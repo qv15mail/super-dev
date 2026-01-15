@@ -115,6 +115,41 @@ class AIPromptGenerator:
    - 每个功能点都有测试
    - 使用 pytest / jest
 
+### 图标使用规范
+
+**严格禁止**:
+- ❌ **禁止使用 emoji 表情作为图标**
+  - 不允许使用 emoji 来代替图标（如 💾 保存、🔍 搜索、⚙️ 设置）
+  - emoji 在不同平台显示不一致
+  - 可访问性差（屏幕阅读器支持不佳）
+  - 不够专业
+
+**图标使用标准**（按优先级）:
+1. ✅ **首选**: UI 框架自带图标库
+   - Vue: Element Plus、Naive UI、Vuetify 自带图标
+   - React: Ant Design、Material-UI、Chakra UI 图标
+   - 其他: 使用项目选择的 UI 库官方图标
+
+2. ✅ **专业图标库**:
+   - [Lucide Icons](https://lucide.dev/) - 推荐，轻量且现代
+   - [Heroicons](https://heroicons.com/) - Tailwind CSS 官方
+   - [Tabler Icons](https://tabler-icons.io/) - 开源免费
+   - [Phosphor Icons](https://phosphoricons.com/) - 精美免费
+
+3. ✅ **自定义 SVG**:
+   - 如果需要自定义图标，使用 SVG 格式
+   - 确保遵循无障碍标准（添加 aria-label）
+
+**代码示例**:
+```typescript
+// ✅ 正确：使用图标库
+import {{ Save, Search, Settings }} from 'lucide-react';
+<button><Save size={{20}} />保存</button>
+
+// ❌ 错误：使用 emoji
+<button>💾 保存</button>
+```
+
 ### 安全规范
 
 1. **输入验证**: 所有用户输入必须验证
