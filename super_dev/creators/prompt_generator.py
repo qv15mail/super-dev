@@ -29,7 +29,7 @@ class AIPromptGenerator:
         config_path = self.project_dir / "super-dev.yaml"
         project_config = {}
         if config_path.exists():
-            with open(config_path, 'r') as f:
+            with open(config_path, 'r', encoding='utf-8') as f:
                 project_config = yaml.safe_load(f)
 
         # 读取生成的文档

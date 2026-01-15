@@ -478,7 +478,7 @@ class QualityGateChecker:
         # 检查是否有测试配置
         has_jest = (self.project_dir / "package.json").exists() and "jest" in (
             self.project_dir / "package.json"
-        ).read_text()
+        ).read_text(encoding='utf-8')
         has_pytest = (self.project_dir / "pytest.ini").exists() or (
             self.project_dir / "pyproject.toml"
         ).exists()
@@ -517,7 +517,7 @@ class QualityGateChecker:
         has_pylint = (self.project_dir / "pylint.ini").exists()
         has_black = (self.project_dir / "pyproject.toml").exists() and "black" in (
             self.project_dir / "pyproject.toml"
-        ).read_text()
+        ).read_text(encoding='utf-8')
 
         if has_eslint or has_pylint or has_black:
             checks.append(QualityCheck(

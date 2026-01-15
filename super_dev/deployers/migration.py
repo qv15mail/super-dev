@@ -109,7 +109,7 @@ class MigrationGenerator:
             # 检查 package.json
             package_json = self.project_dir / "package.json"
             if package_json.exists():
-                content = package_json.read_text()
+                content = package_json.read_text(encoding='utf-8')
                 if "prisma" in content:
                     return ORMType.PRISMA
                 elif "typeorm" in content:
@@ -124,7 +124,7 @@ class MigrationGenerator:
             for file_name in ["requirements.txt", "pyproject.toml"]:
                 req_file = self.project_dir / file_name
                 if req_file.exists():
-                    content = req_file.read_text()
+                    content = req_file.read_text(encoding='utf-8')
                     if "sqlalchemy" in content:
                         return ORMType.SQLALCHEMY
                     elif "django" in content:
@@ -143,7 +143,7 @@ class MigrationGenerator:
         spec_dir = self.project_dir / ".super-dev" / "specs"
         if spec_dir.exists():
             for spec_file in spec_dir.glob("*.md"):
-                content = spec_file.read_text()
+                content = spec_file.read_text(encoding='utf-8')
                 entities.extend(self._parse_entities_from_spec(content))
 
         # 如果没有找到实体，生成默认的
