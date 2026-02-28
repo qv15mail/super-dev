@@ -132,6 +132,21 @@ class TestConfigManager:
         assert is_valid
         assert len(errors) == 0
 
+    def test_validate_extended_frontend(self, temp_project_dir: Path):
+        """测试扩展前端框架校验"""
+        manager = ConfigManager(temp_project_dir)
+        manager.create(
+            name="valid-next",
+            platform="web",
+            frontend="next",
+            backend="node",
+            quality_gate=80
+        )
+
+        is_valid, errors = manager.validate()
+        assert is_valid
+        assert len(errors) == 0
+
     def test_validate_invalid_platform(self, temp_project_dir: Path):
         """测试验证无效平台"""
         manager = ConfigManager(temp_project_dir)

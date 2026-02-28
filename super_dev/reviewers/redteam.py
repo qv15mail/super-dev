@@ -11,6 +11,8 @@
 from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass, field
+import os
+import re
 
 
 @dataclass
@@ -21,6 +23,8 @@ class SecurityIssue:
     description: str
     recommendation: str
     cwe: Optional[str] = None
+    file_path: Optional[str] = None
+    line: Optional[int] = None
 
 
 @dataclass
@@ -31,6 +35,8 @@ class PerformanceIssue:
     description: str
     recommendation: str
     impact: str = ""
+    file_path: Optional[str] = None
+    line: Optional[int] = None
 
 
 @dataclass
@@ -41,6 +47,8 @@ class ArchitectureIssue:
     description: str
     recommendation: str
     adr_needed: bool = False
+    file_path: Optional[str] = None
+    line: Optional[int] = None
 
 
 @dataclass
@@ -235,6 +243,18 @@ class RedTeamReport:
 class RedTeamReviewer:
     """红队审查器"""
 
+    _CODE_EXTENSIONS = {".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".java", ".sql"}
+    _SKIP_DIRS = {
+        ".git", ".idea", ".vscode", "node_modules", "__pycache__", ".pytest_cache",
+        ".mypy_cache", ".ruff_cache", "dist", "build", "output", ".super-dev", "logs",
+        ".venv", "venv", ".tox", ".cache", "coverage", "htmlcov", ".next", ".nuxt",
+    }
+    _PREFERRED_SCAN_DIRS = (
+        "backend", "frontend", "src", "app", "server", "api", "services", "lib", "super_dev"
+    )
+    _MAX_SCAN_FILES = 220
+    _MAX_FILE_SIZE = 300_000
+
     def __init__(self, project_dir: Path, name: str, tech_stack: dict):
         self.project_dir = Path(project_dir).resolve()
         self.name = name
@@ -243,6 +263,7 @@ class RedTeamReviewer:
         self.frontend = tech_stack.get("frontend", "react")
         self.backend = tech_stack.get("backend", "node")
         self.domain = tech_stack.get("domain", "")
+        self._source_file_cache: Optional[list[tuple[Path, str]]] = None
 
     def review(self) -> RedTeamReport:
         """执行完整红队审查"""
@@ -261,111 +282,108 @@ class RedTeamReviewer:
 
     def _review_security(self) -> list[SecurityIssue]:
         """安全审查"""
-        issues = []
+        issues: list[SecurityIssue] = []
+        issue_keys: set[tuple[str, str]] = set()
 
-        # 认证安全
-        if self.backend != "none":
-            issues.extend([
-                SecurityIssue(
-                    severity="high",
-                    category="认证",
-                    description="确保使用 JWT 或 Session 进行身份验证",
-                    recommendation="实施基于 Token 的认证，使用 RS256 算法签名",
-                    cwe="CWE-287"
-                ),
-                SecurityIssue(
-                    severity="critical",
-                    category="密码存储",
-                    description="密码必须使用强哈希算法存储",
-                    recommendation="使用 bcrypt (cost>=10) 或 Argon2 存储密码",
-                    cwe="CWE-256"
-                ),
-                SecurityIssue(
-                    severity="high",
-                    category="密码策略",
-                    description="实施强密码策略",
-                    recommendation="最小长度 8 位，包含大小写字母、数字和特殊字符",
-                    cwe="CWE-521"
-                ),
-            ])
-
-        # 输入验证
-        issues.extend([
-            SecurityIssue(
-                severity="critical",
-                category="注入",
-                description="防止 SQL 注入攻击",
-                recommendation="使用参数化查询或 ORM，禁止字符串拼接 SQL",
-                cwe="CWE-89"
-            ),
-            SecurityIssue(
-                severity="high",
-                category="注入",
-                description="防止 XSS 攻击",
-                recommendation="对所有用户输入进行转义，使用 CSP 头",
-                cwe="CWE-79"
-            ),
-            SecurityIssue(
-                severity="high",
-                category="CSRF",
-                description="防止 CSRF 攻击",
-                recommendation="实施 CSRF Token 验证，使用 SameSite Cookie",
-                cwe="CWE-352"
-            ),
-        ])
-
-        # API 安全
-        if self.backend != "none":
-            issues.extend([
-                SecurityIssue(
-                    severity="high",
-                    category="速率限制",
-                    description="实施 API 速率限制",
-                    recommendation="使用 Redis 实现令牌桶算法，限制每 IP 每分钟请求次数",
-                    cwe="CWE-770"
-                ),
-                SecurityIssue(
-                    severity="medium",
-                    category="敏感数据",
-                    description="敏感数据不得记录到日志",
-                    recommendation="实施日志脱敏，过滤密码、Token 等敏感字段",
-                    cwe="CWE-532"
-                ),
-            ])
-
-        # HTTPS
-        issues.append(
-            SecurityIssue(
-                severity="critical",
-                category="传输安全",
-                description="强制使用 HTTPS",
-                recommendation="配置 TLS 1.3，启用 HSTS，使用有效证书",
-                cwe="CWE-319"
-            )
+        # 1) 扫描代码中的高风险模式（真实信号）
+        secret_pattern = re.compile(
+            r'(?i)\b(api[_-]?key|secret|token|password)\b\s*[:=]\s*["\']([^"\']{6,})["\']'
         )
+        dangerous_rules = [
+            ("命令执行", re.compile(r"\bsubprocess\.(run|call|Popen)\([^)]*shell\s*=\s*True"), "CWE-78",
+             "避免 shell=True，改为参数数组执行并进行输入白名单校验"),
+            ("动态执行", re.compile(r"\b(eval|exec)\s*\("), "CWE-95",
+             "避免 eval/exec，使用安全解析器或受限表达式引擎"),
+            ("动态命令", re.compile(r"child_process\.exec\s*\("), "CWE-78",
+             "改用 execFile/spawn 并限定允许命令集合"),
+            ("SQL 注入", re.compile(r'(?i)(select|insert|update|delete)[^\n]{0,120}\+'), "CWE-89",
+             "避免字符串拼接 SQL，统一使用参数化查询/ORM"),
+        ]
+
+        for file_path, content in self._iter_source_files_with_content():
+            if self._is_yaml_file(file_path):
+                # 对配置文件只做轻量提示，不做高危判定
+                continue
+
+            # 硬编码凭据
+            for match in secret_pattern.finditer(content):
+                value = match.group(2).strip()
+                if self._looks_like_placeholder(value):
+                    continue
+                line_no = self._line_number_from_offset(content, match.start())
+                issue_key = (str(file_path), "硬编码凭据")
+                if issue_key in issue_keys:
+                    continue
+                issue_keys.add(issue_key)
+                issues.append(SecurityIssue(
+                    severity="high",
+                    category="硬编码凭据",
+                    description=f"检测到疑似硬编码敏感信息: {file_path.name}:{line_no}",
+                    recommendation="将密钥迁移到环境变量或密钥管理服务（Vault/KMS）",
+                    cwe="CWE-798",
+                    file_path=str(file_path),
+                    line=line_no,
+                ))
+                break
+
+            for category, pattern, cwe, recommendation in dangerous_rules:
+                match = pattern.search(content)
+                if not match:
+                    continue
+                issue_key = (str(file_path), category)
+                if issue_key in issue_keys:
+                    continue
+                issue_keys.add(issue_key)
+                line_no = self._line_number_from_offset(content, match.start())
+                issues.append(SecurityIssue(
+                    severity="high",
+                    category=category,
+                    description=f"检测到高风险代码模式: {file_path.name}:{line_no}",
+                    recommendation=recommendation,
+                    cwe=cwe,
+                    file_path=str(file_path),
+                    line=line_no,
+                ))
+
+        # 2) 框架级最低安全基线（中低风险建议）
+        if self.backend != "none":
+            issues.append(SecurityIssue(
+                severity="medium",
+                category="认证",
+                description="建议统一鉴权中间件并对关键接口做细粒度权限控制",
+                recommendation="采用 JWT/Session + RBAC/ABAC，补充关键操作审计日志",
+                cwe="CWE-287",
+            ))
+            issues.append(SecurityIssue(
+                severity="medium",
+                category="速率限制",
+                description="建议对登录、注册、重置密码等敏感接口启用限流",
+                recommendation="采用令牌桶/滑动窗口算法并记录触发日志",
+                cwe="CWE-770",
+            ))
 
         # 领域特定安全
         if self.domain == "fintech":
             issues.extend([
                 SecurityIssue(
-                    severity="critical",
+                    severity="high",
                     category="PCI-DSS",
-                    description="金融数据必须符合 PCI-DSS 标准",
-                    recommendation="实施端到端加密，使用 PCI 认证的服务商",
+                    description="金融场景需完成支付数据合规评估与密钥分级管理",
+                    recommendation="补充 PCI-DSS 控制项自检并输出合规矩阵",
                     cwe="CWE-320"
                 ),
                 SecurityIssue(
-                    severity="critical",
+                    severity="high",
                     category="审计",
-                    description="所有金融操作必须有审计日志",
-                    recommendation="实施完整的审计追踪，日志不可篡改",
+                    description="金融核心流程建议实施不可篡改审计链路",
+                    recommendation="关键交易日志上链或做 WORM 存储并定期核验",
                     cwe="CWE-778"
                 ),
             ])
         elif self.domain == "medical":
             issues.extend([
                 SecurityIssue(
-                    severity="critical",
+                    severity="high",
                     category="HIPAA",
                     description="医疗数据必须符合 HIPAA 标准",
                     recommendation="实施数据加密、访问控制、审计日志",
@@ -377,183 +395,230 @@ class RedTeamReviewer:
 
     def _review_performance(self) -> list[PerformanceIssue]:
         """性能审查"""
-        issues = []
+        issues: list[PerformanceIssue] = []
+        issue_keys: set[tuple[str, str]] = set()
 
-        # 数据库性能
+        async_requests_pattern = re.compile(r"async\s+def[\s\S]{0,300}requests\.(get|post|put|delete)\(")
+        n_plus_one_pattern = re.compile(r"for\s+.+:\s*[\r\n]+\s*.+\.(find|get|query|select)\(")
+
+        for file_path, content in self._iter_source_files_with_content():
+            line_count = content.count("\n") + 1
+
+            async_match = async_requests_pattern.search(content)
+            if async_match and (str(file_path), "API") not in issue_keys:
+                issue_keys.add((str(file_path), "API"))
+                line_no = self._line_number_from_offset(content, async_match.start())
+                issues.append(PerformanceIssue(
+                    severity="high",
+                    category="API",
+                    description=f"异步上下文中检测到同步 HTTP 调用: {file_path.name}:{line_no}",
+                    recommendation="在 async 流程中使用异步 HTTP 客户端（httpx.AsyncClient/aiohttp）",
+                    impact="阻塞事件循环，增加高并发下请求延迟",
+                    file_path=str(file_path),
+                    line=line_no,
+                ))
+
+            n_plus_one_match = n_plus_one_pattern.search(content)
+            if n_plus_one_match and (str(file_path), "数据库") not in issue_keys:
+                issue_keys.add((str(file_path), "数据库"))
+                line_no = self._line_number_from_offset(content, n_plus_one_match.start())
+                issues.append(PerformanceIssue(
+                    severity="medium",
+                    category="数据库",
+                    description=f"疑似 N+1 查询模式: {file_path.name}:{line_no}",
+                    recommendation="批量查询或预加载关联数据，减少循环内 DB 调用",
+                    impact="高数据量场景响应时间线性恶化",
+                    file_path=str(file_path),
+                    line=line_no,
+                ))
+
+            if line_count > 1200:
+                issues.append(PerformanceIssue(
+                    severity="medium",
+                    category="代码结构",
+                    description=f"超大文件可能影响维护与性能优化: {file_path.name} ({line_count} 行)",
+                    recommendation="拆分模块并隔离热点路径，便于单点性能调优",
+                    impact="性能问题定位与重构成本升高",
+                ))
+
+        # 基线建议
         if self.backend != "none":
-            issues.extend([
-                PerformanceIssue(
-                    severity="high",
-                    category="数据库",
-                    description="确保数据库查询使用索引",
-                    recommendation="为所有 WHERE、JOIN、ORDER BY 字段添加索引",
-                    impact="查询速度可提升 10-1000 倍"
-                ),
-                PerformanceIssue(
-                    severity="high",
-                    category="数据库",
-                    description="防止 N+1 查询问题",
-                    recommendation="使用 Eager Loading 或 JOIN 查询，避免循环查询",
-                    impact="减少数据库往返次数，显著提升响应速度"
-                ),
-                PerformanceIssue(
-                    severity="medium",
-                    category="数据库",
-                    description="实施数据库连接池",
-                    recommendation="配置连接池 (max_connections=100)，避免频繁创建连接",
-                    impact="降低连接开销，提升并发能力"
-                ),
-            ])
-
-        # API 性能
-        issues.extend([
-            PerformanceIssue(
-                severity="high",
-                category="API",
-                description="实施响应缓存",
-                recommendation="使用 Redis 缓存热点数据，设置合理的过期时间",
-                impact="缓存命中时响应时间 < 10ms"
-            ),
-            PerformanceIssue(
+            issues.append(PerformanceIssue(
                 severity="medium",
-                category="API",
-                description="实施响应压缩",
-                recommendation="启用 gzip 或 brotli 压缩，减少传输数据量",
-                impact="传输数据量减少 60-80%"
-            ),
-            PerformanceIssue(
-                severity="medium",
-                category="API",
-                description="实施分页和限制",
-                recommendation="所有列表接口实施分页，限制每页最大数量",
-                impact="防止大数据量查询导致性能问题"
-            ),
-        ])
-
-        # 前端性能
+                category="数据库",
+                description="建议关键查询路径补齐索引与慢查询观测",
+                recommendation="建立慢查询阈值与索引基线，持续回归",
+                impact="降低接口尾延迟并提升吞吐稳定性",
+            ))
         if self.frontend != "none":
-            issues.extend([
-                PerformanceIssue(
-                    severity="high",
-                    category="前端",
-                    description="实施代码分割和懒加载",
-                    recommendation="使用动态 import() 和 React.lazy() 按需加载代码",
-                    impact="初始加载体积减少 40-60%"
-                ),
-                PerformanceIssue(
-                    severity="medium",
-                    category="前端",
-                    description="优化图片加载",
-                    recommendation="使用 WebP 格式，实施懒加载和响应式图片",
-                    impact="图片体积减少 50-70%"
-                ),
-                PerformanceIssue(
-                    severity="medium",
-                    category="前端",
-                    description="使用 CDN 加速静态资源",
-                    recommendation="将 JS/CSS/图片等静态资源部署到 CDN",
-                    impact="全球访问速度提升 50-80%"
-                ),
-            ])
+            issues.append(PerformanceIssue(
+                severity="medium",
+                category="前端",
+                description="建议实施代码分割与静态资源缓存策略",
+                recommendation="按路由拆包并配置长期缓存 + 指纹文件名",
+                impact="首屏加载与重复访问体验提升",
+            ))
 
         return issues
 
     def _review_architecture(self) -> list[ArchitectureIssue]:
         """架构审查"""
-        issues = []
+        issues: list[ArchitectureIssue] = []
+        source_files = self._iter_source_files_with_content()
 
-        # 可扩展性
-        issues.extend([
-            ArchitectureIssue(
-                severity="high",
-                category="可扩展性",
-                description="设计无状态架构",
-                recommendation="避免 Session 粘滞，使用 JWT 或外部 Session 存储",
-                adr_needed=True
-            ),
-            ArchitectureIssue(
-                severity="medium",
-                category="可扩展性",
-                description="实施水平扩展能力",
-                recommendation="使用负载均衡，支持动态增减实例",
-                adr_needed=True
-            ),
-        ])
-
-        # 可维护性
-        issues.extend([
-            ArchitectureIssue(
+        tests_dir = self.project_dir / "tests"
+        if not tests_dir.exists():
+            issues.append(ArchitectureIssue(
                 severity="high",
                 category="可维护性",
-                description="遵循单一职责原则",
-                recommendation="每个模块/类只负责一个功能，保持高内聚低耦合",
-                adr_needed=False
-            ),
-            ArchitectureIssue(
-                severity="medium",
-                category="可维护性",
-                description="实施依赖注入",
-                recommendation="使用 DI 容器，降低模块间耦合",
-                adr_needed=True
-            ),
-            ArchitectureIssue(
-                severity="medium",
-                category="可维护性",
-                description="统一错误处理",
-                recommendation="实施全局错误处理中间件，统一错误响应格式",
-                adr_needed=True
-            ),
-        ])
+                description="未检测到 tests 目录，回归保障不足",
+                recommendation="建立单元/集成测试目录并纳入 CI 必跑策略",
+                adr_needed=False,
+            ))
 
-        # 可靠性
-        if self.backend != "none":
-            issues.extend([
-                ArchitectureIssue(
-                    severity="high",
-                    category="可靠性",
-                    description="实施健康检查端点",
-                    recommendation="提供 /health 和 /ready 端点，支持 K8s 健康检查",
-                    adr_needed=False
-                ),
-                ArchitectureIssue(
-                    severity="high",
-                    category="可靠性",
-                    description="实施熔断机制",
-                    recommendation="使用熔断器模式，防止级联故障",
-                    adr_needed=True
-                ),
-                ArchitectureIssue(
-                    severity="medium",
-                    category="可靠性",
-                    description="实施重试机制",
-                    recommendation="对外部调用实施指数退避重试",
-                    adr_needed=False
-                ),
-            ])
+        has_health_endpoint = False
+        for _file_path, content in source_files:
+            if re.search(r"/health|health_check|healthcheck", content, re.IGNORECASE):
+                has_health_endpoint = True
+                break
 
-        # 可观测性
-        issues.extend([
-            ArchitectureIssue(
+        if self.backend != "none" and not has_health_endpoint:
+            issues.append(ArchitectureIssue(
+                severity="medium",
+                category="可靠性",
+                description="未检测到健康检查端点标记",
+                recommendation="增加 /health 与 /ready 端点并接入部署探针",
+                adr_needed=False,
+            ))
+
+        ci_files = [
+            self.project_dir / ".github" / "workflows" / "ci.yml",
+            self.project_dir / ".gitlab-ci.yml",
+            self.project_dir / "Jenkinsfile",
+            self.project_dir / ".azure-pipelines.yml",
+            self.project_dir / "bitbucket-pipelines.yml",
+        ]
+        if not any(p.exists() for p in ci_files):
+            issues.append(ArchitectureIssue(
+                severity="medium",
+                category="工程化",
+                description="未检测到 CI/CD 主流程配置",
+                recommendation="补齐至少一套 CI 流水线并将质量门禁前置",
+                adr_needed=True,
+            ))
+
+        largest_file = None
+        largest_lines = 0
+        for file_path, content in source_files:
+            line_count = content.count("\n") + 1
+            if line_count > largest_lines:
+                largest_file = file_path
+                largest_lines = line_count
+        if largest_file and largest_lines > 2000:
+            issues.append(ArchitectureIssue(
                 severity="high",
-                category="可观测性",
-                description="实施结构化日志",
-                recommendation="使用 JSON 格式日志，包含请求 ID、用户 ID 等上下文",
-                adr_needed=True
-            ),
-            ArchitectureIssue(
+                category="可维护性",
+                description=f"检测到超大单体文件: {largest_file.name} ({largest_lines} 行)",
+                recommendation="按业务边界拆分模块并定义明确接口契约",
+                adr_needed=True,
+                file_path=str(largest_file),
+                line=1,
+            ))
+        elif largest_file and largest_lines > 1200:
+            issues.append(ArchitectureIssue(
                 severity="medium",
-                category="可观测性",
-                description="实施分布式追踪",
-                recommendation="使用 OpenTelemetry 追踪跨服务调用链",
-                adr_needed=True
-            ),
-            ArchitectureIssue(
-                severity="medium",
-                category="可观测性",
-                description="实施指标监控",
-                recommendation="收集和展示关键业务和技术指标",
-                adr_needed=True
-            ),
-        ])
+                category="可维护性",
+                description=f"检测到大文件: {largest_file.name} ({largest_lines} 行)",
+                recommendation="逐步拆分高复杂度模块并补充针对性测试",
+                adr_needed=True,
+                file_path=str(largest_file),
+                line=1,
+            ))
 
         return issues
+
+    def _iter_source_files_with_content(self) -> list[tuple[Path, str]]:
+        if self._source_file_cache is not None:
+            return self._source_file_cache
+
+        files: list[tuple[Path, str]] = []
+        seen: set[Path] = set()
+
+        # 优先扫描常见源码目录，保证信噪比
+        for root_name in self._PREFERRED_SCAN_DIRS:
+            root = self.project_dir / root_name
+            if not root.exists() or not root.is_dir():
+                continue
+            self._collect_scannable_files(root, files, seen)
+            if len(files) >= self._MAX_SCAN_FILES:
+                self._source_file_cache = files
+                return files
+
+        # 回退到全项目扫描，避免目录命名不标准导致漏检
+        if len(files) < self._MAX_SCAN_FILES:
+            self._collect_scannable_files(self.project_dir, files, seen)
+
+        self._source_file_cache = files
+        return files
+
+    def _collect_scannable_files(
+        self, root: Path, files: list[tuple[Path, str]], seen: set[Path]
+    ) -> None:
+        for dirpath, dirnames, filenames in os.walk(root):
+            # 预剪枝，避免进入大型依赖目录
+            dirnames[:] = [d for d in dirnames if not self._should_skip_dir(d)]
+
+            for filename in filenames:
+                if len(files) >= self._MAX_SCAN_FILES:
+                    return
+
+                path = Path(dirpath) / filename
+                if not self._is_scannable_file(path):
+                    continue
+
+                try:
+                    resolved = path.resolve()
+                except Exception:
+                    continue
+                if resolved in seen:
+                    continue
+                seen.add(resolved)
+
+                try:
+                    if path.stat().st_size > self._MAX_FILE_SIZE:
+                        continue
+                except OSError:
+                    continue
+
+                try:
+                    content = path.read_text(encoding="utf-8", errors="ignore")
+                except OSError:
+                    continue
+
+                files.append((path, content))
+
+    def _should_skip_dir(self, dirname: str) -> bool:
+        if dirname in self._SKIP_DIRS:
+            return True
+        return dirname.startswith(".") and dirname not in {".github"}
+
+    def _is_scannable_file(self, path: Path) -> bool:
+        suffix = path.suffix.lower()
+        return suffix in self._CODE_EXTENSIONS or self._is_yaml_file(path)
+
+    def _is_yaml_file(self, path: Path) -> bool:
+        return path.suffix.lower() in {".yml", ".yaml"}
+
+    def _looks_like_placeholder(self, value: str) -> bool:
+        lowered = value.lower()
+        placeholder_markers = (
+            "your-", "example", "placeholder", "changeme", "<value>", "*****", "dummy"
+        )
+        if any(marker in lowered for marker in placeholder_markers):
+            return True
+        if lowered in {"password", "secret", "token", "api_key"}:
+            return True
+        return False
+
+    def _line_number_from_offset(self, content: str, start: int) -> int:
+        return content.count("\n", 0, start) + 1

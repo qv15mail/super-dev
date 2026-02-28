@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 开发：Excellent（11964948@qq.com）
-功能：设计智能引擎 - 超越 UI UX Pro Max
+功能：设计智能引擎
 作用：提供 UI/UX 设计智能搜索和推荐
 创建时间：2025-12-30
 最后修改：2025-12-30
@@ -142,7 +142,7 @@ class DesignIntelligenceEngine:
     """
     设计智能引擎
 
-    超越 UI UX Pro Max 的核心：
+    设计智能引擎核心能力：
     1. 更多设计资产（100+ styles, 150+ palettes, 80+ fonts）
     2. AI 驱动的推荐
     3. 语义搜索支持
@@ -165,14 +165,14 @@ class DesignIntelligenceEngine:
         self.domain_configs = {
             "style": {
                 "file": "styles.csv",
-                "search_cols": ["name", "category", "keywords", "best_for", "tags"],
+                "search_cols": ["name", "category", "keywords", "best_for"],
                 "output_cols": ["name", "category", "keywords", "description", "primary_colors",
                               "effects", "animations", "best_for", "complexity", "accessibility",
                               "performance", "frameworks", "example_prompt"],
             },
             "color": {
                 "file": "colors.csv",
-                "search_cols": ["name", "category", "product_type", "keywords", "mood"],
+                "search_cols": ["name", "category", "keywords", "mood", "best_for"],
                 "output_cols": ["name", "category", "primary", "secondary", "accent",
                               "background", "surface", "text", "text_muted", "border",
                               "keywords", "mood", "best_for", "css_vars"],
@@ -205,28 +205,27 @@ class DesignIntelligenceEngine:
             },
             "ux": {
                 "file": "ux_guidelines.csv",
-                "search_cols": ["category", "topic", "keywords", "platform"],
-                "output_cols": ["category", "topic", "description", "do", "dont",
-                              "code_good", "code_bad", "severity", "platform", "references"],
+                "search_cols": ["domain", "topic", "best_practice", "anti_pattern", "impact"],
+                "output_cols": ["domain", "topic", "best_practice", "anti_pattern",
+                              "example", "impact", "complexity"],
             },
             "chart": {
-                "file": "charts.csv",
-                "search_cols": ["name", "data_type", "keywords", "best_for"],
-                "output_cols": ["name", "data_type", "description", "keywords", "library",
-                              "accessibility", "interactive", "example_code"],
+                "file": "chart_types.csv",
+                "search_cols": ["name", "category", "data_type", "keywords", "description"],
+                "output_cols": ["name", "category", "data_type", "description",
+                              "best_libraries", "accessibility_notes", "use_cases", "limitations", "keywords"],
             },
             "product": {
-                "file": "products.csv",
-                "search_cols": ["product_type", "keywords", "industry", "target_audience"],
-                "output_cols": ["product_type", "keywords", "industry", "recommended_style",
-                              "color_strategy", "typography_strategy", "layout_patterns",
-                              "key_features", "anti_patterns"],
+                "file": "landing_patterns.csv",
+                "search_cols": ["name", "category", "description", "best_for", "keywords"],
+                "output_cols": ["name", "category", "description", "sections", "cta_strategy",
+                              "best_for", "conversion_tips", "complexity", "keywords"],
             },
             "stack": {
-                "file": "stacks.csv",
-                "search_cols": ["stack", "category", "keywords", "topic"],
-                "output_cols": ["stack", "category", "topic", "guideline", "do", "dont",
-                              "code_example", "references", "severity"],
+                "file": "tech_stacks.csv",
+                "search_cols": ["framework", "category", "topic", "recommendation", "use_cases"],
+                "output_cols": ["framework", "category", "topic", "recommendation",
+                              "code_example", "benefits", "use_cases", "complexity"],
             },
         }
 
@@ -307,7 +306,7 @@ class DesignIntelligenceEngine:
         """
         AI 驱动的完整设计系统推荐
 
-        超越 UI UX Pro Max：不只搜索，而是推荐完整的设计系统
+        不只搜索，而是推荐完整的设计系统
 
         Args:
             product_type: 产品类型（SaaS, E-commerce, Portfolio, Dashboard）
@@ -353,7 +352,7 @@ class DesignIntelligenceEngine:
         """
         生成 Design Tokens
 
-        超越 UI UX Pro Max：生成可用的 tokens
+        生成可直接使用的 design tokens
 
         Args:
             design_system: 设计系统字典

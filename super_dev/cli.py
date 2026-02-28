@@ -4,11 +4,13 @@
 功能：Super Dev CLI 主入口
 作用：提供命令行界面，统一访问所有功能
 创建时间：2025-12-30
-最后修改：2025-12-30
+最后修改：2025-01-29
 """
 
 import sys
+import os
 import argparse
+import traceback
 from pathlib import Path
 from typing import Optional
 
@@ -23,6 +25,8 @@ except ImportError:
 from . import __version__, __description__
 from .config import get_config_manager, ConfigManager
 from .orchestrator import WorkflowEngine, Phase
+from .exceptions import SuperDevError, ConfigurationError, ValidationError
+from .utils import get_logger
 
 
 class SuperDevCLI:
@@ -31,6 +35,7 @@ class SuperDevCLI:
     def __init__(self):
         self.console = Console() if RICH_AVAILABLE else None
         self.parser = self._create_parser()
+        self.logger = get_logger('cli', level='WARNING')  # CLI只记录WARNING及以上级别
 
     def _create_parser(self) -> argparse.ArgumentParser:
         """创建命令行参数解析器"""
@@ -184,6 +189,29 @@ class SuperDevCLI:
             help="质量门禁阈值 (0-100)"
         )
 
+        # studio 命令
+        studio_parser = subparsers.add_parser(
+            "studio",
+            help="启动交互工作台",
+            description="启动 Super Dev Web 工作台 API 服务"
+        )
+        studio_parser.add_argument(
+            "--host",
+            default="127.0.0.1",
+            help="监听地址 (默认: 127.0.0.1)"
+        )
+        studio_parser.add_argument(
+            "--port",
+            type=int,
+            default=8765,
+            help="监听端口 (默认: 8765)"
+        )
+        studio_parser.add_argument(
+            "--reload",
+            action="store_true",
+            help="启用热重载 (开发模式)"
+        )
+
         # expert 命令
         expert_parser = subparsers.add_parser(
             "expert",
@@ -245,7 +273,7 @@ class SuperDevCLI:
         )
         deploy_parser.add_argument(
             "--cicd",
-            choices=["github", "gitlab", "jenkins", "azure", "bitbucket"],
+            choices=["github", "gitlab", "jenkins", "azure", "bitbucket", "all"],
             help="生成 CI/CD 配置"
         )
 
@@ -269,6 +297,65 @@ class SuperDevCLI:
             "value",
             nargs="?",
             help="配置值"
+        )
+
+        # skill 命令 - 多平台 Skill 安装/管理
+        skill_parser = subparsers.add_parser(
+            "skill",
+            help="Skill 管理",
+            description="安装、列出、卸载跨平台 AI Coding Skills"
+        )
+        skill_parser.add_argument(
+            "action",
+            choices=["list", "install", "uninstall", "targets"],
+            help="操作类型"
+        )
+        skill_parser.add_argument(
+            "source_or_name",
+            nargs="?",
+            help="install 时为来源（目录/git/super-dev），uninstall 时为 skill 名称"
+        )
+        skill_parser.add_argument(
+            "-t", "--target",
+            choices=["claude-code", "codex-cli", "opencode", "cursor", "qoder", "trae", "codebuddy", "antigravity"],
+            default="claude-code",
+            help="目标平台 (默认: claude-code)"
+        )
+        skill_parser.add_argument(
+            "--name",
+            help="安装后的 skill 名称（可选）"
+        )
+        skill_parser.add_argument(
+            "--force",
+            action="store_true",
+            help="覆盖已存在的 skill"
+        )
+
+        # integrate 命令 - 多平台适配配置
+        integrate_parser = subparsers.add_parser(
+            "integrate",
+            help="平台集成配置",
+            description="为 CLI/IDE AI Coding 工具生成集成配置文件"
+        )
+        integrate_parser.add_argument(
+            "action",
+            choices=["list", "setup"],
+            help="操作类型"
+        )
+        integrate_parser.add_argument(
+            "-t", "--target",
+            choices=["claude-code", "codex-cli", "opencode", "cursor", "qoder", "trae", "codebuddy", "antigravity"],
+            help="目标平台"
+        )
+        integrate_parser.add_argument(
+            "--all",
+            action="store_true",
+            help="对所有平台执行 setup"
+        )
+        integrate_parser.add_argument(
+            "--force",
+            action="store_true",
+            help="覆盖已存在的配置文件"
         )
 
         # create 命令 - 一键创建项目
@@ -318,7 +405,7 @@ class SuperDevCLI:
         # design 命令 - 设计智能引擎
         design_parser = subparsers.add_parser(
             "design",
-            help="设计智能引擎 - 超越 UI UX Pro Max",
+            help="设计智能引擎",
             description="搜索设计资产、生成设计系统、创建 design tokens"
         )
         design_subparsers = design_parser.add_subparsers(
@@ -724,7 +811,7 @@ class SuperDevCLI:
         pipeline_parser = subparsers.add_parser(
             "pipeline",
             help="运行完整流水线 (从想法到部署)",
-            description="执行完整的开发流水线：文档 → Spec → 红队审查 → 质量门禁 → 代码审查指南 → CI/CD"
+            description="执行完整开发流水线：需求增强 → 文档 → 前端骨架 → Spec → 实现骨架 → 审查与门禁 → 交付配置"
         )
         pipeline_parser.add_argument(
             "description",
@@ -760,8 +847,8 @@ class SuperDevCLI:
         )
         pipeline_parser.add_argument(
             "--cicd",
-            choices=["github", "gitlab", "jenkins", "azure", "bitbucket"],
-            default="github",
+            choices=["github", "gitlab", "jenkins", "azure", "bitbucket", "all"],
+            default="all",
             help="CI/CD 平台"
         )
         pipeline_parser.add_argument(
@@ -770,15 +857,25 @@ class SuperDevCLI:
             help="跳过红队审查"
         )
         pipeline_parser.add_argument(
+            "--skip-scaffold",
+            action="store_true",
+            help="跳过前后端实现骨架生成"
+        )
+        pipeline_parser.add_argument(
             "--skip-quality-gate",
             action="store_true",
             help="跳过质量门禁检查"
         )
         pipeline_parser.add_argument(
+            "--offline",
+            action="store_true",
+            help="离线模式（禁用联网检索）"
+        )
+        pipeline_parser.add_argument(
             "--quality-threshold",
             type=int,
-            default=80,
-            help="质量门禁阈值 (默认 80)"
+            default=None,
+            help="质量门禁阈值（可选；默认按场景自动判定）"
         )
 
         return parser
@@ -793,7 +890,13 @@ class SuperDevCLI:
         Returns:
             退出码
         """
-        parsed_args = self.parser.parse_args(args)
+        argv = list(args) if args is not None else sys.argv[1:]
+
+        # 直达入口：`super-dev <需求描述>`
+        if self._is_direct_requirement_input(argv):
+            return self._run_direct_requirement(" ".join(argv).strip())
+
+        parsed_args = self.parser.parse_args(argv)
 
         if parsed_args.command is None:
             self._print_banner()
@@ -808,8 +911,37 @@ class SuperDevCLI:
 
         try:
             return command_handler(parsed_args)
+
+        except SuperDevError as e:
+            # 已知异常 - 显示友好错误信息
+            self.console.print(f"[red]错误: {e.message}[/red]")
+            if e.details:
+                self.logger.warning(f"命令执行失败: {e.code}", extra={'details': e.details})
+            return 1
+
+        except KeyboardInterrupt:
+            # 用户中断
+            self.console.print("\n[yellow]操作已取消[/yellow]")
+            return 130
+
         except Exception as e:
-            self.console.print(f"[red]错误: {e}[/red]")
+            # 未知异常 - 显示详细错误信息
+            self.console.print(f"[red]未预期的错误: {str(e)}[/red]")
+
+            # 记录完整错误栈
+            self.logger.error(
+                f"CLI命令异常: {parsed_args.command}",
+                extra={
+                    'error_type': type(e).__name__,
+                    'error_message': str(e),
+                    'traceback': traceback.format_exc()
+                }
+            )
+
+            # 在调试模式下显示traceback
+            if '--debug' in sys.argv or '-d' in sys.argv:
+                self.console.print(traceback.format_exc())
+
             return 1
 
     # ==================== 命令处理器 ====================
@@ -901,11 +1033,16 @@ class SuperDevCLI:
                     self.console.print(output)
 
             else:  # text
+                framework_value = (
+                    report.tech_stack.framework.value
+                    if hasattr(report.tech_stack.framework, "value")
+                    else str(report.tech_stack.framework)
+                )
                 self.console.print(f"[cyan]项目分析报告[/cyan]")
                 self.console.print(f"  路径: {report.project_path}")
                 self.console.print(f"  类型: {report.category.value}")
                 self.console.print(f"  语言: {report.tech_stack.language}")
-                self.console.print(f"  框架: {report.tech_stack.framework.value}")
+                self.console.print(f"  框架: {framework_value}")
                 if report.tech_stack.ui_library:
                     self.console.print(f"  UI 库: {report.tech_stack.ui_library}")
                 if report.tech_stack.state_management:
@@ -920,10 +1057,29 @@ class SuperDevCLI:
 
             return 0
 
+        except FileNotFoundError as e:
+            self.console.print(f"[red]路径不存在: {e}[/red]")
+            self.logger.error(f"分析失败: 文件不存在", extra={'path': str(e)})
+            return 1
+
+        except PermissionError as e:
+            self.console.print(f"[red]权限不足: {e}[/red]")
+            self.logger.error(f"分析失败: 权限错误", extra={'path': str(e)})
+            return 1
+
         except Exception as e:
             self.console.print(f"[red]分析失败: {e}[/red]")
-            import traceback
-            self.console.print(traceback.format_exc())
+            self.logger.error(
+                f"分析异常: {type(e).__name__}",
+                extra={
+                    'error_message': str(e),
+                    'traceback': traceback.format_exc()
+                }
+            )
+
+            if '--debug' in sys.argv or '-d' in sys.argv:
+                self.console.print(traceback.format_exc())
+
             return 1
 
     def _cmd_workflow(self, args) -> int:
@@ -962,25 +1118,34 @@ class SuperDevCLI:
 
         return 0 if all_success else 1
 
+    def _cmd_studio(self, args) -> int:
+        """启动交互工作台 API"""
+        try:
+            import uvicorn
+        except ImportError:
+            self.console.print("[red]缺少依赖: uvicorn[/red]")
+            self.console.print("[dim]请安装: pip install fastapi uvicorn[/dim]")
+            return 1
+
+        self.console.print(f"[cyan]启动 Super Dev Studio: http://{args.host}:{args.port}[/cyan]")
+        uvicorn.run(
+            "super_dev.web.api:app",
+            host=args.host,
+            port=args.port,
+            reload=args.reload,
+            log_level="info",
+        )
+        return 0
+
     def _cmd_expert(self, args) -> int:
         """调用专家"""
+        from .experts import list_experts, has_expert, save_expert_advice
+
         # 处理 --list 选项
         if args.list:
             self.console.print("[cyan]可用专家列表:[/cyan]")
-            experts = [
-                ("PM", "产品经理 - 战略、市场契合度、优先级"),
-                ("ARCHITECT", "架构师 - 扩展性、权衡取舍、可用性"),
-                ("UI", "UI 设计师 - 设计系统、视觉打磨"),
-                ("UX", "UX 设计师 - 流程、用户心理学"),
-                ("SECURITY", "安全红队 - 渗透测试、威胁建模"),
-                ("CODE", "代码审查官 - 安全、性能优化"),
-                ("DBA", "数据架构 - 范式、索引、一致性"),
-                ("QA", "测试开发 - 自动化、质量门禁"),
-                ("DEVOPS", "基础设施 - IaC、容器化、流水线"),
-                ("RCA", "故障侦探 - 复盘、5 Whys、监控"),
-            ]
-            for code, desc in experts:
-                self.console.print(f"  [green]{code:<10}[/green] {desc}")
+            for expert in list_experts():
+                self.console.print(f"  [green]{expert['id']:<10}[/green] {expert['name']} - {expert['description']}")
             return 0
 
         # 如果没有提供专家名称，显示帮助
@@ -991,41 +1156,218 @@ class SuperDevCLI:
         prompt = " ".join(args.prompt) if args.prompt else ""
         self.console.print(f"[cyan]调用专家: {args.expert_name}[/cyan]")
         self.console.print(f"[dim]提示词: {prompt or '(无)'}[/dim]")
+        if not has_expert(args.expert_name):
+            self.console.print(f"[red]未知专家: {args.expert_name}[/red]")
+            return 1
 
-        # 这里会调用对应的专家
-        # 暂时只打印消息
-        self.console.print("[yellow]专家功能正在实现中...[/yellow]")
-
+        report_file, _ = save_expert_advice(
+            project_dir=Path.cwd(),
+            expert_id=args.expert_name,
+            prompt=prompt,
+        )
+        self.console.print(f"[green]✓[/green] 专家建议已生成: {report_file}")
         return 0
 
     def _cmd_quality(self, args) -> int:
         """质量检查"""
+        from .reviewers import QualityGateChecker
+
+        project_dir = Path.cwd()
+        output_dir = project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        config_manager = ConfigManager(project_dir)
+        config = config_manager.load()
+
+        project_name = self._sanitize_project_name(config.name or project_dir.name)
+        tech_stack = {
+            "platform": config.platform,
+            "frontend": self._normalize_pipeline_frontend(config.frontend),
+            "backend": config.backend,
+            "domain": config.domain,
+        }
+
         self.console.print(f"[cyan]运行质量检查: {args.type}[/cyan]")
 
-        # 这里会调用 quality_check.py
-        self.console.print("[yellow]质量检查功能正在实现中...[/yellow]")
+        # 轻量文档检查
+        if args.type in {"prd", "architecture", "ui", "ux"}:
+            pattern_map = {
+                "prd": "*-prd.md",
+                "architecture": "*-architecture.md",
+                "ui": "*-uiux.md",
+                "ux": "*-uiux.md",
+            }
+            expected_pattern = pattern_map[args.type]
+            matched = sorted(output_dir.glob(expected_pattern))
+            if matched:
+                self.console.print(f"[green]✓[/green] 检测到 {len(matched)} 个文档: {expected_pattern}")
+                for file_path in matched[:5]:
+                    self.console.print(f"  - {file_path}")
+                return 0
 
-        return 0
+            self.console.print(f"[red]未找到文档: output/{expected_pattern}[/red]")
+            return 1
+
+        # 代码或全量检查走质量门禁评估
+        gate_checker = QualityGateChecker(
+            project_dir=project_dir,
+            name=project_name,
+            tech_stack=tech_stack,
+        )
+        gate_result = gate_checker.check(redteam_report=None)
+
+        gate_file = output_dir / f"{project_name}-quality-gate.md"
+        gate_file.write_text(gate_result.to_markdown(), encoding="utf-8")
+
+        scenario_label = "0-1 新建项目" if gate_result.scenario == "0-1" else "1-N+1 增量开发"
+        status = "[green]通过[/green]" if gate_result.passed else "[red]未通过[/red]"
+
+        self.console.print(f"  [dim]场景: {scenario_label}[/dim]")
+        self.console.print(f"  {status} 总分: {gate_result.total_score}/100")
+        self.console.print(f"  [green]✓[/green] 报告: {gate_file}")
+
+        if not gate_result.passed and gate_result.critical_failures:
+            self.console.print("[yellow]关键失败项:[/yellow]")
+            for failure in gate_result.critical_failures:
+                self.console.print(f"  - {failure}")
+
+        return 0 if gate_result.passed else 1
 
     def _cmd_preview(self, args) -> int:
         """生成原型"""
-        self.console.print(f"[cyan]生成原型: {args.output}[/cyan]")
+        import shutil
 
-        # 这里会调用 generate_preview.py
-        self.console.print("[yellow]原型生成功能正在实现中...[/yellow]")
+        output_path = Path(args.output).expanduser()
+        if not output_path.is_absolute():
+            output_path = Path.cwd() / output_path
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
+        self.console.print(f"[cyan]生成原型: {output_path}[/cyan]")
+
+        frontend_dir = Path.cwd() / "output" / "frontend"
+        index_file = frontend_dir / "index.html"
+        css_file = frontend_dir / "styles.css"
+        js_file = frontend_dir / "app.js"
+
+        if index_file.exists():
+            html = index_file.read_text(encoding="utf-8")
+            output_path.write_text(html, encoding="utf-8")
+
+            if css_file.exists():
+                shutil.copyfile(css_file, output_path.parent / "styles.css")
+            if js_file.exists():
+                shutil.copyfile(js_file, output_path.parent / "app.js")
+
+            self.console.print("[green]✓[/green] 已基于 output/frontend 生成可预览页面")
+            return 0
+
+        # 回退：生成文档概览预览页
+        output_dir = Path.cwd() / "output"
+        docs = sorted(output_dir.glob("*.md")) if output_dir.exists() else []
+        rows = "\n".join(
+            f"<li><a href=\"{doc.name}\" target=\"_blank\">{doc.name}</a></li>"
+            for doc in docs[:20]
+        ) or "<li>未找到可预览文档，请先运行 super-dev create 或 super-dev pipeline。</li>"
+
+        fallback_html = f"""<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Super Dev Preview</title>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 32px; line-height: 1.6; }}
+    h1 {{ margin-bottom: 8px; }}
+    .hint {{ color: #555; margin-bottom: 16px; }}
+    ul {{ padding-left: 18px; }}
+  </style>
+</head>
+<body>
+  <h1>Super Dev 预览页</h1>
+  <p class="hint">未检测到 output/frontend 前端骨架，以下为当前 output 文档列表：</p>
+  <ul>{rows}</ul>
+</body>
+</html>
+"""
+        output_path.write_text(fallback_html, encoding="utf-8")
+        self.console.print("[yellow]未检测到 output/frontend，已生成文档概览预览页[/yellow]")
         return 0
 
     def _cmd_deploy(self, args) -> int:
         """生成部署配置"""
-        if args.docker:
-            self.console.print("[cyan]生成 Dockerfile...[/cyan]")
-        if args.cicd:
-            self.console.print(f"[cyan]生成 CI/CD 配置: {args.cicd}[/cyan]")
+        from .deployers import CICDGenerator
 
-        # 这里会调用 generate_dockerfile.py, generate_ci_cd.py
-        self.console.print("[yellow]部署配置功能正在实现中...[/yellow]")
+        project_dir = Path.cwd()
+        config_manager = ConfigManager(project_dir)
+        config = config_manager.load()
 
+        tech_stack = {
+            "platform": config.platform,
+            "frontend": self._normalize_pipeline_frontend(config.frontend),
+            "backend": config.backend,
+            "domain": config.domain,
+        }
+        project_name = self._sanitize_project_name(config.name or project_dir.name)
+
+        platform = args.cicd or "github"
+        generator = CICDGenerator(
+            project_dir=project_dir,
+            name=project_name,
+            tech_stack=tech_stack,
+            platform=platform,
+        )
+        generated_files = generator.generate()
+
+        cicd_map = {
+            "github": [".github/workflows/ci.yml", ".github/workflows/cd.yml"],
+            "gitlab": [".gitlab-ci.yml"],
+            "jenkins": ["Jenkinsfile"],
+            "azure": [".azure-pipelines.yml"],
+            "bitbucket": ["bitbucket-pipelines.yml"],
+            "all": [
+                ".github/workflows/ci.yml",
+                ".github/workflows/cd.yml",
+                ".gitlab-ci.yml",
+                "Jenkinsfile",
+                ".azure-pipelines.yml",
+                "bitbucket-pipelines.yml",
+            ],
+        }
+        docker_related = [
+            "Dockerfile",
+            "docker-compose.yml",
+            ".dockerignore",
+            "k8s/deployment.yaml",
+            "k8s/service.yaml",
+            "k8s/ingress.yaml",
+            "k8s/configmap.yaml",
+            "k8s/secret.yaml",
+        ]
+
+        want_cicd = bool(args.cicd) or (not args.cicd and not args.docker)
+        want_docker = bool(args.docker) or (not args.cicd and not args.docker)
+
+        selected_keys: list[str] = []
+        if want_cicd:
+            selected_keys.extend(cicd_map.get(platform, []))
+        if want_docker:
+            selected_keys.extend(docker_related)
+
+        selected_keys = [key for key in selected_keys if key in generated_files]
+        if not selected_keys:
+            self.console.print("[yellow]没有可生成的部署配置[/yellow]")
+            return 0
+
+        self.console.print("[cyan]生成部署配置...[/cyan]")
+        written = 0
+        for relative_path in selected_keys:
+            full_path = project_dir / relative_path
+            full_path.parent.mkdir(parents=True, exist_ok=True)
+            full_path.write_text(generated_files[relative_path], encoding="utf-8")
+            self.console.print(f"  [green]✓[/green] {relative_path}")
+            written += 1
+
+        self.console.print(f"[green]✓[/green] 已生成 {written} 个部署文件")
         return 0
 
     def _cmd_create(self, args) -> int:
@@ -1047,6 +1389,7 @@ class SuperDevCLI:
                 project_name = '-'.join(words[:3]).lower()
             else:
                 project_name = "my-project"
+        project_name = self._sanitize_project_name(project_name)
 
         # 创建项目目录
         project_dir = Path.cwd()
@@ -1073,6 +1416,10 @@ class SuperDevCLI:
                 self.console.print(f"  [green]✓[/green] PRD: {docs['prd']}")
                 self.console.print(f"  [green]✓[/green] 架构: {docs['architecture']}")
                 self.console.print(f"  [green]✓[/green] UI/UX: {docs['uiux']}")
+                if docs.get("plan"):
+                    self.console.print(f"  [green]✓[/green] 执行路线图: {docs['plan']}")
+                if docs.get("frontend_blueprint"):
+                    self.console.print(f"  [green]✓[/green] 前端蓝图: {docs['frontend_blueprint']}")
                 self.console.print("")
 
             # 2. 创建 Spec
@@ -1095,9 +1442,11 @@ class SuperDevCLI:
             self.console.print(f"     - PRD: output/{project_name}-prd.md")
             self.console.print(f"     - 架构: output/{project_name}-architecture.md")
             self.console.print(f"     - UI/UX: output/{project_name}-uiux.md")
+            self.console.print(f"     - 执行路线图: output/{project_name}-execution-plan.md")
+            self.console.print(f"     - 前端蓝图: output/{project_name}-frontend-blueprint.md")
             self.console.print(f"  2. 查看规范: super-dev spec show {change_id}")
             self.console.print(f"  3. 复制 AI 提示词: cat {prompt_file}")
-            self.console.print(f"  4. 开始开发: 回复 '开始' 或运行 'super-dev spec start {change_id}'")
+            self.console.print(f"  4. 开始开发: 按 tasks 顺序实现并持续更新规范")
 
         except Exception as e:
             self.console.print(f"[red]创建失败: {e}[/red]")
@@ -1726,6 +2075,7 @@ class SuperDevCLI:
                 project_name = '-'.join(words[:3]).lower()
             else:
                 project_name = "my-project"
+        project_name = self._sanitize_project_name(project_name)
 
         tech_stack = {
             "platform": args.platform,
@@ -1744,13 +2094,48 @@ class SuperDevCLI:
         self.console.print("")
 
         try:
+            # ========== 第 0 阶段: 需求增强 ==========
+            self.console.print("[cyan]第 0 阶段: 需求增强 (联网 + 知识库)...[/cyan]")
+            import os
+            from .orchestrator.knowledge import KnowledgeAugmenter
+
+            output_dir = project_dir / "output"
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            disable_web = args.offline or (
+                os.getenv("SUPER_DEV_DISABLE_WEB", "").strip().lower() in {"1", "true", "yes"}
+            )
+            augmenter = KnowledgeAugmenter(project_dir=project_dir, web_enabled=not disable_web)
+            knowledge_bundle = augmenter.augment(
+                requirement=args.description,
+                domain=args.domain or "",
+            )
+            research_file = output_dir / f"{project_name}-research.md"
+            research_file.write_text(augmenter.to_markdown(knowledge_bundle), encoding="utf-8")
+
+            enriched_description = knowledge_bundle.get("enriched_requirement", args.description)
+            self.console.print(f"  [green]✓[/green] 需求增强报告: {research_file}")
+            self.console.print(
+                f"  [dim]本地知识 {len(knowledge_bundle.get('local_knowledge', []))} 条 | "
+                f"联网结果 {len(knowledge_bundle.get('web_knowledge', []))} 条[/dim]"
+            )
+            self.console.print("")
+
             # ========== 第 1 阶段: 生成文档 ==========
             self.console.print("[cyan]第 1 阶段: 生成专业文档...[/cyan]")
-            from .creators import DocumentGenerator
+            from .creators import (
+                DocumentGenerator,
+                FrontendScaffoldBuilder,
+                ImplementationScaffoldBuilder,
+                RequirementParser,
+            )
+
+            parser = RequirementParser()
+            scenario = parser.detect_scenario(project_dir)
 
             doc_generator = DocumentGenerator(
                 name=project_name,
-                description=args.description,
+                description=enriched_description,
                 platform=args.platform,
                 frontend=args.frontend,
                 backend=args.backend,
@@ -1762,9 +2147,7 @@ class SuperDevCLI:
             arch_content = doc_generator.generate_architecture()
             uiux_content = doc_generator.generate_uiux()
 
-            # 创建输出目录并写入文件
-            output_dir = project_dir / "output"
-            output_dir.mkdir(parents=True, exist_ok=True)
+            # 写入文件
 
             prd_file = output_dir / f"{project_name}-prd.md"
             arch_file = output_dir / f"{project_name}-architecture.md"
@@ -1774,16 +2157,51 @@ class SuperDevCLI:
             arch_file.write_text(arch_content, encoding="utf-8")
             uiux_file.write_text(uiux_content, encoding="utf-8")
 
+            plan_file = output_dir / f"{project_name}-execution-plan.md"
+            frontend_blueprint_file = output_dir / f"{project_name}-frontend-blueprint.md"
+            plan_file.write_text(doc_generator.generate_execution_plan(scenario=scenario), encoding="utf-8")
+            frontend_blueprint_file.write_text(doc_generator.generate_frontend_blueprint(), encoding="utf-8")
+
             self.console.print(f"  [green]✓[/green] PRD: {prd_file}")
             self.console.print(f"  [green]✓[/green] 架构: {arch_file}")
             self.console.print(f"  [green]✓[/green] UI/UX: {uiux_file}")
+            self.console.print(f"  [green]✓[/green] 执行路线图: {plan_file}")
+            self.console.print(f"  [green]✓[/green] 前端蓝图: {frontend_blueprint_file}")
+            self.console.print(f"  [dim]场景识别: {scenario}[/dim]")
             self.console.print("")
 
             # 保存技术栈到配置文件（供后续阶段使用）
             self._save_tech_stack_to_config(project_dir, tech_stack, args.description)
 
-            # ========== 第 2 阶段: 创建 Spec ==========
-            self.console.print("[cyan]第 2 阶段: 创建 Spec 规范...[/cyan]")
+            requirements = doc_generator.extract_requirements()
+            phases = parser.build_execution_phases(scenario, requirements)
+
+            # ========== 第 2 阶段: 生成前端可演示骨架 ==========
+            self.console.print("[cyan]第 2 阶段: 生成前端可演示骨架...[/cyan]")
+            frontend_builder = FrontendScaffoldBuilder(
+                project_dir=project_dir,
+                name=project_name,
+                description=args.description,
+                frontend=args.frontend,
+            )
+            frontend_files = frontend_builder.generate(
+                requirements=requirements,
+                phases=phases,
+                docs={
+                    "prd": str(prd_file),
+                    "architecture": str(arch_file),
+                    "uiux": str(uiux_file),
+                    "plan": str(plan_file),
+                    "frontend_blueprint": str(frontend_blueprint_file),
+                },
+            )
+            self.console.print(f"  [green]✓[/green] 页面: {frontend_files['html']}")
+            self.console.print(f"  [green]✓[/green] 样式: {frontend_files['css']}")
+            self.console.print(f"  [green]✓[/green] 脚本: {frontend_files['js']}")
+            self.console.print("")
+
+            # ========== 第 3 阶段: 创建 Spec ==========
+            self.console.print("[cyan]第 3 阶段: 创建 Spec 规范...[/cyan]")
             from .creators import SpecBuilder
 
             spec_builder = SpecBuilder(
@@ -1792,17 +2210,38 @@ class SuperDevCLI:
                 description=args.description
             )
 
-            requirements = doc_generator.extract_requirements()
-            change_id = spec_builder.create_change(requirements, tech_stack)
+            change_id = spec_builder.create_change(requirements, tech_stack, scenario=scenario)
 
             self.console.print(f"  [green]✓[/green] 变更 ID: {change_id}")
             self.console.print(f"  [green]✓[/green] Spec: .super-dev/changes/{change_id}/")
             self.console.print("")
 
-            # ========== 第 3 阶段: 红队审查 ==========
+            # ========== 第 4 阶段: 生成实现骨架 ==========
+            scaffold_result = {"frontend_files": [], "backend_files": []}
+            if not args.skip_scaffold:
+                self.console.print("[cyan]第 4 阶段: 生成前后端实现骨架...[/cyan]")
+                implementation_builder = ImplementationScaffoldBuilder(
+                    project_dir=project_dir,
+                    name=project_name,
+                    frontend=args.frontend,
+                    backend=args.backend,
+                )
+                scaffold_result = implementation_builder.generate(requirements=requirements)
+                self.console.print(
+                    f"  [green]✓[/green] 前端骨架文件: {len(scaffold_result['frontend_files'])} 个"
+                )
+                self.console.print(
+                    f"  [green]✓[/green] 后端骨架文件: {len(scaffold_result['backend_files'])} 个"
+                )
+                self.console.print("")
+            else:
+                self.console.print("[yellow]第 4 阶段: 生成前后端实现骨架 (跳过)[/yellow]")
+                self.console.print("")
+
+            # ========== 第 5 阶段: 红队审查 ==========
             redteam_report = None
             if not args.skip_redteam:
-                self.console.print("[cyan]第 3 阶段: 红队审查...[/cyan]")
+                self.console.print("[cyan]第 5 阶段: 红队审查...[/cyan]")
                 from .reviewers import RedTeamReviewer
 
                 reviewer = RedTeamReviewer(
@@ -1824,18 +2263,20 @@ class SuperDevCLI:
                 self.console.print(f"  [green]✓[/green] 报告: {redteam_file}")
                 self.console.print("")
             else:
-                self.console.print("[yellow]第 3 阶段: 红队审查 (跳过)[/yellow]")
+                self.console.print("[yellow]第 5 阶段: 红队审查 (跳过)[/yellow]")
                 self.console.print("")
 
-            # ========== 第 4 阶段: 质量门禁 ==========
+            # ========== 第 6 阶段: 质量门禁 ==========
             if not args.skip_quality_gate:
-                self.console.print("[cyan]第 4 阶段: 质量门禁检查...[/cyan]")
+                self.console.print("[cyan]第 6 阶段: 质量门禁检查...[/cyan]")
                 from .reviewers import QualityGateChecker
 
                 gate_checker = QualityGateChecker(
                     project_dir=project_dir,
                     name=project_name,
-                    tech_stack=tech_stack
+                    tech_stack=tech_stack,
+                    scenario_override=scenario,
+                    threshold_override=args.quality_threshold,
                 )
 
                 gate_result = gate_checker.check(redteam_report)
@@ -1863,12 +2304,12 @@ class SuperDevCLI:
                         self.console.print(f"  - {failure}")
                     return 1
             else:
-                self.console.print("[yellow]第 4 阶段: 质量门禁检查 (跳过)[/yellow]")
+                self.console.print("[yellow]第 6 阶段: 质量门禁检查 (跳过)[/yellow]")
                 self.console.print("[dim]提示: 使用 --skip-quality-gate 跳过了质量门禁检查，建议后续补充测试和质量检查[/dim]")
                 self.console.print("")
 
-            # ========== 第 5 阶段: 代码审查指南 ==========
-            self.console.print("[cyan]第 5 阶段: 生成代码审查指南...[/cyan]")
+            # ========== 第 7 阶段: 代码审查指南 ==========
+            self.console.print("[cyan]第 7 阶段: 生成代码审查指南...[/cyan]")
             from .reviewers import CodeReviewGenerator
 
             review_gen = CodeReviewGenerator(
@@ -1884,8 +2325,8 @@ class SuperDevCLI:
             self.console.print(f"  [green]✓[/green] 代码审查指南: {review_file}")
             self.console.print("")
 
-            # ========== 第 6 阶段: AI 提示词 ==========
-            self.console.print("[cyan]第 6 阶段: 生成 AI 提示词...[/cyan]")
+            # ========== 第 8 阶段: AI 提示词 ==========
+            self.console.print("[cyan]第 8 阶段: 生成 AI 提示词...[/cyan]")
             from .creators import AIPromptGenerator
 
             prompt_gen = AIPromptGenerator(
@@ -1900,8 +2341,8 @@ class SuperDevCLI:
             self.console.print(f"  [green]✓[/green] AI 提示词: {prompt_file}")
             self.console.print("")
 
-            # ========== 第 7 阶段: CI/CD 配置 ==========
-            self.console.print(f"[cyan]第 7 阶段: 生成 CI/CD 配置 ({args.cicd.upper()})...[/cyan]")
+            # ========== 第 9 阶段: CI/CD 配置 ==========
+            self.console.print(f"[cyan]第 9 阶段: 生成 CI/CD 配置 ({args.cicd.upper()})...[/cyan]")
             from .deployers import CICDGenerator
 
             cicd_gen = CICDGenerator(
@@ -1921,8 +2362,22 @@ class SuperDevCLI:
 
             self.console.print("")
 
-            # ========== 第 8 阶段: 数据库迁移 ==========
-            self.console.print("[cyan]第 8 阶段: 生成数据库迁移脚本...[/cyan]")
+            # ========== 第 10 阶段: 部署修复模板 ==========
+            self.console.print("[cyan]第 10 阶段: 生成部署修复模板...[/cyan]")
+            remediation_outputs = self._export_deploy_remediation_templates(
+                project_dir=project_dir,
+                cicd_platform=args.cicd,
+                only_missing=True,
+            )
+            self.console.print(f"  [green]✓[/green] 环境模板: {remediation_outputs['env_file']}")
+            self.console.print(f"  [green]✓[/green] 检查清单: {remediation_outputs['checklist_file']}")
+            self.console.print(f"  [dim]缺失变量条目: {remediation_outputs['items_count']}[/dim]")
+            if remediation_outputs.get("per_platform_files"):
+                self.console.print(f"  [green]✓[/green] 平台拆分模板: {len(remediation_outputs['per_platform_files'])} 组")
+            self.console.print("")
+
+            # ========== 第 11 阶段: 数据库迁移 ==========
+            self.console.print("[cyan]第 11 阶段: 生成数据库迁移脚本...[/cyan]")
             from .deployers import MigrationGenerator
 
             migration_gen = MigrationGenerator(
@@ -1948,30 +2403,56 @@ class SuperDevCLI:
             self.console.print("")
             self.console.print("[cyan]生成的文件:[/cyan]")
             self.console.print("  文档:")
+            self.console.print(f"    - 需求增强报告: output/{project_name}-research.md")
             self.console.print(f"    - PRD: output/{project_name}-prd.md")
             self.console.print(f"    - 架构: output/{project_name}-architecture.md")
             self.console.print(f"    - UI/UX: output/{project_name}-uiux.md")
+            self.console.print(f"    - 执行路线图: output/{project_name}-execution-plan.md")
+            self.console.print(f"    - 前端蓝图: output/{project_name}-frontend-blueprint.md")
             if not args.skip_redteam:
                 self.console.print(f"    - 红队审查: output/{project_name}-redteam.md")
-            self.console.print(f"    - 质量门禁: output/{project_name}-quality-gate.md")
+            if not args.skip_quality_gate:
+                self.console.print(f"    - 质量门禁: output/{project_name}-quality-gate.md")
             self.console.print(f"    - 代码审查: output/{project_name}-code-review.md")
             self.console.print(f"    - AI 提示词: output/{project_name}-ai-prompt.md")
             self.console.print("")
+            self.console.print("  前端演示:")
+            self.console.print("    - output/frontend/index.html")
+            self.console.print("    - output/frontend/styles.css")
+            self.console.print("    - output/frontend/app.js")
+            self.console.print("")
+            if not args.skip_scaffold:
+                self.console.print("  实现骨架:")
+                self.console.print("    - frontend/src/*")
+                self.console.print("    - backend/src/*")
+                self.console.print("    - backend/API_CONTRACT.md")
+                self.console.print("")
             self.console.print("  CI/CD:")
             for file_path in cicd_files.keys():
                 self.console.print(f"    - {file_path}")
+            self.console.print("")
+            self.console.print("  部署修复模板:")
+            self.console.print(f"    - {Path(remediation_outputs['env_file']).name}")
+            self.console.print(f"    - {Path(remediation_outputs['checklist_file']).relative_to(project_dir)}")
+            if remediation_outputs.get("per_platform_files"):
+                for item in remediation_outputs["per_platform_files"]:
+                    self.console.print(
+                        f"    - {Path(item['checklist_file']).relative_to(project_dir)}"
+                    )
+                    self.console.print(
+                        f"    - {Path(item['env_file']).relative_to(project_dir)}"
+                    )
             self.console.print("")
             self.console.print("  数据库迁移:")
             for file_path in migration_files.keys():
                 self.console.print(f"    - {file_path}")
             self.console.print("")
             self.console.print("[cyan]下一步:[/cyan]")
-            self.console.print("  1. 查看生成的文档和审查报告")
-            self.console.print("  2. 复制 AI 提示词给 AI 编码助手开始开发")
-            self.console.print("  3. 使用代码审查指南进行代码审查")
+            self.console.print("  1. 打开 output/frontend/index.html 评审前端骨架")
+            self.console.print("  2. 对照执行路线图按阶段推进开发")
+            self.console.print("  3. 使用代码审查指南进行评审和修复")
             self.console.print("  4. 配置 CI/CD 平台 (设置 secrets/credentials)")
-            self.console.print("  5. 运行数据库迁移脚本")
-            self.console.print("  6. 推送代码触发 CI/CD 流水线")
+            self.console.print("  5. 运行数据库迁移脚本并推送代码触发流水线")
             self.console.print("")
 
         except Exception as e:
@@ -2013,6 +2494,112 @@ class SuperDevCLI:
             self.console.print(f"[green]✓[/green] {args.key} = {args.value}")
 
         return 0
+
+    def _cmd_skill(self, args) -> int:
+        """Skill 管理"""
+        from .skills import SkillManager
+
+        manager = SkillManager(Path.cwd())
+
+        if args.action == "targets":
+            self.console.print("[cyan]支持的 Skill 目标平台:[/cyan]")
+            for target in manager.list_targets():
+                self.console.print(f"  - {target}")
+            return 0
+
+        if args.action == "list":
+            installed = manager.list_installed(args.target)
+            if not installed:
+                self.console.print(f"[dim]{args.target} 未安装任何 skill[/dim]")
+                return 0
+
+            self.console.print(f"[cyan]{args.target} 已安装 skill:[/cyan]")
+            for skill_name in installed:
+                self.console.print(f"  - {skill_name}")
+            return 0
+
+        if args.action == "install":
+            if not args.source_or_name:
+                self.console.print("[red]请提供 skill 来源（目录/git/super-dev）[/red]")
+                return 1
+
+            try:
+                result = manager.install(
+                    source=args.source_or_name,
+                    target=args.target,
+                    name=args.name,
+                    force=args.force,
+                )
+            except Exception as e:
+                self.console.print(f"[red]Skill 安装失败: {e}[/red]")
+                return 1
+
+            self.console.print("[green]✓ Skill 安装成功[/green]")
+            self.console.print(f"  名称: {result.name}")
+            self.console.print(f"  目标: {result.target}")
+            self.console.print(f"  路径: {result.path}")
+            self.console.print(f"  来源: {result.source}")
+            return 0
+
+        if args.action == "uninstall":
+            if not args.source_or_name:
+                self.console.print("[red]请提供要卸载的 skill 名称[/red]")
+                return 1
+
+            try:
+                removed_path = manager.uninstall(args.source_or_name, args.target)
+            except Exception as e:
+                self.console.print(f"[red]Skill 卸载失败: {e}[/red]")
+                return 1
+
+            self.console.print("[green]✓ Skill 已卸载[/green]")
+            self.console.print(f"  路径: {removed_path}")
+            return 0
+
+        self.console.print("[yellow]未知 skill 操作[/yellow]")
+        return 1
+
+    def _cmd_integrate(self, args) -> int:
+        """多平台集成配置"""
+        from .integrations import IntegrationManager
+
+        manager = IntegrationManager(Path.cwd())
+
+        if args.action == "list":
+            self.console.print("[cyan]支持的集成平台:[/cyan]")
+            for target in manager.list_targets():
+                self.console.print(f"  - {target.name}: {target.description}")
+            return 0
+
+        if args.action == "setup":
+            if args.all:
+                results = manager.setup_all(force=args.force)
+                self.console.print("[green]✓ 已完成所有平台集成配置[/green]")
+                for platform, files in results.items():
+                    if not files:
+                        self.console.print(f"  {platform}: [dim]无变更[/dim]")
+                        continue
+                    self.console.print(f"  {platform}:")
+                    for file_path in files:
+                        self.console.print(f"    - {file_path}")
+                return 0
+
+            if not args.target:
+                self.console.print("[red]请通过 --target 指定平台，或使用 --all[/red]")
+                return 1
+
+            files = manager.setup(args.target, force=args.force)
+            if not files:
+                self.console.print("[yellow]配置已存在，无需修改（可加 --force 覆盖）[/yellow]")
+                return 0
+
+            self.console.print("[green]✓ 集成配置已生成[/green]")
+            for file_path in files:
+                self.console.print(f"  - {file_path}")
+            return 0
+
+        self.console.print("[yellow]未知 integrate 操作[/yellow]")
+        return 1
 
     def _cmd_spec(self, args) -> int:
         """Spec-Driven Development 命令"""
@@ -2277,6 +2864,76 @@ class SuperDevCLI:
 
     # ==================== 辅助方法 ====================
 
+    def _is_direct_requirement_input(self, argv: list[str]) -> bool:
+        """判断是否为直达需求输入（非子命令模式）"""
+        if not argv:
+            return False
+
+        first = argv[0]
+        if first.startswith("-"):
+            return False
+
+        known_commands = {
+            "init", "analyze", "workflow", "studio", "expert", "quality", "preview",
+            "deploy", "create", "design", "spec", "pipeline", "config", "skill", "integrate",
+        }
+        return first not in known_commands
+
+    def _normalize_pipeline_frontend(self, frontend: str) -> str:
+        """将 init 的前端框架映射到 pipeline 可接受值"""
+        mapping = {
+            "next": "react",
+            "remix": "react",
+            "react-vite": "react",
+            "gatsby": "react",
+            "nuxt": "vue",
+            "vue-vite": "vue",
+            "sveltekit": "svelte",
+            "astro": "react",
+            "solid": "react",
+            "qwik": "react",
+        }
+        if frontend in {"react", "vue", "angular", "svelte", "none"}:
+            return frontend
+        return mapping.get(frontend, "react")
+
+    def _sanitize_project_name(self, name: str) -> str:
+        """清理项目名，避免路径非法字符"""
+        import re
+
+        cleaned = re.sub(r"[\\/:*?\"<>|]+", "-", name.strip())
+        cleaned = re.sub(r"\s+", "-", cleaned)
+        cleaned = re.sub(r"-{2,}", "-", cleaned).strip("-")
+        return cleaned or "my-project"
+
+    def _run_direct_requirement(self, description: str) -> int:
+        """将 `super-dev <需求描述>` 直达路由到完整流水线"""
+        if not description:
+            self.console.print("[red]请提供需求描述[/red]")
+            return 1
+
+        config_manager = get_config_manager()
+        config_exists = config_manager.exists()
+        config = config_manager.config
+
+        args = argparse.Namespace(
+            description=description,
+            platform=config.platform if config_exists else "web",
+            frontend=self._normalize_pipeline_frontend(config.frontend) if config_exists else "react",
+            backend=config.backend if config_exists else "node",
+            domain=config.domain if config_exists else "",
+            name=None,
+            cicd="all",
+            skip_redteam=False,
+            skip_scaffold=False,
+            skip_quality_gate=False,
+            offline=False,
+            quality_threshold=None,
+        )
+
+        self.console.print("[cyan]需求直达模式：自动执行完整流水线[/cyan]")
+        return self._cmd_pipeline(args)
+
     def _save_tech_stack_to_config(self, project_dir: Path, tech_stack: dict, description: str) -> None:
         """保存技术栈到项目配置文件"""
         import yaml
@@ -2300,6 +2957,217 @@ class SuperDevCLI:
         # 保存配置
         with open(config_file, 'w', encoding='utf-8') as f:
             yaml.dump(config, f, allow_unicode=True, default_flow_style=False)
+
+    def _export_deploy_remediation_templates(
+        self,
+        project_dir: Path,
+        cicd_platform: str,
+        only_missing: bool = True,
+    ) -> dict:
+        """导出部署修复模板：环境变量示例 + secrets 检查清单。"""
+        env_hints_map = {
+            "github": [
+                {"name": "DOCKER_USERNAME", "description": "Docker 镜像仓库用户名"},
+                {"name": "DOCKER_PASSWORD", "description": "Docker 镜像仓库密码/Token"},
+                {"name": "KUBE_CONFIG_DEV", "description": "开发环境 Kubernetes kubeconfig"},
+                {"name": "KUBE_CONFIG_PROD", "description": "生产环境 Kubernetes kubeconfig"},
+            ],
+            "gitlab": [
+                {"name": "CI_REGISTRY_USER", "description": "GitLab Registry 用户名"},
+                {"name": "CI_REGISTRY_PASSWORD", "description": "GitLab Registry 密码/Token"},
+                {"name": "KUBE_CONTEXT_DEV", "description": "开发环境 K8s 上下文"},
+                {"name": "KUBE_CONTEXT_PROD", "description": "生产环境 K8s 上下文"},
+            ],
+            "azure": [
+                {"name": "AZURE_ACR_SERVICE_CONNECTION", "description": "Azure ACR 服务连接标识"},
+                {"name": "AZURE_DEV_K8S_CONNECTION", "description": "开发环境 AKS 服务连接标识"},
+                {"name": "AZURE_PROD_K8S_CONNECTION", "description": "生产环境 AKS 服务连接标识"},
+            ],
+            "bitbucket": [
+                {"name": "REGISTRY_URL", "description": "镜像仓库地址"},
+                {"name": "KUBE_CONFIG_DEV", "description": "开发环境 Kubernetes kubeconfig"},
+                {"name": "KUBE_CONFIG_PROD", "description": "生产环境 Kubernetes kubeconfig"},
+            ],
+        }
+        manual_hints_map = {
+            "jenkins": [
+                "Jenkins Credentials: docker-credentials",
+                "Jenkins Credentials: kubeconfig-dev",
+                "Jenkins Credentials: kubeconfig-prod",
+            ]
+        }
+        platform_guidance_map = {
+            "github": [
+                "在 GitHub Settings > Secrets and variables > Actions 配置变量。",
+                "按 dev/prod 环境拆分敏感变量。",
+            ],
+            "gitlab": [
+                "在 GitLab Settings > CI/CD > Variables 中配置变量并启用 Masked。",
+            ],
+            "jenkins": [
+                "在 Jenkins Credentials 中创建与流水线一致的凭据 ID。",
+            ],
+            "azure": [
+                "在 Azure DevOps 配置 Service Connection 和 Variable Group。",
+            ],
+            "bitbucket": [
+                "在 Bitbucket Repository variables 中配置密钥。",
+            ],
+        }
+
+        def _resolve_env_hints(platform: str) -> list[dict]:
+            if platform == "all":
+                merged = []
+                seen = set()
+                for item_platform in ("github", "gitlab", "azure", "bitbucket"):
+                    for item in env_hints_map.get(item_platform, []):
+                        if item["name"] in seen:
+                            continue
+                        seen.add(item["name"])
+                        merged.append(item)
+                return merged
+            return list(env_hints_map.get(platform, []))
+
+        def _resolve_manual_hints(platform: str) -> list[str]:
+            if platform == "all":
+                return list(manual_hints_map.get("jenkins", []))
+            return list(manual_hints_map.get(platform, []))
+
+        def _resolve_guidance(platform: str) -> list[str]:
+            if platform == "all":
+                merged = []
+                seen = set()
+                for item_platform in ("github", "gitlab", "jenkins", "azure", "bitbucket"):
+                    for item in platform_guidance_map.get(item_platform, []):
+                        if item in seen:
+                            continue
+                        seen.add(item)
+                        merged.append(item)
+                return merged
+            return list(platform_guidance_map.get(platform, []))
+
+        def _collect_items(platform: str) -> list[dict]:
+            env_hints = _resolve_env_hints(platform)
+            items = []
+            for item in env_hints:
+                name = item["name"]
+                present = bool(os.getenv(name, "").strip())
+                if only_missing and present:
+                    continue
+                items.append(
+                    {
+                        "name": name,
+                        "description": item["description"],
+                        "present": present,
+                        "template": f'{name}="<value>"',
+                    }
+                )
+            return items
+
+        def _write_env_example(file_path: Path, platform: str, items: list[dict]) -> None:
+            lines = [
+                "# Super Dev Deployment Environment Template",
+                f"# Platform: {platform}",
+                f"# only_missing: {str(only_missing).lower()}",
+                "",
+            ]
+            if not items:
+                lines.append("# No variables to export for current filter.")
+            else:
+                for item in items:
+                    lines.append(f"# {item['description']}")
+                    lines.append(item["template"])
+                    lines.append("")
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+        def _write_checklist(
+            file_path: Path,
+            platform: str,
+            items: list[dict],
+            manual_hints: list[str],
+            platform_guidance: list[str],
+        ) -> None:
+            lines = [
+                "# Deploy Remediation Checklist",
+                "",
+                f"- Platform: `{platform}`",
+                f"- only_missing: `{str(only_missing).lower()}`",
+                "",
+                "## Environment Variables",
+                "",
+                "| Name | Status | Description | Template |",
+                "|:---|:---:|:---|:---|",
+            ]
+            if items:
+                for item in items:
+                    status = "present" if item["present"] else "missing"
+                    lines.append(
+                        f"| `{item['name']}` | `{status}` | {item['description']} | `{item['template']}` |"
+                    )
+            else:
+                lines.append("| - | - | No variables in current filter | - |")
+
+            lines.extend(["", "## Platform Guidance", ""])
+            if platform_guidance:
+                lines.extend([f"- {line}" for line in platform_guidance])
+            else:
+                lines.append("- No guidance available.")
+
+            lines.extend(["", "## Manual Requirements", ""])
+            if manual_hints:
+                lines.extend([f"- {line}" for line in manual_hints])
+            else:
+                lines.append("- No manual requirements.")
+
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+        output_dir = project_dir / "output" / "deploy"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        aggregate_items = _collect_items(cicd_platform)
+        env_path = project_dir / ".env.deploy.example"
+        checklist_path = output_dir / f"{cicd_platform}-secrets-checklist.md"
+        _write_env_example(env_path, cicd_platform, aggregate_items)
+        _write_checklist(
+            checklist_path,
+            cicd_platform,
+            aggregate_items,
+            _resolve_manual_hints(cicd_platform),
+            _resolve_guidance(cicd_platform),
+        )
+
+        per_platform_files = []
+        if cicd_platform == "all":
+            platform_dir = output_dir / "platforms"
+            for platform in ("github", "gitlab", "jenkins", "azure", "bitbucket"):
+                platform_items = _collect_items(platform)
+                platform_env = platform_dir / f".env.deploy.{platform}.example"
+                platform_checklist = platform_dir / f"{platform}-secrets-checklist.md"
+                _write_env_example(platform_env, platform, platform_items)
+                _write_checklist(
+                    platform_checklist,
+                    platform,
+                    platform_items,
+                    _resolve_manual_hints(platform),
+                    _resolve_guidance(platform),
+                )
+                per_platform_files.append(
+                    {
+                        "platform": platform,
+                        "env_file": str(platform_env),
+                        "checklist_file": str(platform_checklist),
+                        "items_count": len(platform_items),
+                    }
+                )
+
+        return {
+            "env_file": str(env_path),
+            "checklist_file": str(checklist_path),
+            "items_count": len(aggregate_items),
+            "per_platform_files": per_platform_files,
+        }
 
     def _print_banner(self) -> None:
         """打印欢迎横幅"""

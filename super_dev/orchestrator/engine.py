@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 """
 开发：Excellent（11964948@qq.com）
-功能：工作流编排引擎 - 协调 6 阶段工作流
+功能：工作流编排引擎 - 协调 11 阶段工作流（含第 0 阶段）
 作用：管理任务执行、专家调度、质量门禁
 创建时间：2025-12-30
-最后修改：2025-12-30
+最后修改：2026-02-24
 """
 
 import json
 import asyncio
+import traceback
 from pathlib import Path
 from datetime import datetime
 from typing import Any, Callable, Optional
@@ -25,6 +26,13 @@ except ImportError:
     RICH_AVAILABLE = False
 
 from ..config.manager import ConfigManager, get_config_manager
+from ..exceptions import (
+    WorkflowError,
+    PhaseExecutionError,
+    QualityGateError,
+    ConfigurationError
+)
+from ..utils import get_logger
 
 
 class Phase(Enum):
@@ -68,15 +76,14 @@ class WorkflowEngine:
     """工作流编排引擎"""
 
     def __init__(self, project_dir: Optional[Path] = None):
-        """
-        初始化工作流引擎
-
-        Args:
-            project_dir: 项目目录
-        """
         self.project_dir = Path.cwd() if project_dir is None else project_dir
         self.config_manager = get_config_manager(self.project_dir)
         self.console = Console() if RICH_AVAILABLE else None
+        self.logger = get_logger(
+            'workflow_engine',
+            level='INFO',
+            log_file=self.project_dir / 'logs' / 'workflow.log'
+        )
 
         # 阶段注册表
         self._phase_handlers: dict[Phase, Callable] = {}
@@ -84,9 +91,10 @@ class WorkflowEngine:
         # 注册默认阶段处理器
         self._register_default_handlers()
 
+        self.logger.info(f"工作流引擎初始化完成", extra={'project_dir': str(self.project_dir)})
+
     def _register_default_handlers(self) -> None:
         """注册默认阶段处理器"""
-        # 这些方法将在后续实现中连接到实际的 Python 脚本
         self._phase_handlers[Phase.DISCOVERY] = self._phase_discovery
         self._phase_handlers[Phase.INTELLIGENCE] = self._phase_intelligence
         self._phase_handlers[Phase.DRAFTING] = self._phase_drafting
@@ -96,72 +104,76 @@ class WorkflowEngine:
         self._phase_handlers[Phase.DEPLOYMENT] = self._phase_deployment
 
     def register_phase_handler(self, phase: Phase, handler: Callable) -> None:
-        """
-        注册自定义阶段处理器
-
-        Args:
-            phase: 阶段
-            handler: 处理函数
-        """
         self._phase_handlers[phase] = handler
 
     async def run(
         self,
         phases: Optional[list[Phase]] = None,
-        context: Optional[WorkflowContext] = None
+        context: Optional[WorkflowContext] = None,
+        stop_requested: Optional[Callable[[], bool]] = None,
     ) -> dict[Phase, PhaseResult]:
-        """
-        运行工作流
-
-        Args:
-            phases: 要执行的阶段列表，默认执行全部
-            context: 工作流上下文
-
-        Returns:
-            各阶段执行结果
-        """
-        # 初始化上下文
         if context is None:
             context = WorkflowContext(
                 project_dir=self.project_dir,
                 config=self.config_manager
             )
 
-        # 确定要执行的阶段
         if phases is None:
             phases = self._get_phases_from_config()
 
         results = {}
-
-        # 打印工作流开始
         self._print_workflow_start(phases)
 
-        # 执行各阶段
         for phase in phases:
-            result = await self._run_phase(phase, context)
-            results[phase] = result
-
-            # 质量门禁检查
-            if not result.success:
-                self._print_phase_failed(phase, result)
+            if stop_requested and stop_requested():
+                self.logger.warning(
+                    f"工作流收到停止请求，在阶段 {phase.value} 开始前终止",
+                    extra={"phase": phase.value}
+                )
                 break
 
-            if result.quality_score < self.config_manager.config.quality_gate:
-                self._print_quality_gate_failed(phase, result)
+            try:
+                result = await self._run_phase(phase, context)
+                results[phase] = result
+
+                # 质量门禁检查
+                if result.quality_score < self.config_manager.config.quality_gate:
+                    self._print_quality_gate_failed(phase, result)
+                    raise QualityGateError(
+                        score=result.quality_score,
+                        threshold=self.config_manager.config.quality_gate,
+                        details={'phase': phase.value}
+                    )
+
+                self._print_phase_complete(phase, result)
+
+            except QualityGateError as e:
+                self.logger.error(
+                    f"工作流在阶段 {phase.value} 因质量门禁终止",
+                    extra={'error': str(e), 'phase': phase.value}
+                )
+                if phase in results:
+                    results[phase].errors.append(str(e))
                 break
 
-            self._print_phase_complete(phase, result)
+            except PhaseExecutionError as e:
+                self.logger.error(
+                    f"工作流在阶段 {phase.value} 终止",
+                    extra={'error': str(e), 'phase': phase.value}
+                )
+                results[phase] = PhaseResult(
+                    phase=phase,
+                    success=False,
+                    duration=0.0,
+                    errors=[str(e)]
+                )
+                break
 
-        # 打印工作流完成
         self._print_workflow_complete(results)
-
-        # 保存执行报告
         self._save_report(results)
-
         return results
 
     def _get_phases_from_config(self) -> list[Phase]:
-        """从配置获取要执行的阶段"""
         config_phases = self.config_manager.config.phases
         phases = []
         phase_map = {
@@ -179,101 +191,573 @@ class WorkflowEngine:
         return phases
 
     async def _run_phase(self, phase: Phase, context: WorkflowContext) -> PhaseResult:
-        """
-        执行单个阶段
-
-        Args:
-            phase: 阶段
-            context: 上下文
-
-        Returns:
-            阶段执行结果
-        """
         start_time = datetime.now()
+        phase_name = phase.value.upper()
+
+        self.logger.info(f"开始执行阶段: {phase_name}", extra={'phase': phase_name})
 
         try:
-            # 获取阶段处理器
             handler = self._phase_handlers.get(phase)
             if handler is None:
-                raise ValueError(f"No handler registered for phase: {phase}")
+                raise PhaseExecutionError(
+                    phase=phase_name,
+                    message=f"No handler registered for phase: {phase}",
+                    details={'available_phases': list(self._phase_handlers.keys())}
+                )
 
-            # 执行阶段
             output = await self._execute_handler(handler, context)
-
             duration = (datetime.now() - start_time).total_seconds()
+            quality_score = self._calculate_quality_score(phase, context)
+
+            self.logger.info(
+                f"阶段执行成功: {phase_name}",
+                extra={
+                    'phase': phase_name,
+                    'duration': duration,
+                    'quality_score': quality_score
+                }
+            )
 
             return PhaseResult(
                 phase=phase,
                 success=True,
                 duration=duration,
                 output=output,
-                quality_score=self._calculate_quality_score(phase, context)
+                quality_score=quality_score
             )
 
+        except PhaseExecutionError:
+            raise
+        except QualityGateError:
+            raise
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds()
-            return PhaseResult(
-                phase=phase,
-                success=False,
-                duration=duration,
-                errors=[str(e)]
-            )
+            error_details = {
+                'error_type': type(e).__name__,
+                'error_message': str(e),
+                'traceback': traceback.format_exc(),
+                'phase': phase_name,
+                'duration': duration
+            }
+            self.logger.error(f"阶段执行失败: {phase_name}", extra=error_details)
+            raise PhaseExecutionError(
+                phase=phase_name,
+                message=f"Phase execution failed: {str(e)}",
+                details=error_details
+            ) from e
 
     async def _execute_handler(self, handler: Callable, context: WorkflowContext) -> Any:
-        """执行处理器（支持同步和异步）"""
         if asyncio.iscoroutinefunction(handler):
             return await handler(context)
         else:
             return handler(context)
 
     def _calculate_quality_score(self, phase: Phase, context: WorkflowContext) -> float:
-        """计算质量分数"""
-        # 这里应该调用质量检查脚本
-        # 暂时返回默认分数
-        return 85.0
+        """使用真实质量评分引擎计算分数"""
+        try:
+            from .quality import QualityScorer
+            name = context.user_input.get("name", context.config.config.name or "project")
+            scorer = QualityScorer(project_dir=self.project_dir, name=name)
+            score = scorer.score_phase(
+                phase_name=phase.value,
+                context_data=context.user_input,
+            )
+            return float(score)
+        except Exception as e:
+            self.logger.warning(f"质量评分失败，使用默认值: {e}")
+            return 75.0
 
-    # ==================== 阶段处理器 ====================
+    # ==================== 阶段处理器（真实实现）====================
 
     async def _phase_discovery(self, context: WorkflowContext) -> Any:
-        """Phase 0: 发现阶段 - 需求 intake"""
-        from ...skills.super_dev.scripts.init_project import initialize_project
-        # 这里会调用 init_project.py
-        return {"status": "requirements_collected"}
+        """
+        第 0 阶段：需求增强
+        - 解析用户输入的自然语言需求
+        - 注入领域知识库
+        - 联网检索补充背景信息（可选）
+        """
+        from ..creators.requirement_parser import RequirementParser
+        from .knowledge import KnowledgeBase
+
+        user_input = context.user_input
+        description = user_input.get("description", "")
+        domain = user_input.get("domain", "")
+        offline = user_input.get("offline", False)
+
+        # 1. 解析结构化需求
+        parser = RequirementParser()
+        requirements = parser.parse_requirements(description)
+        scenario = parser.detect_scenario(self.project_dir)
+        context.user_input["scenario"] = scenario
+        context.user_input["requirements"] = requirements
+
+        # 2. 注入知识库
+        try:
+            kb = KnowledgeBase(self.project_dir)
+            knowledge = kb.get_domain_knowledge(domain) if domain else {}
+            context.research_data["knowledge"] = knowledge
+            context.user_input["knowledge_enhanced"] = bool(knowledge)
+        except Exception as e:
+            self.logger.warning(f"知识库注入跳过: {e}")
+            context.user_input["knowledge_enhanced"] = False
+
+        # 3. 联网检索（可选）
+        if not offline:
+            try:
+                web_results = await self._web_search(description)
+                context.research_data["web_results"] = web_results
+                context.user_input["web_research"] = bool(web_results)
+            except Exception as e:
+                self.logger.info(f"联网检索跳过（离线降级）: {e}")
+                context.user_input["web_research"] = False
+        else:
+            context.user_input["web_research"] = False
+
+        return {
+            "status": "discovery_complete",
+            "scenario": scenario,
+            "requirements_count": len(requirements),
+            "knowledge_enhanced": context.user_input.get("knowledge_enhanced"),
+            "web_research": context.user_input.get("web_research"),
+        }
 
     async def _phase_intelligence(self, context: WorkflowContext) -> Any:
-        """Phase 2: 情报阶段 - 市场研究、竞品分析"""
-        # 这里会调用 market_research.py, competitor_analysis.py, domain_research.py
-        return {"status": "intelligence_collected"}
+        """
+        第 0.5 阶段：市场情报
+        - 基于需求进行深度联网检索
+        - 竞品分析
+        - 技术趋势调研
+        """
+        description = context.user_input.get("description", "")
+        offline = context.user_input.get("offline", False)
+
+        intelligence = {
+            "trends": [],
+            "competitors": [],
+            "best_practices": [],
+        }
+
+        if not offline and description:
+            try:
+                # 技术趋势检索
+                trend_results = await self._web_search(f"{description} best practices 2024 2025")
+                if trend_results:
+                    intelligence["trends"] = trend_results[:3]
+
+                # 竞品检索
+                competitor_results = await self._web_search(f"{description} top alternatives tools")
+                if competitor_results:
+                    intelligence["competitors"] = competitor_results[:3]
+
+            except Exception as e:
+                self.logger.info(f"市场情报检索跳过: {e}")
+
+        context.research_data["intelligence"] = intelligence
+
+        return {
+            "status": "intelligence_complete",
+            "trends_count": len(intelligence["trends"]),
+            "competitors_count": len(intelligence["competitors"]),
+        }
 
     async def _phase_drafting(self, context: WorkflowContext) -> Any:
-        """Phase 3: 起草阶段 - 专家协作生成文档"""
-        # 这里会调用专家系统生成 PRD、架构、UI 等
-        return {"status": "documents_generated"}
+        """
+        第 1 阶段：专家协作生成文档
+        - PM 专家：生成 PRD
+        - ARCHITECT 专家：生成架构文档
+        - UI/UX 专家：生成 UI/UX 文档
+        """
+        from .experts import ExpertDispatcher
+
+        user_input = context.user_input
+        name = user_input.get("name", self.config_manager.config.name or "project")
+        description = user_input.get("description", "")
+        platform = user_input.get("platform", "web")
+        frontend = user_input.get("frontend", "react")
+        backend = user_input.get("backend", "node")
+        domain = user_input.get("domain", "")
+
+        dispatcher = ExpertDispatcher(self.project_dir)
+        result = dispatcher.dispatch_document_generation(
+            name=name,
+            description=description,
+            platform=platform,
+            frontend=frontend,
+            backend=backend,
+            domain=domain,
+        )
+
+        # 保存生成的文档到 output/ 目录
+        output_dir = self.project_dir / "output"
+        output_dir.mkdir(exist_ok=True)
+
+        saved_docs = []
+        for expert_output in result.outputs:
+            doc_path = output_dir / f"{name}-{expert_output.document_type}.md"
+            doc_path.write_text(expert_output.content, encoding="utf-8")
+            saved_docs.append(str(doc_path))
+            context.documents[expert_output.document_type] = expert_output.content
+
+        return {
+            "status": "documents_generated",
+            "documents": saved_docs,
+            "team_score": result.total_score,
+            "summary": result.summary,
+        }
 
     async def _phase_redteam(self, context: WorkflowContext) -> Any:
-        """Phase 4: 红队阶段 - 质量检查"""
-        # 这里会调用 quality_check.py
-        return {"status": "review_complete"}
+        """
+        第 5 阶段：红队审查
+        - SECURITY 专家：安全审查（注入、XSS、CSRF 等）
+        - 性能审查（N+1、缓存、分页）
+        - 架构审查（可扩展性、可维护性）
+        """
+        from .experts import ExpertDispatcher
+
+        user_input = context.user_input
+        name = user_input.get("name", self.config_manager.config.name or "project")
+        tech_stack = {
+            "platform": user_input.get("platform", "web"),
+            "frontend": user_input.get("frontend", "react"),
+            "backend": user_input.get("backend", "node"),
+            "domain": user_input.get("domain", ""),
+        }
+
+        dispatcher = ExpertDispatcher(self.project_dir)
+        expert_output = dispatcher.dispatch_redteam_review(name=name, tech_stack=tech_stack)
+
+        # 保存红队报告
+        output_dir = self.project_dir / "output"
+        output_dir.mkdir(exist_ok=True)
+        redteam_path = output_dir / f"{name}-redteam.md"
+        redteam_path.write_text(expert_output.content, encoding="utf-8")
+
+        # 保存报告到上下文（供 QA 阶段使用）
+        context.quality_reports["redteam"] = expert_output.metadata
+
+        return {
+            "status": "redteam_complete",
+            "report_path": str(redteam_path),
+            "score": expert_output.quality_score,
+            "critical_count": expert_output.metadata.get("critical_count", 0),
+            "high_count": expert_output.metadata.get("high_count", 0),
+            "issues": {
+                "security": expert_output.metadata.get("security_issues", []),
+                "performance": expert_output.metadata.get("performance_issues", []),
+                "architecture": expert_output.metadata.get("architecture_issues", []),
+            },
+        }
 
     async def _phase_qa(self, context: WorkflowContext) -> Any:
-        """Phase 5: QA 阶段 - 质量门禁"""
-        # 这里会进行最终质量检查
-        return {"status": "qa_passed"}
+        """
+        第 6 阶段：质量门禁
+        - QA 专家：多维度质量门禁检查
+        - 场景化阈值（0-1 自动放宽）
+        - 生成详细质量报告
+        """
+        from .experts import ExpertDispatcher
+        from ..reviewers.redteam import RedTeamReport, RedTeamReviewer
+
+        user_input = context.user_input
+        name = user_input.get("name", self.config_manager.config.name or "project")
+        tech_stack = {
+            "platform": user_input.get("platform", "web"),
+            "frontend": user_input.get("frontend", "react"),
+            "backend": user_input.get("backend", "node"),
+            "domain": user_input.get("domain", ""),
+        }
+        threshold_override = user_input.get("quality_threshold")
+
+        # 重新加载红队报告（如果存在）
+        redteam_report = None
+        try:
+            reviewer = RedTeamReviewer(
+                project_dir=self.project_dir,
+                name=name,
+                tech_stack=tech_stack,
+            )
+            redteam_report = reviewer.review()
+        except Exception as e:
+            self.logger.warning(f"红队报告加载失败，跳过: {e}")
+
+        dispatcher = ExpertDispatcher(self.project_dir)
+        expert_output = dispatcher.dispatch_quality_gate(
+            name=name,
+            tech_stack=tech_stack,
+            redteam_report=redteam_report,
+            threshold_override=threshold_override,
+        )
+
+        # 保存质量门禁报告
+        output_dir = self.project_dir / "output"
+        output_dir.mkdir(exist_ok=True)
+        qg_path = output_dir / f"{name}-quality-gate.md"
+        qg_path.write_text(expert_output.content, encoding="utf-8")
+
+        passed = expert_output.metadata.get("passed", False)
+        if not passed:
+            raise QualityGateError(
+                score=expert_output.quality_score,
+                threshold=threshold_override or 80,
+                details={"phase": "qa", "report_path": str(qg_path)}
+            )
+
+        return {
+            "status": "quality_gate_passed",
+            "score": expert_output.quality_score,
+            "scenario": expert_output.metadata.get("scenario"),
+            "report_path": str(qg_path),
+        }
 
     async def _phase_delivery(self, context: WorkflowContext) -> Any:
-        """Phase 6: 交付阶段 - 幻影交付"""
-        # 这里会调用 generate_preview.py
-        return {"status": "preview_generated"}
+        """
+        第 7-8 阶段：代码审查指南 + AI 提示词生成
+        - CODE 专家：代码审查指南
+        - CODE 专家：AI 提示词（用户复制给 AI 即可开始开发）
+        """
+        from .experts import ExpertDispatcher
+
+        user_input = context.user_input
+        name = user_input.get("name", self.config_manager.config.name or "project")
+        tech_stack = {
+            "platform": user_input.get("platform", "web"),
+            "frontend": user_input.get("frontend", "react"),
+            "backend": user_input.get("backend", "node"),
+            "domain": user_input.get("domain", ""),
+        }
+
+        dispatcher = ExpertDispatcher(self.project_dir)
+        output_dir = self.project_dir / "output"
+        output_dir.mkdir(exist_ok=True)
+        saved = []
+
+        # 代码审查指南
+        try:
+            cr_output = dispatcher.dispatch_code_review(name=name, tech_stack=tech_stack)
+            cr_path = output_dir / f"{name}-code-review.md"
+            cr_path.write_text(cr_output.content, encoding="utf-8")
+            saved.append(str(cr_path))
+        except Exception as e:
+            self.logger.warning(f"代码审查指南生成跳过: {e}")
+
+        # AI 提示词
+        try:
+            ai_output = dispatcher.dispatch_ai_prompt(name=name)
+            ai_path = output_dir / f"{name}-ai-prompt.md"
+            ai_path.write_text(ai_output.content, encoding="utf-8")
+            saved.append(str(ai_path))
+        except Exception as e:
+            self.logger.warning(f"AI 提示词生成跳过: {e}")
+
+        return {
+            "status": "delivery_complete",
+            "files": saved,
+        }
 
     async def _phase_deployment(self, context: WorkflowContext) -> Any:
-        """Phase 7: 部署阶段 - 工业化部署"""
-        # 这里会调用 generate_dockerfile.py, generate_ci_cd.py
-        return {"status": "deployment_ready"}
+        """
+        第 9-10 阶段：CI/CD 配置 + 数据库迁移
+        - DEVOPS 专家：生成 5 大 CI/CD 平台配置
+        - DBA 专家：生成 6 种 ORM 数据库迁移脚本
+        """
+        from .experts import ExpertDispatcher
+
+        user_input = context.user_input
+        name = user_input.get("name", self.config_manager.config.name or "project")
+        tech_stack = {
+            "platform": user_input.get("platform", "web"),
+            "frontend": user_input.get("frontend", "react"),
+            "backend": user_input.get("backend", "node"),
+            "domain": user_input.get("domain", ""),
+        }
+        cicd_platform = user_input.get("cicd", "github")
+        orm = user_input.get("orm", self._detect_orm())
+
+        dispatcher = ExpertDispatcher(self.project_dir)
+        output_dir = self.project_dir / "output"
+        output_dir.mkdir(exist_ok=True)
+        saved = []
+
+        # CI/CD 配置
+        try:
+            cicd_output = dispatcher.dispatch_cicd(
+                name=name,
+                tech_stack=tech_stack,
+                cicd_platform=cicd_platform,
+            )
+            cicd_path = output_dir / f"{name}-cicd.md"
+            cicd_path.write_text(cicd_output.content, encoding="utf-8")
+            saved.append(str(cicd_path))
+        except Exception as e:
+            self.logger.warning(f"CI/CD 配置生成跳过: {e}")
+
+        # 数据库迁移
+        try:
+            migration_output = dispatcher.dispatch_migration(
+                name=name,
+                tech_stack=tech_stack,
+                orm=orm,
+            )
+            migration_path = output_dir / f"{name}-migration.md"
+            migration_path.write_text(migration_output.content, encoding="utf-8")
+            saved.append(str(migration_path))
+        except Exception as e:
+            self.logger.warning(f"数据库迁移脚本生成跳过: {e}")
+
+        return {
+            "status": "deployment_ready",
+            "cicd_platform": cicd_platform,
+            "orm": orm,
+            "files": saved,
+        }
+
+    # ==================== 联网检索 ====================
+
+    async def _web_search(self, query: str, max_results: int = 5) -> list[dict]:
+        """
+        联网检索（优先使用 DuckDuckGo，自动降级到离线模式）
+        
+        中国大陆环境：DuckDuckGo API 通常可访问；
+        如需国内可访问的备选，可配置 TAVILY_API_KEY。
+        """
+        # 优先尝试 Tavily（如配置了 API Key）
+        import os
+        tavily_key = os.environ.get("TAVILY_API_KEY") or os.environ.get("SUPER_DEV_TAVILY_KEY")
+        if tavily_key:
+            try:
+                return await self._search_tavily(query, tavily_key, max_results)
+            except Exception as e:
+                self.logger.debug(f"Tavily 检索失败，降级到 DuckDuckGo: {e}")
+
+        # 降级到 DuckDuckGo（无需 API Key）
+        try:
+            return await self._search_duckduckgo(query, max_results)
+        except Exception as e:
+            self.logger.debug(f"DuckDuckGo 检索失败，进入完全离线模式: {e}")
+            return []
+
+    async def _search_duckduckgo(self, query: str, max_results: int = 5) -> list[dict]:
+        """使用 DuckDuckGo Instant Answer API 检索"""
+        import urllib.parse
+        import urllib.request
+
+        encoded_query = urllib.parse.quote(query)
+        url = f"https://api.duckduckgo.com/?q={encoded_query}&format=json&no_html=1&skip_disambig=1"
+
+        # 在线程池中执行阻塞 IO
+        loop = asyncio.get_event_loop()
+        response_text = await loop.run_in_executor(
+            None,
+            lambda: self._http_get(url, timeout=5)
+        )
+
+        if not response_text:
+            return []
+
+        data = json.loads(response_text)
+        results = []
+
+        # 摘要结果
+        if data.get("Abstract"):
+            results.append({
+                "title": data.get("Heading", query),
+                "snippet": data.get("Abstract", ""),
+                "url": data.get("AbstractURL", ""),
+                "source": "DuckDuckGo",
+            })
+
+        # 相关主题
+        for topic in data.get("RelatedTopics", [])[:max_results - 1]:
+            if isinstance(topic, dict) and topic.get("Text"):
+                results.append({
+                    "title": topic.get("Text", "")[:80],
+                    "snippet": topic.get("Text", ""),
+                    "url": topic.get("FirstURL", ""),
+                    "source": "DuckDuckGo",
+                })
+
+        return results[:max_results]
+
+    async def _search_tavily(self, query: str, api_key: str, max_results: int = 5) -> list[dict]:
+        """使用 Tavily API 进行深度检索"""
+        import json as json_mod
+        import urllib.request
+
+        payload = json_mod.dumps({
+            "api_key": api_key,
+            "query": query,
+            "search_depth": "basic",
+            "max_results": max_results,
+        }).encode("utf-8")
+
+        loop = asyncio.get_event_loop()
+        response_text = await loop.run_in_executor(
+            None,
+            lambda: self._http_post(
+                "https://api.tavily.com/search",
+                payload,
+                headers={"Content-Type": "application/json"},
+                timeout=10,
+            )
+        )
+
+        if not response_text:
+            return []
+
+        data = json.loads(response_text)
+        results = []
+        for item in data.get("results", [])[:max_results]:
+            results.append({
+                "title": item.get("title", ""),
+                "snippet": item.get("content", "")[:300],
+                "url": item.get("url", ""),
+                "source": "Tavily",
+            })
+        return results
+
+    def _http_get(self, url: str, timeout: int = 5) -> Optional[str]:
+        """同步 HTTP GET（在 executor 中执行）"""
+        import urllib.request
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "super-dev/1.0"})
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return resp.read().decode("utf-8", errors="ignore")
+        except Exception:
+            return None
+
+    def _http_post(self, url: str, data: bytes, headers: dict, timeout: int = 10) -> Optional[str]:
+        """同步 HTTP POST（在 executor 中执行）"""
+        import urllib.request
+        try:
+            req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return resp.read().decode("utf-8", errors="ignore")
+        except Exception:
+            return None
+
+    def _detect_orm(self) -> str:
+        """自动检测项目使用的 ORM"""
+        if (self.project_dir / "prisma").exists():
+            return "prisma"
+        if (self.project_dir / "requirements.txt").exists():
+            req = (self.project_dir / "requirements.txt").read_text(encoding="utf-8", errors="ignore")
+            if "sqlalchemy" in req.lower():
+                return "sqlalchemy"
+            if "django" in req.lower():
+                return "django"
+        if (self.project_dir / "package.json").exists():
+            pkg = (self.project_dir / "package.json").read_text(encoding="utf-8", errors="ignore")
+            if "typeorm" in pkg.lower():
+                return "typeorm"
+            if "sequelize" in pkg.lower():
+                return "sequelize"
+            if "mongoose" in pkg.lower():
+                return "mongoose"
+        return "prisma"
 
     # ==================== 打印方法 ====================
 
     def _print_workflow_start(self, phases: list[Phase]) -> None:
-        """打印工作流开始"""
         if self.console:
             self.console.print(Panel.fit(
                 f"[bold cyan]Super Dev 工作流引擎[/bold cyan]\n\n"
@@ -283,7 +767,6 @@ class WorkflowEngine:
             ))
 
     def _print_phase_complete(self, phase: Phase, result: PhaseResult) -> None:
-        """打印阶段完成"""
         if self.console:
             self.console.print(
                 f"[green]✓[/green] {phase.value}: "
@@ -291,7 +774,6 @@ class WorkflowEngine:
             )
 
     def _print_phase_failed(self, phase: Phase, result: PhaseResult) -> None:
-        """打印阶段失败"""
         if self.console:
             self.console.print(
                 f"[red]✗[/red] {phase.value}: "
@@ -299,7 +781,6 @@ class WorkflowEngine:
             )
 
     def _print_quality_gate_failed(self, phase: Phase, result: PhaseResult) -> None:
-        """打印质量门禁失败"""
         if self.console:
             gate = self.config_manager.config.quality_gate
             self.console.print(
@@ -308,9 +789,7 @@ class WorkflowEngine:
             )
 
     def _print_workflow_complete(self, results: dict[Phase, PhaseResult]) -> None:
-        """打印工作流完成"""
         if self.console:
-            # 创建结果表格
             table = Table(title="工作流执行结果")
             table.add_column("阶段", style="cyan")
             table.add_column("状态", style="green")
@@ -326,7 +805,6 @@ class WorkflowEngine:
                 quality = f"{result.quality_score:.0f}"
 
                 table.add_row(phase.value, status, duration, quality)
-
                 total_duration += result.duration
                 if result.success:
                     success_count += 1
@@ -338,7 +816,6 @@ class WorkflowEngine:
             )
 
     def _save_report(self, results: dict[Phase, PhaseResult]) -> None:
-        """保存执行报告"""
         output_dir = self.project_dir / self.config_manager.config.output_dir
         output_dir.mkdir(exist_ok=True)
 

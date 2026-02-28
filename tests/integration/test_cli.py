@@ -135,19 +135,29 @@ class TestCLIConfig:
 class TestCLIExpert:
     """测试 expert 命令"""
 
-    def test_expert_pm(self):
+    def test_expert_pm(self, temp_project_dir: Path):
         """测试调用 PM 专家"""
-        cli = SuperDevCLI()
-        result = cli.run(["expert", "PM", "帮我分析需求"])
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["expert", "PM", "帮我分析需求"])
+            assert result == 0
+            assert (temp_project_dir / "output" / "expert-pm-advice.md").exists()
+        finally:
+            os.chdir(original_cwd)
 
-        assert result == 0
-
-    def test_expert_architect(self):
+    def test_expert_architect(self, temp_project_dir: Path):
         """测试调用架构师专家"""
-        cli = SuperDevCLI()
-        result = cli.run(["expert", "ARCHITECT", "设计系统架构"])
-
-        assert result == 0
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["expert", "ARCHITECT", "设计系统架构"])
+            assert result == 0
+            assert (temp_project_dir / "output" / "expert-architect-advice.md").exists()
+        finally:
+            os.chdir(original_cwd)
 
 
 class TestCLIPreview:
@@ -155,13 +165,15 @@ class TestCLIPreview:
 
     def test_preview_generation(self, temp_project_dir: Path):
         """测试原型生成"""
+        preview_path = temp_project_dir / "preview.html"
         cli = SuperDevCLI()
         result = cli.run([
             "preview",
-            "-o", str(temp_project_dir / "preview.html")
+            "-o", str(preview_path)
         ])
 
         assert result == 0
+        assert preview_path.exists()
 
 
 class TestCLIDeploy:
@@ -169,21 +181,149 @@ class TestCLIDeploy:
 
     def test_deploy_docker(self, temp_project_dir: Path):
         """测试生成 Dockerfile"""
-        cli = SuperDevCLI()
-        result = cli.run(["deploy", "--docker"])
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["deploy", "--docker"])
+            assert result == 0
+            assert (temp_project_dir / "Dockerfile").exists()
+            assert (temp_project_dir / "k8s" / "deployment.yaml").exists()
+        finally:
+            os.chdir(original_cwd)
 
-        assert result == 0
-
-    def test_deploy_cicd_github(self):
+    def test_deploy_cicd_github(self, temp_project_dir: Path):
         """测试生成 GitHub Actions 配置"""
-        cli = SuperDevCLI()
-        result = cli.run(["deploy", "--cicd", "github"])
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["deploy", "--cicd", "github"])
+            assert result == 0
+            assert (temp_project_dir / ".github" / "workflows" / "ci.yml").exists()
+            assert (temp_project_dir / ".github" / "workflows" / "cd.yml").exists()
+        finally:
+            os.chdir(original_cwd)
 
-        assert result == 0
-
-    def test_deploy_cicd_gitlab(self):
+    def test_deploy_cicd_gitlab(self, temp_project_dir: Path):
         """测试生成 GitLab CI 配置"""
-        cli = SuperDevCLI()
-        result = cli.run(["deploy", "--cicd", "gitlab"])
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["deploy", "--cicd", "gitlab"])
+            assert result == 0
+            assert (temp_project_dir / ".gitlab-ci.yml").exists()
+        finally:
+            os.chdir(original_cwd)
 
+    def test_deploy_cicd_all_platforms(self, temp_project_dir: Path):
+        """测试一次生成五大 CI/CD 平台配置"""
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["deploy", "--cicd", "all"])
+            assert result == 0
+            assert (temp_project_dir / ".github" / "workflows" / "ci.yml").exists()
+            assert (temp_project_dir / ".github" / "workflows" / "cd.yml").exists()
+            assert (temp_project_dir / ".gitlab-ci.yml").exists()
+            assert (temp_project_dir / "Jenkinsfile").exists()
+            assert (temp_project_dir / ".azure-pipelines.yml").exists()
+            assert (temp_project_dir / "bitbucket-pipelines.yml").exists()
+        finally:
+            os.chdir(original_cwd)
+
+
+class TestCLIQuality:
+    """测试 quality 命令"""
+
+    def test_quality_document_check(self, temp_project_dir: Path):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            output_dir = temp_project_dir / "output"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            (output_dir / "demo-prd.md").write_text("# PRD", encoding="utf-8")
+
+            cli = SuperDevCLI()
+            result = cli.run(["quality", "--type", "prd"])
+            assert result == 0
+        finally:
+            os.chdir(original_cwd)
+
+    def test_quality_all_generates_report(self, temp_project_dir: Path):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["quality", "--type", "all"])
+            assert result in (0, 1)
+            assert any((temp_project_dir / "output").glob("*-quality-gate.md"))
+        finally:
+            os.chdir(original_cwd)
+
+
+class TestCLISkillAndIntegrate:
+    """测试 skill 和 integrate 命令"""
+
+    def test_skill_targets(self):
+        cli = SuperDevCLI()
+        result = cli.run(["skill", "targets"])
         assert result == 0
+
+    def test_integrate_setup_cursor(self, temp_project_dir: Path):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["integrate", "setup", "--target", "cursor", "--force"])
+            assert result == 0
+            assert (temp_project_dir / ".cursorrules").exists()
+        finally:
+            os.chdir(original_cwd)
+
+
+class TestCLIPipeline:
+    """测试完整流水线关键产物"""
+
+    def test_pipeline_generates_core_artifacts(self, temp_project_dir: Path, monkeypatch):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        monkeypatch.setenv("SUPER_DEV_DISABLE_WEB", "1")
+
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["pipeline", "构建一个支持登录和看板的平台"])
+            assert result == 0
+
+            output_dir = temp_project_dir / "output"
+            assert any(output_dir.glob("*-research.md"))
+            assert any(output_dir.glob("*-prd.md"))
+            assert any(output_dir.glob("*-architecture.md"))
+            assert any(output_dir.glob("*-uiux.md"))
+            assert any(output_dir.glob("*-execution-plan.md"))
+            assert any(output_dir.glob("*-frontend-blueprint.md"))
+            assert any(output_dir.glob("*-ai-prompt.md"))
+
+            assert (temp_project_dir / "frontend" / "src" / "App.tsx").exists()
+            assert (temp_project_dir / "backend" / "API_CONTRACT.md").exists()
+            assert (temp_project_dir / ".github" / "workflows" / "ci.yml").exists()
+            assert (temp_project_dir / ".gitlab-ci.yml").exists()
+            assert (temp_project_dir / "Jenkinsfile").exists()
+            assert (temp_project_dir / ".azure-pipelines.yml").exists()
+            assert (temp_project_dir / "bitbucket-pipelines.yml").exists()
+            assert (temp_project_dir / ".env.deploy.example").exists()
+            assert (temp_project_dir / "output" / "deploy" / "all-secrets-checklist.md").exists()
+            assert (temp_project_dir / "output" / "deploy" / "platforms" / "github-secrets-checklist.md").exists()
+            assert (temp_project_dir / "output" / "deploy" / "platforms" / "gitlab-secrets-checklist.md").exists()
+            assert (temp_project_dir / "output" / "deploy" / "platforms" / "jenkins-secrets-checklist.md").exists()
+            assert (temp_project_dir / "output" / "deploy" / "platforms" / "azure-secrets-checklist.md").exists()
+            assert (temp_project_dir / "output" / "deploy" / "platforms" / "bitbucket-secrets-checklist.md").exists()
+            assert (temp_project_dir / "output" / "deploy" / "platforms" / ".env.deploy.github.example").exists()
+            assert (temp_project_dir / "output" / "deploy" / "platforms" / ".env.deploy.gitlab.example").exists()
+            assert (temp_project_dir / "output" / "deploy" / "platforms" / ".env.deploy.jenkins.example").exists()
+            assert (temp_project_dir / "output" / "deploy" / "platforms" / ".env.deploy.azure.example").exists()
+            assert (temp_project_dir / "output" / "deploy" / "platforms" / ".env.deploy.bitbucket.example").exists()
+        finally:
+            os.chdir(original_cwd)

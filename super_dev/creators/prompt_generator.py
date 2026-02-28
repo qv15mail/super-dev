@@ -9,7 +9,6 @@ AI 提示词生成器 - 生成可直接给 AI 的提示词
 """
 
 from pathlib import Path
-from typing import Optional
 
 from ..specs.models import TaskStatus
 
@@ -36,9 +35,11 @@ class AIPromptGenerator:
         prd_content = self._read_document('prd')
         arch_content = self._read_document('architecture')
         uiux_content = self._read_document('uiux')
+        plan_content = self._read_document('execution-plan')
+        frontend_blueprint = self._read_document('frontend-blueprint')
 
         # 读取 Spec 变更
-        change_content = self._read_change_spec()
+        change_content, change_id = self._read_change_spec()
 
         # 组装提示词
         prompt = f"""# {self.name} - AI 开发提示词
@@ -75,17 +76,27 @@ class AIPromptGenerator:
 
 ### 1. PRD (产品需求文档)
 
-{prd_content[:1000] if prd_content else '请查看 output/{self.name}-prd.md'}
+{prd_content[:1000] if prd_content else f'请查看 output/{self.name}-prd.md'}
 ...
 
 ### 2. 架构设计文档
 
-{arch_content[:1000] if arch_content else '请查看 output/{self.name}-architecture.md'}
+{arch_content[:1000] if arch_content else f'请查看 output/{self.name}-architecture.md'}
 ...
 
 ### 3. UI/UX 设计文档
 
-{uiux_content[:1000] if uiux_content else '请查看 output/{self.name}-uiux.md'}
+{uiux_content[:1000] if uiux_content else f'请查看 output/{self.name}-uiux.md'}
+...
+
+### 4. 执行路线图
+
+{plan_content[:1000] if plan_content else f'请查看 output/{self.name}-execution-plan.md'}
+...
+
+### 5. 前端蓝图
+
+{frontend_blueprint[:1000] if frontend_blueprint else f'请查看 output/{self.name}-frontend-blueprint.md'}
 ...
 
 ---
@@ -196,7 +207,7 @@ project-root/
 请从任务 1.1 开始，按顺序实现所有任务。
 
 **每完成一个任务**:
-1. 更新 `.super-dev/changes/{self.name}/tasks.md`
+1. 更新 `.super-dev/changes/{change_id}/tasks.md`
 2. 将任务标记为 [x] 完成状态
 3. 提交代码 (可选)
 4. 继续下一个任务
@@ -225,14 +236,14 @@ project-root/
 
         return prompt
 
-    def _read_document(self, doc_type: str) -> Optional[str]:
+    def _read_document(self, doc_type: str) -> str | None:
         """读取生成的文档"""
         doc_path = self.project_dir / "output" / f"{self.name}-{doc_type}.md"
         if doc_path.exists():
             return doc_path.read_text(encoding="utf-8")
         return None
 
-    def _read_change_spec(self) -> str:
+    def _read_change_spec(self) -> tuple[str, str]:
         """读取 Spec 变更内容"""
         from ..specs import ChangeManager
 
@@ -240,7 +251,7 @@ project-root/
         changes = change_manager.list_changes()
 
         if not changes:
-            return "暂无 Spec，请先运行 super-dev spec init"
+            return "暂无 Spec，请先运行 super-dev spec init", "unknown-change"
 
         change = changes[0]  # 获取最新的变更
 
@@ -271,7 +282,7 @@ project-root/
                     for scenario in req.scenarios:
                         content += f"  - {scenario.when}: {scenario.then}\n"
 
-        return content
+        return content, change.id
 
     def _get_timestamp(self) -> str:
         """获取时间戳"""

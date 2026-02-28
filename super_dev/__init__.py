@@ -7,6 +7,6 @@
 最后修改：2025-12-30
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __author__ = "Excellent"
 __description__ = "顶级 AI 开发战队 - God-Tier Development Team"

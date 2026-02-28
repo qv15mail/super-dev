@@ -71,7 +71,7 @@ def detect_project_type(project_path: Path) -> ProjectCategory:
 
     if composer_json.exists():
         # 可能是前端或后端
-        return __detect_php_project_type(project_path)
+        return _detect_php_project_type(project_path)
 
     # 检查是否有 Android/iOS 项目
     if (project_path / "android").exists() or (project_path / "ios").exists():

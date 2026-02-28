@@ -150,7 +150,6 @@ class TestWorkflowEngine:
     @pytest.mark.asyncio
     async def test_run_multiple_phases(self, temp_project_dir: Path, workflow_context):
         """测试运行多个阶段"""
-        # 确保使用默认质量门禁 (80)，避免被其他测试影响
         config_manager = ConfigManager(temp_project_dir)
         config_manager.create(name="test", quality_gate=80)
 
@@ -163,6 +162,9 @@ class TestWorkflowEngine:
         for phase in [Phase.DISCOVERY, Phase.INTELLIGENCE]:
             engine.register_phase_handler(phase, handler)
 
+        # Mock 质量评分引擎，确保本测试聚焦于多阶段流程而非质量评分逻辑
+        engine._calculate_quality_score = lambda phase, context: 85.0
+
         results = await engine.run(
             phases=[Phase.DISCOVERY, Phase.INTELLIGENCE],
             context=workflow_context
@@ -174,7 +176,6 @@ class TestWorkflowEngine:
     @pytest.mark.asyncio
     async def test_phase_failure_stops_workflow(self, temp_project_dir: Path, workflow_context):
         """测试阶段失败停止工作流"""
-        # 确保使用默认质量门禁 (80)
         config_manager = ConfigManager(temp_project_dir)
         config_manager.create(name="test", quality_gate=80)
 
@@ -190,6 +191,9 @@ class TestWorkflowEngine:
 
         engine.register_phase_handler(Phase.DISCOVERY, success_handler)
         engine.register_phase_handler(Phase.INTELLIGENCE, fail_handler)
+
+        # Mock 质量评分，让 discovery 通过门禁以便测试后续阶段失败逻辑
+        engine._calculate_quality_score = lambda phase, context: 88.0
 
         results = await engine.run(
             phases=[Phase.DISCOVERY, Phase.INTELLIGENCE, Phase.DRAFTING],

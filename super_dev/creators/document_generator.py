@@ -12,6 +12,8 @@
 from typing import Optional, List
 from datetime import datetime
 
+from .requirement_parser import RequirementParser
+
 
 class DocumentGenerator:
     """文档生成器 - 生成专家级项目文档"""
@@ -40,6 +42,7 @@ class DocumentGenerator:
         self.style_solution = style_solution
         self.state_management = state_management or []
         self.testing_frameworks = testing_frameworks or []
+        self.requirement_parser = RequirementParser()
 
     def _analyze_project_for_design(self) -> dict:
         """分析项目特征用于设计推荐"""
@@ -857,15 +860,15 @@ module.exports = {{
 
 """)
             for font in recommendations['fonts'][:2]:
-                doc_parts.append(f"""**{font.get('Font Pairing Name', 'Professional')}**
-- **Heading**: {font.get('Heading Font', 'Inter')}
-- **Body**: {font.get('Body Font', 'Roboto')}
-- **风格**: {font.get('Mood/Style Keywords', 'Professional')}
-- **适用**: {font.get('Best For', 'General purpose')}
+                doc_parts.append(f"""**{font.get('name', font.get('Font Pairing Name', 'Professional'))}**
+- **Heading**: {font.get('heading_font', font.get('Heading Font', 'Inter'))}
+- **Body**: {font.get('body_font', font.get('Body Font', 'Roboto'))}
+- **风格**: {font.get('mood', font.get('Mood/Style Keywords', 'Professional'))}
+- **适用**: {font.get('best_for', font.get('Best For', 'General purpose'))}
 
 **Google Fonts 导入**:
 ```html
-{font.get('CSS Import', '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">')}
+{font.get('css_import', font.get('CSS Import', '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">'))}
 ```
 
 """)
@@ -921,15 +924,32 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica
         # 如果有 Landing 页面推荐，添加它
         if recommendations.get('landing'):
             landing = recommendations['landing']
+            landing_sections = landing.get('sections', '')
+            if isinstance(landing_sections, list):
+                landing_sections_text = "\n".join(
+                    f"- {s.get('name', s)}" if isinstance(s, dict) else f"- {s}"
+                    for s in landing_sections[:8]
+                )
+            else:
+                landing_sections_text = str(landing_sections)
+
+            cta_strategy = landing.get('cta_strategy', {})
+            if isinstance(cta_strategy, dict):
+                cta_strategy_text = ", ".join(
+                    f"{k}: {v}" for k, v in cta_strategy.items()
+                )
+            else:
+                cta_strategy_text = str(cta_strategy)
+
             doc_parts.append(f"""
 #### 推荐页面布局: {landing.get('name', 'Standard Layout')}
 
 **布局类型**: {landing.get('category', 'classic').title()}
 
 **页面结构**:
-{landing.get('sections', '')}
+{landing_sections_text}
 
-**CTA 策略**: {landing.get('cta_strategy', {})}
+**CTA 策略**: {cta_strategy_text}
 
 **转化优化**:
 {chr(10).join(f"- {tip}" for tip in landing.get('conversion_tips', [])[:5])}
@@ -1108,7 +1128,11 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica
 """)
             for i, tip in enumerate(recommendations['ux_tips'][:5], 1):
                 guideline = tip.get('guideline', tip)
-                doc_parts.append(f"""### {i}. {guideline.get('topic', 'Best Practice')} ({guideline.get('domain', 'UX').value()})
+                domain = guideline.get('domain', 'UX')
+                domain_text = domain.value if hasattr(domain, 'value') else str(domain)
+                complexity = guideline.get('complexity', 'medium')
+                complexity_text = str(complexity).title()
+                doc_parts.append(f"""### {i}. {guideline.get('topic', 'Best Practice')} ({domain_text})
 
 **最佳实践**:
 {guideline.get('best_practice', 'Follow industry standards')}
@@ -1118,7 +1142,7 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica
 
 **影响**: {guideline.get('impact', 'Improved user experience')}
 
-**实施难度**: {guideline.get('complexity', 'medium').title()}
+**实施难度**: {complexity_text}
 
 """)
 
@@ -2262,18 +2286,18 @@ spec:
 
             # 1. 风格推荐
             style_query = f"{analysis['style']} {analysis['product_type']} {analysis['industry']}"
-            style_results = design_engine.search(style_query, category="style", max_results=3)
-            recommendations['styles'] = style_results[:3] if style_results else []
+            style_results = design_engine.search(style_query, domain="style", max_results=3)
+            recommendations['styles'] = style_results.get("results", [])[:3]
 
             # 2. 配色推荐
             color_query = f"{analysis['industry']} {analysis['product_type']}" if analysis['industry'] != 'general' else analysis['product_type']
-            color_results = design_engine.search(color_query, category="color", max_results=1)
-            recommendations['colors'] = color_results[0] if color_results else None
+            color_results = design_engine.search(color_query, domain="color", max_results=1)
+            recommendations['colors'] = (color_results.get("results", []) or [None])[0]
 
             # 3. 字体推荐
             font_query = f"{analysis['style']} professional"
-            font_results = design_engine.search(font_query, category="typography", max_results=2)
-            recommendations['fonts'] = font_results[:2] if font_results else []
+            font_results = design_engine.search(font_query, domain="typography", max_results=2)
+            recommendations['fonts'] = font_results.get("results", [])[:2]
 
             # 4. Landing 页面推荐（如果适用）
             if analysis['product_type'] in ['landing', 'saas', 'ecommerce']:
@@ -2282,13 +2306,33 @@ spec:
                     goal='signup',
                     audience='B2C' if analysis['industry'] == 'general' else 'B2B'
                 )
-                recommendations['landing'] = landing_pattern
+                recommendations['landing'] = (
+                    landing_pattern.to_dict()
+                    if landing_pattern and hasattr(landing_pattern, "to_dict")
+                    else None
+                )
             else:
                 recommendations['landing'] = None
 
             # 5. UX 最佳实践
             ux_quick_wins = ux_guide.get_quick_wins(max_results=5)
-            recommendations['ux_tips'] = ux_quick_wins
+            ux_tips = []
+            for rec in ux_quick_wins:
+                guideline = rec.guideline
+                ux_tips.append({
+                    "guideline": {
+                        "domain": guideline.domain.value if hasattr(guideline.domain, "value") else str(guideline.domain),
+                        "topic": guideline.topic,
+                        "best_practice": guideline.best_practice,
+                        "anti_pattern": guideline.anti_pattern,
+                        "impact": guideline.impact,
+                        "complexity": guideline.complexity,
+                    },
+                    "priority": rec.priority,
+                    "implementation_effort": rec.implementation_effort,
+                    "user_impact": rec.user_impact,
+                })
+            recommendations['ux_tips'] = ux_tips
 
             return recommendations
 
@@ -2305,30 +2349,127 @@ spec:
 
     def extract_requirements(self) -> list:
         """从描述提取需求列表"""
-        # 简化实现，实际应该用 NLP 或规则提取
-        return [
-            {
-                "spec_name": "auth",
-                "req_name": "user-registration",
-                "description": "用户可以使用邮箱和密码注册账户",
-                "scenarios": [
-                    {"given": "用户访问注册页面", "when": "填写有效邮箱和密码", "then": "账户创建成功并发送验证邮件"}
-                ]
-            },
-            {
-                "spec_name": "auth",
-                "req_name": "user-login",
-                "description": "用户可以使用邮箱和密码登录系统",
-                "scenarios": [
-                    {"given": "用户已注册", "when": "输入正确的邮箱和密码", "then": "登录成功并跳转首页"}
-                ]
-            },
-            {
-                "spec_name": "user",
-                "req_name": "profile-management",
-                "description": "用户可以查看和编辑个人资料",
-                "scenarios": [
-                    {"given": "用户已登录", "when": "访问个人资料页面", "then": "显示当前资料并允许编辑"}
-                ]
-            }
+        return self.requirement_parser.parse_requirements(self.description)
+
+    def generate_execution_plan(self, scenario: str = "0-1") -> str:
+        """生成分阶段执行路线图（支持 0-1 / 1-N+1）"""
+        requirements = self.extract_requirements()
+        phases = self.requirement_parser.build_execution_phases(scenario, requirements)
+
+        lines = [
+            f"# {self.name} - 执行路线图",
+            "",
+            f"> **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            f"> **场景**: {scenario}",
+            f"> **策略**: 先前端可视化，再系统能力闭环",
+            "",
+            "---",
+            "",
+            "## 1. 需求范围",
+            "",
+            "| 模块 | 需求 | 说明 |",
+            "|:---|:---|:---|",
         ]
+
+        for req in requirements:
+            lines.append(
+                f"| {req.get('spec_name', 'core')} | {req.get('req_name', 'n/a')} | {req.get('description', '')} |"
+            )
+
+        lines.extend(
+            [
+                "",
+                "## 2. 分阶段计划",
+                "",
+            ]
+        )
+
+        for idx, phase in enumerate(phases, 1):
+            lines.extend(
+                [
+                    f"### Phase {idx}: {phase['title']}",
+                    "",
+                    f"**目标**: {phase['objective']}",
+                    "",
+                    "**交付物**:",
+                ]
+            )
+            for item in phase["deliverables"]:
+                lines.append(f"- {item}")
+            lines.append("")
+
+        lines.extend(
+            [
+                "## 3. 风险与控制",
+                "",
+                "- 需求漂移: 每个 Phase 完成后冻结版本并复核。",
+                "- 前后端脱节: 在 Phase 2 开始前产出 API 契约草案。",
+                "- 质量不足: 每个阶段结束前执行红队审查和质量门禁。",
+                "",
+                "## 4. 完成定义",
+                "",
+                "- 所有核心需求存在可验收场景并被实现。",
+                "- 前端模块与文档一致，关键链路可演示。",
+                "- 质量门禁通过，具备交付上线条件。",
+                "",
+            ]
+        )
+
+        return "\n".join(lines)
+
+    def generate_frontend_blueprint(self) -> str:
+        """生成前端先行的模块蓝图"""
+        requirements = self.extract_requirements()
+        modules = self.requirement_parser.build_frontend_modules(requirements)
+
+        lines = [
+            f"# {self.name} - 前端蓝图",
+            "",
+            f"> **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            f"> **前端框架**: {self.frontend}",
+            f"> **设计重点**: 先可视化业务流程，再补齐系统深度能力",
+            "",
+            "---",
+            "",
+            "## 1. 体验目标",
+            "",
+            "- 一次进入即可理解产品价值和关键流程。",
+            "- 文档和执行状态可追踪，避免信息散落。",
+            "- 关键任务路径操作链路最短、反馈明确。",
+            "",
+            "## 2. 模块拆分",
+            "",
+        ]
+
+        for index, module in enumerate(modules, 1):
+            lines.extend(
+                [
+                    f"### {index}. {module['name']}",
+                    "",
+                    f"**目标**: {module['goal']}",
+                    "",
+                    "**核心元素**:",
+                ]
+            )
+            for element in module["core_elements"]:
+                lines.append(f"- {element}")
+            lines.append("")
+
+        lines.extend(
+            [
+                "## 3. 开发顺序",
+                "",
+                "1. 先实现 `需求总览面板` + `文档工作台`，确保信息结构完整。",
+                "2. 再实现业务模块页面，覆盖每条核心需求的主路径。",
+                "3. 最后统一交互细节、动效和可访问性。",
+                "",
+                "## 4. 前后端契约建议",
+                "",
+                "- 页面只消费稳定 DTO，避免直接绑定数据库结构。",
+                "- API 响应必须包含状态码、业务码和可读错误信息。",
+                "- 对列表页统一分页/筛选参数结构，减少重复实现。",
+                "",
+            ]
+        )
+
+        return "\n".join(lines)

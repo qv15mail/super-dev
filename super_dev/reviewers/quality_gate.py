@@ -4,7 +4,7 @@
 
 开发：Excellent（11964948@qq.com）
 功能：多维度质量评分和门禁检查
-作用：只有达到 80 分以上才能通过质量门禁
+作用：按场景阈值（或自定义阈值）评估是否通过质量门禁
 创建时间：2025-12-30
 """
 
@@ -12,6 +12,10 @@ from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass, field
 from enum import Enum
+import json
+import shutil
+import subprocess
+import xml.etree.ElementTree as ET
 
 
 class CheckStatus(Enum):
@@ -161,7 +165,7 @@ class QualityGateResult:
             lines.extend(failed_items)
             lines.extend([
                 "",
-                "修复后运行: `super-dev quality-check`",
+                "修复后运行: `super-dev quality --type all`",
                 "",
             ])
 
@@ -201,11 +205,22 @@ class QualityGateChecker:
         },
     }
 
-    def __init__(self, project_dir: Path, name: str, tech_stack: dict):
+    def __init__(
+        self,
+        project_dir: Path,
+        name: str,
+        tech_stack: dict,
+        scenario_override: str | None = None,
+        threshold_override: int | None = None,
+    ):
         self.project_dir = Path(project_dir).resolve()
         self.name = name
         self.tech_stack = tech_stack
-        self.is_zero_to_one = self._detect_zero_to_one_scenario()
+        self.threshold_override = threshold_override
+        if scenario_override in {"0-1", "1-N+1"}:
+            self.is_zero_to_one = scenario_override == "0-1"
+        else:
+            self.is_zero_to_one = self._detect_zero_to_one_scenario()
 
     def _detect_zero_to_one_scenario(self) -> bool:
         """
@@ -270,7 +285,11 @@ class QualityGateChecker:
         weighted_score = self._calculate_weighted_score(checks)
 
         # 根据场景选择阈值
-        threshold = self.PASS_THRESHOLD_ZERO_TO_ONE if self.is_zero_to_one else self.PASS_THRESHOLD
+        threshold = (
+            self.threshold_override
+            if self.threshold_override is not None
+            else (self.PASS_THRESHOLD_ZERO_TO_ONE if self.is_zero_to_one else self.PASS_THRESHOLD)
+        )
 
         # 检查是否通过
         passed = total_score >= threshold
@@ -504,6 +523,122 @@ class QualityGateChecker:
                 details="测试框架未配置",
             ))
 
+        python_tests = self._discover_python_tests()
+        js_test_script = self._has_js_test_script()
+
+        # 真实测试执行检查（优先 Python）
+        if python_tests:
+            pytest_executable = shutil.which("pytest")
+            if pytest_executable:
+                result = self._run_command(
+                    [pytest_executable, "-q", "--maxfail=1"],
+                    timeout=180,
+                )
+                if result["timed_out"]:
+                    checks.append(QualityCheck(
+                        name="测试执行",
+                        category="testing",
+                        description="自动化测试执行结果",
+                        status=CheckStatus.WARNING,
+                        score=40,
+                        weight=self.CHECKS_CONFIG["testing"]["weight"],
+                        details="pytest 执行超时，建议拆分测试或优化测试速度",
+                    ))
+                elif result["returncode"] == 0:
+                    summary = self._extract_test_summary(result["stdout"])
+                    checks.append(QualityCheck(
+                        name="测试执行",
+                        category="testing",
+                        description="自动化测试执行结果",
+                        status=CheckStatus.PASSED,
+                        score=100,
+                        weight=self.CHECKS_CONFIG["testing"]["weight"],
+                        details=summary or "pytest 执行通过",
+                    ))
+                else:
+                    summary = self._extract_test_summary(result["stdout"] or result["stderr"])
+                    checks.append(QualityCheck(
+                        name="测试执行",
+                        category="testing",
+                        description="自动化测试执行结果",
+                        status=CheckStatus.FAILED,
+                        score=20,
+                        weight=self.CHECKS_CONFIG["testing"]["weight"],
+                        details=summary or "pytest 执行失败",
+                    ))
+            else:
+                checks.append(QualityCheck(
+                    name="测试执行",
+                    category="testing",
+                    description="自动化测试执行结果",
+                    status=CheckStatus.WARNING,
+                    score=40,
+                    weight=self.CHECKS_CONFIG["testing"]["weight"],
+                    details="检测到 Python 测试，但未找到 pytest 可执行文件",
+                ))
+        elif js_test_script:
+            checks.append(QualityCheck(
+                name="测试执行",
+                category="testing",
+                description="自动化测试执行结果",
+                status=CheckStatus.WARNING,
+                score=50,
+                weight=self.CHECKS_CONFIG["testing"]["weight"],
+                details="检测到 JS test 脚本，当前质量门禁未自动执行 npm test",
+            ))
+        else:
+            checks.append(QualityCheck(
+                name="测试执行",
+                category="testing",
+                description="自动化测试执行结果",
+                status=CheckStatus.WARNING,
+                score=40,
+                weight=self.CHECKS_CONFIG["testing"]["weight"],
+                details="未检测到可执行测试用例",
+            ))
+
+        coverage_percent = self._read_coverage_percent()
+        if coverage_percent is None:
+            checks.append(QualityCheck(
+                name="测试覆盖率",
+                category="testing",
+                description="覆盖率报告",
+                status=CheckStatus.WARNING,
+                score=50,
+                weight=self.CHECKS_CONFIG["testing"]["weight"],
+                details="未检测到 coverage.xml 报告",
+            ))
+        elif coverage_percent >= 80:
+            checks.append(QualityCheck(
+                name="测试覆盖率",
+                category="testing",
+                description="覆盖率报告",
+                status=CheckStatus.PASSED,
+                score=coverage_percent,
+                weight=self.CHECKS_CONFIG["testing"]["weight"],
+                details=f"覆盖率 {coverage_percent}%",
+            ))
+        elif coverage_percent >= 60:
+            checks.append(QualityCheck(
+                name="测试覆盖率",
+                category="testing",
+                description="覆盖率报告",
+                status=CheckStatus.WARNING,
+                score=coverage_percent,
+                weight=self.CHECKS_CONFIG["testing"]["weight"],
+                details=f"覆盖率 {coverage_percent}%（建议提升到 80%+）",
+            ))
+        else:
+            checks.append(QualityCheck(
+                name="测试覆盖率",
+                category="testing",
+                description="覆盖率报告",
+                status=CheckStatus.FAILED,
+                score=coverage_percent,
+                weight=self.CHECKS_CONFIG["testing"]["weight"],
+                details=f"覆盖率 {coverage_percent}%（低于最低建议）",
+            ))
+
         return checks
 
     def _check_code_quality(self) -> list[QualityCheck]:
@@ -540,6 +675,53 @@ class QualityGateChecker:
                 details="Linter 未配置",
             ))
 
+        python_roots = self._discover_python_source_roots()
+        if python_roots:
+            python_exec = shutil.which("python3") or shutil.which("python")
+            if python_exec:
+                cmd = [python_exec, "-m", "compileall", "-q", *[str(p) for p in python_roots]]
+                result = self._run_command(cmd, timeout=120)
+                if result["timed_out"]:
+                    checks.append(QualityCheck(
+                        name="Python 语法检查",
+                        category="code_quality",
+                        description="compileall 语法检查",
+                        status=CheckStatus.WARNING,
+                        score=50,
+                        weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                        details="compileall 执行超时",
+                    ))
+                elif result["returncode"] == 0:
+                    checks.append(QualityCheck(
+                        name="Python 语法检查",
+                        category="code_quality",
+                        description="compileall 语法检查",
+                        status=CheckStatus.PASSED,
+                        score=100,
+                        weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                        details="Python 语法检查通过",
+                    ))
+                else:
+                    checks.append(QualityCheck(
+                        name="Python 语法检查",
+                        category="code_quality",
+                        description="compileall 语法检查",
+                        status=CheckStatus.FAILED,
+                        score=20,
+                        weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                        details="Python 语法检查失败",
+                    ))
+            else:
+                checks.append(QualityCheck(
+                    name="Python 语法检查",
+                    category="code_quality",
+                    description="compileall 语法检查",
+                    status=CheckStatus.WARNING,
+                    score=50,
+                    weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                    details="未找到 python 解释器，跳过语法检查",
+                ))
+
         return checks
 
     def _calculate_total_score(self, checks: list[QualityCheck]) -> int:
@@ -572,3 +754,99 @@ class QualityGateChecker:
                 recommendations.append(f"建议: {check.description}")
 
         return recommendations
+
+    def _discover_python_tests(self) -> list[Path]:
+        tests_dir = self.project_dir / "tests"
+        if not tests_dir.exists():
+            return []
+        return list(tests_dir.rglob("test_*.py")) + list(tests_dir.rglob("*_test.py"))
+
+    def _discover_python_source_roots(self) -> list[Path]:
+        roots: list[Path] = []
+        candidates = [
+            "super_dev", "src", "app", "backend", "server", "api", "services", "lib"
+        ]
+        for name in candidates:
+            path = self.project_dir / name
+            if path.exists() and path.is_dir():
+                roots.append(path)
+
+        top_level_py = list(self.project_dir.glob("*.py"))
+        roots.extend(top_level_py)
+
+        # 去重并限制数量，避免无界扫描
+        unique: list[Path] = []
+        seen = set()
+        for path in roots:
+            key = str(path.resolve())
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(path)
+        return unique[:8]
+
+    def _has_js_test_script(self) -> bool:
+        package_json = self.project_dir / "package.json"
+        if not package_json.exists():
+            return False
+        try:
+            data = json.loads(package_json.read_text(encoding="utf-8"))
+        except Exception:
+            return False
+        scripts = data.get("scripts", {})
+        test_script = scripts.get("test")
+        return bool(test_script and str(test_script).strip())
+
+    def _extract_test_summary(self, output: str) -> str:
+        if not output:
+            return ""
+        lines = [line.strip() for line in output.splitlines() if line.strip()]
+        for line in reversed(lines):
+            if "passed" in line or "failed" in line or "error" in line:
+                return line[:240]
+        return lines[-1][:240] if lines else ""
+
+    def _read_coverage_percent(self) -> int | None:
+        coverage_xml = self.project_dir / "coverage.xml"
+        if not coverage_xml.exists():
+            return None
+        try:
+            root = ET.fromstring(coverage_xml.read_text(encoding="utf-8"))
+            line_rate = root.attrib.get("line-rate")
+            if line_rate is None:
+                return None
+            value = float(line_rate) * 100
+            return max(0, min(100, int(round(value))))
+        except Exception:
+            return None
+
+    def _run_command(self, cmd: list[str], timeout: int = 120) -> dict[str, object]:
+        try:
+            completed = subprocess.run(
+                cmd,
+                cwd=str(self.project_dir),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+            return {
+                "returncode": completed.returncode,
+                "stdout": completed.stdout or "",
+                "stderr": completed.stderr or "",
+                "timed_out": False,
+            }
+        except subprocess.TimeoutExpired as e:
+            return {
+                "returncode": -1,
+                "stdout": (e.stdout or ""),
+                "stderr": (e.stderr or ""),
+                "timed_out": True,
+            }
+        except Exception as e:
+            return {
+                "returncode": -1,
+                "stdout": "",
+                "stderr": str(e),
+                "timed_out": False,
+            }

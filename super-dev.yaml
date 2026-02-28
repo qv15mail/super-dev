@@ -2,7 +2,7 @@ author: ''
 backend: node
 cli: {}
 database: postgresql
-description: ''
+description: 构建一个宠物护理预约平台，先做前端
 domain: ''
 experts:
 - PM

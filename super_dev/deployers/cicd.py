@@ -20,7 +20,7 @@ class CICDGenerator:
         project_dir: Path,
         name: str,
         tech_stack: dict,
-        platform: Literal["github", "gitlab", "jenkins", "azure", "bitbucket"] = "github"
+        platform: Literal["github", "gitlab", "jenkins", "azure", "bitbucket", "all"] = "github"
     ):
         self.project_dir = Path(project_dir).resolve()
         self.name = name
@@ -33,16 +33,16 @@ class CICDGenerator:
         """生成所有 CI/CD 配置文件"""
         files = {}
 
-        if self.platform == "github":
+        if self.platform in {"github", "all"}:
             files[".github/workflows/ci.yml"] = self._generate_github_ci()
             files[".github/workflows/cd.yml"] = self._generate_github_cd()
-        elif self.platform == "gitlab":
+        if self.platform in {"gitlab", "all"}:
             files[".gitlab-ci.yml"] = self._generate_gitlab_ci()
-        elif self.platform == "jenkins":
+        if self.platform in {"jenkins", "all"}:
             files["Jenkinsfile"] = self._generate_jenkins()
-        elif self.platform == "azure":
+        if self.platform in {"azure", "all"}:
             files[".azure-pipelines.yml"] = self._generate_azure()
-        elif self.platform == "bitbucket":
+        if self.platform in {"bitbucket", "all"}:
             files["bitbucket-pipelines.yml"] = self._generate_bitbucket()
 
         # Docker 配置
@@ -78,20 +78,20 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Setup Node.js
-        if: ${{ '{{' }} matrix.backend == 'node' {{}}' }}
+        if: ${{{{ matrix.backend == 'node' }}}}
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
       - name: Setup Python
-        if: ${{ '{{' }} matrix.backend == 'python' {{}}' }}
+        if: ${{{{ matrix.backend == 'python' }}}}
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
       - name: Install dependencies
         run: |
-          if [ "${{ '{{' }} matrix.backend {{}}'" == "node" ]; then
+          if [ "${{{{ matrix.backend }}}}" == "node" ]; then
             npm ci
           else
             pip install -e ".[dev]"
@@ -99,7 +99,7 @@ jobs:
 
       - name: Run linter
         run: |
-          if [ "${{ '{{' }} matrix.backend {{}}'" == "node" ]; then
+          if [ "${{{{ matrix.backend }}}}" == "node" ]; then
             npm run lint
           else
             npm run lint || pylint **/*.py
@@ -117,32 +117,32 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Setup Node.js
-        if: ${{ '{{' }} matrix.frontend == 'react' {{}}' }}
+        if: ${{{{ matrix.frontend == 'react' }}}}
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
       - name: Setup Python
-        if: ${{ '{{' }} matrix.backend == 'python' {{}}' }}
+        if: ${{{{ matrix.backend == 'python' }}}}
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
       - name: Install dependencies
         run: |
-          if [ "${{ '{{' }} matrix.frontend {{}}'" == "react" ]; then
+          if [ "${{{{ matrix.frontend }}}}" == "react" ]; then
             npm ci
           fi
-          if [ "${{ '{{' }} matrix.backend {{}}'" == "python" ]; then
+          if [ "${{{{ matrix.backend }}}}" == "python" ]; then
             pip install -e ".[dev]"
           fi
 
       - name: Run type check
         run: |
-          if [ "${{ '{{' }} matrix.frontend {{}}'" == "react" ]; then
+          if [ "${{{{ matrix.frontend }}}}" == "react" ]; then
             npm run type-check
           fi
-          if [ "${{ '{{' }} matrix.backend {{}}'" == "python" ]; then
+          if [ "${{{{ matrix.backend }}}}" == "python" ]; then
             mypy .
           fi
 
@@ -247,8 +247,8 @@ jobs:
       - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
-          username: ${{ '{{' }} secrets.DOCKER_USERNAME {{}}' }}
-          password: ${{ '{{' }} secrets.DOCKER_PASSWORD {{}}' }}
+          username: ${{{{ secrets.DOCKER_USERNAME }}}}
+          password: ${{{{ secrets.DOCKER_PASSWORD }}}}
 
       - name: Build and push
         uses: docker/build-push-action@v4
@@ -256,8 +256,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ '{{' }} secrets.DOCKER_USERNAME {{}}' }}/{self.name}:latest
-            ${{ '{{' }} secrets.DOCKER_USERNAME {{}}' }}/{self.name}:${{ '{{' }} github.sha {{}}' }}
+            ${{{{ secrets.DOCKER_USERNAME }}}}/{self.name}:latest
+            ${{{{ secrets.DOCKER_USERNAME }}}}/{self.name}:${{{{ github.sha }}}}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 """
@@ -287,7 +287,7 @@ jobs:
         uses: azure/k8s-set-context@v3
         with:
           method: kubeconfig
-          kubeconfig: ${{ '{{' }} secrets.KUBE_CONFIG_DEV {{}}' }}
+          kubeconfig: ${{{{ secrets.KUBE_CONFIG_DEV }}}}
 
       - name: Deploy to Kubernetes
         run: |
@@ -313,11 +313,11 @@ jobs:
         uses: azure/k8s-set-context@v3
         with:
           method: kubeconfig
-          kubeconfig: ${{ '{{' }} secrets.KUBE_CONFIG_PROD {{}}' }}
+          kubeconfig: ${{{{ secrets.KUBE_CONFIG_PROD }}}}
 
       - name: Create backup
         run: |
-          kubectl get deployment {self.name} -n prod -o yaml > backup-{{ '{{' }} github.sha {{}}' }}.yaml
+          kubectl get deployment {self.name} -n prod -o yaml > backup-${{{{ github.sha }}}}.yaml
 
       - name: Deploy to Kubernetes
         run: |
@@ -330,7 +330,7 @@ jobs:
 
       - name: Health check
         run: |
-          for i in {{ '{{' }} {{1..30}} {{}}'; do
+          for i in {{1..30}}; do
             if curl -f https://{self.name}.example.com/health; then
               echo "Health check passed"
               exit 0
@@ -344,7 +344,7 @@ jobs:
       - name: Rollback on failure
         if: failure()
         run: |
-          kubectl apply -f backup-{{ '{{' }} github.sha {{}}' }}.yaml
+          kubectl apply -f backup-${{{{ github.sha }}}}.yaml
           kubectl rollout undo deployment/{self.name} -n prod
 """
 
@@ -1100,8 +1100,7 @@ stages:
 
     def _generate_bitbucket(self) -> str:
         """生成 Bitbucket Pipelines 配置"""
-        # 使用普通字符串拼接，避免 f-string 转义问题
-        header = "# Bitbucket Pipelines CI/CD for " + self.name + """
+        return f"""# Bitbucket Pipelines CI/CD for {self.name}
 image: node:18
 
 definitions:
@@ -1142,8 +1141,8 @@ pipelines:
       - step:
           name: 'Build Docker Image'
           script:
-            - docker build -t ${{{REGISTRY_URL}}}/""" + self.name + """:${{{{BITBUCKET_BUILD_NUMBER}} .
-            - docker push ${{{REGISTRY_URL}}}/""" + self.name + """:${{{{BITBUCKET_BUILD_NUMBER}}
+            - docker build -t ${{REGISTRY_URL}}/{self.name}:${{BITBUCKET_BUILD_NUMBER}} .
+            - docker push ${{REGISTRY_URL}}/{self.name}:${{BITBUCKET_BUILD_NUMBER}}
           services:
             - docker
 
@@ -1153,12 +1152,12 @@ pipelines:
           script:
             - pipe: atlassian/kubectl-deploy:1.7.0
               variables:
-                KUBE_CONFIG: ${{{KUBE_CONFIG_PROD}}}
+                KUBE_CONFIG: ${{KUBE_CONFIG_PROD}}
                 KUBECTL_VERSION: '1.28.0'
                 RESOURCE_PATH: 'k8s/'
-                SELECTOR: 'app=""" + self.name + """'
-                CONTAINER: '""" + self.name + """'
-                IMAGE: ${{{REGISTRY_URL}}}/""" + self.name + """:${{{{BITBUCKET_BUILD_NUMBER}}}
+                SELECTOR: 'app={self.name}'
+                CONTAINER: '{self.name}'
+                IMAGE: ${{REGISTRY_URL}}/{self.name}:${{BITBUCKET_BUILD_NUMBER}}
 
     develop:
       - step:
@@ -1177,8 +1176,8 @@ pipelines:
       - step:
           name: 'Build Docker Image'
           script:
-            - docker build -t ${{{REGISTRY_URL}}}/""" + self.name + """:${{{{BITBUCKET_BUILD_NUMBER}} .
-            - docker push ${{{REGISTRY_URL}}}/""" + self.name + """:${{{{BITBUCKET_BUILD_NUMBER}}
+            - docker build -t ${{REGISTRY_URL}}/{self.name}:${{BITBUCKET_BUILD_NUMBER}} .
+            - docker push ${{REGISTRY_URL}}/{self.name}:${{BITBUCKET_BUILD_NUMBER}}
           services:
             - docker
 
@@ -1188,12 +1187,12 @@ pipelines:
           script:
             - pipe: atlassian/kubectl-deploy:1.7.0
               variables:
-                KUBE_CONFIG: ${{{KUBE_CONFIG_DEV}}}
+                KUBE_CONFIG: ${{KUBE_CONFIG_DEV}}
                 KUBECTL_VERSION: '1.28.0'
                 RESOURCE_PATH: 'k8s/'
-                SELECTOR: 'app=""" + self.name + """'
-                CONTAINER: '""" + self.name + """'
-                IMAGE: ${{{REGISTRY_URL}}}/""" + self.name + """:${{{{BITBUCKET_BUILD_NUMBER}}}
+                SELECTOR: 'app={self.name}'
+                CONTAINER: '{self.name}'
+                IMAGE: ${{REGISTRY_URL}}/{self.name}:${{BITBUCKET_BUILD_NUMBER}}
 
   pull-requests:
     - step:
@@ -1215,4 +1214,3 @@ pipelines:
               FORMAT: 'cobertura'
               FILE: 'coverage/cobertura-coverage.xml'
 """
-        return header

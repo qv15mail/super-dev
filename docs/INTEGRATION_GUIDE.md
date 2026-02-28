@@ -119,12 +119,18 @@
 #### 安装
 
 ```bash
-# 方法 1: 使用安装脚本
+# 方法 1: 使用多平台安装脚本（默认全部平台）
 ./install.sh
 
-# 方法 2: 手动安装
-mkdir -p .claude/skills
-cp -r .claude/skills/super-dev .claude/skills/
+# 只安装指定平台
+./install.sh --targets claude-code,codex-cli,cursor
+
+# 仅生成集成配置，不安装 skill
+./install.sh --targets all --no-skill
+
+# 方法 2: 使用 CLI 命令
+super-dev integrate setup --target claude-code --force
+super-dev skill install super-dev --target claude-code --name super-dev-core --force
 ```
 
 #### 使用
@@ -483,7 +489,7 @@ EOF
 
 ## 约束条件
 - 必须修复红队审查中的所有高危问题
-- 必须达到质量门禁 80+ 分标准
+- 必须达到当前场景的质量门禁阈值（可由 `--quality-threshold` 覆盖）
 - 必须包含单元测试和集成测试
 - 必须遵循项目代码规范
 
@@ -856,7 +862,7 @@ super-dev analyze
 - 遵循 PRD: {prd-reference}
 - 实现架构: {arch-reference}
 - 使用设计: {uiux-reference}
-- 达到质量标准: 80+ 分
+- 达到质量标准: 满足当前质量门禁阈值
 ```
 
 ---

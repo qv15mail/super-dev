@@ -72,8 +72,8 @@ cat output/*-ai-prompt.md
 # 3. 生成 CI/CD 配置
 super-dev deploy --cicd github
 
-# 4. 生成数据库迁移脚本
-super-dev migrate --orm prisma
+# 4. 通过完整流水线生成数据库迁移脚本
+super-dev pipeline "用户认证系统" --platform web --frontend react --backend node --domain auth
 ```
 
 ### 第三步：使用 AI 提示词开发
@@ -309,46 +309,61 @@ super-dev spec archive add-payment-integration
 
 # 工作流详解
 
-## 8 阶段流水线
+## 11 阶段流水线（含第 0 阶段）
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
+│  0. 需求增强 (Requirement Augmentation)                     │
+│     ├─ 联网检索最佳实践                                     │
+│     ├─ 本地知识库检索                                       │
+│     └─ 增强后的需求描述                                     │
+├─────────────────────────────────────────────────────────────┤
 │  1. 文档生成 (Documentation)                                │
 │     ├─ PRD: 产品需求文档                                    │
 │     ├─ Architecture: 技术架构设计                           │
 │     └─ UI/UX: 界面与交互设计                                │
 ├─────────────────────────────────────────────────────────────┤
-│  2. Spec 创建 (Specification)                              │
+│  2. 前端可演示骨架 (Frontend First)                         │
+│     ├─ index.html: 可演示首页                               │
+│     ├─ styles.css: 视觉风格与响应式                          │
+│     └─ app.js: 需求与阶段数据绑定                           │
+├─────────────────────────────────────────────────────────────┤
+│  3. Spec 创建 (Specification)                              │
 │     ├─ proposal.md: 变更提案                               │
 │     ├─ tasks.md: 任务清单                                  │
 │     └─ spec.md: 规范定义（OpenSpec 格式）                  │
 ├─────────────────────────────────────────────────────────────┤
-│  3. 红队审查 (Red Team Review)                             │
+│  4. 前后端实现骨架 (Implementation Scaffold)               │
+│     ├─ frontend/src: 前端实现目录                           │
+│     ├─ backend/src: 后端实现目录                            │
+│     └─ API_CONTRACT.md: 接口契约草案                        │
+├─────────────────────────────────────────────────────────────┤
+│  5. 红队审查 (Red Team Review)                             │
 │     ├─ 安全威胁分析                                        │
 │     ├─ 性能瓶颈识别                                        │
 │     └─ 架构缺陷检查                                        │
 ├─────────────────────────────────────────────────────────────┤
-│  4. 质量门禁 (Quality Gate)                                │
-│     ├─ 自动评分 (80+ 分通过)                               │
+│  6. 质量门禁 (Quality Gate)                                │
+│     ├─ 场景化阈值评估（支持 --quality-threshold 覆盖）      │
 │     ├─ 详细改进建议                                        │
 │     └─ 缺陷修复追踪                                        │
 ├─────────────────────────────────────────────────────────────┤
-│  5. 代码审查 (Code Review)                                 │
+│  7. 代码审查 (Code Review)                                 │
 │     ├─ 审查清单                                            │
 │     ├─ 常见陷阱警告                                        │
 │     └─ 最佳实践建议                                        │
 ├─────────────────────────────────────────────────────────────┤
-│  6. AI 提示生成 (AI Prompt Generation)                     │
+│  8. AI 提示生成 (AI Prompt Generation)                     │
 │     ├─ 结构化提示词                                        │
 │     ├─ 上下文注入                                          │
 │     └─ 约束条件明确                                        │
 ├─────────────────────────────────────────────────────────────┤
-│  7. CI/CD 配置 (Continuous Integration/Deployment)         │
+│  9. CI/CD 配置 (Continuous Integration/Deployment)         │
 │     ├─ GitHub Actions / GitLab CI / Jenkins               │
 │     ├─ 自动化测试                                          │
 │     └─ 自动部署                                            │
 ├─────────────────────────────────────────────────────────────┤
-│  8. 数据库迁移 (Database Migration)                        │
+│  10. 数据库迁移 (Database Migration)                       │
 │     ├─ Prisma / TypeORM / Sequelize                       │
 │     ├─ SQLAlchemy / Django / Mongoose                     │
 │     └─ 版本化迁移脚本                                      │
@@ -820,7 +835,7 @@ super-dev quality  # 检查质量趋势
 
 **A**: Super Dev 提供多层保障：
 1. **红队审查**: 发现安全和性能问题
-2. **质量门禁**: 80+ 分标准
+2. **质量门禁**: 场景化阈值（1-N+1 默认 80；0-1 自动放宽）
 3. **代码审查指南**: 详细的审查清单
 4. **专家系统**: 10 位专家提供专业建议
 

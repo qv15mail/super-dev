@@ -142,8 +142,8 @@ super-dev create "用户登录系统" \
 
 **参数说明**：
 - `--platform`: 平台类型（web/mobile/wechat/desktop）
-- `--frontend`: 前端框架（react/vue/angular/svelte/flutter/swift/kotlin）
-- `--backend`: 后端框架（node/python/go/java/rust/php）
+- `--frontend`: 前端框架（react/vue/angular/svelte）
+- `--backend`: 后端框架（node/python/go/java）
 
 **预期输出**：
 ```
@@ -392,21 +392,23 @@ super-dev create "用户登录系统" --platform web --frontend react
 ```bash
 # ===== 核心命令 =====
 super-dev create "功能描述"              # 生成完整文档
-super-dev pipeline "功能描述"            # 运行完整 8 阶段流水线
+super-dev pipeline "功能描述"            # 运行完整 11 阶段流水线（含第 0 阶段）
 super-dev init <项目名>                  # 初始化新项目
+super-dev skill targets                  # 查看支持的 skill 目标平台
+super-dev integrate setup --all          # 生成多平台集成配置
 
 # ===== Spec 管理 =====
-super-dev spec list                      # 列出所有 specs
-super-dev spec show <spec-name>          # 查看 spec 详情
-super-dev spec update <spec-name>        # 更新 spec
+super-dev spec list                      # 列出所有变更
+super-dev spec show <change-id>          # 查看变更详情
+super-dev spec validate                  # 验证规范格式
 
 # ===== 设计引擎 =====
 super-dev design search "关键词"         # 搜索设计资产
 super-dev design generate                # 生成完整设计系统
 
 # ===== 质量检查 =====
-super-dev quality check                  # 运行质量检查
-super-dev quality score                  # 评分项目质量
+super-dev quality --type all             # 运行质量门禁检查
+super-dev quality --type prd             # 仅检查 PRD 文档是否存在
 
 # ===== 部署配置 =====
 super-dev deploy --cicd github           # 生成 CI/CD 配置
@@ -432,11 +434,8 @@ super-dev <command> --help               # 查看命令帮助
 
 ### Q2：生成的文档在哪里？
 
-**A**：默认在 `output/` 目录。你可以通过 `--output` 参数指定：
-
-```bash
-super-dev create "功能" --output docs/
-```
+**A**：默认在当前项目的 `output/` 目录（文件名为 `<项目名>-*.md`）。
+如果需要放到其他目录，可以在命令完成后自行移动或在不同工作目录执行命令。
 
 ### Q3：如何查看生成的文档？
 

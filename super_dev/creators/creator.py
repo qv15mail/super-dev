@@ -10,7 +10,6 @@
 
 from pathlib import Path
 from typing import Optional, List
-from datetime import datetime
 
 from .document_generator import DocumentGenerator
 from .spec_builder import SpecBuilder
@@ -95,6 +94,19 @@ class ProjectCreator:
         uiux_content = self.doc_generator.generate_uiux()
         uiux_path.write_text(uiux_content, encoding="utf-8")
         docs['uiux'] = str(uiux_path)
+
+        # 4. 执行路线图
+        scenario = self.doc_generator.requirement_parser.detect_scenario(self.project_dir)
+        plan_path = self.output_dir / f"{self.name}-execution-plan.md"
+        plan_content = self.doc_generator.generate_execution_plan(scenario=scenario)
+        plan_path.write_text(plan_content, encoding="utf-8")
+        docs['plan'] = str(plan_path)
+
+        # 5. 前端蓝图
+        frontend_blueprint_path = self.output_dir / f"{self.name}-frontend-blueprint.md"
+        frontend_blueprint_content = self.doc_generator.generate_frontend_blueprint()
+        frontend_blueprint_path.write_text(frontend_blueprint_content, encoding="utf-8")
+        docs['frontend_blueprint'] = str(frontend_blueprint_path)
 
         return docs
 

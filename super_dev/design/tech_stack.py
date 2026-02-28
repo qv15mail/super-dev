@@ -242,8 +242,8 @@ class TechStackEngine:
                 description="Build components that share state implicitly",
                 use_case="Modals, Dropdowns, Tabs",
                 implementation="const Tabs = ({ children }) => {\n  const [active, setActive] = useState(0)\n  return (\n    <TabsContext value={{ active, setActive }}>\n      {children}\n    </TabsContext>\n  )\n}",
-                pros["Flexible API", "Less prop drilling", "Intuitive usage"],
-                cons["Harder to understand", "Requires context"]
+                pros=["Flexible API", "Less prop drilling", "Intuitive usage"],
+                cons=["Harder to understand", "Requires context"]
             )
         ]
 
@@ -387,7 +387,7 @@ class TechStackEngine:
 
         # 按影响程度排序
         impact_order = {"high": 0, "medium": 1, "low": 2}
-        tips.sort(key=lambda t: impact_order.get(tip.impact.lower(), 3))
+        tips.sort(key=lambda t: impact_order.get(t.impact.lower(), 3))
 
         return tips
 

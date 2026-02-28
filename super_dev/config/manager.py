@@ -235,7 +235,15 @@ class ConfigManager:
             errors.append(f"平台必须是: {', '.join(valid_platforms)}")
 
         # 验证前端框架
-        valid_frontends = ["react", "vue", "angular", "svelte", "none"]
+        valid_frontends = [
+            "next", "remix", "react-vite", "gatsby",
+            "nuxt", "vue-vite",
+            "angular",
+            "sveltekit",
+            "astro", "solid", "qwik",
+            "react", "vue", "svelte",
+            "none",
+        ]
         if self.config.frontend not in valid_frontends:
             errors.append(f"前端框架必须是: {', '.join(valid_frontends)}")
 
