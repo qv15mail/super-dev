@@ -1,9 +1,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: 构建一个宠物护理预约平台-先做前端
+  name: 用户认证系统
   labels:
-    app: 构建一个宠物护理预约平台-先做前端
+    app: 用户认证系统
     version: v1
 spec:
   replicas: 3
@@ -14,16 +14,16 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app: 构建一个宠物护理预约平台-先做前端
+      app: 用户认证系统
   template:
     metadata:
       labels:
-        app: 构建一个宠物护理预约平台-先做前端
+        app: 用户认证系统
         version: v1
     spec:
       containers:
-      - name: 构建一个宠物护理预约平台-先做前端
-        image: your-registry/构建一个宠物护理预约平台-先做前端:latest
+      - name: 用户认证系统
+        image: your-registry/用户认证系统:latest
         ports:
         - containerPort: 3000
           name: http
@@ -34,12 +34,12 @@ spec:
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
-              name: 构建一个宠物护理预约平台-先做前端-secret
+              name: 用户认证系统-secret
               key: database-url
         - name: REDIS_URL
           valueFrom:
             configMapKeyRef:
-              name: 构建一个宠物护理预约平台-先做前端-config
+              name: 用户认证系统-config
               key: redis-url
         resources:
           requests:

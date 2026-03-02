@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Spec-Driven Development 生成器
 
@@ -9,13 +8,19 @@ Spec-Driven Development 生成器
 """
 
 from pathlib import Path
-from typing import Optional
 
+from .manager import ChangeManager, SpecManager
 from .models import (
-    Spec, Requirement, Scenario, Change, ChangeStatus,
-    Proposal, Task, TaskStatus, SpecDelta, DeltaType
+    Change,
+    ChangeStatus,
+    DeltaType,
+    Proposal,
+    Requirement,
+    Scenario,
+    SpecDelta,
+    Task,
+    TaskStatus,
 )
-from .manager import SpecManager, ChangeManager
 
 
 class SpecGenerator:
@@ -100,7 +105,7 @@ class SpecGenerator:
     def generate_tasks_from_requirements(
         self,
         change_id: str,
-        tech_stack: Optional[dict] = None
+        tech_stack: dict | None = None
     ) -> list[Task]:
         """从需求自动生成任务"""
         change = self.change_manager.load_change(change_id)

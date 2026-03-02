@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 开发：Excellent（11964948@qq.com）
 功能：代码片段生成器
@@ -8,12 +7,11 @@
 """
 
 import csv
-from pathlib import Path
-from typing import Dict, List, Optional, Union
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
+
 from .generator import DesignSystem
-from .tokens import TokenGenerator
 
 
 class Framework(str, Enum):
@@ -47,8 +45,8 @@ class ComponentSnippet:
     category: ComponentCategory
     framework: Framework
     code: str
-    dependencies: List[str]
-    props: Dict[str, str]
+    dependencies: list[str]
+    props: dict[str, str]
     preview: str
     description: str
 
@@ -57,9 +55,9 @@ class ComponentSnippet:
 class GeneratedComponent:
     """生成的组件"""
     code: str
-    imports: List[str]
+    imports: list[str]
     styles: str
-    dependencies: List[str]
+    dependencies: list[str]
     description: str
     usage_example: str
 
@@ -67,7 +65,7 @@ class GeneratedComponent:
 class CodeGenerator:
     """代码生成器"""
 
-    def __init__(self, data_dir: Optional[Path] = None):
+    def __init__(self, data_dir: Path | None = None):
         """
         初始化代码生成器
 
@@ -78,7 +76,7 @@ class CodeGenerator:
             data_dir = Path(__file__).parent.parent / "data" / "design"
 
         self.data_dir = Path(data_dir)
-        self.snippets: List[ComponentSnippet] = []
+        self.snippets: list[ComponentSnippet] = []
         self._load_snippets()
 
     def _load_snippets(self):
@@ -89,7 +87,7 @@ class CodeGenerator:
             self.snippets = self._get_default_snippets()
             return
 
-        with open(csv_path, 'r', encoding='utf-8') as f:
+        with open(csv_path, encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
@@ -107,7 +105,7 @@ class CodeGenerator:
                 except Exception as e:
                     print(f"Warning: Failed to parse snippet: {e}")
 
-    def _parse_props(self, props_str: str) -> Dict[str, str]:
+    def _parse_props(self, props_str: str) -> dict[str, str]:
         """解析 props 字符串"""
         props = {}
         for item in props_str.split(";"):
@@ -116,7 +114,7 @@ class CodeGenerator:
                 props[key.strip()] = value.strip()
         return props
 
-    def _get_default_snippets(self) -> List[ComponentSnippet]:
+    def _get_default_snippets(self) -> list[ComponentSnippet]:
         """获取默认组件片段"""
         return [
             ComponentSnippet(
@@ -154,9 +152,9 @@ class CodeGenerator:
     def search_components(
         self,
         query: str,
-        framework: Optional[str] = None,
-        category: Optional[str] = None
-    ) -> List[ComponentSnippet]:
+        framework: str | None = None,
+        category: str | None = None
+    ) -> list[ComponentSnippet]:
         """
         搜索组件片段
 
@@ -199,8 +197,8 @@ class CodeGenerator:
         self,
         component_name: str,
         framework: Framework,
-        design_system: Optional[DesignSystem] = None
-    ) -> Optional[GeneratedComponent]:
+        design_system: DesignSystem | None = None
+    ) -> GeneratedComponent | None:
         """
         生成组件代码
 
@@ -240,7 +238,7 @@ class CodeGenerator:
         self,
         design_system: DesignSystem,
         framework: Framework
-    ) -> Dict[str, GeneratedComponent]:
+    ) -> dict[str, GeneratedComponent]:
         """
         从设计系统生成组件
 
@@ -296,7 +294,7 @@ class CodeGenerator:
 
         return code
 
-    def _extract_imports(self, code: str, framework: Framework) -> List[str]:
+    def _extract_imports(self, code: str, framework: Framework) -> list[str]:
         """提取 import 语句"""
         imports = []
         for line in code.split('\n'):
@@ -315,8 +313,8 @@ class CodeGenerator:
 
     def get_available_components(
         self,
-        framework: Optional[Framework] = None
-    ) -> Dict[str, List[str]]:
+        framework: Framework | None = None
+    ) -> dict[str, list[str]]:
         """
         获取可用组件列表
 
@@ -326,7 +324,7 @@ class CodeGenerator:
         Returns:
             按类别分组的组件列表
         """
-        components = {}
+        components: dict[str, list[str]] = {}
 
         for snippet in self.snippets:
             if framework and snippet.framework != framework:
@@ -340,17 +338,17 @@ class CodeGenerator:
 
         return components
 
-    def list_frameworks(self) -> List[str]:
+    def list_frameworks(self) -> list[str]:
         """列出支持的框架"""
         return [f.value for f in Framework]
 
-    def list_categories(self) -> List[str]:
+    def list_categories(self) -> list[str]:
         """列出组件类别"""
         return [c.value for c in ComponentCategory]
 
 
 # 便捷函数
-def get_code_generator(data_dir: Optional[Path] = None) -> CodeGenerator:
+def get_code_generator(data_dir: Path | None = None) -> CodeGenerator:
     """获取代码生成器实例"""
     return CodeGenerator(data_dir)
 
@@ -358,8 +356,8 @@ def get_code_generator(data_dir: Optional[Path] = None) -> CodeGenerator:
 def generate_component_snippet(
     component_name: str,
     framework: str = "react",
-    design_system: Optional[DesignSystem] = None
-) -> Optional[GeneratedComponent]:
+    design_system: DesignSystem | None = None
+) -> GeneratedComponent | None:
     """
     快捷函数：生成组件片段
 

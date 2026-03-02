@@ -1,13 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 Super Dev Configuration Module
 """
 
-from .manager import (
-    ConfigManager,
-    ProjectConfig,
-    get_config_manager
-)
+from .manager import ConfigManager, ProjectConfig, get_config_manager
 
 __all__ = [
     "ConfigManager",

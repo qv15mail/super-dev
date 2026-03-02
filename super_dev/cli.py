@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 开发：Excellent（11964948@qq.com）
 功能：Super Dev CLI 主入口
@@ -7,12 +6,14 @@
 最后修改：2025-01-29
 """
 
-import sys
-import os
 import argparse
+import json
+import os
+import sys
 import traceback
+from collections.abc import Callable
 from pathlib import Path
-from typing import Optional
+from typing import Any, Literal, cast
 
 try:
     from rich.console import Console
@@ -22,11 +23,13 @@ try:
 except ImportError:
     RICH_AVAILABLE = False
 
-from . import __version__, __description__
-from .config import get_config_manager, ConfigManager
-from .orchestrator import WorkflowEngine, Phase
-from .exceptions import SuperDevError, ConfigurationError, ValidationError
+from . import __description__, __version__
+from .config import ConfigManager, get_config_manager
+from .exceptions import SuperDevError
+from .orchestrator import Phase, WorkflowContext, WorkflowEngine
 from .utils import get_logger
+
+CICDPlatform = Literal["github", "gitlab", "jenkins", "azure", "bitbucket", "all"]
 
 
 class SuperDevCLI:
@@ -689,7 +692,7 @@ class SuperDevCLI:
         )
 
         # spec init
-        spec_init_parser = spec_subparsers.add_parser(
+        spec_subparsers.add_parser(
             "init",
             help="初始化 SDD 目录结构"
         )
@@ -880,7 +883,7 @@ class SuperDevCLI:
 
         return parser
 
-    def run(self, args: Optional[list] = None) -> int:
+    def run(self, args: list | None = None) -> int:
         """
         运行 CLI
 
@@ -905,12 +908,13 @@ class SuperDevCLI:
 
         # 路由到对应命令
         command_handler = getattr(self, f"_cmd_{parsed_args.command}", None)
-        if command_handler is None:
+        if command_handler is None or not callable(command_handler):
             self.console.print(f"[red]未知命令: {parsed_args.command}[/red]")
             return 1
 
         try:
-            return command_handler(parsed_args)
+            handler = cast(Callable[[Any], int], command_handler)
+            return int(handler(parsed_args))
 
         except SuperDevError as e:
             # 已知异常 - 显示友好错误信息
@@ -988,9 +992,9 @@ class SuperDevCLI:
         if config.domain:
             self.console.print(f"  领域: {config.domain}")
 
-        self.console.print(f"\n[dim]下一步:[/dim]")
-        self.console.print(f"  1. 编辑 super-dev.yaml 配置项目详情")
-        self.console.print(f"  2. 运行 'super-dev workflow' 开始开发")
+        self.console.print("\n[dim]下一步:[/dim]")
+        self.console.print("  1. 编辑 super-dev.yaml 配置项目详情")
+        self.console.print("  2. 运行 'super-dev workflow' 开始开发")
 
         return 0
 
@@ -1038,7 +1042,7 @@ class SuperDevCLI:
                     if hasattr(report.tech_stack.framework, "value")
                     else str(report.tech_stack.framework)
                 )
-                self.console.print(f"[cyan]项目分析报告[/cyan]")
+                self.console.print("[cyan]项目分析报告[/cyan]")
                 self.console.print(f"  路径: {report.project_path}")
                 self.console.print(f"  类型: {report.category.value}")
                 self.console.print(f"  语言: {report.tech_stack.language}")
@@ -1059,12 +1063,12 @@ class SuperDevCLI:
 
         except FileNotFoundError as e:
             self.console.print(f"[red]路径不存在: {e}[/red]")
-            self.logger.error(f"分析失败: 文件不存在", extra={'path': str(e)})
+            self.logger.error("分析失败: 文件不存在", extra={'path': str(e)})
             return 1
 
         except PermissionError as e:
             self.console.print(f"[red]权限不足: {e}[/red]")
-            self.logger.error(f"分析失败: 权限错误", extra={'path': str(e)})
+            self.logger.error("分析失败: 权限错误", extra={'path': str(e)})
             return 1
 
         except Exception as e:
@@ -1084,7 +1088,8 @@ class SuperDevCLI:
 
     def _cmd_workflow(self, args) -> int:
         """运行工作流"""
-        config_manager = get_config_manager()
+        project_dir = Path.cwd()
+        config_manager = ConfigManager(project_dir)
 
         if not config_manager.exists():
             self.console.print("[red]未找到项目配置，请先运行 'super-dev init'[/red]")
@@ -1110,11 +1115,25 @@ class SuperDevCLI:
 
         # 运行工作流
         import asyncio
-        engine = WorkflowEngine()
-        results = asyncio.run(engine.run(phases=phases))
+        config = config_manager.config
+        context = WorkflowContext(
+            project_dir=project_dir,
+            config=config_manager,
+            user_input={
+                "name": config.name or project_dir.name,
+                "description": config.description,
+                "platform": config.platform,
+                "frontend": config.frontend,
+                "backend": config.backend,
+                "domain": config.domain,
+                "quality_threshold": args.quality_gate,
+            },
+        )
+        engine = WorkflowEngine(project_dir)
+        results = asyncio.run(engine.run(phases=phases, context=context))
 
         # 检查是否全部成功
-        all_success = all(r.success for r in results.values())
+        all_success = bool(results) and all(r.success and not r.errors for r in results.values())
 
         return 0 if all_success else 1
 
@@ -1139,7 +1158,7 @@ class SuperDevCLI:
 
     def _cmd_expert(self, args) -> int:
         """调用专家"""
-        from .experts import list_experts, has_expert, save_expert_advice
+        from .experts import has_expert, list_experts, save_expert_advice
 
         # 处理 --list 选项
         if args.list:
@@ -1309,7 +1328,7 @@ class SuperDevCLI:
         }
         project_name = self._sanitize_project_name(config.name or project_dir.name)
 
-        platform = args.cicd or "github"
+        platform = self._normalize_cicd_platform(args.cicd or "github")
         generator = CICDGenerator(
             project_dir=project_dir,
             name=project_name,
@@ -1374,7 +1393,7 @@ class SuperDevCLI:
         """一键创建项目 - 从想法到规范"""
         from .creators import ProjectCreator
 
-        self.console.print(f"[cyan]Super Dev 项目创建器[/cyan]")
+        self.console.print("[cyan]Super Dev 项目创建器[/cyan]")
         self.console.print(f"[dim]描述: {args.description}[/dim]")
         self.console.print(f"[dim]平台: {args.platform} | 前端: {args.frontend} | 后端: {args.backend}[/dim]")
         self.console.print("")
@@ -1438,7 +1457,7 @@ class SuperDevCLI:
             self.console.print("[green]✓ 项目创建完成！[/green]")
             self.console.print("")
             self.console.print("[cyan]下一步:[/cyan]")
-            self.console.print(f"  1. 查看生成的文档:")
+            self.console.print("  1. 查看生成的文档:")
             self.console.print(f"     - PRD: output/{project_name}-prd.md")
             self.console.print(f"     - 架构: output/{project_name}-architecture.md")
             self.console.print(f"     - UI/UX: output/{project_name}-uiux.md")
@@ -1446,7 +1465,7 @@ class SuperDevCLI:
             self.console.print(f"     - 前端蓝图: output/{project_name}-frontend-blueprint.md")
             self.console.print(f"  2. 查看规范: super-dev spec show {change_id}")
             self.console.print(f"  3. 复制 AI 提示词: cat {prompt_file}")
-            self.console.print(f"  4. 开始开发: 按 tasks 顺序实现并持续更新规范")
+            self.console.print("  4. 开始开发: 按 tasks 顺序实现并持续更新规范")
 
         except Exception as e:
             self.console.print(f"[red]创建失败: {e}[/red]")
@@ -1516,7 +1535,7 @@ class SuperDevCLI:
 
         elif args.design_command == "generate":
             # 生成完整设计系统
-            self.console.print(f"[cyan]生成设计系统[/cyan]")
+            self.console.print("[cyan]生成设计系统[/cyan]")
             self.console.print(f"  产品: {args.product}")
             self.console.print(f"  行业: {args.industry}")
             self.console.print(f"  关键词: {' '.join(args.keywords) if args.keywords else 'N/A'}")
@@ -1533,7 +1552,7 @@ class SuperDevCLI:
                 aesthetic=args.aesthetic,
             )
 
-            self.console.print(f"[green]设计系统已生成:[/green]\n")
+            self.console.print("[green]设计系统已生成:[/green]\n")
             self.console.print(f"  名称: {design_system.name}")
             self.console.print(f"  描述: {design_system.description}")
 
@@ -1541,7 +1560,7 @@ class SuperDevCLI:
                 self.console.print(f"  美学方向: {design_system.aesthetic.name}")
                 self.console.print(f"  差异化特征: {design_system.aesthetic.differentiation}")
 
-            self.console.print(f"\n[cyan]生成文件...[/cyan]")
+            self.console.print("\n[cyan]生成文件...[/cyan]")
 
             output_dir = Path(args.output)
             generated_files = generator.generate_documentation(design_system, output_dir)
@@ -1549,7 +1568,7 @@ class SuperDevCLI:
             for file_path in generated_files:
                 self.console.print(f"  [green]✓[/green] {file_path}")
 
-            self.console.print(f"\n[dim]下一步:[/dim]")
+            self.console.print("\n[dim]下一步:[/dim]")
             self.console.print(f"  1. 查看 {output_dir / 'DESIGN_SYSTEM.md'} 了解设计系统")
             self.console.print(f"  2. 使用 {output_dir / 'design-tokens.css'} 导入 CSS 变量")
             self.console.print(f"  3. 使用 {output_dir / 'tailwind.config.json'} 配置 Tailwind")
@@ -1558,7 +1577,7 @@ class SuperDevCLI:
 
         elif args.design_command == "tokens":
             # 生成 design tokens
-            self.console.print(f"[cyan]生成 design tokens[/cyan]")
+            self.console.print("[cyan]生成 design tokens[/cyan]")
             self.console.print(f"  主色: {args.primary}")
             self.console.print(f"  类型: {args.type}")
             self.console.print()
@@ -1637,16 +1656,16 @@ class SuperDevCLI:
 
             # 列出所有模式
             if hasattr(args, 'list') and args.list:
-                patterns = landing_gen.list_patterns()
-                self.console.print(f"\n[green]可用的 Landing 页面模式 ({len(patterns)} 个):[/green]\n")
-                for i, pattern in enumerate(patterns, 1):
-                    self.console.print(f"  {i}. {pattern}")
+                pattern_names = landing_gen.list_patterns()
+                self.console.print(f"\n[green]可用的 Landing 页面模式 ({len(pattern_names)} 个):[/green]\n")
+                for i, pattern_name in enumerate(pattern_names, 1):
+                    self.console.print(f"  {i}. {pattern_name}")
                 self.console.print()
                 return 0
 
             # 智能推荐
             if hasattr(args, 'product_type') and args.product_type:
-                self.console.print(f"[cyan]智能推荐 Landing 页面模式[/cyan]")
+                self.console.print("[cyan]智能推荐 Landing 页面模式[/cyan]")
                 self.console.print(f"  产品类型: {args.product_type}")
                 self.console.print(f"  目标: {args.goal if hasattr(args, 'goal') and args.goal else 'N/A'}")
                 self.console.print(f"  受众: {args.audience if hasattr(args, 'audience') and args.audience else 'N/A'}")
@@ -1671,28 +1690,28 @@ class SuperDevCLI:
             if query:
                 self.console.print(f"[cyan]搜索 Landing 页面模式: {query}[/cyan]\n")
 
-                results = landing_gen.search(query, max_results=args.max_results)
+                landing_results = landing_gen.search(query, max_results=args.max_results)
 
-                if not results:
+                if not landing_results:
                     self.console.print("[yellow]未找到匹配的模式[/yellow]")
                     return 1
 
-                self.console.print(f"[green]找到 {len(results)} 个结果:[/green]\n")
+                self.console.print(f"[green]找到 {len(landing_results)} 个结果:[/green]\n")
 
-                for idx, pattern in enumerate(results, 1):
-                    self.console.print(f"[cyan]{idx}. {pattern.name}[/cyan]")
-                    self.console.print(f"    {pattern.description}")
-                    self.console.print(f"    适合: {', '.join(pattern.best_for)}")
-                    self.console.print(f"    复杂度: {pattern.complexity}")
+                for idx, landing_pattern in enumerate(landing_results, 1):
+                    self.console.print(f"[cyan]{idx}. {landing_pattern.name}[/cyan]")
+                    self.console.print(f"    {landing_pattern.description}")
+                    self.console.print(f"    适合: {', '.join(landing_pattern.best_for)}")
+                    self.console.print(f"    复杂度: {landing_pattern.complexity}")
                     self.console.print()
 
                 return 0
 
             # 默认显示所有模式
-            patterns = landing_gen.list_patterns()
-            self.console.print(f"\n[green]可用的 Landing 页面模式 ({len(patterns)} 个):[/green]\n")
-            for i, pattern in enumerate(patterns, 1):
-                self.console.print(f"  {i}. {pattern}")
+            pattern_names = landing_gen.list_patterns()
+            self.console.print(f"\n[green]可用的 Landing 页面模式 ({len(pattern_names)} 个):[/green]\n")
+            for i, pattern_name in enumerate(pattern_names, 1):
+                self.console.print(f"  {i}. {pattern_name}")
             self.console.print()
             return 0
 
@@ -1718,32 +1737,32 @@ class SuperDevCLI:
             # 推荐图表类型
             data_description = args.data_description if hasattr(args, 'data_description') else ""
             if data_description:
-                self.console.print(f"[cyan]推荐图表类型[/cyan]")
+                self.console.print("[cyan]推荐图表类型[/cyan]")
                 self.console.print(f"  数据描述: {data_description}")
                 self.console.print(f"  框架: {args.framework}")
                 self.console.print()
 
-                recommendations = chart_recommender.recommend(
+                chart_recommendations = chart_recommender.recommend(
                     data_description=data_description,
                     framework=args.framework,
                     max_results=args.max_results
                 )
 
-                if not recommendations:
+                if not chart_recommendations:
                     self.console.print("[yellow]未找到合适的图表类型[/yellow]")
                     return 1
 
-                self.console.print(f"[green]推荐结果:[/green]\n")
+                self.console.print("[green]推荐结果:[/green]\n")
 
-                for idx, rec in enumerate(recommendations, 1):
-                    confidence_pct = int(rec.confidence * 100)
-                    self.console.print(f"[cyan]{idx}. {rec.chart_type.name}[/cyan] (置信度: {confidence_pct}%)")
-                    self.console.print(f"    {rec.chart_type.description}")
-                    self.console.print(f"    理由: {rec.reasoning}")
-                    self.console.print(f"    推荐库: {rec.library_recommendation}")
-                    self.console.print(f"    无障碍: {rec.chart_type.accessibility_notes}")
-                    if rec.alternatives:
-                        self.console.print(f"    替代方案: {', '.join([a.name for a in rec.alternatives])}")
+                for idx, chart_rec in enumerate(chart_recommendations, 1):
+                    confidence_pct = int(chart_rec.confidence * 100)
+                    self.console.print(f"[cyan]{idx}. {chart_rec.chart_type.name}[/cyan] (置信度: {confidence_pct}%)")
+                    self.console.print(f"    {chart_rec.chart_type.description}")
+                    self.console.print(f"    理由: {chart_rec.reasoning}")
+                    self.console.print(f"    推荐库: {chart_rec.library_recommendation}")
+                    self.console.print(f"    无障碍: {chart_rec.chart_type.accessibility_notes}")
+                    if chart_rec.alternatives:
+                        self.console.print(f"    替代方案: {', '.join([a.name for a in chart_rec.alternatives])}")
                     self.console.print()
 
                 return 0
@@ -1773,29 +1792,29 @@ class SuperDevCLI:
 
             # 快速见效的改进
             if hasattr(args, 'quick_wins') and args.quick_wins:
-                self.console.print(f"[cyan]快速见效的 UX 改进建议[/cyan]\n")
+                self.console.print("[cyan]快速见效的 UX 改进建议[/cyan]\n")
 
-                quick_wins = ux_guide.get_quick_wins(max_results=args.max_results)
+                ux_quick_wins = ux_guide.get_quick_wins(max_results=args.max_results)
 
-                if not quick_wins:
+                if not ux_quick_wins:
                     self.console.print("[yellow]未找到快速见效的建议[/yellow]")
                     return 1
 
-                for idx, rec in enumerate(quick_wins, 1):
-                    self.console.print(f"[cyan]{idx}. {rec.guideline.topic}[/cyan] ({rec.guideline.domain.value})")
-                    self.console.print(f"    [green]最佳实践:[/green] {rec.guideline.best_practice}")
-                    self.console.print(f"    [red]反模式:[/red] {rec.guideline.anti_pattern}")
-                    self.console.print(f"    影响: {rec.guideline.impact}")
-                    self.console.print(f"    优先级: {rec.priority} | 实现难度: {rec.implementation_effort} | 用户影响: {rec.user_impact}")
-                    if rec.resources:
-                        self.console.print(f"    资源: {', '.join(rec.resources)}")
+                for idx, ux_rec in enumerate(ux_quick_wins, 1):
+                    self.console.print(f"[cyan]{idx}. {ux_rec.guideline.topic}[/cyan] ({ux_rec.guideline.domain.value})")
+                    self.console.print(f"    [green]最佳实践:[/green] {ux_rec.guideline.best_practice}")
+                    self.console.print(f"    [red]反模式:[/red] {ux_rec.guideline.anti_pattern}")
+                    self.console.print(f"    影响: {ux_rec.guideline.impact}")
+                    self.console.print(f"    优先级: {ux_rec.priority} | 实现难度: {ux_rec.implementation_effort} | 用户影响: {ux_rec.user_impact}")
+                    if ux_rec.resources:
+                        self.console.print(f"    资源: {', '.join(ux_rec.resources)}")
                     self.console.print()
 
                 return 0
 
             # 检查清单
             if hasattr(args, 'checklist') and args.checklist:
-                self.console.print(f"[cyan]UX 检查清单[/cyan]\n")
+                self.console.print("[cyan]UX 检查清单[/cyan]\n")
 
                 checklist = ux_guide.get_checklist(domains=[args.domain] if hasattr(args, 'domain') and args.domain else None)
 
@@ -1812,26 +1831,26 @@ class SuperDevCLI:
             if query:
                 self.console.print(f"[cyan]搜索 UX 指南: {query}[/cyan]\n")
 
-                recommendations = ux_guide.search(
+                ux_recommendations = ux_guide.search(
                     query=query,
                     domain=args.domain if hasattr(args, 'domain') else None,
                     max_results=args.max_results
                 )
 
-                if not recommendations:
+                if not ux_recommendations:
                     self.console.print("[yellow]未找到匹配的 UX 指南[/yellow]")
                     return 1
 
-                self.console.print(f"[green]找到 {len(recommendations)} 个结果:[/green]\n")
+                self.console.print(f"[green]找到 {len(ux_recommendations)} 个结果:[/green]\n")
 
-                for idx, rec in enumerate(recommendations, 1):
-                    self.console.print(f"[cyan]{idx}. {rec.guideline.topic}[/cyan] ({rec.guideline.domain.value})")
-                    self.console.print(f"    [green]最佳实践:[/green] {rec.guideline.best_practice}")
-                    self.console.print(f"    [red]反模式:[/red] {rec.guideline.anti_pattern}")
-                    self.console.print(f"    影响: {rec.guideline.impact}")
-                    self.console.print(f"    优先级: {rec.priority} | 实现难度: {rec.implementation_effort} | 用户影响: {rec.user_impact}")
-                    if rec.resources:
-                        self.console.print(f"    资源: {', '.join(rec.resources)}")
+                for idx, ux_rec in enumerate(ux_recommendations, 1):
+                    self.console.print(f"[cyan]{idx}. {ux_rec.guideline.topic}[/cyan] ({ux_rec.guideline.domain.value})")
+                    self.console.print(f"    [green]最佳实践:[/green] {ux_rec.guideline.best_practice}")
+                    self.console.print(f"    [red]反模式:[/red] {ux_rec.guideline.anti_pattern}")
+                    self.console.print(f"    影响: {ux_rec.guideline.impact}")
+                    self.console.print(f"    优先级: {ux_rec.priority} | 实现难度: {ux_rec.implementation_effort} | 用户影响: {ux_rec.user_impact}")
+                    if ux_rec.resources:
+                        self.console.print(f"    资源: {', '.join(ux_rec.resources)}")
                     self.console.print()
 
                 return 0
@@ -1866,22 +1885,22 @@ class SuperDevCLI:
 
             # 显示设计模式
             if hasattr(args, 'patterns') and args.patterns:
-                patterns = tech_engine.get_patterns(stack_name)
+                tech_patterns = tech_engine.get_patterns(stack_name)
 
-                if not patterns:
+                if not tech_patterns:
                     self.console.print(f"[yellow]未找到 {stack_name} 的设计模式[/yellow]")
                     return 1
 
-                self.console.print(f"\n[cyan]{stack_name} 设计模式 ({len(patterns)} 个):[/cyan]\n")
+                self.console.print(f"\n[cyan]{stack_name} 设计模式 ({len(tech_patterns)} 个):[/cyan]\n")
 
-                for idx, pattern in enumerate(patterns, 1):
-                    self.console.print(f"[cyan]{idx}. {pattern.name}[/cyan]")
-                    self.console.print(f"    描述: {pattern.description}")
-                    self.console.print(f"    使用场景: {pattern.use_case}")
-                    if pattern.pros:
-                        self.console.print(f"    优点: {', '.join(pattern.pros)}")
-                    if pattern.cons:
-                        self.console.print(f"    缺点: {', '.join(pattern.cons)}")
+                for idx, tech_pattern in enumerate(tech_patterns, 1):
+                    self.console.print(f"[cyan]{idx}. {tech_pattern.name}[/cyan]")
+                    self.console.print(f"    描述: {tech_pattern.description}")
+                    self.console.print(f"    使用场景: {tech_pattern.use_case}")
+                    if tech_pattern.pros:
+                        self.console.print(f"    优点: {', '.join(tech_pattern.pros)}")
+                    if tech_pattern.cons:
+                        self.console.print(f"    缺点: {', '.join(tech_pattern.cons)}")
                     self.console.print()
 
                 return 0
@@ -1931,31 +1950,33 @@ class SuperDevCLI:
             if query:
                 self.console.print(f"查询: {query}\n")
 
-            recommendations = tech_engine.search_practices(
+            stack_recommendations = tech_engine.search_practices(
                 stack=stack_name,
                 query=query,
                 category=category,
                 max_results=args.max_results
             )
 
-            if not recommendations:
+            if not stack_recommendations:
                 self.console.print("[yellow]未找到匹配的最佳实践[/yellow]")
                 return 1
 
-            for idx, rec in enumerate(recommendations, 1):
-                self.console.print(f"[cyan]{idx}. {rec.practice.topic}[/cyan] ({rec.practice.category.value})")
-                self.console.print(f"    [green]最佳实践:[/green] {rec.practice.practice}")
-                self.console.print(f"    [red]反模式:[/red] {rec.practice.anti_pattern}")
-                self.console.print(f"    好处: {rec.practice.benefits}")
-                self.console.print(f"    优先级: {rec.priority} | 复杂度: {rec.practice.complexity}")
-                if rec.context:
-                    self.console.print(f"    上下文: {rec.context}")
-                if rec.alternatives:
-                    self.console.print(f"    替代方案: {', '.join(rec.alternatives)}")
-                if rec.resources:
-                    self.console.print(f"    资源: {', '.join(rec.resources)}")
-                if rec.practice.code_example:
-                    self.console.print(f"    代码示例:\n    [dim]{rec.practice.code_example[:200]}...[/dim]")
+            for idx, stack_rec in enumerate(stack_recommendations, 1):
+                self.console.print(f"[cyan]{idx}. {stack_rec.practice.topic}[/cyan] ({stack_rec.practice.category.value})")
+                self.console.print(f"    [green]最佳实践:[/green] {stack_rec.practice.practice}")
+                self.console.print(f"    [red]反模式:[/red] {stack_rec.practice.anti_pattern}")
+                self.console.print(f"    好处: {stack_rec.practice.benefits}")
+                self.console.print(f"    优先级: {stack_rec.priority} | 复杂度: {stack_rec.practice.complexity}")
+                if stack_rec.context:
+                    self.console.print(f"    上下文: {stack_rec.context}")
+                if stack_rec.alternatives:
+                    self.console.print(
+                        f"    替代方案: {', '.join([a.value if hasattr(a, 'value') else str(a) for a in stack_rec.alternatives])}"
+                    )
+                if stack_rec.resources:
+                    self.console.print(f"    资源: {', '.join(stack_rec.resources)}")
+                if stack_rec.practice.code_example:
+                    self.console.print(f"    代码示例:\n    [dim]{stack_rec.practice.code_example[:200]}...[/dim]")
                 self.console.print()
 
             return 0
@@ -1985,18 +2006,18 @@ class SuperDevCLI:
 
             # 搜索组件
             if hasattr(args, 'search') and args.search:
-                results = codegen.search_components(
+                component_snippets = codegen.search_components(
                     query=args.search,
                     framework=args.framework if hasattr(args, 'framework') else None
                 )
 
-                if not results:
+                if not component_snippets:
                     self.console.print(f"[yellow]未找到匹配的组件: {args.search}[/yellow]")
                     return 1
 
-                self.console.print(f"\n[green]找到 {len(results)} 个组件:[/green]\n")
+                self.console.print(f"\n[green]找到 {len(component_snippets)} 个组件:[/green]\n")
 
-                for idx, snippet in enumerate(results, 1):
+                for idx, snippet in enumerate(component_snippets, 1):
                     self.console.print(f"[cyan]{idx}. {snippet.name}[/cyan] ({snippet.framework.value})")
                     self.console.print(f"    类别: {snippet.category.value}")
                     self.console.print(f"    描述: {snippet.description}")
@@ -2020,30 +2041,30 @@ class SuperDevCLI:
 
             if not component:
                 self.console.print(f"[yellow]未找到组件: {component_name}[/yellow]")
-                self.console.print(f"使用 --list 查看可用组件")
+                self.console.print("使用 --list 查看可用组件")
                 return 1
 
             self.console.print(f"[green]组件名称:[/green] {component_name}")
             self.console.print(f"[green]描述:[/green] {component.description}\n")
 
-            self.console.print(f"[cyan]代码:[/cyan]")
+            self.console.print("[cyan]代码:[/cyan]")
             self.console.print(f"```{framework}")
             self.console.print(component.code)
             self.console.print("```\n")
 
             if component.imports:
-                self.console.print(f"[cyan]导入语句:[/cyan]")
+                self.console.print("[cyan]导入语句:[/cyan]")
                 for imp in component.imports:
                     self.console.print(f"  {imp}")
                 self.console.print()
 
             if component.dependencies:
-                self.console.print(f"[cyan]依赖:[/cyan]")
+                self.console.print("[cyan]依赖:[/cyan]")
                 self.console.print(f"  {', '.join(component.dependencies)}")
                 self.console.print()
 
             if component.usage_example:
-                self.console.print(f"[cyan]使用示例:[/cyan]")
+                self.console.print("[cyan]使用示例:[/cyan]")
                 self.console.print(f"  [dim]{component.usage_example}[/dim]")
 
             # 输出到文件
@@ -2087,7 +2108,7 @@ class SuperDevCLI:
         project_dir = Path.cwd()
 
         self.console.print(f"[cyan]{'=' * 60}[/cyan]")
-        self.console.print(f"[cyan]Super Dev 完整流水线[/cyan]")
+        self.console.print("[cyan]Super Dev 完整流水线[/cyan]")
         self.console.print(f"[cyan]{'=' * 60}[/cyan]")
         self.console.print(f"[dim]项目: {project_name}[/dim]")
         self.console.print(f"[dim]技术栈: {args.platform} | {args.frontend} | {args.backend}[/dim]")
@@ -2097,6 +2118,7 @@ class SuperDevCLI:
             # ========== 第 0 阶段: 需求增强 ==========
             self.console.print("[cyan]第 0 阶段: 需求增强 (联网 + 知识库)...[/cyan]")
             import os
+
             from .orchestrator.knowledge import KnowledgeAugmenter
 
             output_dir = project_dir / "output"
@@ -2217,7 +2239,7 @@ class SuperDevCLI:
             self.console.print("")
 
             # ========== 第 4 阶段: 生成实现骨架 ==========
-            scaffold_result = {"frontend_files": [], "backend_files": []}
+            scaffold_result: dict[str, list[str]] = {"frontend_files": [], "backend_files": []}
             if not args.skip_scaffold:
                 self.console.print("[cyan]第 4 阶段: 生成前后端实现骨架...[/cyan]")
                 implementation_builder = ImplementationScaffoldBuilder(
@@ -2262,6 +2284,14 @@ class SuperDevCLI:
                 self.console.print(f"  [green]✓[/green] 总分: {redteam_report.total_score}/100")
                 self.console.print(f"  [green]✓[/green] 报告: {redteam_file}")
                 self.console.print("")
+
+                # 红队未通过时直接阻断，确保“先通过红队，再进入质量门禁”
+                if not redteam_report.passed:
+                    self.console.print("[red]红队审查未通过，流水线终止[/red]")
+                    for reason in redteam_report.blocking_reasons:
+                        self.console.print(f"  - {reason}")
+                    self.console.print("[dim]可使用 --skip-redteam 跳过该阶段（不推荐生产使用）[/dim]")
+                    return 1
             else:
                 self.console.print("[yellow]第 5 阶段: 红队审查 (跳过)[/yellow]")
                 self.console.print("")
@@ -2283,8 +2313,7 @@ class SuperDevCLI:
 
                 # 显示场景信息
                 scenario_label = "0-1 新建项目" if gate_result.scenario == "0-1" else "1-N+1 增量开发"
-                if gate_result.scenario == "0-1":
-                    self.console.print(f"  [dim]场景: {scenario_label} (使用放宽标准)[/dim]")
+                self.console.print(f"  [dim]场景: {scenario_label}[/dim]")
 
                 # 保存质量门禁报告
                 gate_file = project_dir / "output" / f"{project_name}-quality-gate.md"
@@ -2349,7 +2378,7 @@ class SuperDevCLI:
                 project_dir=project_dir,
                 name=project_name,
                 tech_stack=tech_stack,
-                platform=args.cicd
+                platform=self._normalize_cicd_platform(args.cicd)
             )
 
             cicd_files = cicd_gen.generate()
@@ -2376,9 +2405,9 @@ class SuperDevCLI:
                 self.console.print(f"  [green]✓[/green] 平台拆分模板: {len(remediation_outputs['per_platform_files'])} 组")
             self.console.print("")
 
-            # ========== 第 11 阶段: 数据库迁移 ==========
-            self.console.print("[cyan]第 11 阶段: 生成数据库迁移脚本...[/cyan]")
-            from .deployers import MigrationGenerator
+            # ========== 第 11 阶段: 数据库迁移 + 项目交付包 ==========
+            self.console.print("[cyan]第 11 阶段: 生成数据库迁移脚本 + 项目交付包...[/cyan]")
+            from .deployers import DeliveryPackager, MigrationGenerator
 
             migration_gen = MigrationGenerator(
                 project_dir=project_dir,
@@ -2394,6 +2423,22 @@ class SuperDevCLI:
                 full_path.write_text(content, encoding="utf-8")
                 self.console.print(f"  [green]✓[/green] {file_path}")
 
+            packager = DeliveryPackager(
+                project_dir=project_dir,
+                name=project_name,
+                version=__version__,
+            )
+            delivery_outputs = packager.package(cicd_platform=args.cicd)
+            missing_required_raw = delivery_outputs.get("missing_required_count", 0)
+            missing_required_count = missing_required_raw if isinstance(missing_required_raw, int) else 0
+            self.console.print(f"  [green]✓[/green] 清单: {delivery_outputs['manifest_file']}")
+            self.console.print(f"  [green]✓[/green] 报告: {delivery_outputs['report_file']}")
+            self.console.print(f"  [green]✓[/green] 交付包: {delivery_outputs['archive_file']}")
+            self.console.print(
+                f"  [dim]状态: {delivery_outputs['status']} | 缺失必需项: {missing_required_count}[/dim]"
+            )
+            if missing_required_count > 0:
+                self.console.print("[yellow]  交付包标记为 incomplete，请补齐缺失项后重新打包[/yellow]")
             self.console.print("")
 
             # ========== 完成 ==========
@@ -2447,12 +2492,24 @@ class SuperDevCLI:
             for file_path in migration_files.keys():
                 self.console.print(f"    - {file_path}")
             self.console.print("")
+            self.console.print("  项目交付包:")
+            self.console.print(
+                f"    - {Path(str(delivery_outputs['manifest_file'])).relative_to(project_dir)}"
+            )
+            self.console.print(
+                f"    - {Path(str(delivery_outputs['report_file'])).relative_to(project_dir)}"
+            )
+            self.console.print(
+                f"    - {Path(str(delivery_outputs['archive_file'])).relative_to(project_dir)}"
+            )
+            self.console.print("")
             self.console.print("[cyan]下一步:[/cyan]")
             self.console.print("  1. 打开 output/frontend/index.html 评审前端骨架")
             self.console.print("  2. 对照执行路线图按阶段推进开发")
             self.console.print("  3. 使用代码审查指南进行评审和修复")
             self.console.print("  4. 配置 CI/CD 平台 (设置 secrets/credentials)")
             self.console.print("  5. 运行数据库迁移脚本并推送代码触发流水线")
+            self.console.print("  6. 使用 output/delivery/* 作为对外交付包")
             self.console.print("")
 
         except Exception as e:
@@ -2474,7 +2531,7 @@ class SuperDevCLI:
         if args.action == "list":
             # 列出所有配置
             config = config_manager.config
-            self.console.print(f"[cyan]项目配置:[/cyan]")
+            self.console.print("[cyan]项目配置:[/cyan]")
             for key, value in config.__dict__.items():
                 if not key.startswith("_"):
                     self.console.print(f"  {key}: {value}")
@@ -2603,7 +2660,7 @@ class SuperDevCLI:
 
     def _cmd_spec(self, args) -> int:
         """Spec-Driven Development 命令"""
-        from .specs import SpecGenerator, ChangeManager, SpecManager
+        from .specs import ChangeManager, SpecGenerator, SpecManager
         from .specs.models import ChangeStatus
 
         project_dir = Path.cwd()
@@ -2614,13 +2671,13 @@ class SuperDevCLI:
             agents_path, project_path = generator.init_sdd()
 
             self.console.print("[green]✓[/green] SDD 目录结构已初始化")
-            self.console.print(f"  [dim].super-dev/specs/[/dim] - 当前规范")
-            self.console.print(f"  [dim].super-dev/changes/[/dim] - 变更提案")
-            self.console.print(f"  [dim].super-dev/archive/[/dim] - 已归档变更")
+            self.console.print("  [dim].super-dev/specs/[/dim] - 当前规范")
+            self.console.print("  [dim].super-dev/changes/[/dim] - 变更提案")
+            self.console.print("  [dim].super-dev/archive/[/dim] - 已归档变更")
             self.console.print("")
-            self.console.print(f"[cyan]下一步:[/cyan]")
-            self.console.print(f"  1. 编辑 .super-dev/project.md 填写项目上下文")
-            self.console.print(f"  2. 运行 'super-dev spec propose <id>' 创建变更提案")
+            self.console.print("[cyan]下一步:[/cyan]")
+            self.console.print("  1. 编辑 .super-dev/project.md 填写项目上下文")
+            self.console.print("  2. 运行 'super-dev spec propose <id>' 创建变更提案")
 
         elif args.spec_action == "list":
             # 列出所有变更
@@ -2635,7 +2692,7 @@ class SuperDevCLI:
                 self.console.print("[dim]没有找到变更[/dim]")
                 return 0
 
-            self.console.print(f"[cyan]变更列表:[/cyan]")
+            self.console.print("[cyan]变更列表:[/cyan]")
             for change in changes:
                 status_color = {
                     ChangeStatus.DRAFT: "dim",
@@ -2657,35 +2714,35 @@ class SuperDevCLI:
         elif args.spec_action == "show":
             # 显示变更详情
             manager = ChangeManager(project_dir)
-            change = manager.load_change(args.change_id)
+            loaded_change = manager.load_change(args.change_id)
 
-            if not change:
+            if not loaded_change:
                 self.console.print(f"[red]变更不存在: {args.change_id}[/red]")
                 return 1
 
-            self.console.print(f"[cyan]变更详情: {change.id}[/cyan]")
-            self.console.print(f"  标题: {change.title}")
-            self.console.print(f"  状态: {change.status.value}")
+            self.console.print(f"[cyan]变更详情: {loaded_change.id}[/cyan]")
+            self.console.print(f"  标题: {loaded_change.title}")
+            self.console.print(f"  状态: {loaded_change.status.value}")
 
-            if change.proposal:
+            if loaded_change.proposal:
                 self.console.print("")
                 self.console.print("[cyan]提案:[/cyan]")
-                if change.proposal.description:
-                    self.console.print(f"  {change.proposal.description}")
-                if change.proposal.motivation:
-                    self.console.print(f"[dim]动机: {change.proposal.motivation}[/dim]")
+                if loaded_change.proposal.description:
+                    self.console.print(f"  {loaded_change.proposal.description}")
+                if loaded_change.proposal.motivation:
+                    self.console.print(f"[dim]动机: {loaded_change.proposal.motivation}[/dim]")
 
-            if change.tasks:
+            if loaded_change.tasks:
                 self.console.print("")
                 self.console.print("[cyan]任务:[/cyan]")
-                for task in change.tasks:
+                for task in loaded_change.tasks:
                     checkbox = "[x]" if task.status.value == "completed" else "[ ]"
                     self.console.print(f"  {checkbox} {task.id}: {task.title}")
 
-            if change.spec_deltas:
+            if loaded_change.spec_deltas:
                 self.console.print("")
                 self.console.print("[cyan]规范变更:[/cyan]")
-                for delta in change.spec_deltas:
+                for delta in loaded_change.spec_deltas:
                     self.console.print(f"  - {delta.spec_name} ({delta.delta_type.value})")
 
         elif args.spec_action == "propose":
@@ -2702,7 +2759,7 @@ class SuperDevCLI:
             self.console.print(f"[green]✓[/green] 变更提案已创建: {change.id}")
             self.console.print(f"  [dim].super-dev/changes/{change.id}/[/dim]")
             self.console.print("")
-            self.console.print(f"[cyan]下一步:[/cyan]")
+            self.console.print("[cyan]下一步:[/cyan]")
             self.console.print(f"  1. 运行 'super-dev spec add-req {change.id} <spec> <req> <desc>' 添加需求")
             self.console.print(f"  2. 或 'super-dev spec show {change.id}' 查看详情")
 
@@ -2716,7 +2773,7 @@ class SuperDevCLI:
                 description=args.description
             )
 
-            self.console.print(f"[green]✓[/green] 需求已添加到变更")
+            self.console.print("[green]✓[/green] 需求已添加到变更")
             self.console.print(f"  规范: {delta.spec_name}")
             self.console.print(f"  需求: {args.req_name}")
 
@@ -2786,8 +2843,8 @@ class SuperDevCLI:
         elif args.spec_action == "view":
             # 交互式仪表板
             from rich.console import Console
-            from rich.table import Table
             from rich.panel import Panel
+            from rich.table import Table
             from rich.text import Text
 
             console = Console()
@@ -2897,6 +2954,13 @@ class SuperDevCLI:
             return frontend
         return mapping.get(frontend, "react")
 
+    def _normalize_cicd_platform(self, value: str) -> CICDPlatform:
+        valid = {"github", "gitlab", "jenkins", "azure", "bitbucket", "all"}
+        normalized = (value or "github").lower()
+        if normalized not in valid:
+            raise ValueError(f"不支持的 CI/CD 平台: {value}")
+        return cast(CICDPlatform, normalized)
+
     def _sanitize_project_name(self, name: str) -> str:
         """清理项目名，避免路径非法字符"""
         import re
@@ -2936,15 +3000,14 @@ class SuperDevCLI:
 
     def _save_tech_stack_to_config(self, project_dir: Path, tech_stack: dict, description: str) -> None:
         """保存技术栈到项目配置文件"""
-        import yaml
-        from pathlib import Path
+        import yaml  # type: ignore[import-untyped]
 
         config_file = project_dir / "super-dev.yaml"
 
         # 读取现有配置（如果有）
-        config = {}
+        config: dict[str, Any] = {}
         if config_file.exists():
-            with open(config_file, 'r', encoding='utf-8') as f:
+            with open(config_file, encoding='utf-8') as f:
                 config = yaml.safe_load(f) or {}
 
         # 更新配置

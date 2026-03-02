@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
 """
 Super Dev 配置管理单元测试
 """
 
-import pytest
-import yaml
 from pathlib import Path
+
+import yaml
 
 from super_dev.config import ConfigManager, ProjectConfig, get_config_manager
 
@@ -77,7 +76,7 @@ class TestConfigManager:
         config_path = temp_project_dir / "super-dev.yaml"
         assert config_path.exists()
 
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             data = yaml.safe_load(f)
             assert data["name"] == "saved-project"
 
@@ -151,6 +150,7 @@ class TestConfigManager:
         """测试验证无效平台"""
         manager = ConfigManager(temp_project_dir)
         manager.create(name="invalid")
+        assert manager._config is not None
         manager._config.platform = "invalid_platform"
 
         is_valid, errors = manager.validate()
@@ -161,6 +161,7 @@ class TestConfigManager:
         """测试验证无效质量门禁"""
         manager = ConfigManager(temp_project_dir)
         manager.create(name="invalid")
+        assert manager._config is not None
         manager._config.quality_gate = 150
 
         is_valid, errors = manager.validate()
@@ -176,3 +177,11 @@ class TestGlobalConfigManager:
         manager2 = get_config_manager(temp_project_dir)
 
         assert manager1 is manager2
+
+    def test_get_config_manager_isolated_by_project(self, temp_project_dir: Path, tmp_path: Path):
+        """测试不同项目目录返回不同实例"""
+        manager1 = get_config_manager(temp_project_dir)
+        manager2 = get_config_manager(tmp_path)
+
+        assert manager1 is not manager2
+        assert manager1.project_dir != manager2.project_dir

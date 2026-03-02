@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
 """
 质量门禁检查器测试
 """
 
 from pathlib import Path
 
-from super_dev.reviewers.quality_gate import QualityGateChecker
+from super_dev.reviewers.quality_gate import CheckStatus, QualityCheck, QualityGateChecker
 
 
 class TestQualityGateChecker:
@@ -50,6 +49,46 @@ class TestQualityGateChecker:
 
         result = checker.check(None)
         assert result.passed is False
+
+    def test_required_failed_check_blocks_gate_even_with_high_score(self, temp_project_dir: Path, monkeypatch):
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "node"},
+            scenario_override="1-N+1",
+        )
+
+        failed_required = QualityCheck(
+            name="安全审查",
+            category="security",
+            description="存在 critical 漏洞",
+            status=CheckStatus.FAILED,
+            score=95,
+            weight=1.5,
+        )
+        passing_docs = QualityCheck(
+            name="PRD 文档",
+            category="documentation",
+            description="文档完整",
+            status=CheckStatus.PASSED,
+            score=100,
+            weight=1.0,
+        )
+        checks = [failed_required, passing_docs]
+
+        monkeypatch.setattr(checker, "_check_documentation", lambda: [passing_docs])
+        monkeypatch.setattr(checker, "_check_security", lambda _r: [failed_required])
+        monkeypatch.setattr(checker, "_check_performance", lambda _r: [])
+        monkeypatch.setattr(checker, "_check_testing", lambda: [])
+        monkeypatch.setattr(checker, "_check_code_quality", lambda: [])
+        monkeypatch.setattr(checker, "_calculate_total_score", lambda _c: 95)
+        monkeypatch.setattr(checker, "_calculate_weighted_score", lambda _c: 95.0)
+        monkeypatch.setattr(checker, "_generate_recommendations", lambda _c: [])
+
+        result = checker.check(None)
+        assert result.passed is False
+        assert result.critical_failures
+        assert checks[0].description in result.critical_failures[0]
 
     def test_testing_check_runs_pytest(self, temp_project_dir: Path, monkeypatch):
         tests_dir = temp_project_dir / "tests"
@@ -123,3 +162,60 @@ class TestQualityGateChecker:
             tech_stack={"frontend": "react", "backend": "python"},
         )
         assert checker._read_coverage_percent() == 76
+
+    def test_has_pytest_config_requires_real_marker(self, temp_project_dir: Path):
+        (temp_project_dir / "pyproject.toml").write_text(
+            "[project]\nname='demo'\n",
+            encoding="utf-8",
+        )
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+        )
+        assert checker._has_pytest_config() is False
+
+    def test_has_pytest_config_from_pyproject_marker(self, temp_project_dir: Path):
+        (temp_project_dir / "pyproject.toml").write_text(
+            "[tool.pytest.ini_options]\naddopts='-q'\n",
+            encoding="utf-8",
+        )
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+        )
+        assert checker._has_pytest_config() is True
+
+    def test_discover_js_test_targets_and_run(self, temp_project_dir: Path, monkeypatch):
+        frontend = temp_project_dir / "frontend"
+        frontend.mkdir(parents=True, exist_ok=True)
+        (frontend / "package.json").write_text(
+            '{"name":"frontend","scripts":{"test":"vitest run"}}',
+            encoding="utf-8",
+        )
+
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "node"},
+            scenario_override="1-N+1",
+        )
+
+        monkeypatch.setattr("super_dev.reviewers.quality_gate.shutil.which", lambda cmd: "/usr/bin/npm" if cmd == "npm" else None)
+        monkeypatch.setattr(
+            checker,
+            "_run_command",
+            lambda cmd, timeout=120: {
+                "returncode": 0,
+                "stdout": "1 passed in 0.01s",
+                "stderr": "",
+                "timed_out": False,
+            },
+        )
+        monkeypatch.setattr(checker, "_read_coverage_percent", lambda: 85)
+
+        checks = checker._check_testing()
+        names = {c.name: c for c in checks}
+        assert checker._has_js_test_script() is True
+        assert names["测试执行"].status.value == "passed"

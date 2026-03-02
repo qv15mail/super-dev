@@ -1,37 +1,31 @@
-# -*- coding: utf-8 -*-
 """
 开发：Excellent（11964948@qq.com）
-功能：工作流编排引擎 - 协调 11 阶段工作流（含第 0 阶段）
+功能：工作流编排引擎 - 协调 12 阶段工作流（含第 0 阶段）
 作用：管理任务执行、专家调度、质量门禁
 创建时间：2025-12-30
 最后修改：2026-02-24
 """
 
-import json
 import asyncio
+import json
 import traceback
-from pathlib import Path
-from datetime import datetime
-from typing import Any, Callable, Optional
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
+from pathlib import Path
+from typing import Any
 
 try:
     from rich.console import Console
     from rich.panel import Panel
-    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
     from rich.table import Table
     RICH_AVAILABLE = True
 except ImportError:
     RICH_AVAILABLE = False
 
 from ..config.manager import ConfigManager, get_config_manager
-from ..exceptions import (
-    WorkflowError,
-    PhaseExecutionError,
-    QualityGateError,
-    ConfigurationError
-)
+from ..exceptions import PhaseExecutionError, QualityGateError
 from ..utils import get_logger
 
 
@@ -75,7 +69,7 @@ class WorkflowContext:
 class WorkflowEngine:
     """工作流编排引擎"""
 
-    def __init__(self, project_dir: Optional[Path] = None):
+    def __init__(self, project_dir: Path | None = None):
         self.project_dir = Path.cwd() if project_dir is None else project_dir
         self.config_manager = get_config_manager(self.project_dir)
         self.console = Console() if RICH_AVAILABLE else None
@@ -91,7 +85,7 @@ class WorkflowEngine:
         # 注册默认阶段处理器
         self._register_default_handlers()
 
-        self.logger.info(f"工作流引擎初始化完成", extra={'project_dir': str(self.project_dir)})
+        self.logger.info("工作流引擎初始化完成", extra={'project_dir': str(self.project_dir)})
 
     def _register_default_handlers(self) -> None:
         """注册默认阶段处理器"""
@@ -108,15 +102,16 @@ class WorkflowEngine:
 
     async def run(
         self,
-        phases: Optional[list[Phase]] = None,
-        context: Optional[WorkflowContext] = None,
-        stop_requested: Optional[Callable[[], bool]] = None,
+        phases: list[Phase] | None = None,
+        context: WorkflowContext | None = None,
+        stop_requested: Callable[[], bool] | None = None,
     ) -> dict[Phase, PhaseResult]:
         if context is None:
             context = WorkflowContext(
                 project_dir=self.project_dir,
                 config=self.config_manager
             )
+        self._seed_context_user_input(context)
 
         if phases is None:
             phases = self._get_phases_from_config()
@@ -136,14 +131,31 @@ class WorkflowEngine:
                 result = await self._run_phase(phase, context)
                 results[phase] = result
 
-                # 质量门禁检查
-                if result.quality_score < self.config_manager.config.quality_gate:
+                # 红队审查必须通过，避免风险进入后续阶段
+                if phase == Phase.REDTEAM and isinstance(result.output, dict):
+                    if not bool(result.output.get("passed", True)):
+                        reasons = result.output.get("blocking_reasons") or ["红队审查未通过"]
+                        reason_text = "; ".join(str(r) for r in reasons)
+                        quality_error = QualityGateError(
+                            score=float(result.output.get("score", result.quality_score)),
+                            threshold=float(result.output.get("pass_threshold", 70)),
+                            details={"phase": phase.value, "reasons": reasons},
+                        )
+                        result.success = False
+                        result.errors.append(reason_text)
+                        raise quality_error
+
+                # 质量门禁只在 QA 阶段执行，避免前置阶段被全局阈值误杀
+                if phase == Phase.QA and result.quality_score < self.config_manager.config.quality_gate:
                     self._print_quality_gate_failed(phase, result)
-                    raise QualityGateError(
+                    quality_error = QualityGateError(
                         score=result.quality_score,
                         threshold=self.config_manager.config.quality_gate,
                         details={'phase': phase.value}
                     )
+                    result.success = False
+                    result.errors.append(str(quality_error))
+                    raise quality_error
 
                 self._print_phase_complete(phase, result)
 
@@ -153,7 +165,9 @@ class WorkflowEngine:
                     extra={'error': str(e), 'phase': phase.value}
                 )
                 if phase in results:
-                    results[phase].errors.append(str(e))
+                    results[phase].success = False
+                    if str(e) not in results[phase].errors:
+                        results[phase].errors.append(str(e))
                 break
 
             except PhaseExecutionError as e:
@@ -207,6 +221,18 @@ class WorkflowEngine:
 
             output = await self._execute_handler(handler, context)
             duration = (datetime.now() - start_time).total_seconds()
+
+            # 兼容自定义处理器直接返回 PhaseResult 的场景
+            if isinstance(output, PhaseResult):
+                result = output
+                if result.phase != phase:
+                    result.phase = phase
+                if result.duration <= 0:
+                    result.duration = duration
+                if result.quality_score <= 0:
+                    result.quality_score = self._calculate_quality_score(phase, context)
+                return result
+
             quality_score = self._calculate_quality_score(phase, context)
 
             self.logger.info(
@@ -256,7 +282,17 @@ class WorkflowEngine:
         """使用真实质量评分引擎计算分数"""
         try:
             from .quality import QualityScorer
-            name = context.user_input.get("name", context.config.config.name or "project")
+            configured_name = "project"
+            config_obj = getattr(context, "config", None)
+            if config_obj is not None:
+                # 兼容 WorkflowContext.config 为 ConfigManager 或 ProjectConfig 两种形态
+                manager_cfg = getattr(config_obj, "config", None)
+                if manager_cfg is not None:
+                    configured_name = getattr(manager_cfg, "name", None) or configured_name
+                else:
+                    configured_name = getattr(config_obj, "name", None) or configured_name
+
+            name = str(context.user_input.get("name", configured_name))
             scorer = QualityScorer(project_dir=self.project_dir, name=name)
             score = scorer.score_phase(
                 phase_name=phase.value,
@@ -277,10 +313,10 @@ class WorkflowEngine:
         - 联网检索补充背景信息（可选）
         """
         from ..creators.requirement_parser import RequirementParser
-        from .knowledge import KnowledgeBase
+        from .knowledge import KnowledgeAugmenter
 
         user_input = context.user_input
-        description = user_input.get("description", "")
+        description = user_input.get("enriched_description", user_input.get("description", ""))
         domain = user_input.get("domain", "")
         offline = user_input.get("offline", False)
 
@@ -291,26 +327,17 @@ class WorkflowEngine:
         context.user_input["scenario"] = scenario
         context.user_input["requirements"] = requirements
 
-        # 2. 注入知识库
+        # 2. 需求知识增强（本地知识库 + 联网检索）
         try:
-            kb = KnowledgeBase(self.project_dir)
-            knowledge = kb.get_domain_knowledge(domain) if domain else {}
-            context.research_data["knowledge"] = knowledge
-            context.user_input["knowledge_enhanced"] = bool(knowledge)
+            augmenter = KnowledgeAugmenter(project_dir=self.project_dir, web_enabled=not offline)
+            knowledge_bundle = augmenter.augment(requirement=description, domain=domain)
+            context.research_data["knowledge_bundle"] = knowledge_bundle
+            context.user_input["knowledge_enhanced"] = bool(knowledge_bundle.get("local_knowledge"))
+            context.user_input["web_research"] = bool(knowledge_bundle.get("web_knowledge"))
+            context.user_input["enriched_description"] = knowledge_bundle.get("enriched_requirement", description)
         except Exception as e:
-            self.logger.warning(f"知识库注入跳过: {e}")
+            self.logger.warning(f"需求知识增强跳过: {e}")
             context.user_input["knowledge_enhanced"] = False
-
-        # 3. 联网检索（可选）
-        if not offline:
-            try:
-                web_results = await self._web_search(description)
-                context.research_data["web_results"] = web_results
-                context.user_input["web_research"] = bool(web_results)
-            except Exception as e:
-                self.logger.info(f"联网检索跳过（离线降级）: {e}")
-                context.user_input["web_research"] = False
-        else:
             context.user_input["web_research"] = False
 
         return {
@@ -328,10 +355,13 @@ class WorkflowEngine:
         - 竞品分析
         - 技术趋势调研
         """
-        description = context.user_input.get("description", "")
+        description = context.user_input.get(
+            "enriched_description",
+            context.user_input.get("description", ""),
+        )
         offline = context.user_input.get("offline", False)
 
-        intelligence = {
+        intelligence: dict[str, list[dict[str, str]]] = {
             "trends": [],
             "competitors": [],
             "best_practices": [],
@@ -371,7 +401,7 @@ class WorkflowEngine:
 
         user_input = context.user_input
         name = user_input.get("name", self.config_manager.config.name or "project")
-        description = user_input.get("description", "")
+        description = user_input.get("enriched_description", user_input.get("description", ""))
         platform = user_input.get("platform", "web")
         frontend = user_input.get("frontend", "react")
         backend = user_input.get("backend", "node")
@@ -439,6 +469,9 @@ class WorkflowEngine:
             "status": "redteam_complete",
             "report_path": str(redteam_path),
             "score": expert_output.quality_score,
+            "passed": expert_output.metadata.get("passed", False),
+            "pass_threshold": expert_output.metadata.get("pass_threshold", 70),
+            "blocking_reasons": expert_output.metadata.get("blocking_reasons", []),
             "critical_count": expert_output.metadata.get("critical_count", 0),
             "high_count": expert_output.metadata.get("high_count", 0),
             "issues": {
@@ -452,11 +485,11 @@ class WorkflowEngine:
         """
         第 6 阶段：质量门禁
         - QA 专家：多维度质量门禁检查
-        - 场景化阈值（0-1 自动放宽）
+        - 场景化检查但统一 80+ 通过标准（支持手动覆盖）
         - 生成详细质量报告
         """
+        from ..reviewers.redteam import RedTeamReviewer
         from .experts import ExpertDispatcher
-        from ..reviewers.redteam import RedTeamReport, RedTeamReviewer
 
         user_input = context.user_input
         name = user_input.get("name", self.config_manager.config.name or "project")
@@ -530,6 +563,7 @@ class WorkflowEngine:
         output_dir = self.project_dir / "output"
         output_dir.mkdir(exist_ok=True)
         saved = []
+        step_errors: list[str] = []
 
         # 代码审查指南
         try:
@@ -538,7 +572,9 @@ class WorkflowEngine:
             cr_path.write_text(cr_output.content, encoding="utf-8")
             saved.append(str(cr_path))
         except Exception as e:
-            self.logger.warning(f"代码审查指南生成跳过: {e}")
+            msg = f"代码审查指南生成失败: {e}"
+            self.logger.error(msg)
+            step_errors.append(msg)
 
         # AI 提示词
         try:
@@ -547,7 +583,16 @@ class WorkflowEngine:
             ai_path.write_text(ai_output.content, encoding="utf-8")
             saved.append(str(ai_path))
         except Exception as e:
-            self.logger.warning(f"AI 提示词生成跳过: {e}")
+            msg = f"AI 提示词生成失败: {e}"
+            self.logger.error(msg)
+            step_errors.append(msg)
+
+        if step_errors:
+            raise PhaseExecutionError(
+                phase=Phase.DELIVERY.value.upper(),
+                message="Delivery phase failed",
+                details={"errors": step_errors},
+            )
 
         return {
             "status": "delivery_complete",
@@ -556,10 +601,13 @@ class WorkflowEngine:
 
     async def _phase_deployment(self, context: WorkflowContext) -> Any:
         """
-        第 9-10 阶段：CI/CD 配置 + 数据库迁移
+        第 9-11 阶段：CI/CD 配置 + 数据库迁移 + 交付包
         - DEVOPS 专家：生成 5 大 CI/CD 平台配置
         - DBA 专家：生成 6 种 ORM 数据库迁移脚本
+        - 交付收敛：生成 manifest/report/zip 交付包
         """
+        from .. import __version__
+        from ..deployers import DeliveryPackager
         from .experts import ExpertDispatcher
 
         user_input = context.user_input
@@ -577,6 +625,7 @@ class WorkflowEngine:
         output_dir = self.project_dir / "output"
         output_dir.mkdir(exist_ok=True)
         saved = []
+        step_errors: list[str] = []
 
         # CI/CD 配置
         try:
@@ -588,8 +637,12 @@ class WorkflowEngine:
             cicd_path = output_dir / f"{name}-cicd.md"
             cicd_path.write_text(cicd_output.content, encoding="utf-8")
             saved.append(str(cicd_path))
+            generated = cicd_output.metadata.get("generated_file_contents", {})
+            saved.extend(self._write_generated_files(generated))
         except Exception as e:
-            self.logger.warning(f"CI/CD 配置生成跳过: {e}")
+            msg = f"CI/CD 配置生成失败: {e}"
+            self.logger.error(msg)
+            step_errors.append(msg)
 
         # 数据库迁移
         try:
@@ -601,8 +654,35 @@ class WorkflowEngine:
             migration_path = output_dir / f"{name}-migration.md"
             migration_path.write_text(migration_output.content, encoding="utf-8")
             saved.append(str(migration_path))
+            generated = migration_output.metadata.get("generated_file_contents", {})
+            saved.extend(self._write_generated_files(generated))
         except Exception as e:
-            self.logger.warning(f"数据库迁移脚本生成跳过: {e}")
+            msg = f"数据库迁移脚本生成失败: {e}"
+            self.logger.error(msg)
+            step_errors.append(msg)
+
+        # 交付包
+        try:
+            packager = DeliveryPackager(
+                project_dir=self.project_dir,
+                name=name,
+                version=__version__,
+            )
+            delivery_outputs = packager.package(cicd_platform=cicd_platform)
+            saved.append(str(delivery_outputs["manifest_file"]))
+            saved.append(str(delivery_outputs["report_file"]))
+            saved.append(str(delivery_outputs["archive_file"]))
+        except Exception as e:
+            msg = f"交付包生成失败: {e}"
+            self.logger.error(msg)
+            step_errors.append(msg)
+
+        if step_errors:
+            raise PhaseExecutionError(
+                phase=Phase.DEPLOYMENT.value.upper(),
+                message="Deployment phase failed",
+                details={"errors": step_errors},
+            )
 
         return {
             "status": "deployment_ready",
@@ -616,7 +696,7 @@ class WorkflowEngine:
     async def _web_search(self, query: str, max_results: int = 5) -> list[dict]:
         """
         联网检索（优先使用 DuckDuckGo，自动降级到离线模式）
-        
+
         中国大陆环境：DuckDuckGo API 通常可访问；
         如需国内可访问的备选，可配置 TAVILY_API_KEY。
         """
@@ -681,7 +761,6 @@ class WorkflowEngine:
     async def _search_tavily(self, query: str, api_key: str, max_results: int = 5) -> list[dict]:
         """使用 Tavily API 进行深度检索"""
         import json as json_mod
-        import urllib.request
 
         payload = json_mod.dumps({
             "api_key": api_key,
@@ -715,23 +794,35 @@ class WorkflowEngine:
             })
         return results
 
-    def _http_get(self, url: str, timeout: int = 5) -> Optional[str]:
+    def _http_get(self, url: str, timeout: int = 5) -> str | None:
         """同步 HTTP GET（在 executor 中执行）"""
         import urllib.request
+        from urllib.parse import urlparse
         try:
+            parsed = urlparse(url)
+            if parsed.scheme not in {"http", "https"}:
+                return None
             req = urllib.request.Request(url, headers={"User-Agent": "super-dev/1.0"})
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return resp.read().decode("utf-8", errors="ignore")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310
+                raw: bytes = resp.read()
+                decoded = raw.decode("utf-8", errors="ignore")
+                return str(decoded)
         except Exception:
             return None
 
-    def _http_post(self, url: str, data: bytes, headers: dict, timeout: int = 10) -> Optional[str]:
+    def _http_post(self, url: str, data: bytes, headers: dict, timeout: int = 10) -> str | None:
         """同步 HTTP POST（在 executor 中执行）"""
         import urllib.request
+        from urllib.parse import urlparse
         try:
+            parsed = urlparse(url)
+            if parsed.scheme not in {"http", "https"}:
+                return None
             req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return resp.read().decode("utf-8", errors="ignore")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310
+                raw: bytes = resp.read()
+                decoded = raw.decode("utf-8", errors="ignore")
+                return str(decoded)
         except Exception:
             return None
 
@@ -796,7 +887,7 @@ class WorkflowEngine:
             table.add_column("耗时", style="yellow")
             table.add_column("质量分", style="magenta")
 
-            total_duration = 0
+            total_duration = 0.0
             success_count = 0
 
             for phase, result in results.items():
@@ -837,3 +928,31 @@ class WorkflowEngine:
 
         with open(report_path, "w", encoding="utf-8") as f:
             json.dump(report_data, f, indent=2, ensure_ascii=False)
+
+    def _seed_context_user_input(self, context: WorkflowContext) -> None:
+        cfg = self.config_manager.config
+        defaults = {
+            "name": cfg.name or self.project_dir.name,
+            "description": cfg.description,
+            "platform": cfg.platform,
+            "frontend": cfg.frontend,
+            "backend": cfg.backend,
+            "domain": cfg.domain,
+            "cicd": "github",
+            "offline": False,
+        }
+        for key, value in defaults.items():
+            context.user_input.setdefault(key, value)
+
+    def _write_generated_files(self, generated_files: Any) -> list[str]:
+        if not isinstance(generated_files, dict):
+            return []
+        saved_paths: list[str] = []
+        for relative_path, content in generated_files.items():
+            if not isinstance(relative_path, str) or not isinstance(content, str):
+                continue
+            full_path = self.project_dir / relative_path
+            full_path.parent.mkdir(parents=True, exist_ok=True)
+            full_path.write_text(content, encoding="utf-8")
+            saved_paths.append(str(full_path))
+        return saved_paths

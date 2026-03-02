@@ -7,6 +7,18 @@ Super Dev 自动发布脚本
 
 set -e
 
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT_DIR"
+
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN="python3"
+elif command -v python >/dev/null 2>&1; then
+    PYTHON_BIN="python"
+else
+    echo "[ERROR] python3/python not found in PATH"
+    exit 1
+fi
+
 # 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -33,7 +45,7 @@ log_error() {
 
 # 获取版本号
 get_version() {
-    python -c "from super_dev import __version__; print(__version__)"
+    "$PYTHON_BIN" -c "from super_dev import __version__; print(__version__)"
 }
 
 # 检查是否在正确的分支上
@@ -88,6 +100,17 @@ run_tests() {
     log_success "所有测试通过!"
 }
 
+# 交付门禁烟雾验证
+run_delivery_gate() {
+    log_info "运行交付门禁 smoke..."
+    "$PYTHON_BIN" scripts/check_delivery_ready.py --smoke --project-dir "$(pwd)"
+    if [ $? -ne 0 ]; then
+        log_error "交付门禁 smoke 失败"
+        exit 1
+    fi
+    log_success "交付门禁 smoke 通过!"
+}
+
 # 构建包
 build_package() {
     log_info "构建包..."
@@ -96,7 +119,7 @@ build_package() {
     rm -rf dist/ build/ *.egg-info
 
     # 构建
-    python -m build
+    "$PYTHON_BIN" -m build
 
     if [ $? -ne 0 ]; then
         log_error "构建失败"
@@ -228,6 +251,9 @@ main() {
 
     # 运行测试
     run_tests
+
+    # 交付门禁验证
+    run_delivery_gate
 
     # 更新 CHANGELOG
     update_changelog

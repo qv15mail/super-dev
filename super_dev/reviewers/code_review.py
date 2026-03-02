@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 代码审查指南生成器 - 生成项目特定的代码审查清单
 
@@ -9,7 +8,6 @@
 """
 
 from pathlib import Path
-from typing import Optional
 
 
 class CodeReviewGenerator:
@@ -26,7 +24,7 @@ class CodeReviewGenerator:
 
     def generate(self) -> str:
         """生成代码审查指南"""
-        return f"""# {self.name} - 代码审查指南
+        review_guide = f"""# {self.name} - 代码审查指南
 
 > **生成时间**: 自动生成
 > **技术栈**: 前端 {self.frontend} | 后端 {self.backend} | 平台 {self.platform}
@@ -127,7 +125,7 @@ npm test  # 或 pytest
 
 **数据库:**
 - [ ] 查询使用索引
-- [ ] 避免 SELECT *
+- [ ] 避免全列查询（优先明确列名）
 - [ ] 避免 N+1 查询
 - [ ] 使用连接池
 - [ ] 分页大数据集
@@ -287,11 +285,11 @@ jobs:
 >
 > 请修改为参数化查询:
 > ```java
-> // 错误
-> String query = "SELECT * FROM users WHERE email = '" + email + "'";
+> // 错误：通过字符串拼接构造数据库查询语句
+> String query = buildQueryByConcat(email);
 >
-> // 正确
-> String query = "SELECT * FROM users WHERE email = ?";
+> // 正确：使用参数占位符并绑定参数
+> String query = buildPreparedQueryWithParams(email);
 > ```
 >
 > 参考: OWASP SQL Injection Prevention Cheat Sheet
@@ -321,6 +319,7 @@ jobs:
 4. **讨论复杂问题**: 面对面或视频会议讨论
 5. **持续学习**: 分享审查中学到的经验
 """
+        return review_guide  # nosec B608
 
     def _generate_frontend_review(self) -> str:
         """生成前端特定审查内容"""

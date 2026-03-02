@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 专家系统调度器 - 协调 10 位专家协作生成文档
 
@@ -14,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Literal, cast
 
 
 class ExpertRole(Enum):
@@ -62,7 +61,7 @@ class ExpertTeamResult:
     total_score: float = 0.0
     summary: str = ""
 
-    def get_output(self, doc_type: str) -> Optional[ExpertOutput]:
+    def get_output(self, doc_type: str) -> ExpertOutput | None:
         for out in self.outputs:
             if out.document_type == doc_type:
                 return out
@@ -175,6 +174,9 @@ class ExpertDispatcher:
             content=content,
             quality_score=report.total_score,
             metadata={
+                "passed": report.passed,
+                "pass_threshold": report.pass_threshold,
+                "blocking_reasons": report.blocking_reasons,
                 "critical_count": report.critical_count,
                 "high_count": report.high_count,
                 "security_issues": [self._serialize_security_issue(i) for i in report.security_issues],
@@ -188,7 +190,7 @@ class ExpertDispatcher:
         name: str,
         tech_stack: dict,
         redteam_report=None,
-        threshold_override: Optional[int] = None,
+        threshold_override: int | None = None,
     ) -> ExpertOutput:
         """QA 专家：调度质量门禁检查"""
         from ..reviewers.quality_gate import QualityGateChecker
@@ -220,9 +222,9 @@ class ExpertDispatcher:
         tech_stack: dict,
     ) -> ExpertOutput:
         """CODE 专家：调度代码审查"""
-        from ..reviewers.code_review import CodeReviewGuideGenerator
+        from ..reviewers.code_review import CodeReviewGenerator
 
-        generator = CodeReviewGuideGenerator(
+        generator = CodeReviewGenerator(
             project_dir=self.project_dir,
             name=name,
             tech_stack=tech_stack,
@@ -268,15 +270,24 @@ class ExpertDispatcher:
             project_dir=self.project_dir,
             name=name,
             tech_stack=tech_stack,
+            platform=self._normalize_cicd_platform(cicd_platform),
         )
-        content = generator.generate(platform=cicd_platform)
+        generated_files = generator.generate()
+        content = self._render_generated_files_markdown(
+            title=f"{name} - CI/CD 配置",
+            generated_files=generated_files,
+        )
 
         return ExpertOutput(
             role=ExpertRole.DEVOPS,
             document_type="cicd",
             content=content,
             quality_score=88,
-            metadata={"platform": cicd_platform},
+            metadata={
+                "platform": cicd_platform,
+                "generated_files": list(generated_files.keys()),
+                "generated_file_contents": generated_files,
+            },
         )
 
     def dispatch_migration(
@@ -292,15 +303,24 @@ class ExpertDispatcher:
             project_dir=self.project_dir,
             name=name,
             tech_stack=tech_stack,
+            orm_type=self._normalize_orm_type(orm),
         )
-        content = generator.generate(orm=orm)
+        generated_files = generator.generate()
+        content = self._render_generated_files_markdown(
+            title=f"{name} - 数据库迁移脚本",
+            generated_files=generated_files,
+        )
 
         return ExpertOutput(
             role=ExpertRole.DBA,
             document_type="migration",
             content=content,
             quality_score=87,
-            metadata={"orm": orm},
+            metadata={
+                "orm": orm,
+                "generated_files": list(generated_files.keys()),
+                "generated_file_contents": generated_files,
+            },
         )
 
     def list_experts(self) -> list[dict]:
@@ -362,3 +382,42 @@ class ExpertDispatcher:
             "file_path": issue.file_path,
             "line": issue.line,
         }
+
+    def _normalize_cicd_platform(
+        self, platform: str
+    ) -> Literal["github", "gitlab", "jenkins", "azure", "bitbucket", "all"]:
+        normalized = (platform or "").strip().lower()
+        allowed = {"github", "gitlab", "jenkins", "azure", "bitbucket", "all"}
+        if normalized in allowed:
+            return cast(
+                Literal["github", "gitlab", "jenkins", "azure", "bitbucket", "all"],
+                normalized,
+            )
+        return "github"
+
+    def _normalize_orm_type(self, orm: str):
+        from ..deployers.migration import ORMType
+
+        mapping = {
+            "prisma": ORMType.PRISMA,
+            "typeorm": ORMType.TYPEORM,
+            "sequelize": ORMType.SEQUELIZE,
+            "sqlalchemy": ORMType.SQLALCHEMY,
+            "django": ORMType.DJANGO,
+            "mongoose": ORMType.MONGOOSE,
+        }
+        return mapping.get((orm or "").strip().lower())
+
+    def _render_generated_files_markdown(self, title: str, generated_files: dict[str, str]) -> str:
+        lines = [
+            f"# {title}",
+            "",
+            f"共生成 {len(generated_files)} 个文件。",
+            "",
+            "## 文件列表",
+            "",
+        ]
+        for file_path in sorted(generated_files.keys()):
+            lines.append(f"- `{file_path}`")
+        lines.append("")
+        return "\n".join(lines)

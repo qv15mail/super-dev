@@ -1,18 +1,13 @@
-# -*- coding: utf-8 -*-
 """
 Super Dev 工作流引擎单元测试
 """
 
-import pytest
 from pathlib import Path
 
-from super_dev.orchestrator import (
-    WorkflowEngine,
-    Phase,
-    PhaseResult,
-    WorkflowContext
-)
+import pytest
+
 from super_dev.config import ConfigManager, ProjectConfig
+from super_dev.orchestrator import Phase, PhaseResult, WorkflowContext, WorkflowEngine
 
 
 class TestPhase:
@@ -217,7 +212,7 @@ class TestWorkflowEngine:
             config=config_manager
         )
 
-        # 返回低分的处理器
+        # discovery 低分不应触发门禁
         async def low_score_handler(context):
             from super_dev.orchestrator.engine import PhaseResult
             return PhaseResult(
@@ -228,35 +223,91 @@ class TestWorkflowEngine:
                 output={"status": "low_score"}
             )
 
-        # 正常处理器
-        async def normal_handler(context):
+        # QA 低分应触发门禁并停止
+        async def qa_low_score_handler(context):
             from super_dev.orchestrator.engine import PhaseResult
             return PhaseResult(
-                phase=Phase.INTELLIGENCE,
+                phase=Phase.QA,
                 success=True,
                 duration=1.0,
-                quality_score=85.0,
-                output={"status": "normal"}
+                quality_score=85.0,  # 低于门禁 90
+                output={"status": "qa_low_score"}
             )
 
         engine.register_phase_handler(Phase.DISCOVERY, low_score_handler)
-        engine.register_phase_handler(Phase.INTELLIGENCE, normal_handler)
-
-        # Mock calculate_quality_score to return low score for discovery
-        original_calculate = engine._calculate_quality_score
-        def mock_calculate(phase, context):
-            if phase == Phase.DISCOVERY:
-                return 75.0
-            return 85.0
-        engine._calculate_quality_score = mock_calculate
+        engine.register_phase_handler(Phase.QA, qa_low_score_handler)
 
         results = await engine.run(
-            phases=[Phase.DISCOVERY, Phase.INTELLIGENCE],
+            phases=[Phase.DISCOVERY, Phase.QA, Phase.DELIVERY],
             context=context
         )
 
-        # 第一阶段应该完成但因质量分低导致停止
+        # discovery 不应被门禁阻断
         assert results[Phase.DISCOVERY].success
-        # 第二阶段不应执行（质量门禁停止）
-        assert Phase.INTELLIGENCE not in results
+        # QA 阶段被门禁阻断，且被标记为失败
+        assert Phase.QA in results
+        assert not results[Phase.QA].success
         assert results[Phase.DISCOVERY].quality_score == 75.0
+        # 后续阶段不应执行
+        assert Phase.DELIVERY not in results
+
+    @pytest.mark.asyncio
+    async def test_redteam_failure_stops_workflow(self, temp_project_dir: Path):
+        """测试红队不通过时工作流停止"""
+        config_manager = ConfigManager(temp_project_dir)
+        config_manager.create(name="test", quality_gate=80)
+
+        engine = WorkflowEngine(temp_project_dir)
+        context = WorkflowContext(
+            project_dir=temp_project_dir,
+            config=config_manager
+        )
+
+        async def redteam_fail_handler(_context):
+            return {
+                "status": "redteam_complete",
+                "score": 52,
+                "passed": False,
+                "pass_threshold": 70,
+                "blocking_reasons": ["存在 1 个 critical 问题"],
+            }
+
+        async def should_not_run(_context):
+            return {"status": "qa_complete"}
+
+        engine.register_phase_handler(Phase.REDTEAM, redteam_fail_handler)
+        engine.register_phase_handler(Phase.QA, should_not_run)
+
+        results = await engine.run(
+            phases=[Phase.REDTEAM, Phase.QA],
+            context=context
+        )
+
+        assert Phase.REDTEAM in results
+        assert not results[Phase.REDTEAM].success
+        assert Phase.QA not in results
+
+    @pytest.mark.asyncio
+    async def test_deployment_persists_generated_files(self, temp_project_dir: Path):
+        """测试部署阶段会落盘生成的 CI/CD 与迁移文件"""
+        config_manager = ConfigManager(temp_project_dir)
+        config_manager.create(name="test", quality_gate=80)
+
+        engine = WorkflowEngine(temp_project_dir)
+        context = WorkflowContext(
+            project_dir=temp_project_dir,
+            config=config_manager,
+            user_input={
+                "name": "demo",
+                "platform": "web",
+                "frontend": "react",
+                "backend": "node",
+                "domain": "",
+            },
+        )
+
+        results = await engine.run(phases=[Phase.DEPLOYMENT], context=context)
+        assert Phase.DEPLOYMENT in results
+        assert results[Phase.DEPLOYMENT].success
+        assert (temp_project_dir / ".github" / "workflows" / "ci.yml").exists()
+        assert (temp_project_dir / "prisma" / "schema.prisma").exists()

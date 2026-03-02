@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "super-dev"
-version = "1.0.1"
+version = "2.0.0"
 description = "顶级 AI 开发战队 - God-Tier Development Team"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -37,6 +37,7 @@ dependencies = [
     "ddgs>=9.0.0",
     "requests>=2.31.0",
     "beautifulsoup4>=4.12.0",
+    "defusedxml>=0.7.1",
     "openai>=1.0.0",
     "tenacity>=8.2.0",
     "fastapi>=0.110.0",
@@ -73,6 +74,8 @@ target-version = ["py310", "py311", "py312"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
 ignore = ["E501"]
 
@@ -81,3 +84,8 @@ python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:The 'app' shortcut is now deprecated\\.:DeprecationWarning:httpx\\._client",
+]

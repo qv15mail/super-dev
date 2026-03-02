@@ -1,9 +1,10 @@
-# -*- coding: utf-8 -*-
 """
 Skill 管理测试
 """
 
 from pathlib import Path
+
+import pytest
 
 from super_dev.skills import SkillManager
 
@@ -27,10 +28,26 @@ class TestSkillManager:
         removed = manager.uninstall("my-skill", "codex-cli")
         assert not removed.exists()
 
-    def test_install_builtin_skill(self, temp_project_dir: Path):
+    @pytest.mark.parametrize(
+        "target",
+        [
+            "claude-code",
+            "codex-cli",
+            "opencode",
+            "cursor",
+            "qoder",
+            "trae",
+            "codebuddy",
+            "antigravity",
+        ],
+    )
+    def test_install_builtin_skill(self, temp_project_dir: Path, target: str):
         manager = SkillManager(temp_project_dir)
-        result = manager.install(source="super-dev", target="claude-code", name="super-dev-core")
+        result = manager.install(source="super-dev", target=target, name="super-dev-core")
 
         assert result.path.exists()
         assert (result.path / "SKILL.md").exists()
-        assert "super-dev-core" in manager.list_installed("claude-code")
+        assert "super-dev-core" in manager.list_installed(target)
+
+        removed = manager.uninstall("super-dev-core", target)
+        assert not removed.exists()

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 开发：Excellent（11964948@qq.com）
 功能：配置管理器 - 管理项目配置
@@ -7,11 +6,11 @@
 最后修改：2025-12-30
 """
 
-import os
-import yaml
-from pathlib import Path
-from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, cast
+
+import yaml  # type: ignore[import-untyped]
 
 
 @dataclass
@@ -20,7 +19,7 @@ class ProjectConfig:
 
     name: str
     description: str = ""
-    version: str = "1.0.0"
+    version: str = "2.0.0"
     author: str = ""
     license: str = "MIT"
 
@@ -31,22 +30,22 @@ class ProjectConfig:
     database: str = "postgresql"  # postgresql, mysql, mongodb, redis
 
     # 前端配置 (扩展)
-    ui_library: Optional[str] = None  # UI 组件库
-    style_solution: Optional[str] = None  # 样式方案
-    state_management: List[str] = field(default_factory=list)  # 状态管理
-    testing_frameworks: List[str] = field(default_factory=list)  # 测试框架
+    ui_library: str | None = None  # UI 组件库
+    style_solution: str | None = None  # 样式方案
+    state_management: list[str] = field(default_factory=list)  # 状态管理
+    testing_frameworks: list[str] = field(default_factory=list)  # 测试框架
 
     # 领域知识
     domain: str = ""  # fintech, ecommerce, medical, social, iot, education
 
     # 工作流配置
-    phases: list = field(default_factory=lambda: [
+    phases: list[str] = field(default_factory=lambda: [
         "discovery", "intelligence", "drafting",
         "redteam", "qa", "delivery", "deployment"
     ])
 
     # 专家配置
-    experts: list = field(default_factory=lambda: [
+    experts: list[str] = field(default_factory=lambda: [
         "PM", "ARCHITECT", "UI", "UX", "SECURITY", "CODE"
     ])
 
@@ -57,17 +56,17 @@ class ProjectConfig:
     output_dir: str = "output"
 
     # CLI 设置
-    cli: Dict[str, Any] = field(default_factory=dict)
+    cli: dict[str, Any] = field(default_factory=dict)
 
 
 class ConfigManager:
     """配置管理器"""
 
     CONFIG_FILENAME = "super-dev.yaml"
-    DEFAULT_CONFIG = {
+    DEFAULT_CONFIG: dict[str, Any] = {
         "name": "my-project",
         "description": "A Super Dev project",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "platform": "web",
         "frontend": "next",  # 默认使用 Next.js
         "backend": "node",
@@ -82,7 +81,7 @@ class ConfigManager:
         "testing_frameworks": [],
     }
 
-    def __init__(self, project_dir: Optional[Path] = None):
+    def __init__(self, project_dir: Path | None = None):
         """
         初始化配置管理器
 
@@ -91,7 +90,7 @@ class ConfigManager:
         """
         self.project_dir = Path.cwd() if project_dir is None else project_dir
         self.config_path = self.project_dir / self.CONFIG_FILENAME
-        self._config: Optional[ProjectConfig] = None
+        self._config: ProjectConfig | None = None
 
     @property
     def config(self) -> ProjectConfig:
@@ -113,17 +112,18 @@ class ConfigManager:
         """
         if not self.exists():
             # 返回默认配置
-            return ProjectConfig(**self.DEFAULT_CONFIG)
+            return ProjectConfig(**cast(dict[str, Any], self.DEFAULT_CONFIG.copy()))
 
-        with open(self.config_path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
+        with open(self.config_path, encoding="utf-8") as f:
+            loaded = yaml.safe_load(f)
+        data = loaded if isinstance(loaded, dict) else {}
 
         # 合并默认配置
-        config_data = {**self.DEFAULT_CONFIG, **data}
+        config_data: dict[str, Any] = {**self.DEFAULT_CONFIG, **data}
 
-        return ProjectConfig(**config_data)
+        return ProjectConfig(**cast(dict[str, Any], config_data))
 
-    def save(self, config: Optional[ProjectConfig] = None) -> None:
+    def save(self, config: ProjectConfig | None = None) -> None:
         """
         保存配置文件
 
@@ -145,7 +145,7 @@ class ConfigManager:
 
         self._config = config_to_save
 
-    def create(self, **kwargs) -> ProjectConfig:
+    def create(self, **kwargs: Any) -> ProjectConfig:
         """
         创建新配置
 
@@ -155,12 +155,12 @@ class ConfigManager:
         Returns:
             ProjectConfig: 新创建的配置对象
         """
-        config_data = {**self.DEFAULT_CONFIG, **kwargs}
-        self._config = ProjectConfig(**config_data)
+        config_data: dict[str, Any] = {**self.DEFAULT_CONFIG, **kwargs}
+        self._config = ProjectConfig(**cast(dict[str, Any], config_data))
         self.save()
         return self._config
 
-    def update(self, **kwargs) -> ProjectConfig:
+    def update(self, **kwargs: Any) -> ProjectConfig:
         """
         更新配置
 
@@ -174,12 +174,12 @@ class ConfigManager:
             return self.create(**kwargs)
 
         # 类型转换映射
-        type_converters = {
+        type_converters: dict[str, type[int]] = {
             "quality_gate": int,  # 质量门禁必须是整数
         }
 
         # 转换类型
-        converted_kwargs = {}
+        converted_kwargs: dict[str, Any] = {}
         for key, value in kwargs.items():
             if key in type_converters and isinstance(value, str):
                 try:
@@ -190,10 +190,10 @@ class ConfigManager:
                 converted_kwargs[key] = value
 
         # 合并现有配置
-        current_data = self.config.__dict__
-        updated_data = {**current_data, **converted_kwargs}
+        current_data: dict[str, Any] = dict(self.config.__dict__)
+        updated_data: dict[str, Any] = {**current_data, **converted_kwargs}
 
-        self._config = ProjectConfig(**updated_data)
+        self._config = ProjectConfig(**cast(dict[str, Any], updated_data))
         self.save()
         return self._config
 
@@ -223,7 +223,7 @@ class ConfigManager:
         Returns:
             (是否有效, 错误列表)
         """
-        errors = []
+        errors: list[str] = []
 
         # 验证必需字段
         if not self.config.name:
@@ -259,11 +259,11 @@ class ConfigManager:
         return len(errors) == 0, errors
 
 
-# 全局配置管理器实例
-_global_config_manager: Optional[ConfigManager] = None
+# 全局配置管理器缓存（按项目目录隔离）
+_global_config_managers: dict[Path, ConfigManager] = {}
 
 
-def get_config_manager(project_dir: Optional[Path] = None) -> ConfigManager:
+def get_config_manager(project_dir: Path | None = None) -> ConfigManager:
     """
     获取全局配置管理器实例
 
@@ -273,7 +273,9 @@ def get_config_manager(project_dir: Optional[Path] = None) -> ConfigManager:
     Returns:
         ConfigManager: 配置管理器实例
     """
-    global _global_config_manager
-    if _global_config_manager is None:
-        _global_config_manager = ConfigManager(project_dir)
-    return _global_config_manager
+    project_root = (Path.cwd() if project_dir is None else Path(project_dir)).resolve()
+    manager = _global_config_managers.get(project_root)
+    if manager is None:
+        manager = ConfigManager(project_root)
+        _global_config_managers[project_root] = manager
+    return manager

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Super Dev 分析器数据模型
 """
@@ -211,13 +210,13 @@ class ArchitectureReport:
         )
 
         lines = [
-            f"# 项目架构分析报告",
-            f"",
+            "# 项目架构分析报告",
+            "",
             f"**项目路径**: `{self.project_path}`",
             f"**项目类型**: {self.category.value}",
-            f"",
-            f"## 技术栈",
-            f"",
+            "",
+            "## 技术栈",
+            "",
             f"- **编程语言**: {self.tech_stack.language}",
             f"- **框架**: {framework_value}",
         ]
@@ -233,17 +232,17 @@ class ArchitectureReport:
 
         if self.architecture_pattern:
             lines.extend([
-                f"",
-                f"## 架构模式",
-                f"",
+                "",
+                "## 架构模式",
+                "",
                 f"识别到: **{self.architecture_pattern.value}**",
             ])
 
         if self.design_patterns:
             lines.extend([
-                f"",
-                f"## 设计模式",
-                f"",
+                "",
+                "## 设计模式",
+                "",
             ])
             for pattern in self.design_patterns:
                 lines.append(f"- **{pattern.name.value}**: `{pattern.location}`")
@@ -251,15 +250,15 @@ class ArchitectureReport:
                     lines.append(f"  - {pattern.description}")
 
         lines.extend([
-            f"",
-            f"## 项目统计",
-            f"",
+            "",
+            "## 项目统计",
+            "",
             f"- **文件数量**: {self.file_count}",
             f"- **代码行数**: {self.total_lines:,}",
         ])
 
         if self.languages_used:
-            lines.append(f"- **语言分布**:")
+            lines.append("- **语言分布**:")
             for lang, count in sorted(
                 self.languages_used.items(), key=lambda x: x[1], reverse=True
             ):
@@ -268,9 +267,9 @@ class ArchitectureReport:
 
         if self.tech_stack.dependencies:
             lines.extend([
-                f"",
+                "",
                 f"## 主要依赖 ({len(self.tech_stack.dependencies)})",
-                f"",
+                "",
             ])
             for dep in self.tech_stack.dependencies[:20]:  # 只显示前20个
                 lines.append(f"- {dep}")

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 开发：Excellent（11964948@qq.com）
 功能：设计系统模块 - 企业级设计智能能力
@@ -7,32 +6,32 @@
 最后修改：2025-01-04
 """
 
-from .engine import DesignIntelligenceEngine, EnhancedBM25
-from .generator import DesignSystemGenerator, DesignSystem
-from .aesthetics import AestheticEngine, AestheticDirection, AestheticDirectionType
-from .tokens import TokenGenerator
-from .landing import LandingPatternGenerator, LandingPattern, CTAStrategy, get_landing_generator
-from .charts import ChartRecommender, ChartType, ChartRecommendation, get_chart_recommender
-from .ux_guide import UXGuideEngine, UXGuideline, UXRecommendation, get_ux_guide
-from .tech_stack import (
-    TechStackEngine,
-    TechStack,
-    PracticeCategory,
-    TechBestPractice,
-    TechPattern,
-    PerformanceTip,
-    StackRecommendation,
-    get_tech_stack_engine
-)
+from .aesthetics import AestheticDirection, AestheticDirectionType, AestheticEngine
+from .charts import ChartRecommendation, ChartRecommender, ChartType, get_chart_recommender
 from .codegen import (
     CodeGenerator,
-    Framework,
     ComponentCategory,
     ComponentSnippet,
+    Framework,
     GeneratedComponent,
+    generate_component_snippet,
     get_code_generator,
-    generate_component_snippet
 )
+from .engine import DesignIntelligenceEngine, EnhancedBM25
+from .generator import DesignSystem, DesignSystemGenerator
+from .landing import CTAStrategy, LandingPattern, LandingPatternGenerator, get_landing_generator
+from .tech_stack import (
+    PerformanceTip,
+    PracticeCategory,
+    StackRecommendation,
+    TechBestPractice,
+    TechPattern,
+    TechStack,
+    TechStackEngine,
+    get_tech_stack_engine,
+)
+from .tokens import TokenGenerator
+from .ux_guide import UXGuideEngine, UXGuideline, UXRecommendation, get_ux_guide
 
 __all__ = [
     "DesignIntelligenceEngine",

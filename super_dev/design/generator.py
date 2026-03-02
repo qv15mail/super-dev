@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 开发：Excellent（11964948@qq.com）
 功能：设计系统生成器 - 完整的设计交付
@@ -8,11 +7,12 @@
 """
 
 import json
-from pathlib import Path
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from .aesthetics import AestheticDirection, AestheticDirectionType, AestheticEngine
 from .engine import DesignIntelligenceEngine
-from .aesthetics import AestheticEngine, AestheticDirection
 from .tokens import TokenGenerator
 
 
@@ -23,28 +23,28 @@ class DesignSystem:
     description: str
 
     # 色彩
-    colors: Dict[str, str] = field(default_factory=dict)
+    colors: dict[str, str] = field(default_factory=dict)
 
     # 字体
-    typography: Dict[str, str] = field(default_factory=dict)
+    typography: dict[str, str] = field(default_factory=dict)
 
     # 间距
-    spacing: Dict[str, str] = field(default_factory=dict)
+    spacing: dict[str, str] = field(default_factory=dict)
 
     # 阴影
-    shadows: Dict[str, str] = field(default_factory=dict)
+    shadows: dict[str, str] = field(default_factory=dict)
 
     # 圆角
-    radius: Dict[str, str] = field(default_factory=dict)
+    radius: dict[str, str] = field(default_factory=dict)
 
     # 动画
-    animations: Dict[str, str] = field(default_factory=dict)
+    animations: dict[str, str] = field(default_factory=dict)
 
     # 组件样式
-    components: Dict[str, Dict] = field(default_factory=dict)
+    components: dict[str, dict] = field(default_factory=dict)
 
     # 美学方向
-    aesthetic: Optional[AestheticDirection] = None
+    aesthetic: AestheticDirection | None = None
 
     def to_css_variables(self) -> str:
         """生成 CSS 变量"""
@@ -88,7 +88,7 @@ class DesignSystem:
 
         return "\n".join(lines)
 
-    def to_tailwind_config(self) -> Dict[str, Any]:
+    def to_tailwind_config(self) -> dict[str, Any]:
         """生成 Tailwind 配置"""
         return {
             "theme": {
@@ -126,9 +126,9 @@ class DesignSystemGenerator:
         self,
         product_type: str,
         industry: str,
-        keywords: List[str],
+        keywords: list[str],
         platform: str = "web",
-        aesthetic: Optional[str] = None,
+        aesthetic: str | None = None,
     ) -> DesignSystem:
         """
         生成完整的设计系统
@@ -153,8 +153,7 @@ class DesignSystemGenerator:
 
         # 生成或使用指定的美学方向
         if aesthetic:
-            from .aesthetics import AestheticDirection
-            direction = AestheticDirection[aesthetic.upper()]
+            direction = AestheticDirectionType[aesthetic.upper()]
             aesthetic_config = self.aesthetic_engine.generate_direction(direction)
         else:
             aesthetic_config = self.aesthetic_engine.generate_direction()
@@ -227,39 +226,39 @@ class DesignSystemGenerator:
 
         return design_system
 
-    def _generate_component_styles(self, design_system: DesignSystem) -> Dict[str, Dict]:
+    def _generate_component_styles(self, design_system: DesignSystem) -> dict[str, dict]:
         """生成组件样式"""
         return {
             "button": {
                 "primary": {
-                    "background": f"var(--color-primary)",
-                    "color": f"var(--color-background)",
-                    "padding": f"var(--space-sm) var(--space-lg)",
-                    "border-radius": f"var(--radius-md)",
+                    "background": "var(--color-primary)",
+                    "color": "var(--color-background)",
+                    "padding": "var(--space-sm) var(--space-lg)",
+                    "border-radius": "var(--radius-md)",
                     "font-weight": "600",
                     "transition": "all 0.2s",
                 },
                 "secondary": {
-                    "background": f"var(--color-secondary)",
-                    "color": f"var(--color-background)",
-                    "padding": f"var(--space-sm) var(--space-lg)",
-                    "border-radius": f"var(--radius-md)",
+                    "background": "var(--color-secondary)",
+                    "color": "var(--color-background)",
+                    "padding": "var(--space-sm) var(--space-lg)",
+                    "border-radius": "var(--radius-md)",
                     "font-weight": "600",
                 },
             },
             "card": {
-                "background": f"var(--color-surface)",
-                "border": f"1px solid var(--color-border)",
-                "border-radius": f"var(--radius-lg)",
-                "padding": f"var(--space-lg)",
-                "shadow": f"var(--shadow-md)",
+                "background": "var(--color-surface)",
+                "border": "1px solid var(--color-border)",
+                "border-radius": "var(--radius-lg)",
+                "padding": "var(--space-lg)",
+                "shadow": "var(--shadow-md)",
             },
             "input": {
-                "background": f"var(--color-background)",
-                "border": f"1px solid var(--color-border)",
-                "border-radius": f"var(--radius-md)",
-                "padding": f"var(--space-sm) var(--space-md)",
-                "color": f"var(--color-text)",
+                "background": "var(--color-background)",
+                "border": "1px solid var(--color-border)",
+                "border-radius": "var(--radius-md)",
+                "padding": "var(--space-sm) var(--space-md)",
+                "color": "var(--color-text)",
             },
         }
 
@@ -267,7 +266,7 @@ class DesignSystemGenerator:
         self,
         design_system: DesignSystem,
         output_dir: Path,
-    ) -> List[Path]:
+    ) -> list[Path]:
         """
         生成设计系统文档
 

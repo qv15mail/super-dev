@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 开发：Excellent（11964948@qq.com）
 功能：技术栈最佳实践引擎
@@ -8,10 +7,9 @@
 """
 
 import csv
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 
 
 class TechStack(str, Enum):
@@ -63,8 +61,8 @@ class TechPattern:
     description: str
     use_case: str
     implementation: str
-    pros: List[str]
-    cons: List[str]
+    pros: list[str]
+    cons: list[str]
 
 
 @dataclass
@@ -85,14 +83,14 @@ class StackRecommendation:
     practice: TechBestPractice
     priority: str  # critical, high, medium, low
     context: str
-    alternatives: List[str]
-    resources: List[str]
+    alternatives: list[str]
+    resources: list[str]
 
 
 class TechStackEngine:
     """技术栈引擎"""
 
-    def __init__(self, data_dir: Optional[Path] = None):
+    def __init__(self, data_dir: Path | None = None):
         """
         初始化引擎
 
@@ -103,9 +101,9 @@ class TechStackEngine:
             data_dir = Path(__file__).parent.parent / "data" / "design"
 
         self.data_dir = Path(data_dir)
-        self.practices: List[TechBestPractice] = []
-        self.patterns: List[TechPattern] = []
-        self.performance_tips: List[PerformanceTip] = []
+        self.practices: list[TechBestPractice] = []
+        self.patterns: list[TechPattern] = []
+        self.performance_tips: list[PerformanceTip] = []
         self._load_data()
 
     def _load_data(self):
@@ -133,7 +131,7 @@ class TechStackEngine:
 
     def _load_practices(self, csv_path: Path):
         """加载最佳实践数据"""
-        with open(csv_path, 'r', encoding='utf-8') as f:
+        with open(csv_path, encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
@@ -153,7 +151,7 @@ class TechStackEngine:
 
     def _load_patterns(self, csv_path: Path):
         """加载设计模式数据"""
-        with open(csv_path, 'r', encoding='utf-8') as f:
+        with open(csv_path, encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
@@ -172,7 +170,7 @@ class TechStackEngine:
 
     def _load_performance(self, csv_path: Path):
         """加载性能建议数据"""
-        with open(csv_path, 'r', encoding='utf-8') as f:
+        with open(csv_path, encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
@@ -189,7 +187,7 @@ class TechStackEngine:
                 except Exception as e:
                     print(f"Warning: Failed to parse performance tip: {e}")
 
-    def _get_default_practices(self) -> List[TechBestPractice]:
+    def _get_default_practices(self) -> list[TechBestPractice]:
         """获取默认最佳实践"""
         return [
             TechBestPractice(
@@ -224,7 +222,7 @@ class TechStackEngine:
             )
         ]
 
-    def _get_default_patterns(self) -> List[TechPattern]:
+    def _get_default_patterns(self) -> list[TechPattern]:
         """获取默认设计模式"""
         return [
             TechPattern(
@@ -247,7 +245,7 @@ class TechStackEngine:
             )
         ]
 
-    def _get_default_performance(self) -> List[PerformanceTip]:
+    def _get_default_performance(self) -> list[PerformanceTip]:
         """获取默认性能建议"""
         return [
             PerformanceTip(
@@ -273,10 +271,10 @@ class TechStackEngine:
     def search_practices(
         self,
         stack: str,
-        query: Optional[str] = None,
-        category: Optional[str] = None,
+        query: str | None = None,
+        category: str | None = None,
         max_results: int = 5
-    ) -> List[StackRecommendation]:
+    ) -> list[StackRecommendation]:
         """
         搜索最佳实践
 
@@ -337,7 +335,7 @@ class TechStackEngine:
 
         return recommendations
 
-    def get_patterns(self, stack: str) -> List[TechPattern]:
+    def get_patterns(self, stack: str) -> list[TechPattern]:
         """
         获取设计模式
 
@@ -356,9 +354,9 @@ class TechStackEngine:
     def get_performance_tips(
         self,
         stack: str,
-        impact: Optional[str] = None,
-        effort: Optional[str] = None
-    ) -> List[PerformanceTip]:
+        impact: str | None = None,
+        effort: str | None = None
+    ) -> list[PerformanceTip]:
         """
         获取性能优化建议
 
@@ -391,7 +389,7 @@ class TechStackEngine:
 
         return tips
 
-    def get_quick_wins(self, stack: str) -> List[PerformanceTip]:
+    def get_quick_wins(self, stack: str) -> list[PerformanceTip]:
         """
         获取快速见效的性能优化
 
@@ -412,7 +410,7 @@ class TechStackEngine:
         self,
         from_stack: str,
         to_stack: str
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """
         获取技术栈迁移指南
 
@@ -471,12 +469,12 @@ class TechStackEngine:
 
         return contexts.get(practice.category, "通用最佳实践")
 
-    def _get_alternatives(self, practice: TechBestPractice) -> List[str]:
+    def _get_alternatives(self, practice: TechBestPractice) -> list[str]:
         """获取替代方案"""
         # 简化版，可以扩展为更详细的映射
         return ["See documentation for alternatives"]
 
-    def _get_resources(self, practice: TechBestPractice) -> List[str]:
+    def _get_resources(self, practice: TechBestPractice) -> list[str]:
         """获取相关资源"""
         resources = {
             TechStack.NEXTJS: [
@@ -499,11 +497,11 @@ class TechStackEngine:
 
         return resources.get(practice.stack, [])
 
-    def list_stacks(self) -> List[str]:
+    def list_stacks(self) -> list[str]:
         """列出所有支持的技术栈"""
         return list(set(p.stack.value for p in self.practices))
 
-    def list_categories(self, stack: Optional[str] = None) -> List[str]:
+    def list_categories(self, stack: str | None = None) -> list[str]:
         """
         列出所有类别
 
@@ -521,6 +519,6 @@ class TechStackEngine:
 
 
 # 便捷函数
-def get_tech_stack_engine(data_dir: Optional[Path] = None) -> TechStackEngine:
+def get_tech_stack_engine(data_dir: Path | None = None) -> TechStackEngine:
     """获取技术栈引擎实例"""
     return TechStackEngine(data_dir)

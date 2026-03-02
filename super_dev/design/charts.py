@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 开发：Excellent（11964948@qq.com）
 功能：图表类型推荐引擎
@@ -7,11 +6,9 @@
 最后修改：2025-01-04
 """
 
-import random
-from typing import Dict, List, Optional, Tuple
+import csv
 from dataclasses import dataclass
 from enum import Enum
-import csv
 from pathlib import Path
 
 
@@ -50,11 +47,11 @@ class ChartType:
     category: ChartCategory
     data_type: DataType
     description: str
-    best_libraries: List[str]  # Chart.js, Recharts, D3.js, etc.
+    best_libraries: list[str]  # Chart.js, Recharts, D3.js, etc.
     accessibility_notes: str
-    use_cases: List[str]
-    limitations: List[str]
-    keywords: List[str]
+    use_cases: list[str]
+    limitations: list[str]
+    keywords: list[str]
 
 
 @dataclass
@@ -63,9 +60,9 @@ class ChartRecommendation:
     chart_type: ChartType
     confidence: float  # 0-1
     reasoning: str
-    alternatives: List[ChartType]
+    alternatives: list[ChartType]
     library_recommendation: str
-    accessibility_considerations: List[str]
+    accessibility_considerations: list[str]
 
 
 class ChartRecommender:
@@ -81,7 +78,7 @@ class ChartRecommender:
         "next": ["Recharts", "Chart.js", "Nivo", "Tremor"],
     }
 
-    def __init__(self, data_dir: Optional[Path] = None):
+    def __init__(self, data_dir: Path | None = None):
         """
         初始化推荐引擎
 
@@ -92,7 +89,7 @@ class ChartRecommender:
             data_dir = Path(__file__).parent.parent / "data" / "design"
 
         self.data_dir = Path(data_dir)
-        self.chart_types: List[ChartType] = []
+        self.chart_types: list[ChartType] = []
         self._load_chart_types()
 
     def _load_chart_types(self):
@@ -103,7 +100,7 @@ class ChartRecommender:
             self.chart_types = self._get_default_chart_types()
             return
 
-        with open(csv_path, 'r', encoding='utf-8') as f:
+        with open(csv_path, encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
@@ -122,7 +119,7 @@ class ChartRecommender:
                 except Exception as e:
                     print(f"Warning: Failed to parse chart type: {e}")
 
-    def _get_default_chart_types(self) -> List[ChartType]:
+    def _get_default_chart_types(self) -> list[ChartType]:
         """获取默认图表类型（当 CSV 不存在时）"""
         return [
             ChartType(
@@ -165,7 +162,7 @@ class ChartRecommender:
         data_description: str,
         framework: str = "react",
         max_results: int = 3
-    ) -> List[ChartRecommendation]:
+    ) -> list[ChartRecommendation]:
         """
         推荐图表类型
 
@@ -250,7 +247,7 @@ class ChartRecommender:
 
         return scored_charts[:max_results]
 
-    def _analyze_description(self, description: str) -> Dict[str, bool]:
+    def _analyze_description(self, description: str) -> dict[str, bool]:
         """分析数据描述"""
         desc_lower = description.lower()
 
@@ -275,7 +272,7 @@ class ChartRecommender:
             ])
         }
 
-    def _get_alternatives(self, chart_type: ChartType, framework: str) -> List[ChartType]:
+    def _get_alternatives(self, chart_type: ChartType, framework: str) -> list[ChartType]:
         """获取替代图表类型"""
         alternatives = []
 
@@ -307,7 +304,7 @@ class ChartRecommender:
         # 如果没有完美匹配，返回第一个推荐的库
         return chart_type.best_libraries[0] if chart_type.best_libraries else "Chart.js"
 
-    def _get_accessibility_considerations(self, chart_type: ChartType) -> List[str]:
+    def _get_accessibility_considerations(self, chart_type: ChartType) -> list[str]:
         """获取无障碍考虑事项"""
         considerations = [chart_type.accessibility_notes]
 
@@ -326,7 +323,7 @@ class ChartRecommender:
 
         return considerations
 
-    def search(self, query: str, max_results: int = 5) -> List[ChartType]:
+    def search(self, query: str, max_results: int = 5) -> list[ChartType]:
         """
         搜索图表类型
 
@@ -369,7 +366,7 @@ class ChartRecommender:
 
         return [chart for chart, _ in scored_charts[:max_results]]
 
-    def get_chart_type(self, name: str) -> Optional[ChartType]:
+    def get_chart_type(self, name: str) -> ChartType | None:
         """
         获取指定名称的图表类型
 
@@ -384,16 +381,16 @@ class ChartRecommender:
                 return chart_type
         return None
 
-    def list_categories(self) -> List[str]:
+    def list_categories(self) -> list[str]:
         """列出所有类别"""
         return list(set(c.category.value for c in self.chart_types))
 
-    def list_chart_types(self) -> List[str]:
+    def list_chart_types(self) -> list[str]:
         """列出所有图表类型"""
         return [c.name for c in self.chart_types]
 
 
 # 便捷函数
-def get_chart_recommender(data_dir: Optional[Path] = None) -> ChartRecommender:
+def get_chart_recommender(data_dir: Path | None = None) -> ChartRecommender:
     """获取图表推荐引擎实例"""
     return ChartRecommender(data_dir)

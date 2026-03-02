@@ -1,20 +1,19 @@
-# -*- coding: utf-8 -*-
 """
 Super Dev 分析器单元测试
 """
 
 import json
-import pytest
 from pathlib import Path
 
+import pytest
+
 from super_dev.analyzer import (
-    ProjectAnalyzer,
-    ProjectCategory,
-    ProjectType,
     ArchitectureReport,
     Dependency,
     DesignPattern,
     PatternType,
+    ProjectAnalyzer,
+    ProjectCategory,
     TechStack,
     detect_project_type,
     detect_tech_stack,

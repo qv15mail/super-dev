@@ -1,12 +1,13 @@
-# -*- coding: utf-8 -*-
 """
 Super Dev CLI 集成测试
 """
 
 import os
+from pathlib import Path
+
 import pytest
 import yaml
-from pathlib import Path
+
 from super_dev.cli import SuperDevCLI
 
 
@@ -32,7 +33,7 @@ class TestCLIInit:
             config_path = temp_project_dir / "super-dev.yaml"
             assert config_path.exists()
 
-            with open(config_path, "r") as f:
+            with open(config_path) as f:
                 config = yaml.safe_load(f)
                 assert config["name"] == "test-project"
                 assert config["platform"] == "web"
@@ -125,7 +126,7 @@ class TestCLIConfig:
             assert result == 0
 
             # 验证配置已更新
-            with open(config_path, "r") as f:
+            with open(config_path) as f:
                 config = yaml.safe_load(f)
                 assert config["quality_gate"] == 90
         finally:
@@ -264,6 +265,32 @@ class TestCLIQuality:
             os.chdir(original_cwd)
 
 
+class TestCLIDesign:
+    """测试 design 命令关键分支"""
+
+    def test_design_tokens_json_and_tailwind(self, temp_project_dir: Path):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            json_path = temp_project_dir / "tokens.json"
+            tailwind_path = temp_project_dir / "tailwind.json"
+
+            json_result = cli.run(
+                ["design", "tokens", "--primary", "#3B82F6", "--format", "json", "--output", str(json_path)]
+            )
+            tailwind_result = cli.run(
+                ["design", "tokens", "--primary", "#3B82F6", "--format", "tailwind", "--output", str(tailwind_path)]
+            )
+
+            assert json_result == 0
+            assert tailwind_result == 0
+            assert json_path.exists()
+            assert tailwind_path.exists()
+        finally:
+            os.chdir(original_cwd)
+
+
 class TestCLISkillAndIntegrate:
     """测试 skill 和 integrate 命令"""
 
@@ -280,6 +307,61 @@ class TestCLISkillAndIntegrate:
             result = cli.run(["integrate", "setup", "--target", "cursor", "--force"])
             assert result == 0
             assert (temp_project_dir / ".cursorrules").exists()
+        finally:
+            os.chdir(original_cwd)
+
+    @pytest.mark.parametrize(
+        "target, expected_file",
+        [
+            ("claude-code", ".claude/CLAUDE.md"),
+            ("codex-cli", ".codex/AGENTS.md"),
+            ("opencode", ".opencode/AGENTS.md"),
+            ("cursor", ".cursorrules"),
+            ("qoder", ".qoder/rules.md"),
+            ("trae", ".trae/rules.md"),
+            ("codebuddy", ".codebuddy/rules.md"),
+            ("antigravity", ".agents/workflows/super-dev.md"),
+        ],
+    )
+    def test_integrate_setup_each_target(self, temp_project_dir: Path, target: str, expected_file: str):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["integrate", "setup", "--target", target, "--force"])
+            assert result == 0
+            assert (temp_project_dir / expected_file).exists()
+        finally:
+            os.chdir(original_cwd)
+
+    @pytest.mark.parametrize(
+        "target",
+        [
+            "claude-code",
+            "codex-cli",
+            "opencode",
+            "cursor",
+            "qoder",
+            "trae",
+            "codebuddy",
+            "antigravity",
+        ],
+    )
+    def test_skill_builtin_install_each_target(self, temp_project_dir: Path, target: str):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            install_result = cli.run(
+                ["skill", "install", "super-dev", "--target", target, "--name", "super-dev-core", "--force"]
+            )
+            assert install_result == 0
+
+            list_result = cli.run(["skill", "list", "--target", target])
+            assert list_result == 0
+
+            uninstall_result = cli.run(["skill", "uninstall", "super-dev-core", "--target", target])
+            assert uninstall_result == 0
         finally:
             os.chdir(original_cwd)
 
@@ -325,5 +407,8 @@ class TestCLIPipeline:
             assert (temp_project_dir / "output" / "deploy" / "platforms" / ".env.deploy.jenkins.example").exists()
             assert (temp_project_dir / "output" / "deploy" / "platforms" / ".env.deploy.azure.example").exists()
             assert (temp_project_dir / "output" / "deploy" / "platforms" / ".env.deploy.bitbucket.example").exists()
+            assert any((temp_project_dir / "output" / "delivery").glob("*-delivery-manifest.json"))
+            assert any((temp_project_dir / "output" / "delivery").glob("*-delivery-report.md"))
+            assert any((temp_project_dir / "output" / "delivery").glob("*-delivery-v*.zip"))
         finally:
             os.chdir(original_cwd)

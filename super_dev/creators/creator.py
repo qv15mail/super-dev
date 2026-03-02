@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 项目创建器 - 核心协调器
 
@@ -9,11 +8,10 @@
 """
 
 from pathlib import Path
-from typing import Optional, List
 
 from .document_generator import DocumentGenerator
-from .spec_builder import SpecBuilder
 from .prompt_generator import AIPromptGenerator
+from .spec_builder import SpecBuilder
 
 
 class ProjectCreator:
@@ -28,10 +26,10 @@ class ProjectCreator:
         frontend: str = "next",
         backend: str = "node",
         domain: str = "",
-        ui_library: Optional[str] = None,
-        style_solution: Optional[str] = None,
-        state_management: List[str] = None,
-        testing_frameworks: List[str] = None,
+        ui_library: str | None = None,
+        style_solution: str | None = None,
+        state_management: list[str] | None = None,
+        testing_frameworks: list[str] | None = None,
     ):
         """初始化项目创建器"""
         self.project_dir = Path(project_dir).resolve()

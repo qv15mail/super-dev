@@ -1,4 +1,4 @@
-# Multi-stage build for 构建一个宠物护理预约平台-先做前端
+# Multi-stage build for 用户认证系统
 
 # ========== Build stage ==========
 FROM node:18-alpine AS builder

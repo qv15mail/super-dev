@@ -1,0 +1,12 @@
+{
+  "name": "用户认证系统-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node src/app.js",
+    "start": "node src/app.js"
+  },
+  "dependencies": {
+    "express": "^4.19.0"
+  }
+}

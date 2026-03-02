@@ -1,0 +1,119 @@
+stages:
+  - lint
+  - test
+  - build
+  - deploy
+
+variables:
+  DOCKER_IMAGE: ${CI_REGISTRY_IMAGE}/用户认证系统
+  DOCKER_TLS_CERTDIR: "/certs"
+
+# ========== 代码检查 ==========
+lint:
+  stage: lint
+  image: node:18-alpine
+  script:
+    - npm ci
+    - npm run lint
+  cache:
+    paths:
+      - node_modules/
+  only:
+    - merge_requests
+    - main
+    - develop
+
+# ========== 单元测试 ==========
+test:
+  stage: test
+  image: node:18-alpine
+  services:
+    - postgres:15-alpine
+    - redis:7-alpine
+  variables:
+    POSTGRES_HOST: postgres
+    POSTGRES_PASSWORD: postgres
+    POSTGRES_DB: test_db
+    REDIS_HOST: redis
+  script:
+    - npm ci
+    - npm test -- --coverage --watchAll=false
+  coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
+  cache:
+    paths:
+      - node_modules/
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/cobertura-coverage.xml
+    paths:
+      - coverage/
+    expire_in: 1 week
+  only:
+    - merge_requests
+    - main
+    - develop
+
+# ========== 安全扫描 ==========
+security:
+  stage: test
+  image: aquasec/trivy:latest
+  script:
+    - trivy fs --format sarif --output trivy-results.sarif .
+  artifacts:
+    reports:
+      sast: trivy-results.sarif
+    expire_in: 1 week
+  only:
+    - merge_requests
+    - main
+    - develop
+
+# ========== 构建镜像 ==========
+build:
+  stage: build
+  image: docker:24-dind
+  services:
+    - docker:24-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker build -t $DOCKER_IMAGE:$CI_COMMIT_SHA .
+    - docker push $DOCKER_IMAGE:$CI_COMMIT_SHA
+    - docker tag $DOCKER_IMAGE:$CI_COMMIT_SHA $DOCKER_IMAGE:latest
+    - docker push $DOCKER_IMAGE:latest
+  only:
+    - main
+    - develop
+
+# ========== 部署到开发环境 ==========
+deploy:dev:
+  stage: deploy
+  image: bitnami/kubectl:latest
+  script:
+    - kubectl config use-context $KUBE_CONTEXT_DEV
+    - kubectl apply -f k8s/ -n dev
+    - kubectl set image deployment/用户认证系统 用户认证系统=$DOCKER_IMAGE:$CI_COMMIT_SHA -n dev
+    - kubectl rollout status deployment/用户认证系统 -n dev
+  environment:
+    name: development
+    url: https://dev.用户认证系统.example.com
+  only:
+    - develop
+
+# ========== 部署到生产环境 ==========
+deploy:prod:
+  stage: deploy
+  image: bitnami/kubectl:latest
+  script:
+    - kubectl config use-context $KUBE_CONTEXT_PROD
+    - kubectl apply -f k8s/ -n prod
+    - kubectl set image deployment/用户认证系统 用户认证系统=$DOCKER_IMAGE:$CI_COMMIT_SHA -n prod
+    - kubectl rollout status deployment/用户认证系统 -n prod
+  environment:
+    name: production
+    url: https://用户认证系统.example.com
+  when: manual
+  only:
+    - main

@@ -1,28 +1,45 @@
-# -*- coding: utf-8 -*-
 """
 平台集成管理测试
 """
 
 from pathlib import Path
 
+import pytest
+
 from super_dev.integrations import IntegrationManager
 
 
 class TestIntegrationManager:
-    def test_setup_single_target(self, temp_project_dir: Path):
+    @pytest.mark.parametrize(
+        "target, expected_file",
+        [
+            ("claude-code", ".claude/CLAUDE.md"),
+            ("codex-cli", ".codex/AGENTS.md"),
+            ("opencode", ".opencode/AGENTS.md"),
+            ("cursor", ".cursorrules"),
+            ("qoder", ".qoder/rules.md"),
+            ("trae", ".trae/rules.md"),
+            ("codebuddy", ".codebuddy/rules.md"),
+            ("antigravity", ".agents/workflows/super-dev.md"),
+        ],
+    )
+    def test_setup_single_target(self, temp_project_dir: Path, target: str, expected_file: str):
         manager = IntegrationManager(temp_project_dir)
-        files = manager.setup("cursor", force=True)
+        files = manager.setup(target, force=True)
 
         assert len(files) == 1
-        cursor_rules = temp_project_dir / ".cursorrules"
-        assert cursor_rules.exists()
-        content = cursor_rules.read_text(encoding="utf-8")
+        rule_file = temp_project_dir / expected_file
+        assert rule_file.exists()
+        content = rule_file.read_text(encoding="utf-8")
         assert "Super Dev" in content
 
     def test_setup_all_targets(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)
         result = manager.setup_all(force=True)
 
-        assert "claude-code" in result
-        assert (temp_project_dir / ".claude" / "CLAUDE.md").exists()
-        assert (temp_project_dir / ".codex" / "AGENTS.md").exists()
+        assert set(result.keys()) == set(IntegrationManager.TARGETS.keys())
+        for target in IntegrationManager.TARGETS.values():
+            for file_path in target.files:
+                full_path = temp_project_dir / file_path
+                assert full_path.exists()
+                assert "Super Dev" in full_path.read_text(encoding="utf-8")

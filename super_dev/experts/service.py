@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
 """专家建议服务。"""
 
 from __future__ import annotations
 
-from pathlib import Path
 from datetime import datetime
-
+from pathlib import Path
 
 _EXPERT_META: list[dict[str, str]] = [
     {"id": "PM", "name": "产品经理", "description": "需求分析、PRD编写"},

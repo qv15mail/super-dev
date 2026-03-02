@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 实现骨架生成器
 
@@ -8,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 
@@ -25,10 +25,16 @@ class ImplementationScaffoldBuilder:
         self.name = name
         self.frontend = frontend
         self.backend = backend
+        self.package_name = self._sanitize_package_name(name)
+
+    def _sanitize_package_name(self, value: str) -> str:
+        cleaned = re.sub(r"[^a-z0-9-]+", "-", value.lower()).strip("-")
+        cleaned = re.sub(r"-{2,}", "-", cleaned)
+        return cleaned or "super-dev-app"
 
     def generate(self, requirements: list[dict]) -> dict:
         """生成前后端实现骨架"""
-        result = {
+        result: dict[str, list[str]] = {
             "frontend_files": [],
             "backend_files": [],
         }
@@ -102,16 +108,32 @@ class ImplementationScaffoldBuilder:
             files.append(str(app_file))
 
             requirements_file = backend_dir / "requirements.txt"
-            requirements_file.write_text("fastapi>=0.110.0\nuvicorn>=0.27.0\n", encoding="utf-8")
+            requirements_file.write_text(
+                "fastapi>=0.110.0\nuvicorn>=0.27.0\npytest>=7.0.0\n",
+                encoding="utf-8",
+            )
             files.append(str(requirements_file))
+
+            tests_dir = backend_dir / "tests"
+            tests_dir.mkdir(parents=True, exist_ok=True)
+            smoke_test = tests_dir / "test_smoke.py"
+            smoke_test.write_text(
+                (
+                    "def test_backend_scaffold_smoke() -> None:\n"
+                    "    assert True\n"
+                ),
+                encoding="utf-8",
+            )
+            files.append(str(smoke_test))
         elif self.backend == "node":
             package_json = {
-                "name": f"{self.name}-backend",
+                "name": f"{self.package_name}-backend",
                 "version": "0.1.0",
                 "private": True,
                 "scripts": {
                     "dev": "node src/app.js",
                     "start": "node src/app.js",
+                    "test": "node --test",
                 },
                 "dependencies": {
                     "express": "^4.19.0",
@@ -124,6 +146,19 @@ class ImplementationScaffoldBuilder:
             app_file = src_dir / "app.js"
             app_file.write_text(self._build_express_app(unique_modules), encoding="utf-8")
             files.append(str(app_file))
+
+            test_file = src_dir / "app.test.js"
+            test_file.write_text(
+                (
+                    "const test = require('node:test');\n"
+                    "const assert = require('node:assert/strict');\n\n"
+                    "test('backend scaffold smoke', () => {\n"
+                    "  assert.equal(1 + 1, 2);\n"
+                    "});\n"
+                ),
+                encoding="utf-8",
+            )
+            files.append(str(test_file))
         elif self.backend == "go":
             app_file = src_dir / "main.go"
             app_file.write_text(self._build_go_app(unique_modules), encoding="utf-8")
@@ -140,10 +175,10 @@ class ImplementationScaffoldBuilder:
         else:
             # 未知后端类型，回落到 node
             package_json = {
-                "name": f"{self.name}-backend",
+                "name": f"{self.package_name}-backend",
                 "version": "0.1.0",
                 "private": True,
-                "scripts": {"dev": "node src/app.js", "start": "node src/app.js"},
+                "scripts": {"dev": "node src/app.js", "start": "node src/app.js", "test": "node --test"},
                 "dependencies": {"express": "^4.19.0"},
             }
             package_file = backend_dir / "package.json"
@@ -153,6 +188,19 @@ class ImplementationScaffoldBuilder:
             app_file = src_dir / "app.js"
             app_file.write_text(self._build_express_app(unique_modules), encoding="utf-8")
             files.append(str(app_file))
+
+            test_file = src_dir / "app.test.js"
+            test_file.write_text(
+                (
+                    "const test = require('node:test');\n"
+                    "const assert = require('node:assert/strict');\n\n"
+                    "test('backend scaffold smoke', () => {\n"
+                    "  assert.equal(1 + 1, 2);\n"
+                    "});\n"
+                ),
+                encoding="utf-8",
+            )
+            files.append(str(test_file))
 
         api_contract = backend_dir / "API_CONTRACT.md"
         api_contract.write_text(self._build_api_contract(unique_modules), encoding="utf-8")
@@ -169,7 +217,7 @@ class ImplementationScaffoldBuilder:
     ) -> list[str]:
         files: list[str] = []
         package_json = {
-            "name": f"{self.name}-frontend",
+            "name": f"{self.package_name}-frontend",
             "version": "0.1.0",
             "private": True,
             "scripts": {"dev": "vite", "build": "vite build", "preview": "vite preview"},
@@ -225,7 +273,7 @@ class ImplementationScaffoldBuilder:
     ) -> list[str]:
         files: list[str] = []
         package_json = {
-            "name": f"{self.name}-frontend",
+            "name": f"{self.package_name}-frontend",
             "version": "0.1.0",
             "private": True,
             "scripts": {"dev": "vite", "build": "vite build", "preview": "vite preview"},
@@ -284,7 +332,7 @@ class ImplementationScaffoldBuilder:
     ) -> list[str]:
         files: list[str] = []
         package_json = {
-            "name": f"{self.name}-frontend",
+            "name": f"{self.package_name}-frontend",
             "version": "0.1.0",
             "private": True,
             "scripts": {"dev": "vite", "build": "vite build", "preview": "vite preview"},
@@ -344,7 +392,7 @@ class ImplementationScaffoldBuilder:
     ) -> list[str]:
         files: list[str] = []
         package_json = {
-            "name": f"{self.name}-frontend",
+            "name": f"{self.package_name}-frontend",
             "version": "0.1.0",
             "private": True,
             "scripts": {
@@ -464,7 +512,7 @@ class ImplementationScaffoldBuilder:
         routes = []
         for module_name in modules:
             routes.append(
-                (
+
                     f"app.get('/api/{module_name}', (req, res) => {{\n"
                     "  res.json({\n"
                     f"    module: '{module_name}',\n"
@@ -472,7 +520,7 @@ class ImplementationScaffoldBuilder:
                     "    message: 'Module scaffold created by Super Dev'\n"
                     "  });\n"
                     "});"
-                )
+
             )
 
         return (
@@ -496,7 +544,7 @@ class ImplementationScaffoldBuilder:
             function_name = self._safe_identifier(module_name)
             route_segment = self._safe_route_segment(module_name)
             route_blocks.append(
-                (
+
                     f"@app.get('/api/{route_segment}')\n"
                     f"def get_{function_name}():\n"
                     "    return {\n"
@@ -504,7 +552,7 @@ class ImplementationScaffoldBuilder:
                     "        'status': 'todo',\n"
                     "        'message': 'Module scaffold created by Super Dev'\n"
                     "    }\n"
-                )
+
             )
 
         return (
@@ -536,14 +584,13 @@ class ImplementationScaffoldBuilder:
         handlers = []
         for module_name in modules:
             handler = self._safe_identifier(module_name)
-            route = self._safe_route_segment(module_name)
             handlers.append(
-                (
+
                     f"func {handler}Handler(w http.ResponseWriter, _ *http.Request) {{\n"
                     "    w.Header().Set(\"Content-Type\", \"application/json\")\n"
                     f"    w.Write([]byte(`{{\"module\":\"{module_name}\",\"status\":\"todo\"}}`))\n"
                     "}\n"
-                )
+
             )
 
         routes = [f"    http.HandleFunc(\"/api/{self._safe_route_segment(module_name)}\", {self._safe_identifier(module_name)}Handler)" for module_name in modules]
@@ -637,7 +684,6 @@ class ImplementationScaffoldBuilder:
             )
             for module in modules
         ]
-        components = ", ".join(self._to_component(module) for module in modules)
         return (
             "<template>\n"
             "  <main class=\"shell\">\n"
@@ -701,14 +747,13 @@ class ImplementationScaffoldBuilder:
         sections = []
         for module_name in modules:
             sections.append(
-                (
+
                     "<section style=\"border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin:8px 0;\">\n"
                     f"  <h3>{self._to_component(module_name)}</h3>\n"
                     f"  <p>{module_name} 模块初始骨架已创建，可在此实现业务逻辑。</p>\n"
                     "</section>"
-                )
+
             )
-        template = "\\n".join(line.replace("\\", "\\\\").replace("'", "\\'") for line in "\n".join(sections).split("\n"))
         return (
             "import { Component } from '@angular/core';\n\n"
             "@Component({\n"

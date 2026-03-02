@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 开发：Excellent（11964948@qq.com）
 功能：前端配置系统 - 商业级前端技术栈配置
@@ -7,9 +6,9 @@
 最后修改：2025-12-30
 """
 
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 
 class FrameworkCategory(str, Enum):
@@ -72,7 +71,7 @@ class StateManagement(str, Enum):
 
 
 # 前端框架定义
-FRAMEWORKS: Dict[str, Dict[str, Any]] = {
+FRAMEWORKS: dict[str, dict[str, Any]] = {
     # React 生态
     "next": {
         "name": "Next.js",
@@ -173,7 +172,7 @@ FRAMEWORKS: Dict[str, Dict[str, Any]] = {
 }
 
 # UI 组件库
-UI_LIBRARIES: Dict[str, Dict[str, Any]] = {
+UI_LIBRARIES: dict[str, dict[str, Any]] = {
     # React 组件库
     "mui": {
         "name": "Material-UI (MUI)",
@@ -326,7 +325,7 @@ UI_LIBRARIES: Dict[str, Dict[str, Any]] = {
 }
 
 # 状态管理方案
-STATE_MANAGEMENT_OPTIONS: Dict[str, Dict[str, Any]] = {
+STATE_MANAGEMENT_OPTIONS: dict[str, dict[str, Any]] = {
     "react-query": {
         "name": "React Query (TanStack Query)",
         "framework": FrameworkCategory.REACT,
@@ -386,7 +385,7 @@ STATE_MANAGEMENT_OPTIONS: Dict[str, Dict[str, Any]] = {
 }
 
 # 测试工具
-TESTING_TOOLS: Dict[str, Dict[str, Any]] = {
+TESTING_TOOLS: dict[str, dict[str, Any]] = {
     "vitest": {
         "name": "Vitest",
         "description": "由 Vite 驱动的单元测试框架",
@@ -420,7 +419,7 @@ TESTING_TOOLS: Dict[str, Dict[str, Any]] = {
 }
 
 # 工具链配置
-DEV_TOOLS: Dict[str, Dict[str, Any]] = {
+DEV_TOOLS: dict[str, dict[str, Any]] = {
     "typescript": {
         "name": "TypeScript",
         "description": "JavaScript 类型系统",
@@ -457,23 +456,23 @@ class FrontendConfig:
     framework_version: str = "latest"
 
     # UI 库
-    ui_library: Optional[str] = None
+    ui_library: str | None = None
     ui_library_version: str = "latest"
 
     # 样式
-    style_solution: List[StyleSolution] = field(default_factory=lambda: [StyleSolution.TAILWIND])
+    style_solution: list[StyleSolution] = field(default_factory=lambda: [StyleSolution.TAILWIND])
 
     # 状态管理
-    state_management: List[StateManagement] = field(default_factory=list)
+    state_management: list[StateManagement] = field(default_factory=list)
 
     # 构建工具
-    build_tool: Optional[BuildTool] = None
+    build_tool: BuildTool | None = None
 
     # 测试
-    testing_frameworks: List[TestingFramework] = field(default_factory=list)
+    testing_frameworks: list[TestingFramework] = field(default_factory=list)
 
     # 开发工具
-    dev_tools: List[str] = field(default_factory=lambda: ["typescript", "eslint", "prettier"])
+    dev_tools: list[str] = field(default_factory=lambda: ["typescript", "eslint", "prettier"])
 
     # 性能优化
     enable_bundle_analysis: bool = True
@@ -486,22 +485,22 @@ class FrontendConfig:
 
     # 国际化
     enable_i18n: bool = False
-    i18n_locales: List[str] = field(default_factory=lambda: ["en", "zh"])
+    i18n_locales: list[str] = field(default_factory=lambda: ["en", "zh"])
 
     # 无障碍
     a11y_level: str = "aa"  # none, a, aa, aaa
 
-    def get_framework_info(self) -> Dict[str, Any]:
+    def get_framework_info(self) -> dict[str, Any]:
         """获取框架信息"""
         return FRAMEWORKS.get(self.framework, {})
 
-    def get_ui_library_info(self) -> Dict[str, Any]:
+    def get_ui_library_info(self) -> dict[str, Any]:
         """获取 UI 库信息"""
         if not self.ui_library:
             return {}
         return UI_LIBRARIES.get(self.ui_library, {})
 
-    def get_recommended_stack(self) -> Dict[str, Any]:
+    def get_recommended_stack(self) -> dict[str, Any]:
         """获取推荐的技术栈"""
         framework_info = self.get_framework_info()
         stack = {
@@ -516,7 +515,7 @@ class FrontendConfig:
 
         return stack
 
-    def validate(self) -> List[str]:
+    def validate(self) -> list[str]:
         """验证配置"""
         errors = []
 
@@ -549,7 +548,7 @@ class MobileFrontendConfig(FrontendConfig):
     mobile_framework: str = "react-native"  # react-native, flutter
 
     # 移动端 UI 库
-    mobile_ui_library: Optional[str] = None
+    mobile_ui_library: str | None = None
 
     # 原生模块
     enable_native_modules: bool = False

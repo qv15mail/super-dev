@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 开发：Excellent（11964948@qq.com）
 功能：UX 指南数据库引擎
@@ -7,11 +6,10 @@
 最后修改：2025-01-04
 """
 
+import csv
 import random
-from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
-import csv
 from pathlib import Path
 
 
@@ -48,13 +46,13 @@ class UXRecommendation:
     priority: str  # critical, high, medium, low
     implementation_effort: str  # low, medium, high
     user_impact: str  # high, medium, low
-    resources: List[str]  # 相关资源链接
+    resources: list[str]  # 相关资源链接
 
 
 class UXGuideEngine:
     """UX 指南引擎"""
 
-    def __init__(self, data_dir: Optional[Path] = None):
+    def __init__(self, data_dir: Path | None = None):
         """
         初始化引擎
 
@@ -65,7 +63,7 @@ class UXGuideEngine:
             data_dir = Path(__file__).parent.parent / "data" / "design"
 
         self.data_dir = Path(data_dir)
-        self.guidelines: List[UXGuideline] = []
+        self.guidelines: list[UXGuideline] = []
         self._load_guidelines()
 
     def _load_guidelines(self):
@@ -76,7 +74,7 @@ class UXGuideEngine:
             self.guidelines = self._get_default_guidelines()
             return
 
-        with open(csv_path, 'r', encoding='utf-8') as f:
+        with open(csv_path, encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
@@ -93,7 +91,7 @@ class UXGuideEngine:
                 except Exception as e:
                     print(f"Warning: Failed to parse UX guideline: {e}")
 
-    def _get_default_guidelines(self) -> List[UXGuideline]:
+    def _get_default_guidelines(self) -> list[UXGuideline]:
         """获取默认指南（当 CSV 不存在时）"""
         return [
             UXGuideline(
@@ -128,9 +126,9 @@ class UXGuideEngine:
     def search(
         self,
         query: str,
-        domain: Optional[str] = None,
+        domain: str | None = None,
         max_results: int = 5
-    ) -> List[UXRecommendation]:
+    ) -> list[UXRecommendation]:
         """
         搜索 UX 指南
 
@@ -202,7 +200,7 @@ class UXGuideEngine:
     def _determine_priority(self, guideline: UXGuideline) -> str:
         """确定优先级"""
         # 无障碍性通常是关键优先级
-        if guideline.domain == UXDomain.A11y:
+        if guideline.domain == UXDomain.A11Y:
             return "critical"
 
         # 性能影响通常是高优先级
@@ -228,7 +226,7 @@ class UXGuideEngine:
 
         return "low"
 
-    def _get_resources(self, guideline: UXGuideline) -> List[str]:
+    def _get_resources(self, guideline: UXGuideline) -> list[str]:
         """获取相关资源"""
         resources = []
 
@@ -254,7 +252,7 @@ class UXGuideEngine:
 
         return resources
 
-    def get_guidelines_by_domain(self, domain: str) -> List[UXGuideline]:
+    def get_guidelines_by_domain(self, domain: str) -> list[UXGuideline]:
         """
         按领域获取指南
 
@@ -270,7 +268,7 @@ class UXGuideEngine:
             if g.domain.value.lower() == domain_lower
         ]
 
-    def get_quick_wins(self, max_results: int = 5) -> List[UXRecommendation]:
+    def get_quick_wins(self, max_results: int = 5) -> list[UXRecommendation]:
         """
         获取快速见效的改进（低复杂度、高影响）
 
@@ -304,7 +302,7 @@ class UXGuideEngine:
             domain_groups[rec.guideline.domain].append(rec)
 
         # 从每个领域选择最好的
-        result = []
+        result: list[UXRecommendation] = []
         domains = list(domain_groups.keys())
         random.shuffle(domains)
 
@@ -315,7 +313,7 @@ class UXGuideEngine:
 
         return result
 
-    def get_checklist(self, domains: Optional[List[str]] = None) -> Dict[str, List[str]]:
+    def get_checklist(self, domains: list[str] | None = None) -> dict[str, list[str]]:
         """
         获取 UX 检查清单
 
@@ -325,7 +323,7 @@ class UXGuideEngine:
         Returns:
             按领域分组的检查清单
         """
-        checklist = {}
+        checklist: dict[str, list[str]] = {}
 
         for guideline in self.guidelines:
             domain = guideline.domain.value
@@ -343,14 +341,14 @@ class UXGuideEngine:
 
         return checklist
 
-    def get_anti_patterns(self) -> Dict[str, List[str]]:
+    def get_anti_patterns(self) -> dict[str, list[dict[str, str]]]:
         """
         获取所有反模式
 
         Returns:
             按领域分组的反模式
         """
-        anti_patterns = {}
+        anti_patterns: dict[str, list[dict[str, str]]] = {}
 
         for guideline in self.guidelines:
             domain = guideline.domain.value
@@ -366,11 +364,11 @@ class UXGuideEngine:
 
         return anti_patterns
 
-    def list_domains(self) -> List[str]:
+    def list_domains(self) -> list[str]:
         """列出所有领域"""
         return list(set(g.domain.value for g in self.guidelines))
 
-    def list_topics(self, domain: Optional[str] = None) -> List[str]:
+    def list_topics(self, domain: str | None = None) -> list[str]:
         """
         列出所有主题
 
@@ -388,6 +386,6 @@ class UXGuideEngine:
 
 
 # 便捷函数
-def get_ux_guide(data_dir: Optional[Path] = None) -> UXGuideEngine:
+def get_ux_guide(data_dir: Path | None = None) -> UXGuideEngine:
     """获取 UX 指南引擎实例"""
     return UXGuideEngine(data_dir)

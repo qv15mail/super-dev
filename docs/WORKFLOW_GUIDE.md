@@ -72,7 +72,7 @@ cat output/*-ai-prompt.md
 # 3. 生成 CI/CD 配置
 super-dev deploy --cicd github
 
-# 4. 通过完整流水线生成数据库迁移脚本
+# 4. 通过完整流水线生成数据库迁移与项目交付包
 super-dev pipeline "用户认证系统" --platform web --frontend react --backend node --domain auth
 ```
 
@@ -309,7 +309,7 @@ super-dev spec archive add-payment-integration
 
 # 工作流详解
 
-## 11 阶段流水线（含第 0 阶段）
+## 12 阶段流水线（含第 0 阶段）
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -344,7 +344,7 @@ super-dev spec archive add-payment-integration
 │     └─ 架构缺陷检查                                        │
 ├─────────────────────────────────────────────────────────────┤
 │  6. 质量门禁 (Quality Gate)                                │
-│     ├─ 场景化阈值评估（支持 --quality-threshold 覆盖）      │
+│     ├─ 统一阈值评估（80+，支持 --quality-threshold 覆盖）   │
 │     ├─ 详细改进建议                                        │
 │     └─ 缺陷修复追踪                                        │
 ├─────────────────────────────────────────────────────────────┤
@@ -363,10 +363,15 @@ super-dev spec archive add-payment-integration
 │     ├─ 自动化测试                                          │
 │     └─ 自动部署                                            │
 ├─────────────────────────────────────────────────────────────┤
-│  10. 数据库迁移 (Database Migration)                       │
+│  10. 部署修复模板 (Deploy Remediation)                    │
+│     ├─ 环境变量示例文件                                    │
+│     ├─ 平台级 secrets 检查清单                             │
+│     └─ 缺失项自动提示                                      │
+├─────────────────────────────────────────────────────────────┤
+│  11. 交付收敛 (Migration + Delivery Package)              │
 │     ├─ Prisma / TypeORM / Sequelize                       │
 │     ├─ SQLAlchemy / Django / Mongoose                     │
-│     └─ 版本化迁移脚本                                      │
+│     └─ 迁移脚本 + 交付清单/报告/压缩包                    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -669,7 +674,7 @@ jobs:
       - run: npm run snyk-test
 ```
 
-### 阶段 8: 数据库迁移
+### 阶段 8: 数据库迁移与交付包
 
 **支持的 ORM**:
 - Prisma (TypeScript/Node)
@@ -835,7 +840,7 @@ super-dev quality  # 检查质量趋势
 
 **A**: Super Dev 提供多层保障：
 1. **红队审查**: 发现安全和性能问题
-2. **质量门禁**: 场景化阈值（1-N+1 默认 80；0-1 自动放宽）
+2. **质量门禁**: 统一阈值（默认 80+，支持手动覆盖）
 3. **代码审查指南**: 详细的审查清单
 4. **专家系统**: 10 位专家提供专业建议
 

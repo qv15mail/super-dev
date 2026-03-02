@@ -1,14 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 Super Dev Orchestrator Module
 """
 
-from .engine import (
-    WorkflowEngine,
-    Phase,
-    PhaseResult,
-    WorkflowContext
-)
+from .engine import Phase, PhaseResult, WorkflowContext, WorkflowEngine
 
 __all__ = [
     "WorkflowEngine",

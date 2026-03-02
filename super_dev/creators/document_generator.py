@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 文档生成器 - 高质量 PRD、架构、UI/UX 文档生成
 
@@ -9,7 +8,6 @@
 最后修改：2025-01-04
 """
 
-from typing import Optional, List
 from datetime import datetime
 
 from .requirement_parser import RequirementParser
@@ -26,10 +24,10 @@ class DocumentGenerator:
         frontend: str = "next",
         backend: str = "node",
         domain: str = "",
-        ui_library: Optional[str] = None,
-        style_solution: Optional[str] = None,
-        state_management: List[str] = None,
-        testing_frameworks: List[str] = None,
+        ui_library: str | None = None,
+        style_solution: str | None = None,
+        state_management: list[str] | None = None,
+        testing_frameworks: list[str] | None = None,
     ):
         """初始化文档生成器"""
         self.name = name
@@ -99,7 +97,7 @@ class DocumentGenerator:
             dict: 包含提取的技术关键词分类
         """
         description = self.description
-        keywords = {
+        keywords: dict[str, list[str]] = {
             "ai_frameworks": [],      # AI 框架：LangGraph, LangChain, Transformers 等
             "agent_tools": [],        # Agent 工具：AutoGPT, BabyAGI, CrewAI 等
             "ml_libraries": [],       # ML 库：PyTorch, TensorFlow, scikit-learn 等
@@ -156,7 +154,7 @@ class DocumentGenerator:
         return f"""# {self.name} - 产品需求文档 (PRD)
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v1.0.0
+> **版本**: v2.0.0
 > **状态**: 草稿
 
 ---
@@ -287,7 +285,7 @@ class DocumentGenerator:
 
 ## 8. 发布计划
 
-### 8.1 MVP (v1.0)
+### 8.1 MVP (v2.0)
 
 **时间**: 4 周
 **范围**: 核心功能 + 基础架构
@@ -345,7 +343,7 @@ class DocumentGenerator:
 
 | 版本 | 日期 | 变更内容 | 作者 |
 |:---|:---|:---|:---|
-| v1.0.0 | {datetime.now().strftime('%Y-%m-%d')} | 初始版本 | Super Dev |
+| v2.0.0 | {datetime.now().strftime('%Y-%m-%d')} | 初始版本 | Super Dev |
 """
 
     def generate_architecture(self) -> str:
@@ -353,7 +351,7 @@ class DocumentGenerator:
         return f"""# {self.name} - 架构设计文档
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v1.0.0
+> **版本**: v2.0.0
 > **架构师**: Super Dev ARCHITECT 专家
 
 ---
@@ -735,7 +733,7 @@ jobs:
         doc_parts.append(f"""# {self.name} - UI/UX 设计文档
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v1.0.0
+> **版本**: v2.0.0
 > **设计师**: Super Dev UI/UX 专家
 
 ---
@@ -1305,7 +1303,7 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica
 
     def _generate_target_users(self) -> str:
         """生成目标用户"""
-        return f"""
+        return """
 **主要用户群体**:
 
 1. **核心用户** (80%)
@@ -2270,7 +2268,7 @@ spec:
             from super_dev.design import (
                 DesignIntelligenceEngine,
                 get_landing_generator,
-                get_ux_guide
+                get_ux_guide,
             )
 
             # 分析项目特征
@@ -2361,7 +2359,7 @@ spec:
             "",
             f"> **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
             f"> **场景**: {scenario}",
-            f"> **策略**: 先前端可视化，再系统能力闭环",
+            "> **策略**: 先前端可视化，再系统能力闭环",
             "",
             "---",
             "",
@@ -2427,7 +2425,7 @@ spec:
             "",
             f"> **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
             f"> **前端框架**: {self.frontend}",
-            f"> **设计重点**: 先可视化业务流程，再补齐系统深度能力",
+            "> **设计重点**: 先可视化业务流程，再补齐系统深度能力",
             "",
             "---",
             "",

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 开发：Excellent（11964948@qq.com）
 功能：Landing 页面模式生成器
@@ -7,12 +6,11 @@
 最后修改：2025-01-04
 """
 
-import random
-from typing import Dict, List, Optional, Any
+import csv
 from dataclasses import dataclass, field
 from enum import Enum
-import csv
 from pathlib import Path
+from typing import Any
 
 
 class LandingCategory(str, Enum):
@@ -48,10 +46,10 @@ class LandingSection:
 class CTAStrategy:
     """CTA 策略"""
     primary_placement: str  # where the main CTA goes
-    secondary_placements: List[str] = field(default_factory=list)
+    secondary_placements: list[str] = field(default_factory=list)
     style: str = "button"  # button, link, text
     urgency: str = "medium"  # low, medium, high
-    text_variations: List[str] = field(default_factory=list)
+    text_variations: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -60,14 +58,14 @@ class LandingPattern:
     name: str
     category: LandingCategory
     description: str
-    sections: List[LandingSection]
+    sections: list[LandingSection]
     cta_strategy: CTAStrategy
-    best_for: List[str]  # SaaS, Marketing, E-commerce, etc.
-    conversion_tips: List[str]
+    best_for: list[str]  # SaaS, Marketing, E-commerce, etc.
+    conversion_tips: list[str]
     complexity: str  # low, medium, high
-    keywords: List[str]
+    keywords: list[str]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return {
             "name": self.name,
@@ -100,7 +98,7 @@ class LandingPattern:
 class LandingPatternGenerator:
     """Landing 页面模式生成器"""
 
-    def __init__(self, data_dir: Optional[Path] = None):
+    def __init__(self, data_dir: Path | None = None):
         """
         初始化生成器
 
@@ -111,7 +109,7 @@ class LandingPatternGenerator:
             data_dir = Path(__file__).parent.parent / "data" / "design"
 
         self.data_dir = Path(data_dir)
-        self.patterns: List[LandingPattern] = []
+        self.patterns: list[LandingPattern] = []
         self._load_patterns()
 
     def _load_patterns(self):
@@ -123,14 +121,14 @@ class LandingPatternGenerator:
             self.patterns = self._get_default_patterns()
             return
 
-        with open(csv_path, 'r', encoding='utf-8') as f:
+        with open(csv_path, encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 pattern = self._parse_pattern(row)
                 if pattern:
                     self.patterns.append(pattern)
 
-    def _parse_pattern(self, row: Dict[str, str]) -> Optional[LandingPattern]:
+    def _parse_pattern(self, row: dict[str, str]) -> LandingPattern | None:
         """解析 CSV 行为模式对象"""
         try:
             # 解析 sections
@@ -149,7 +147,6 @@ class LandingPatternGenerator:
                 ))
 
             # 解析 CTA 策略
-            cta_raw = row.get("cta_strategy", "")
             cta_strategy = CTAStrategy(
                 primary_placement=section_names[0] if section_names else "hero",
                 style="button",
@@ -208,7 +205,7 @@ class LandingPatternGenerator:
         }
         return hints.get(section_type, "Content for this section")
 
-    def _get_cta_variations(self, best_for: str) -> List[str]:
+    def _get_cta_variations(self, best_for: str) -> list[str]:
         """获取 CTA 文本变体"""
         base_ctas = {
             "SaaS": ["Start Free Trial", "Get Started", "Request Demo", "Start Now"],
@@ -226,7 +223,7 @@ class LandingPatternGenerator:
 
         return base_ctas["Default"]
 
-    def _get_default_patterns(self) -> List[LandingPattern]:
+    def _get_default_patterns(self) -> list[LandingPattern]:
         """获取默认模式（当 CSV 不存在时）"""
         return [
             LandingPattern(
@@ -271,7 +268,7 @@ class LandingPatternGenerator:
             )
         ]
 
-    def search(self, query: str, max_results: int = 5) -> List[LandingPattern]:
+    def search(self, query: str, max_results: int = 5) -> list[LandingPattern]:
         """
         搜索 Landing 页面模式
 
@@ -315,7 +312,7 @@ class LandingPatternGenerator:
 
         return [p for p, _ in scored_patterns[:max_results]]
 
-    def get_pattern(self, name: str) -> Optional[LandingPattern]:
+    def get_pattern(self, name: str) -> LandingPattern | None:
         """
         获取指定名称的模式
 
@@ -330,7 +327,7 @@ class LandingPatternGenerator:
                 return pattern
         return None
 
-    def recommend(self, product_type: str, goal: str, audience: str) -> Optional[LandingPattern]:
+    def recommend(self, product_type: str, goal: str, audience: str) -> LandingPattern | None:
         """
         推荐最适合的模式
 
@@ -370,7 +367,7 @@ class LandingPatternGenerator:
             # 默认推荐经典模式
             return self.get_pattern("Hero + Features")
 
-    def generate_structure(self, pattern: LandingPattern) -> Dict[str, Any]:
+    def generate_structure(self, pattern: LandingPattern) -> dict[str, Any]:
         """
         生成页面结构
 
@@ -410,16 +407,16 @@ class LandingPatternGenerator:
             "complexity": pattern.complexity
         }
 
-    def list_patterns(self) -> List[str]:
+    def list_patterns(self) -> list[str]:
         """列出所有可用模式"""
         return [p.name for p in self.patterns]
 
-    def list_categories(self) -> List[str]:
+    def list_categories(self) -> list[str]:
         """列出所有类别"""
         return list(set(p.category.value for p in self.patterns))
 
 
 # 便捷函数
-def get_landing_generator(data_dir: Optional[Path] = None) -> LandingPatternGenerator:
+def get_landing_generator(data_dir: Path | None = None) -> LandingPatternGenerator:
     """获取 Landing 页面生成器实例"""
     return LandingPatternGenerator(data_dir)

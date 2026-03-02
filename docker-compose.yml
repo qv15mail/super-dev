@@ -27,7 +27,7 @@ services:
       - "8080:8080"
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/构建一个宠物护理预约平台-先做前端
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/用户认证系统
       - REDIS_URL=redis://redis:6379
     depends_on:
       - postgres
@@ -42,7 +42,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_DB=构建一个宠物护理预约平台-先做前端
+      - POSTGRES_DB=用户认证系统
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=password
     networks:

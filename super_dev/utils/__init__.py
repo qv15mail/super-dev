@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 开发:Excellent(11964948@qq.com)
 功能:工具模块初始化

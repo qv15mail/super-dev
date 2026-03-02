@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Skill 安装管理器
 """
@@ -6,7 +5,7 @@ Skill 安装管理器
 from __future__ import annotations
 
 import shutil
-import subprocess
+import subprocess  # nosec B404
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -104,6 +103,10 @@ class SkillManager:
     def _is_git_source(self, source: str) -> bool:
         return source.startswith("http://") or source.startswith("https://") or source.endswith(".git")
 
+    def _validate_git_source(self, source: str) -> None:
+        if source.startswith("-"):
+            raise ValueError("Invalid git source")
+
     def _install_from_git(
         self,
         source: str,
@@ -111,15 +114,20 @@ class SkillManager:
         name: str | None,
         force: bool,
     ) -> SkillInstallResult:
+        self._validate_git_source(source)
+        git_executable = shutil.which("git")
+        if not git_executable:
+            raise FileNotFoundError("git executable not found in PATH")
+
         with tempfile.TemporaryDirectory(prefix="super-dev-skill-") as temp_dir:
             temp_path = Path(temp_dir)
             clone_dir = temp_path / "repo"
             subprocess.run(
-                ["git", "clone", "--depth", "1", source, str(clone_dir)],
+                [git_executable, "clone", "--depth", "1", "--", source, str(clone_dir)],
                 check=True,
                 capture_output=True,
                 text=True,
-            )
+            )  # nosec B603
 
             skill_dirs = self._find_skill_dirs(clone_dir)
             if not skill_dirs:
@@ -181,7 +189,7 @@ class SkillManager:
         target_dir.mkdir(parents=True, exist_ok=True)
         skill_content = f"""# {skill_name} - Super Dev AI Coding Skill
 
-> 版本: 1.0 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
+> 版本: 2.0.0 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
 
 ---
 
@@ -204,7 +212,7 @@ class SkillManager:
 
 ---
 
-## 🚀 11 阶段开发流水线
+## 🚀 12 阶段开发流水线
 
 接到任务后，**严格按以下顺序执行**：
 
@@ -215,11 +223,12 @@ class SkillManager:
 第 3 阶段  Spec 创建   → OpenSpec 风格规范 + 任务列表
 第 4 阶段  实现骨架    → 前后端目录结构 + API 契约
 第 5 阶段  红队审查    → 安全 + 性能 + 架构三维审查
-第 6 阶段  质量门禁    → 场景化阈值（0-1: 50分, 1-N+1: 80分）
+第 6 阶段  质量门禁    → 统一阈值（80+）
 第 7 阶段  代码审查    → 生成代码审查指南
 第 8 阶段  AI 提示词   → 生成给 AI 开发的提示词
 第 9 阶段  CI/CD       → 5 大平台配置（GitHub/GitLab/Jenkins/Azure/Bitbucket）
-第 10 阶段 数据库迁移  → 6 种 ORM 迁移脚本
+第 10 阶段 部署修复模板 → 环境变量示例 + 平台检查清单
+第 11 阶段 交付收敛    → 6 种 ORM 迁移脚本 + 交付包（manifest/report/zip）
 ```
 
 ---
@@ -251,8 +260,8 @@ class SkillManager:
 - 遵循 Conventional Commits 提交规范
 
 ### 质量门禁规则
-- **0-1 新建项目**：质量分 ≥ 50 分可通过（宽松模式）
-- **1-N+1 现有项目**：质量分 ≥ 80 分才能通过（标准模式）
+- **统一标准**：质量分 **≥ 80 分** 才可通过
+- 必检项（文档/安全/性能/测试）出现失败即阻断
 - 交付前运行：`super-dev quality --type all`
 - 红队发现 Critical 问题必须修复后才能继续
 
@@ -290,6 +299,7 @@ super-dev expert ARCHITECT "评审微服务拆分方案"
 - [ ] 前端可正常演示，无控制台报错
 - [ ] 后端 API 联调通过
 - [ ] 数据库迁移脚本可正常执行
+- [ ] `output/delivery/*` 交付包状态为 ready
 - [ ] CI/CD 流水线配置完整
 - [ ] 质量门禁通过（`super-dev quality --type all`）
 - [ ] 红队发现的 Critical/High 问题均已修复

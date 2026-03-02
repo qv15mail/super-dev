@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 实现骨架生成器测试
 """
@@ -27,6 +26,7 @@ class TestImplementationScaffoldBuilder:
         assert len(result["backend_files"]) > 0
         assert (temp_project_dir / "frontend" / "src" / "App.tsx").exists()
         assert (temp_project_dir / "backend" / "src" / "app.js").exists()
+        assert (temp_project_dir / "backend" / "src" / "app.test.js").exists()
         assert (temp_project_dir / "backend" / "API_CONTRACT.md").exists()
 
     def test_generate_python_backend_scaffold(self, temp_project_dir: Path):
@@ -41,6 +41,7 @@ class TestImplementationScaffoldBuilder:
         assert result["frontend_files"] == []
         assert (temp_project_dir / "backend" / "src" / "app.py").exists()
         assert (temp_project_dir / "backend" / "requirements.txt").exists()
+        assert (temp_project_dir / "backend" / "tests" / "test_smoke.py").exists()
 
     def test_generate_vue_go_scaffold(self, temp_project_dir: Path):
         builder = ImplementationScaffoldBuilder(
@@ -56,3 +57,17 @@ class TestImplementationScaffoldBuilder:
         assert (temp_project_dir / "frontend" / "src" / "App.vue").exists()
         assert (temp_project_dir / "frontend" / "vite.config.js").exists()
         assert (temp_project_dir / "backend" / "src" / "main.go").exists()
+
+    def test_package_names_are_sanitized(self, temp_project_dir: Path):
+        builder = ImplementationScaffoldBuilder(
+            project_dir=temp_project_dir,
+            name="用户认证系统",
+            frontend="react",
+            backend="node",
+        )
+        builder.generate(requirements=[{"spec_name": "auth", "req_name": "secure-authentication"}])
+
+        frontend_pkg = (temp_project_dir / "frontend" / "package.json").read_text(encoding="utf-8")
+        backend_pkg = (temp_project_dir / "backend" / "package.json").read_text(encoding="utf-8")
+        assert '"name": "super-dev-app-frontend"' in frontend_pkg
+        assert '"name": "super-dev-app-backend"' in backend_pkg

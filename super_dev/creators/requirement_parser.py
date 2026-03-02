@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 需求解析器 - 将自然语言需求转换为可执行结构
 """
@@ -8,6 +7,15 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TypedDict
+
+
+class KeywordRule(TypedDict):
+    spec_name: str
+    req_name: str
+    keywords: tuple[str, ...]
+    description: str
+    scenario: dict[str, str]
 
 
 @dataclass
@@ -31,7 +39,7 @@ class RequirementBlueprint:
 class RequirementParser:
     """将一句话需求解析为规范、阶段和前端模块"""
 
-    _KEYWORD_RULES = [
+    _KEYWORD_RULES: list[KeywordRule] = [
         {
             "spec_name": "auth",
             "req_name": "secure-authentication",

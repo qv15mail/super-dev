@@ -1,15 +1,14 @@
-# -*- coding: utf-8 -*-
 """
 Super Dev Web API 集成测试
 """
 
 from pathlib import Path
 
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
-from super_dev.orchestrator import Phase, PhaseResult
 import super_dev.web.api as web_api
+from super_dev.orchestrator import Phase, PhaseResult
 
 
 @pytest.fixture(autouse=True)
@@ -108,6 +107,69 @@ class TestWebAPI:
         )
         assert status_resp_2.status_code == 200
         assert status_resp_2.json()["run_id"] == run_id
+
+    def test_workflow_run_passes_request_context(self, temp_project_dir: Path, monkeypatch):
+        client = TestClient(web_api.app)
+
+        init_resp = client.post(
+            "/api/init",
+            params={"project_dir": str(temp_project_dir)},
+            json={
+                "name": "api-context",
+                "description": "from-init",
+                "platform": "web",
+                "frontend": "react",
+                "backend": "node",
+            },
+        )
+        assert init_resp.status_code == 200
+
+        observed: dict[str, str] = {}
+
+        async def fake_run(self, phases=None, context=None, **kwargs):
+            assert context is not None
+            observed["name"] = context.user_input.get("name")
+            observed["description"] = context.user_input.get("description")
+            observed["platform"] = context.user_input.get("platform")
+            observed["frontend"] = context.user_input.get("frontend")
+            observed["backend"] = context.user_input.get("backend")
+            observed["domain"] = context.user_input.get("domain")
+            observed["cicd"] = context.user_input.get("cicd")
+            return {
+                Phase.DISCOVERY: PhaseResult(
+                    phase=Phase.DISCOVERY,
+                    success=True,
+                    duration=0.01,
+                    quality_score=90.0,
+                )
+            }
+
+        monkeypatch.setattr(web_api.WorkflowEngine, "run", fake_run)
+
+        run_resp = client.post(
+            "/api/workflow/run",
+            params={"project_dir": str(temp_project_dir)},
+            json={
+                "phases": ["discovery"],
+                "name": "override-name",
+                "description": "override-desc",
+                "platform": "mobile",
+                "frontend": "vue",
+                "backend": "python",
+                "domain": "medical",
+                "cicd": "gitlab",
+            },
+        )
+        assert run_resp.status_code == 200
+        assert observed == {
+            "name": "override-name",
+            "description": "override-desc",
+            "platform": "mobile",
+            "frontend": "vue",
+            "backend": "python",
+            "domain": "medical",
+            "cicd": "gitlab",
+        }
 
     def test_workflow_status_includes_redteam_output(self, temp_project_dir: Path, monkeypatch):
         client = TestClient(web_api.app)

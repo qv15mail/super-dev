@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 数据库迁移生成器 - 生成数据库迁移脚本
 
@@ -8,11 +7,11 @@
 创建时间：2025-12-30
 """
 
-from pathlib import Path
-from typing import Optional
+import datetime
+import re
 from dataclasses import dataclass
 from enum import Enum
-import datetime
+from pathlib import Path
 
 
 class DatabaseType(Enum):
@@ -41,9 +40,9 @@ class Column:
     nullable: bool = True
     primary_key: bool = False
     unique: bool = False
-    default: Optional[str] = None
-    foreign_key: Optional[str] = None
-    comment: Optional[str] = None
+    default: str | None = None
+    foreign_key: str | None = None
+    comment: str | None = None
 
 
 @dataclass
@@ -51,8 +50,8 @@ class Table:
     """数据库表定义"""
     name: str
     columns: list[Column]
-    indexes: list[str] = None
-    comment: Optional[str] = None
+    indexes: list[str] | None = None
+    comment: str | None = None
 
     def __post_init__(self):
         if self.indexes is None:
@@ -68,7 +67,7 @@ class MigrationGenerator:
         name: str,
         tech_stack: dict,
         db_type: DatabaseType = DatabaseType.POSTGRESQL,
-        orm_type: Optional[ORMType] = None
+        orm_type: ORMType | None = None
     ):
         self.project_dir = Path(project_dir).resolve()
         self.name = name
@@ -139,18 +138,154 @@ class MigrationGenerator:
         """从 Spec 规范加载实体定义"""
         entities = []
 
-        # 尝试从 Spec 文件读取
+        # 1) 尝试从当前规范读取
         spec_dir = self.project_dir / ".super-dev" / "specs"
         if spec_dir.exists():
-            for spec_file in spec_dir.glob("*.md"):
+            for spec_file in spec_dir.rglob("spec.md"):
                 content = spec_file.read_text(encoding='utf-8')
                 entities.extend(self._parse_entities_from_spec(content))
 
-        # 如果没有找到实体，生成默认的
+        # 2) 尝试从变更提案规范读取（pipeline 常见路径）
+        changes_dir = self.project_dir / ".super-dev" / "changes"
+        change_spec_files: list[Path] = []
+        if changes_dir.exists():
+            change_spec_files = list(changes_dir.glob("*/specs/*/spec.md"))
+            for spec_file in change_spec_files:
+                content = spec_file.read_text(encoding='utf-8')
+                entities.extend(self._parse_entities_from_spec(content))
+
+        # 3) 没有显式实体定义时，按模块线索推断（优先于默认模板）
+        if not entities:
+            module_hints = self._collect_module_hints(change_spec_files)
+            if module_hints:
+                entities = self._generate_entities_from_modules(module_hints)
+
+        # 4) 最后兜底默认实体
         if not entities:
             entities = self._generate_default_entities()
 
         return entities
+
+    def _collect_module_hints(self, change_spec_files: list[Path]) -> list[str]:
+        hints: list[str] = []
+
+        # 变更规范目录名（.super-dev/changes/<id>/specs/<module>/spec.md）
+        for spec_file in change_spec_files:
+            module = spec_file.parent.name.strip().lower()
+            if module and module not in hints and module not in {"core", "workflow"}:
+                hints.append(module)
+
+        # 当前规范目录名（.super-dev/specs/<module>/spec.md）
+        specs_dir = self.project_dir / ".super-dev" / "specs"
+        if specs_dir.exists():
+            for module_dir in specs_dir.iterdir():
+                if not module_dir.is_dir():
+                    continue
+                module = module_dir.name.strip().lower()
+                if module and module not in hints and not module.startswith("."):
+                    hints.append(module)
+
+        # API 契约中的模块路径
+        api_contract = self.project_dir / "backend" / "API_CONTRACT.md"
+        if api_contract.exists():
+            content = api_contract.read_text(encoding="utf-8", errors="ignore")
+            for match in re.findall(r"/api/([a-zA-Z0-9_-]+)", content):
+                module = match.strip().lower()
+                if module and module not in hints and module not in {"health", "ready"}:
+                    hints.append(module)
+
+        return hints[:12]
+
+    def _generate_entities_from_modules(self, modules: list[str]) -> list[Table]:
+        entities: list[Table] = []
+        seen_tables: set[str] = set()
+
+        for module in modules:
+            table_name = self._to_table_name(module)
+            if table_name in seen_tables:
+                continue
+            seen_tables.add(table_name)
+            entities.append(
+                Table(
+                    name=table_name,
+                    columns=self._default_columns_for_module(module),
+                )
+            )
+
+        return entities
+
+    def _to_table_name(self, module: str) -> str:
+        cleaned = re.sub(r"[^a-z0-9_]", "_", module.lower()).strip("_")
+        if not cleaned:
+            return "records"
+        if cleaned.endswith("s"):
+            return cleaned
+        return f"{cleaned}s"
+
+    def _default_columns_for_module(self, module: str) -> list[Column]:
+        module = module.lower()
+        base_columns = [
+            Column("id", "uuid", primary_key=True, comment="主键"),
+            Column("created_at", "timestamp", default="CURRENT_TIMESTAMP"),
+            Column("updated_at", "timestamp", default="CURRENT_TIMESTAMP"),
+        ]
+
+        if module in {"auth", "user", "users", "account", "accounts"}:
+            return [
+                Column("id", "uuid", primary_key=True, comment="用户 ID"),
+                Column("email", "varchar(255)", unique=True, comment="邮箱"),
+                Column("password_hash", "varchar(255)", comment="密码哈希"),
+                Column("status", "varchar(32)", default="'active'", comment="状态"),
+                Column("created_at", "timestamp", default="CURRENT_TIMESTAMP"),
+                Column("updated_at", "timestamp", default="CURRENT_TIMESTAMP"),
+            ]
+        if module in {"payment", "payments", "billing"}:
+            return [
+                Column("id", "uuid", primary_key=True, comment="支付 ID"),
+                Column("order_id", "uuid", comment="订单 ID"),
+                Column("amount", "decimal(12,2)", comment="支付金额"),
+                Column("currency", "varchar(10)", default="'CNY'"),
+                Column("status", "varchar(32)", default="'pending'"),
+                Column("method", "varchar(32)", comment="支付方式"),
+                Column("created_at", "timestamp", default="CURRENT_TIMESTAMP"),
+                Column("updated_at", "timestamp", default="CURRENT_TIMESTAMP"),
+            ]
+        if module in {"order", "orders"}:
+            return [
+                Column("id", "uuid", primary_key=True, comment="订单 ID"),
+                Column("user_id", "uuid", comment="用户 ID"),
+                Column("total_amount", "decimal(12,2)", comment="订单金额"),
+                Column("status", "varchar(32)", default="'draft'"),
+                Column("created_at", "timestamp", default="CURRENT_TIMESTAMP"),
+                Column("updated_at", "timestamp", default="CURRENT_TIMESTAMP"),
+            ]
+        if module in {"product", "products", "catalog"}:
+            return [
+                Column("id", "uuid", primary_key=True, comment="商品 ID"),
+                Column("name", "varchar(255)", comment="商品名称"),
+                Column("price", "decimal(12,2)", comment="价格"),
+                Column("stock", "int", default="0", comment="库存"),
+                Column("created_at", "timestamp", default="CURRENT_TIMESTAMP"),
+                Column("updated_at", "timestamp", default="CURRENT_TIMESTAMP"),
+            ]
+        if module in {"booking", "appointment", "appointments", "schedule"}:
+            return [
+                Column("id", "uuid", primary_key=True, comment="预约 ID"),
+                Column("user_id", "uuid", comment="用户 ID"),
+                Column("scheduled_at", "timestamp", comment="预约时间"),
+                Column("status", "varchar(32)", default="'pending'"),
+                Column("notes", "text", comment="备注"),
+                Column("created_at", "timestamp", default="CURRENT_TIMESTAMP"),
+                Column("updated_at", "timestamp", default="CURRENT_TIMESTAMP"),
+            ]
+
+        # 通用模块：保持最小可用结构
+        return [
+            Column("id", "uuid", primary_key=True, comment="主键"),
+            Column("name", "varchar(255)", comment="名称"),
+            Column("status", "varchar(32)", default="'active'"),
+            *base_columns[1:],
+        ]
 
     def _parse_entities_from_spec(self, content: str) -> list[Table]:
         """从 Spec 内容解析实体定义"""
@@ -158,8 +293,8 @@ class MigrationGenerator:
 
         # 简单解析：查找 ## Entity 或 ### Entity 标题
         lines = content.split("\n")
-        current_entity = None
-        current_columns = []
+        current_entity: str | None = None
+        current_columns: list[Column] = []
 
         for line in lines:
             if line.startswith("### ") and "Table" in line:
@@ -238,11 +373,11 @@ class MigrationGenerator:
             "// This is your Prisma schema file,",
             "// learn more about it in the docs: https://pris.ly/d/prisma-schema",
             "",
-            f'generator client {{',
+            'generator client {',
             '  provider = "prisma-client-js"',
             '}',
             "",
-            f'datasource db {{',
+            'datasource db {',
             f'  provider = "{self._get_prisma_provider()}"',
             '  url      = env("DATABASE_URL")',
             '}',
@@ -290,9 +425,9 @@ class MigrationGenerator:
         entity_lines = []
         for entity in self.entities:
             entity_lines.extend([
-                f"import {{ Entity, PrimaryGeneratedColumn, Column }} from 'typeorm';",
+                "import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';",
                 "",
-                f"@Entity()",
+                "@Entity()",
                 f"export class {entity.name.capitalize()} {{",
             ])
 
@@ -323,18 +458,18 @@ class MigrationGenerator:
 
         for entity in self.entities:
             migration_lines.append(f"        // Create {entity.name} table")
-            migration_lines.append(f"        await queryRunner.createTable(new Table({{")
+            migration_lines.append("        await queryRunner.createTable(new Table({")
             migration_lines.append(f"            name: '{entity.name}',")
             migration_lines.append("            columns: [")
 
             for col in entity.columns:
-                migration_lines.append(f"                {{")
+                migration_lines.append("                {")
                 migration_lines.append(f"                    name: '{col.name}',")
                 migration_lines.append(f"                    type: '{self._sql_type(col.type)}',")
                 migration_lines.append(f"                    isPrimary: {str(col.primary_key).lower()},")
                 migration_lines.append(f"                    isNullable: {str(col.nullable).lower()},")
                 migration_lines.append(f"                    isUnique: {str(col.unique).lower()},")
-                migration_lines.append(f"                }},")
+                migration_lines.append("                },")
 
             migration_lines.append("            ],")
             migration_lines.append("        }));")
@@ -408,7 +543,7 @@ class MigrationGenerator:
         ]
 
         for entity in self.entities:
-            migration_lines.append(f'    op.create_table(')
+            migration_lines.append('    op.create_table(')
             migration_lines.append(f'        "{entity.name}",')
             migration_lines.append("        sa.Column(")
 
@@ -462,7 +597,7 @@ class MigrationGenerator:
                 default = f'default="{col.default}", ' if col.default else ""
 
                 if col.primary_key:
-                    models_lines.append(f'    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)')
+                    models_lines.append('    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)')
                 else:
                     models_lines.append(f'    {col.name} = models.{field_type}({nullable}{unique}{default})')
 
@@ -475,25 +610,25 @@ class MigrationGenerator:
         # Django 迁移文件
         migration_lines = [
             "# Generated by Django",
-            f"from django.db import migrations, models",
-            f"import django.db.models.deletion",
-            f"import uuid",
+            "from django.db import migrations, models",
+            "import django.db.models.deletion",
+            "import uuid",
             "",
             "",
-            f"class Migration(migrations.Migration):",
+            "class Migration(migrations.Migration):",
             "",
-            f'    initial = True',
+            '    initial = True',
             "",
-            f'    dependencies = [',
-            f'    ]',
+            '    dependencies = [',
+            '    ]',
             "",
-            f'    operations = [',
+            '    operations = [',
         ]
 
         for entity in self.entities:
-            migration_lines.append(f'        migrations.CreateModel(')
+            migration_lines.append('        migrations.CreateModel(')
             migration_lines.append(f'            name=\'{entity.name.capitalize()}\',')
-            migration_lines.append(f'            fields=[')
+            migration_lines.append('            fields=[')
 
             for col in entity.columns:
                 field_def = self._django_migration_field(col)
@@ -517,7 +652,7 @@ class MigrationGenerator:
         models_lines = []
         for entity in self.entities:
             models_lines.extend([
-                f"module.exports = (sequelize, DataTypes) => {{",
+                "module.exports = (sequelize, DataTypes) => {",
                 f"  const {entity.name.capitalize()} = sequelize.define('{entity.name}', {{",
             ])
 
@@ -528,7 +663,7 @@ class MigrationGenerator:
                 models_lines.append(f"      allowNull: {str(col.nullable).lower()},")
                 models_lines.append(f"      unique: {str(col.unique).lower()},")
                 models_lines.append(f"      primaryKey: {str(col.primary_key).lower()},")
-                models_lines.append(f"    }},")
+                models_lines.append("    },")
 
             models_lines.extend([
                 "  }, {",
@@ -562,7 +697,7 @@ class MigrationGenerator:
                     f'        allowNull: {str(col.nullable).lower()},',
                     f'        unique: {str(col.unique).lower()},',
                     f'        primaryKey: {str(col.primary_key).lower()},',
-                    f'      }},',
+                    '      },',
                 ])
 
             migration_lines.extend([
@@ -592,8 +727,6 @@ class MigrationGenerator:
 
     def _generate_mongoose_migration(self) -> dict[str, str]:
         """生成 Mongoose 迁移"""
-        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-
         models_lines = []
         for entity in self.entities:
             models_lines.extend([
@@ -612,14 +745,14 @@ class MigrationGenerator:
                     f"    type: {mongoose_type},",
                     f"    required: {required},",
                     f"    unique: {unique},",
-                    f"  }},",
+                    "  },",
                 ])
 
             models_lines.extend([
                 "}, {",
-                f"  timestamps: true,",
+                "  timestamps: true,",
                 f"  collection: '{entity.name}',",
-                f"}});",
+                "});",
                 "",
                 f"module.exports = mongoose.model('{entity.name.capitalize()}', {entity.name.capitalize()}Schema);",
                 "",
@@ -834,7 +967,7 @@ class MigrationGenerator:
         args = []
 
         if col.primary_key:
-            return f"models.UUIDField(primary_key=True, default=uuid.uuid4)"
+            return "models.UUIDField(primary_key=True, default=uuid.uuid4)"
 
         if not col.nullable:
             args.append("null=False")

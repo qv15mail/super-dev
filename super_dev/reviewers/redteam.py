@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 红队审查器 - 安全、性能、架构审查
 
@@ -8,11 +7,13 @@
 创建时间：2025-12-30
 """
 
-from pathlib import Path
-from typing import Optional
-from dataclasses import dataclass, field
+import json
 import os
 import re
+import shutil
+import subprocess  # nosec B404
+from dataclasses import dataclass, field
+from pathlib import Path
 
 
 @dataclass
@@ -22,9 +23,9 @@ class SecurityIssue:
     category: str  # injection, auth, xss, csrf, etc.
     description: str
     recommendation: str
-    cwe: Optional[str] = None
-    file_path: Optional[str] = None
-    line: Optional[int] = None
+    cwe: str | None = None
+    file_path: str | None = None
+    line: int | None = None
 
 
 @dataclass
@@ -35,8 +36,8 @@ class PerformanceIssue:
     description: str
     recommendation: str
     impact: str = ""
-    file_path: Optional[str] = None
-    line: Optional[int] = None
+    file_path: str | None = None
+    line: int | None = None
 
 
 @dataclass
@@ -47,8 +48,8 @@ class ArchitectureIssue:
     description: str
     recommendation: str
     adr_needed: bool = False
-    file_path: Optional[str] = None
-    line: Optional[int] = None
+    file_path: str | None = None
+    line: int | None = None
 
 
 @dataclass
@@ -58,6 +59,7 @@ class RedTeamReport:
     security_issues: list[SecurityIssue] = field(default_factory=list)
     performance_issues: list[PerformanceIssue] = field(default_factory=list)
     architecture_issues: list[ArchitectureIssue] = field(default_factory=list)
+    pass_threshold: int = 70
 
     @property
     def critical_count(self) -> int:
@@ -81,45 +83,60 @@ class RedTeamReport:
         base_score = 100
 
         # 扣分标准
-        for issue in self.security_issues:
-            if issue.severity == "critical":
+        for security_issue in self.security_issues:
+            if security_issue.severity == "critical":
                 base_score -= 20
-            elif issue.severity == "high":
+            elif security_issue.severity == "high":
                 base_score -= 10
-            elif issue.severity == "medium":
+            elif security_issue.severity == "medium":
                 base_score -= 5
             else:
                 base_score -= 2
 
-        for issue in self.performance_issues:
-            if issue.severity == "critical":
+        for performance_issue in self.performance_issues:
+            if performance_issue.severity == "critical":
                 base_score -= 15
-            elif issue.severity == "high":
+            elif performance_issue.severity == "high":
                 base_score -= 8
-            elif issue.severity == "medium":
+            elif performance_issue.severity == "medium":
                 base_score -= 4
             else:
                 base_score -= 1
 
-        for issue in self.architecture_issues:
-            if issue.severity == "critical":
+        for architecture_issue in self.architecture_issues:
+            if architecture_issue.severity == "critical":
                 base_score -= 15
-            elif issue.severity == "high":
+            elif architecture_issue.severity == "high":
                 base_score -= 8
-            elif issue.severity == "medium":
+            elif architecture_issue.severity == "medium":
                 base_score -= 4
             else:
                 base_score -= 1
 
         return max(0, base_score)
 
+    @property
+    def passed(self) -> bool:
+        """红队是否通过（无 critical 且得分达到阈值）"""
+        return self.critical_count == 0 and self.total_score >= self.pass_threshold
+
+    @property
+    def blocking_reasons(self) -> list[str]:
+        reasons: list[str] = []
+        if self.critical_count > 0:
+            reasons.append(f"存在 {self.critical_count} 个 critical 问题")
+        if self.total_score < self.pass_threshold:
+            reasons.append(f"红队评分 {self.total_score} 低于阈值 {self.pass_threshold}")
+        return reasons
+
     def to_markdown(self) -> str:
         """生成 Markdown 报告"""
         lines = [
             f"# {self.project_name} - 红队审查报告",
             "",
-            f"> **审查时间**: 自动生成",
+            "> **审查时间**: 自动生成",
             f"> **总分**: {self.total_score}/100",
+            f"> **通过阈值**: {self.pass_threshold}",
             "",
             "---",
             "",
@@ -131,7 +148,7 @@ class RedTeamReport:
             "",
         ]
 
-        if self.total_score < 60:
+        if not self.passed:
             lines.append("**状态**: 未通过质量门禁 - 需要修复关键问题后重新审查")
         elif self.total_score < 80:
             lines.append("**状态**: 有条件通过 - 建议修复 High 级别问题")
@@ -170,9 +187,9 @@ class RedTeamReport:
         else:
             lines.append("| 严重性 | 类别 | 描述 | 影响 | 建议 |")
             lines.append("|:---|:---|:---|:---|:---|")
-            for issue in self.performance_issues:
+            for performance_issue in self.performance_issues:
                 lines.append(
-                    f"| {issue.severity} | {issue.category} | {issue.description} | {issue.impact} | {issue.recommendation} |"
+                    f"| {performance_issue.severity} | {performance_issue.category} | {performance_issue.description} | {performance_issue.impact} | {performance_issue.recommendation} |"
                 )
 
         lines.extend(["", "---", ""])
@@ -188,10 +205,10 @@ class RedTeamReport:
         else:
             lines.append("| 严重性 | 类别 | 描述 | 需要 ADR | 建议 |")
             lines.append("|:---|:---|:---|:---:|:---|")
-            for issue in self.architecture_issues:
-                adr = "是" if issue.adr_needed else "否"
+            for architecture_issue in self.architecture_issues:
+                adr = "是" if architecture_issue.adr_needed else "否"
                 lines.append(
-                    f"| {issue.severity} | {issue.category} | {issue.description} | {adr} | {issue.recommendation} |"
+                    f"| {architecture_issue.severity} | {architecture_issue.category} | {architecture_issue.description} | {adr} | {architecture_issue.recommendation} |"
                 )
 
         lines.extend(["", "---", ""])
@@ -204,7 +221,7 @@ class RedTeamReport:
             "",
         ])
 
-        p0_issues = [
+        p0_issues: list[SecurityIssue | PerformanceIssue | ArchitectureIssue] = [
             i for i in self.security_issues + self.performance_issues + self.architecture_issues
             if i.severity in ("critical", "high")
         ]
@@ -212,10 +229,10 @@ class RedTeamReport:
         if not p0_issues:
             lines.append("无 P0 级别问题。")
         else:
-            for idx, issue in enumerate(p0_issues, 1):
-                issue_type = "安全" if issue in self.security_issues else "性能" if issue in self.performance_issues else "架构"
-                lines.append(f"{idx}. [{issue_type}] {issue.description}")
-                lines.append(f"   - 建议: {issue.recommendation}")
+            for idx, issue_item in enumerate(p0_issues, 1):
+                issue_type = "安全" if issue_item in self.security_issues else "性能" if issue_item in self.performance_issues else "架构"
+                lines.append(f"{idx}. [{issue_type}] {issue_item.description}")
+                lines.append(f"   - 建议: {issue_item.recommendation}")
                 lines.append("")
 
         lines.extend([
@@ -223,7 +240,7 @@ class RedTeamReport:
             "",
         ])
 
-        p1_issues = [
+        p1_issues: list[SecurityIssue | PerformanceIssue | ArchitectureIssue] = [
             i for i in self.security_issues + self.performance_issues + self.architecture_issues
             if i.severity == "medium"
         ]
@@ -231,10 +248,10 @@ class RedTeamReport:
         if not p1_issues:
             lines.append("无 P1 级别问题。")
         else:
-            for idx, issue in enumerate(p1_issues, 1):
-                issue_type = "安全" if issue in self.security_issues else "性能" if issue in self.performance_issues else "架构"
-                lines.append(f"{idx}. [{issue_type}] {issue.description}")
-                lines.append(f"   - 建议: {issue.recommendation}")
+            for idx, issue_item in enumerate(p1_issues, 1):
+                issue_type = "安全" if issue_item in self.security_issues else "性能" if issue_item in self.performance_issues else "架构"
+                lines.append(f"{idx}. [{issue_type}] {issue_item.description}")
+                lines.append(f"   - 建议: {issue_item.recommendation}")
                 lines.append("")
 
         return "\n".join(lines)
@@ -263,7 +280,12 @@ class RedTeamReviewer:
         self.frontend = tech_stack.get("frontend", "react")
         self.backend = tech_stack.get("backend", "node")
         self.domain = tech_stack.get("domain", "")
-        self._source_file_cache: Optional[list[tuple[Path, str]]] = None
+        self._source_file_cache: list[tuple[Path, str]] | None = None
+        self.enable_tool_scans = os.getenv("SUPER_DEV_ENABLE_TOOL_SCANS", "1").strip().lower() not in {
+            "0",
+            "false",
+            "no",
+        }
 
     def review(self) -> RedTeamReport:
         """执行完整红队审查"""
@@ -327,14 +349,14 @@ class RedTeamReviewer:
                 break
 
             for category, pattern, cwe, recommendation in dangerous_rules:
-                match = pattern.search(content)
-                if not match:
+                rule_match = pattern.search(content)
+                if not rule_match:
                     continue
                 issue_key = (str(file_path), category)
                 if issue_key in issue_keys:
                     continue
                 issue_keys.add(issue_key)
-                line_no = self._line_number_from_offset(content, match.start())
+                line_no = self._line_number_from_offset(content, rule_match.start())
                 issues.append(SecurityIssue(
                     severity="high",
                     category=category,
@@ -390,6 +412,9 @@ class RedTeamReviewer:
                     cwe="CWE-200"
                 ),
             ])
+
+        if self.enable_tool_scans:
+            issues.extend(self._run_optional_security_tool_scans())
 
         return issues
 
@@ -466,8 +491,7 @@ class RedTeamReviewer:
         issues: list[ArchitectureIssue] = []
         source_files = self._iter_source_files_with_content()
 
-        tests_dir = self.project_dir / "tests"
-        if not tests_dir.exists():
+        if not self._has_test_assets(source_files):
             issues.append(ArchitectureIssue(
                 severity="high",
                 category="可维护性",
@@ -579,7 +603,7 @@ class RedTeamReviewer:
                 try:
                     resolved = path.resolve()
                 except Exception:
-                    continue
+                    resolved = path
                 if resolved in seen:
                     continue
                 seen.add(resolved)
@@ -622,3 +646,236 @@ class RedTeamReviewer:
 
     def _line_number_from_offset(self, content: str, start: int) -> int:
         return content.count("\n", 0, start) + 1
+
+    def _has_test_assets(self, source_files: list[tuple[Path, str]]) -> bool:
+        if (self.project_dir / "tests").exists():
+            return True
+        test_name_patterns = [
+            re.compile(r"^test_.*\.py$"),
+            re.compile(r".*_test\.py$"),
+            re.compile(r".*\.test\.(js|ts|jsx|tsx)$"),
+            re.compile(r".*\.spec\.(js|ts|jsx|tsx)$"),
+        ]
+        for file_path, _ in source_files:
+            name = file_path.name
+            if any(pattern.match(name) for pattern in test_name_patterns):
+                return True
+        return False
+
+    def _run_optional_security_tool_scans(self) -> list[SecurityIssue]:
+        issues: list[SecurityIssue] = []
+        issues.extend(self._scan_with_bandit())
+        issues.extend(self._scan_with_semgrep())
+        issues.extend(self._scan_with_npm_audit())
+        return issues
+
+    def _scan_with_bandit(self) -> list[SecurityIssue]:
+        if self.backend != "python":
+            return []
+
+        bandit_exec = shutil.which("bandit")
+        if not bandit_exec:
+            return []
+
+        targets = self._discover_bandit_targets()
+        if not targets:
+            return []
+
+        result = self._run_command(
+            [bandit_exec, "-r", *targets, "-f", "json", "-q"],
+            timeout=180,
+        )
+        if result["timed_out"]:
+            return [
+                SecurityIssue(
+                    severity="medium",
+                    category="Bandit",
+                    description="Bandit 扫描超时，建议拆分扫描范围或增加超时时间",
+                    recommendation="将 Bandit 拆分为增量扫描并在 CI 中并行执行",
+                    cwe="CWE-693",
+                )
+            ]
+
+        stdout = str(result["stdout"] or "")
+        if not stdout.strip():
+            return []
+
+        try:
+            payload = json.loads(stdout)
+        except Exception:
+            return []
+
+        findings = payload.get("results", [])
+        issues: list[SecurityIssue] = []
+        for finding in findings[:10]:
+            severity = self._map_tool_severity(str(finding.get("issue_severity", "medium")))
+            file_name = str(finding.get("filename", "unknown"))
+            line_no = finding.get("line_number")
+            issue_text = str(finding.get("issue_text", "Bandit 发现潜在安全风险"))
+            cwe_data = finding.get("issue_cwe", {})
+            cwe_id = None
+            if isinstance(cwe_data, dict) and cwe_data.get("id"):
+                cwe_id = f"CWE-{cwe_data.get('id')}"
+            issues.append(
+                SecurityIssue(
+                    severity=severity,
+                    category="Bandit",
+                    description=f"Bandit: {issue_text} ({Path(file_name).name}:{line_no})",
+                    recommendation="参考 Bandit 建议修复并补充安全回归测试",
+                    cwe=cwe_id,
+                    file_path=file_name,
+                    line=int(line_no) if isinstance(line_no, int) else None,
+                )
+            )
+        return issues
+
+    def _scan_with_semgrep(self) -> list[SecurityIssue]:
+        semgrep_exec = shutil.which("semgrep")
+        if not semgrep_exec:
+            return []
+
+        result = self._run_command(
+            [
+                semgrep_exec,
+                "--config",
+                "auto",
+                "--json",
+                "--quiet",
+                "--metrics=off",
+                ".",
+            ],
+            timeout=240,
+        )
+        if result["timed_out"]:
+            return []
+
+        stdout = str(result["stdout"] or "")
+        if not stdout.strip():
+            return []
+
+        try:
+            payload = json.loads(stdout)
+        except Exception:
+            return []
+
+        matches = payload.get("results", [])
+        issues: list[SecurityIssue] = []
+        for finding in matches[:12]:
+            extra = finding.get("extra", {}) if isinstance(finding.get("extra"), dict) else {}
+            severity = self._map_tool_severity(str(extra.get("severity", "medium")))
+            message = str(extra.get("message", "Semgrep 检测到潜在风险"))
+            path = str(finding.get("path", "unknown"))
+            start = finding.get("start", {})
+            line_no = start.get("line") if isinstance(start, dict) else None
+            issue_type = str(finding.get("check_id", "semgrep.rule"))
+            issues.append(
+                SecurityIssue(
+                    severity=severity,
+                    category="Semgrep",
+                    description=f"Semgrep({issue_type}): {message}",
+                    recommendation="按规则建议修复并补充针对性测试",
+                    cwe=None,
+                    file_path=path,
+                    line=int(line_no) if isinstance(line_no, int) else None,
+                )
+            )
+        return issues
+
+    def _scan_with_npm_audit(self) -> list[SecurityIssue]:
+        npm_exec = shutil.which("npm")
+        if not npm_exec:
+            return []
+
+        issues: list[SecurityIssue] = []
+        for target in (self.project_dir / "frontend", self.project_dir / "backend"):
+            package_json = target / "package.json"
+            if not package_json.exists():
+                continue
+
+            result = self._run_command(
+                [npm_exec, "--prefix", str(target), "audit", "--json"],
+                timeout=240,
+            )
+            if result["timed_out"]:
+                continue
+
+            stdout = str(result["stdout"] or "")
+            if not stdout.strip():
+                continue
+
+            try:
+                payload = json.loads(stdout)
+            except Exception:
+                continue
+
+            metadata = payload.get("metadata", {}) if isinstance(payload.get("metadata"), dict) else {}
+            vuln = metadata.get("vulnerabilities", {}) if isinstance(metadata.get("vulnerabilities"), dict) else {}
+            critical = int(vuln.get("critical", 0) or 0)
+            high = int(vuln.get("high", 0) or 0)
+            if critical <= 0 and high <= 0:
+                continue
+
+            severity = "critical" if critical > 0 else "high"
+            issues.append(
+                SecurityIssue(
+                    severity=severity,
+                    category="依赖漏洞",
+                    description=f"{target.name} 依赖存在漏洞: critical={critical}, high={high}",
+                    recommendation="执行 npm audit fix，并升级高危依赖版本后回归验证",
+                    cwe="CWE-1104",
+                    file_path=str(package_json),
+                    line=None,
+                )
+            )
+
+        return issues
+
+    def _discover_bandit_targets(self) -> list[str]:
+        candidates = ["super_dev", "backend", "src", "app", "server", "api", "services"]
+        targets: list[str] = []
+        for item in candidates:
+            path = self.project_dir / item
+            if path.exists() and path.is_dir():
+                targets.append(str(path))
+        return targets
+
+    def _map_tool_severity(self, raw: str) -> str:
+        value = raw.strip().lower()
+        if value in {"error", "critical"}:
+            return "critical"
+        if value in {"warning", "high"}:
+            return "high"
+        if value in {"info", "low"}:
+            return "low"
+        return "medium"
+
+    def _run_command(self, cmd: list[str], timeout: int = 120) -> dict[str, object]:
+        try:
+            completed = subprocess.run(
+                cmd,
+                cwd=str(self.project_dir),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )  # nosec B603
+            return {
+                "returncode": completed.returncode,
+                "stdout": completed.stdout or "",
+                "stderr": completed.stderr or "",
+                "timed_out": False,
+            }
+        except subprocess.TimeoutExpired as e:
+            return {
+                "returncode": -1,
+                "stdout": (e.stdout or ""),
+                "stderr": (e.stderr or ""),
+                "timed_out": True,
+            }
+        except Exception as e:
+            return {
+                "returncode": -1,
+                "stdout": "",
+                "stderr": str(e),
+                "timed_out": False,
+            }

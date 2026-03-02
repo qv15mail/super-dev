@@ -4,6 +4,18 @@
 
 set -e
 
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT_DIR"
+
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN="python3"
+elif command -v python >/dev/null 2>&1; then
+    PYTHON_BIN="python"
+else
+    echo "❌ python3/python not found in PATH"
+    exit 1
+fi
+
 echo "🚀 Super Dev 发布脚本"
 echo "======================"
 echo ""
@@ -60,12 +72,17 @@ echo -e "${YELLOW}🧹 清理旧的构建...${NC}"
 rm -rf dist/ build/ *.egg-info
 echo -e "${GREEN}✅ 清理完成${NC}"
 
+# 5.5 交付门禁 smoke
+echo -e "${YELLOW}🔐 验证交付门禁（smoke）...${NC}"
+"$PYTHON_BIN" scripts/check_delivery_ready.py --smoke --project-dir "$ROOT_DIR"
+echo -e "${GREEN}✅ 交付门禁通过${NC}"
+
 # 6. 构建包
 echo -e "${YELLOW}📦 构建包...${NC}"
 if command -v uv &> /dev/null; then
     uv build
 else
-    python -m build
+    "$PYTHON_BIN" -m build
 fi
 echo -e "${GREEN}✅ 构建完成${NC}"
 

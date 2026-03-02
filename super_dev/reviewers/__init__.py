@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 审查模块 - 红队审查、代码审查、质量检查
 
@@ -7,9 +6,9 @@
 创建时间：2025-12-30
 """
 
-from .redteam import RedTeamReviewer
 from .code_review import CodeReviewGenerator
 from .quality_gate import QualityGateChecker
+from .redteam import RedTeamReviewer
 
 __all__ = [
     "RedTeamReviewer",

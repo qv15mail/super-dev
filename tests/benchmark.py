@@ -1,14 +1,13 @@
-# -*- coding: utf-8 -*-
 """
 Super Dev 性能基准测试
 用于测量 CLI 命令和工作流的执行性能
 """
 
 import asyncio
-import time
 import statistics
+import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, List
 
 try:
     from rich.console import Console
@@ -18,7 +17,7 @@ except ImportError:
     RICH_AVAILABLE = False
 
 from super_dev.config import ConfigManager, ProjectConfig
-from super_dev.orchestrator import WorkflowEngine, Phase, WorkflowContext
+from super_dev.orchestrator import Phase, WorkflowContext, WorkflowEngine
 
 
 class PerformanceBenchmark:
@@ -119,7 +118,7 @@ class PerformanceBenchmark:
         all_pass = True
 
         if RICH_AVAILABLE:
-            from rich.panel import Panel
+            pass
 
         for name, max_ms in thresholds.items():
             if name not in self.results:
@@ -246,8 +245,8 @@ class BenchmarkSuite:
 
 def main():
     """主函数"""
-    import tempfile
     import shutil
+    import tempfile
 
     # 创建临时目录
     temp_dir = Path(tempfile.mkdtemp())

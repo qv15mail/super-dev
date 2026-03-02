@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 知识增强模块
 
@@ -8,10 +7,14 @@
 
 from __future__ import annotations
 
+import json
 import re
+import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+import requests  # type: ignore[import-untyped]
 
 
 @dataclass
@@ -183,9 +186,12 @@ class KnowledgeAugmenter:
 
         items: list[KnowledgeItem] = []
         for file_path in self._iter_local_files():
+            content = ""
             try:
                 content = file_path.read_text(encoding="utf-8", errors="ignore")
             except Exception:
+                content = ""
+            if not content:
                 continue
 
             lowered = content.lower()
@@ -235,6 +241,12 @@ class KnowledgeAugmenter:
         if not self.web_enabled:
             return []
 
+        results = self._collect_web_items_ddgs(query=query, max_results=max_results)
+        if results:
+            return results
+        return self._collect_web_items_duckduckgo(query=query, max_results=max_results)
+
+    def _collect_web_items_ddgs(self, query: str, max_results: int) -> list[KnowledgeItem]:
         try:
             from ddgs import DDGS  # type: ignore
         except Exception:
@@ -260,6 +272,66 @@ class KnowledgeAugmenter:
             return []
 
         return results
+
+    def _collect_web_items_duckduckgo(self, query: str, max_results: int) -> list[KnowledgeItem]:
+        encoded_query = urllib.parse.quote(query)
+        url = (
+            "https://api.duckduckgo.com/"
+            f"?q={encoded_query}&format=json&no_html=1&skip_disambig=1"
+        )
+
+        try:
+            response = requests.get(url, timeout=6)
+            if response.status_code >= 400:
+                return []
+            payload = response.text
+            data = json.loads(payload)
+        except Exception:
+            return []
+
+        results: list[KnowledgeItem] = []
+        abstract = str(data.get("Abstract", "")).strip()
+        if abstract:
+            results.append(
+                KnowledgeItem(
+                    source="web",
+                    title=str(data.get("Heading", "DuckDuckGo Result")).strip() or "DuckDuckGo Result",
+                    snippet=abstract[:220],
+                    link=str(data.get("AbstractURL", "")).strip(),
+                    score=float(max_results),
+                )
+            )
+
+        related = data.get("RelatedTopics", [])
+        for item in related:
+            if len(results) >= max_results:
+                break
+            if not isinstance(item, dict):
+                continue
+            if "Topics" in item and isinstance(item.get("Topics"), list):
+                sub_topics = item.get("Topics", [])
+            else:
+                sub_topics = [item]
+
+            for topic in sub_topics:
+                if len(results) >= max_results:
+                    break
+                if not isinstance(topic, dict):
+                    continue
+                text = str(topic.get("Text", "")).strip()
+                if not text:
+                    continue
+                results.append(
+                    KnowledgeItem(
+                        source="web",
+                        title=text[:80],
+                        snippet=text[:220],
+                        link=str(topic.get("FirstURL", "")).strip(),
+                        score=float(max_results - len(results)),
+                    )
+                )
+
+        return results[:max_results]
 
     def _compose_enriched_requirement(
         self,

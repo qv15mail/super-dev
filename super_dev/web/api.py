@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 开发：Excellent（11964948@qq.com）
 功能：Super Dev Web API - FastAPI 后端
@@ -8,33 +7,35 @@
 最后修改：2025-12-30
 """
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-from pathlib import Path
-from typing import Optional, List, Any
-from datetime import datetime, timezone
-from threading import Lock
 import asyncio
 import json
 import os
 import re
 import zipfile
+from datetime import datetime, timezone
+from pathlib import Path
+from threading import Lock
+from typing import Any, Literal, cast
+
 import uvicorn
+from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from super_dev.config import ConfigManager
 from super_dev.deployers import CICDGenerator
-from super_dev.orchestrator import WorkflowEngine, Phase
 from super_dev.experts import (
-    list_experts as list_expert_catalog,
     has_expert,
-    save_expert_advice,
     list_expert_advice_history,
     read_expert_advice,
+    save_expert_advice,
 )
-
+from super_dev.experts import (
+    list_experts as list_expert_catalog,
+)
+from super_dev.orchestrator import Phase, WorkflowContext, WorkflowEngine
 
 # ==================== 数据模型 ====================
 
@@ -59,21 +60,30 @@ class ProjectConfigResponse(BaseModel):
     backend: str
     domain: str
     quality_gate: int
-    phases: List[str]
-    experts: List[str]
+    phases: list[str]
+    experts: list[str]
 
 
 class WorkflowRunRequest(BaseModel):
     """工作流运行请求"""
-    phases: Optional[List[str]] = None
-    quality_gate: Optional[int] = None
+    phases: list[str] | None = None
+    quality_gate: int | None = None
+    name: str | None = None
+    description: str | None = None
+    platform: str | None = None
+    frontend: str | None = None
+    backend: str | None = None
+    domain: str | None = None
+    cicd: str | None = None
+    orm: str | None = None
+    offline: bool = False
 
 
 class WorkflowRunResponse(BaseModel):
     """工作流运行响应"""
     status: str
     message: str
-    run_id: Optional[str] = None
+    run_id: str | None = None
 
 
 class ExpertAdviceRequest(BaseModel):
@@ -86,11 +96,11 @@ class DeployGenerateRequest(BaseModel):
     cicd_platform: str = "all"
     include_runtime: bool = True
     overwrite: bool = True
-    name: Optional[str] = None
-    platform: Optional[str] = None
-    frontend: Optional[str] = None
-    backend: Optional[str] = None
-    domain: Optional[str] = None
+    name: str | None = None
+    platform: str | None = None
+    frontend: str | None = None
+    backend: str | None = None
+    domain: str | None = None
 
 
 class DeployRemediationExportRequest(BaseModel):
@@ -99,7 +109,7 @@ class DeployRemediationExportRequest(BaseModel):
     only_missing: bool = True
     split_by_platform: bool = True
     env_file_name: str = ".env.deploy.example"
-    checklist_file_name: Optional[str] = None
+    checklist_file_name: str | None = None
 
 
 # ==================== FastAPI 应用 ====================
@@ -107,7 +117,7 @@ class DeployRemediationExportRequest(BaseModel):
 app = FastAPI(
     title="Super Dev API",
     description="顶级 AI 开发战队 - Web API",
-    version="1.0.0"
+    version="2.0.0"
 )
 
 # CORS 配置
@@ -123,6 +133,9 @@ app.add_middleware(
 
 _RUN_STORE: dict[str, dict[str, Any]] = {}
 _RUN_STORE_LOCK = Lock()
+
+CICDPlatform = Literal["github", "gitlab", "jenkins", "azure", "bitbucket", "all"]
+VALID_CICD_PLATFORMS: set[str] = {"github", "gitlab", "jenkins", "azure", "bitbucket", "all"}
 
 _DEPLOY_CICD_FILE_MAP: dict[str, list[str]] = {
     "github": [".github/workflows/ci.yml", ".github/workflows/cd.yml"],
@@ -234,7 +247,7 @@ def _persist_run_state(project_dir: Path, run_id: str, run: dict[str, Any]) -> N
     )
 
 
-def _load_persisted_run_state(project_dir: Path, run_id: str) -> Optional[dict[str, Any]]:
+def _load_persisted_run_state(project_dir: Path, run_id: str) -> dict[str, Any] | None:
     file_path = _run_state_file(project_dir, run_id)
     if not file_path.exists():
         return None
@@ -245,7 +258,7 @@ def _load_persisted_run_state(project_dir: Path, run_id: str) -> Optional[dict[s
     return data if isinstance(data, dict) else None
 
 
-def _store_run_state(run_id: str, persist_dir: Optional[Path] = None, **fields: Any) -> None:
+def _store_run_state(run_id: str, persist_dir: Path | None = None, **fields: Any) -> None:
     with _RUN_STORE_LOCK:
         run = _RUN_STORE.setdefault(run_id, {})
         run.update(fields)
@@ -255,7 +268,7 @@ def _store_run_state(run_id: str, persist_dir: Optional[Path] = None, **fields: 
             _persist_run_state(persist_dir, run_id, run)
 
 
-def _get_run_state(run_id: str, project_dir: Optional[Path] = None) -> Optional[dict[str, Any]]:
+def _get_run_state(run_id: str, project_dir: Path | None = None) -> dict[str, Any] | None:
     with _RUN_STORE_LOCK:
         run = _RUN_STORE.get(run_id)
         if run is not None:
@@ -282,12 +295,15 @@ def _list_persisted_runs(project_dir: Path, limit: int = 20) -> list[dict[str, A
     runs: list[dict[str, Any]] = []
     files = sorted(state_dir.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
     for file_path in files[:limit]:
+        data: dict[str, Any] | None = None
         try:
-            data = json.loads(file_path.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                runs.append(data)
+            loaded = json.loads(file_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                data = loaded
         except Exception:
-            continue
+            data = None
+        if data is not None:
+            runs.append(data)
     return runs
 
 
@@ -302,7 +318,7 @@ def _sanitize_run_payload(value: Any, depth: int = 0) -> Any:
     if depth > 4:
         return "<truncated>"
 
-    if value is None or isinstance(value, (bool, int, float)):
+    if value is None or isinstance(value, bool | int | float):
         return value
 
     if isinstance(value, str):
@@ -320,7 +336,7 @@ def _sanitize_run_payload(value: Any, depth: int = 0) -> Any:
             out[str(k)] = _sanitize_run_payload(v, depth + 1)
         return out
 
-    if isinstance(value, (list, tuple, set)):
+    if isinstance(value, list | tuple | set):
         out_list = []
         for idx, item in enumerate(value):
             if idx >= 120:
@@ -342,6 +358,12 @@ def _resolve_deploy_targets(cicd_platform: str, include_runtime: bool) -> list[s
     if include_runtime:
         selected.extend(_DEPLOY_RUNTIME_FILES)
     return selected
+
+
+def _to_cicd_platform(value: str) -> CICDPlatform:
+    if value not in VALID_CICD_PLATFORMS:
+        raise ValueError(value)
+    return cast(CICDPlatform, value)
 
 
 def _resolve_deploy_env_hints(cicd_platform: str) -> list[dict[str, str]]:
@@ -503,8 +525,8 @@ def _render_deploy_checklist_markdown(
 
     lines.extend(["", "## Manual Requirements", ""])
     if manual_requirements:
-        for item in manual_requirements:
-            lines.append(f"- {item}")
+        for requirement in manual_requirements:
+            lines.append(f"- {requirement}")
     else:
         lines.append("- No manual requirements.")
 
@@ -621,7 +643,7 @@ def _generate_deploy_remediation_files(
 @app.get("/api/health")
 async def health_check():
     """健康检查"""
-    return {"status": "healthy", "version": "1.0.0"}
+    return {"status": "healthy", "version": "2.0.0"}
 
 
 @app.get("/api/config")
@@ -720,6 +742,7 @@ async def run_workflow(
         # 更新质量门禁
         if request.quality_gate is not None:
             manager.update(quality_gate=request.quality_gate)
+        config = manager.config
 
         # 解析阶段
         phases = None
@@ -786,8 +809,25 @@ async def run_workflow(
             )
             try:
                 engine = WorkflowEngine(project_dir_path)
+                context = WorkflowContext(
+                    project_dir=project_dir_path,
+                    config=manager,
+                    user_input={
+                        "name": request.name or config.name or project_dir_path.name,
+                        "description": request.description if request.description is not None else config.description,
+                        "platform": request.platform or config.platform,
+                        "frontend": request.frontend or config.frontend,
+                        "backend": request.backend or config.backend,
+                        "domain": request.domain if request.domain is not None else config.domain,
+                        "cicd": request.cicd or "github",
+                        "orm": request.orm,
+                        "offline": request.offline,
+                        "quality_threshold": request.quality_gate,
+                    },
+                )
                 results = await engine.run(
                     phases=phases,
+                    context=context,
                     stop_requested=lambda: _is_cancel_requested(run_id),
                 )
 
@@ -931,7 +971,7 @@ async def list_workflow_artifacts(run_id: str, project_dir: str = ".") -> dict:
     items = []
     for file_path in artifact_files:
         try:
-            relative = file_path.relative_to(run_project_dir)
+            relative = str(file_path.relative_to(run_project_dir))
         except ValueError:
             relative = file_path.name
         items.append(
@@ -971,10 +1011,10 @@ async def download_workflow_artifacts_archive(run_id: str, project_dir: str = ".
     with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for file_path in artifact_files:
             try:
-                arcname = file_path.relative_to(run_project_dir)
+                arcname = str(file_path.relative_to(run_project_dir))
             except ValueError:
                 arcname = file_path.name
-            zf.write(file_path, arcname=str(arcname))
+            zf.write(file_path, arcname=arcname)
 
     return FileResponse(
         path=archive_path,
@@ -1250,10 +1290,10 @@ async def download_deploy_remediation_archive(
             if not file_path.exists():
                 continue
             try:
-                arcname = file_path.relative_to(project_dir_path)
+                arcname = str(file_path.relative_to(project_dir_path))
             except ValueError:
                 arcname = file_path.name
-            zf.write(file_path, arcname=str(arcname))
+            zf.write(file_path, arcname=arcname)
 
     return FileResponse(
         path=zip_path,
@@ -1268,12 +1308,12 @@ async def generate_deploy_configs(
     project_dir: str = ".",
 ) -> dict:
     """生成部署配置（CI/CD + 可选 Docker/K8s）。"""
-    valid_platforms = {"github", "gitlab", "jenkins", "azure", "bitbucket", "all"}
-    if request.cicd_platform not in valid_platforms:
+    if request.cicd_platform not in VALID_CICD_PLATFORMS:
         raise HTTPException(
             status_code=400,
             detail=f"不支持的 cicd_platform: {request.cicd_platform}",
         )
+    platform = _to_cicd_platform(request.cicd_platform)
 
     project_dir_path = Path(project_dir).resolve()
     config_manager = ConfigManager(project_dir_path)
@@ -1291,7 +1331,7 @@ async def generate_deploy_configs(
         project_dir=project_dir_path,
         name=project_name,
         tech_stack=tech_stack,
-        platform=request.cicd_platform,
+        platform=platform,
     )
     generated_files = generator.generate()
 
@@ -1346,11 +1386,14 @@ _mount_frontend_if_present()
 
 def main():
     """启动 API 服务器"""
+    host = os.getenv("SUPER_DEV_API_HOST", "127.0.0.1")
+    port = int(os.getenv("SUPER_DEV_API_PORT", "8000"))
+    reload_enabled = os.getenv("SUPER_DEV_API_RELOAD", "true").strip().lower() in {"1", "true", "yes", "on"}
     uvicorn.run(
         "super_dev.web.api:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
+        host=host,
+        port=port,
+        reload=reload_enabled,
         log_level="info"
     )
 

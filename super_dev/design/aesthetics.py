@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 开发：Excellent（11964948@qq.com）
 功能：美学引擎 - 生成独特的设计美学方向
@@ -8,9 +7,9 @@
 """
 
 import random
-from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
+from typing import cast
 
 
 class AestheticDirectionType(str, Enum):
@@ -75,10 +74,10 @@ class Typography:
     """字体配置"""
     display: str  # 标题字体
     body: str  # 正文字体
-    accent: Optional[str] = None  # 强调字体
-    mono: Optional[str] = None  # 等宽字体
+    accent: str | None = None  # 强调字体
+    mono: str | None = None  # 等宽字体
 
-    def get_css_imports(self) -> List[str]:
+    def get_css_imports(self) -> list[str]:
         """获取 Google Fonts 导入"""
         fonts = [self.display, self.body]
         if self.accent:
@@ -100,11 +99,11 @@ class ColorPalette:
     text_secondary: str  # 次要文本色
 
     # 可选的高级色彩
-    gradient_start: Optional[str] = None
-    gradient_end: Optional[str] = None
-    noise_texture: Optional[str] = None
+    gradient_start: str | None = None
+    gradient_end: str | None = None
+    noise_texture: str | None = None
 
-    def get_css_variables(self) -> Dict[str, str]:
+    def get_css_variables(self) -> dict[str, str]:
         """获取 CSS 变量"""
         vars = {
             "--color-primary": self.primary,
@@ -154,7 +153,7 @@ class VisualDetails:
     shadows: str  # 阴影风格
     borders: str  # 边框风格
     corner_radius: str  # 圆角
-    textures: List[str]  # 纹理列表
+    textures: list[str]  # 纹理列表
 
     # 特效
     grain_overlay: bool = False
@@ -213,7 +212,7 @@ class AestheticEngine:
     ]
 
     # 预设美学方向
-    AESTHETIC_PRESETS: Dict[AestheticDirectionType, Dict] = {
+    AESTHETIC_PRESETS: dict[AestheticDirectionType, dict] = {
         AestheticDirectionType.BRUTALIST_MINIMAL: {
             "description": "原始极简主义 - 粗糙、直接、无装饰",
             "typography": {
@@ -366,20 +365,23 @@ class AestheticEngine:
         },
     }
 
-    def __init__(self, seed: Optional[int] = None):
+    def __init__(self, seed: int | None = None):
         """
         初始化美学引擎
 
         Args:
             seed: 随机种子，用于可重现的结果
         """
+        self._rng: random.Random | random.SystemRandom
         if seed is not None:
-            random.seed(seed)
+            self._rng = random.Random(seed)  # nosec B311
+        else:
+            self._rng = random.SystemRandom()
 
     def generate_direction(
         self,
-        direction: Optional[AestheticDirectionType] = None,
-        custom_context: Optional[str] = None,
+        direction: AestheticDirectionType | None = None,
+        custom_context: str | None = None,
     ) -> AestheticDirection:
         """
         生成美学方向
@@ -392,7 +394,7 @@ class AestheticEngine:
             完整的美学方向配置
         """
         if direction is None:
-            direction = random.choice(list(AestheticDirectionType))
+            direction = self._rng.choice(list(AestheticDirectionType))
 
         preset = self.AESTHETIC_PRESETS.get(direction)
         if not preset:
@@ -409,10 +411,10 @@ class AestheticEngine:
             name=direction.value,
             description=f"Custom {direction.value} aesthetic",
             typography=Typography(
-                display=random.choice(self.DISPLAY_FONTS),
-                body=random.choice(self.BODY_FONTS),
-                accent=random.choice(self.ACCENT_FONTS) if random.random() > 0.5 else None,
-                mono=random.choice(self.MONO_FONTS),
+                display=self._rng.choice(self.DISPLAY_FONTS),
+                body=self._rng.choice(self.BODY_FONTS),
+                accent=self._rng.choice(self.ACCENT_FONTS) if self._rng.random() > 0.5 else None,
+                mono=self._rng.choice(self.MONO_FONTS),
             ),
             colors=ColorPalette(
                 primary=self._random_color(),
@@ -420,37 +422,37 @@ class AestheticEngine:
                 accent=self._random_color(),
                 background=self._random_color(light=True),
                 surface=self._random_color(light=True),
-                text="#000000" if random.random() > 0.5 else "#FFFFFF",
+                text="#000000" if self._rng.random() > 0.5 else "#FFFFFF",
                 text_secondary="#666666",
             ),
             animation=AnimationStyle(
-                easing=random.choice([
+                easing=self._rng.choice([
                     "ease", "ease-in", "ease-out", "ease-in-out",
                     "cubic-bezier(0.4, 0, 0.2, 1)",
                     "cubic-bezier(0.68, -0.55, 0.265, 1.55)",
                 ]),
-                duration=f"{random.uniform(0.2, 0.8):.1f}s",
-                stagger=random.random() > 0.3,
-                micro_interactions=random.random() > 0.2,
-                scroll_trigger=random.random() > 0.5,
+                duration=f"{self._rng.uniform(0.2, 0.8):.1f}s",
+                stagger=self._rng.random() > 0.3,
+                micro_interactions=self._rng.random() > 0.2,
+                scroll_trigger=self._rng.random() > 0.5,
             ),
             layout=LayoutPrinciples(
-                grid_system=random.choice(["8pt", "12pt", "baseline"]),
-                asymmetry=random.random() > 0.5,
-                overlap=random.random() > 0.7,
-                diagonal_flow=random.random() > 0.8,
+                grid_system=self._rng.choice(["8pt", "12pt", "baseline"]),
+                asymmetry=self._rng.random() > 0.5,
+                overlap=self._rng.random() > 0.7,
+                diagonal_flow=self._rng.random() > 0.8,
             ),
             details=VisualDetails(
-                shadows=random.choice(["none", "subtle", "medium", "dramatic"]),
-                borders=random.choice(["none", "thin", "medium", "thick"]),
-                corner_radius=random.choice(["0", "4px", "8px", "16px", "pill"]),
+                shadows=self._rng.choice(["none", "subtle", "medium", "dramatic"]),
+                borders=self._rng.choice(["none", "thin", "medium", "thick"]),
+                corner_radius=self._rng.choice(["0", "4px", "8px", "16px", "pill"]),
                 textures=[],
             ),
             differentiation="Unique custom aesthetic",
         )
 
     def _build_from_preset(
-        self, direction: AestheticDirectionType, preset: Dict
+        self, direction: AestheticDirectionType, preset: dict
     ) -> AestheticDirection:
         """从预设构建美学方向"""
         typo_cfg = preset["typography"]
@@ -461,10 +463,10 @@ class AestheticEngine:
             name=direction.value,
             description=preset["description"],
             typography=Typography(
-                display=typo_cfg.get("display", random.choice(self.DISPLAY_FONTS)),
-                body=typo_cfg.get("body", random.choice(self.BODY_FONTS)),
+                display=typo_cfg.get("display", self._rng.choice(self.DISPLAY_FONTS)),
+                body=typo_cfg.get("body", self._rng.choice(self.BODY_FONTS)),
                 accent=typo_cfg.get("accent"),
-                mono=typo_cfg.get("mono", random.choice(self.MONO_FONTS)),
+                mono=typo_cfg.get("mono", self._rng.choice(self.MONO_FONTS)),
             ),
             colors=ColorPalette(**color_cfg),
             animation=AnimationStyle(**anim_cfg),
@@ -515,14 +517,14 @@ class AestheticEngine:
     def _random_color(self, light: bool = False) -> str:
         """生成随机颜色"""
         if light:
-            return f"#{random.randint(200, 255):02x}{random.randint(200, 255):02x}{random.randint(200, 255):02x}"
-        return f"#{random.randint(0, 255):02x}{random.randint(0, 255):02x}{random.randint(0, 255):02x}"
+            return f"#{self._rng.randint(200, 255):02x}{self._rng.randint(200, 255):02x}{self._rng.randint(200, 255):02x}"
+        return f"#{self._rng.randint(0, 255):02x}{self._rng.randint(0, 255):02x}{self._rng.randint(0, 255):02x}"
 
-    def list_directions(self) -> List[str]:
+    def list_directions(self) -> list[str]:
         """列出所有可用的美学方向"""
         return [d.value for d in AestheticDirectionType]
 
     def get_direction_description(self, direction: AestheticDirectionType) -> str:
         """获取美学方向的描述"""
         preset = self.AESTHETIC_PRESETS.get(direction, {})
-        return preset.get("description", direction.value)
+        return cast(str, preset.get("description", direction.value))

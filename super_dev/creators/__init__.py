@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Super Dev 项目创建器
 
@@ -12,9 +11,9 @@ from .creator import ProjectCreator
 from .document_generator import DocumentGenerator
 from .frontend_builder import FrontendScaffoldBuilder
 from .implementation_builder import ImplementationScaffoldBuilder
-from .spec_builder import SpecBuilder
 from .prompt_generator import AIPromptGenerator
 from .requirement_parser import RequirementParser
+from .spec_builder import SpecBuilder
 
 __all__ = [
     "ProjectCreator",

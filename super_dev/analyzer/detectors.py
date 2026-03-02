@@ -1,13 +1,10 @@
-# -*- coding: utf-8 -*-
 """
 Super Dev 项目类型检测器
 """
 
-import ast
 import json
 import re
 from pathlib import Path
-from typing import Literal
 
 # 尝试导入 TOML 解析库
 try:
@@ -80,14 +77,14 @@ def detect_project_type(project_path: Path) -> ProjectCategory:
     # 检查 Electron 项目
     if package_json.exists():
         try:
-            with open(package_json, "r", encoding="utf-8") as f:
+            with open(package_json, encoding="utf-8") as f:
                 data = json.load(f)
                 deps = data.get("dependencies", {})
                 dev_deps = data.get("devDependencies", {})
 
                 if "electron" in deps or "electron" in dev_deps:
                     return ProjectCategory.DESKTOP
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             pass
 
     return ProjectCategory.UNKNOWN
@@ -98,7 +95,7 @@ def _detect_node_project_type(project_path: Path) -> ProjectCategory:
     package_json = project_path / "package.json"
 
     try:
-        with open(package_json, "r", encoding="utf-8") as f:
+        with open(package_json, encoding="utf-8") as f:
             data = json.load(f)
             deps = data.get("dependencies", {})
             dev_deps = data.get("devDependencies", {})
@@ -134,7 +131,7 @@ def _detect_node_project_type(project_path: Path) -> ProjectCategory:
 
             return ProjectCategory.BACKEND  # 默认为后端
 
-    except (json.JSONDecodeError, IOError):
+    except (OSError, json.JSONDecodeError):
         return ProjectCategory.UNKNOWN
 
 
@@ -147,7 +144,7 @@ def _detect_python_project_type(project_path: Path) -> ProjectCategory:
 
     if requirements_txt.exists():
         try:
-            with open(requirements_txt, "r", encoding="utf-8") as f:
+            with open(requirements_txt, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if line and not line.startswith("#"):
@@ -155,7 +152,7 @@ def _detect_python_project_type(project_path: Path) -> ProjectCategory:
                         match = re.match(r"^([a-zA-Z0-9_-]+)", line)
                         if match:
                             dependencies.add(match.group(1).lower())
-        except IOError:
+        except OSError:
             pass
 
     if pyproject_toml.exists() and tomllib is not None:
@@ -165,7 +162,7 @@ def _detect_python_project_type(project_path: Path) -> ProjectCategory:
                 deps = data.get("project", {}).get("dependencies", [])
                 dependencies.update(d.lower().split(">=")[0].split("==")[0] for d in deps)
         except Exception:
-            pass
+            dependencies.update(set())
 
     # 检测 Web 框架
     web_frameworks = {
@@ -196,7 +193,7 @@ def _detect_php_project_type(project_path: Path) -> ProjectCategory:
     composer_json = project_path / "composer.json"
 
     try:
-        with open(composer_json, "r", encoding="utf-8") as f:
+        with open(composer_json, encoding="utf-8") as f:
             data = json.load(f)
             deps = data.get("require", {})
 
@@ -204,7 +201,7 @@ def _detect_php_project_type(project_path: Path) -> ProjectCategory:
             if any(fw in deps for fw in ["laravel/framework", "symfony/http-kernel"]):
                 return ProjectCategory.BACKEND
 
-    except (json.JSONDecodeError, IOError):
+    except (OSError, json.JSONDecodeError):
         pass
 
     return ProjectCategory.BACKEND
@@ -253,7 +250,7 @@ def _detect_node_tech_stack(project_path: Path, category: ProjectCategory) -> Te
     package_json = project_path / "package.json"
 
     try:
-        with open(package_json, "r", encoding="utf-8") as f:
+        with open(package_json, encoding="utf-8") as f:
             data = json.load(f)
             deps = data.get("dependencies", {})
             dev_deps = data.get("devDependencies", {})
@@ -346,7 +343,7 @@ def _detect_node_tech_stack(project_path: Path, category: ProjectCategory) -> Te
                 dependencies=dependencies,
             )
 
-    except (json.JSONDecodeError, IOError):
+    except (OSError, json.JSONDecodeError):
         return TechStack(
             category=category,
             language="javascript",
@@ -357,7 +354,6 @@ def _detect_node_tech_stack(project_path: Path, category: ProjectCategory) -> Te
 def _detect_python_tech_stack(project_path: Path, category: ProjectCategory) -> TechStack:
     """检测 Python 技术栈"""
     requirements_txt = project_path / "requirements.txt"
-    pyproject_toml = project_path / "pyproject.toml"
 
     dependencies = []
     framework = FrameworkType.UNKNOWN
@@ -366,7 +362,7 @@ def _detect_python_tech_stack(project_path: Path, category: ProjectCategory) -> 
     # 解析依赖
     if requirements_txt.exists():
         try:
-            with open(requirements_txt, "r", encoding="utf-8") as f:
+            with open(requirements_txt, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if line and not line.startswith("#"):
@@ -382,7 +378,7 @@ def _detect_python_tech_stack(project_path: Path, category: ProjectCategory) -> 
                                     type="prod",
                                 )
                             )
-        except IOError:
+        except OSError:
             pass
 
     # 检测框架
@@ -418,7 +414,7 @@ def _detect_go_tech_stack(project_path: Path, category: ProjectCategory) -> Tech
     dependencies = []
 
     try:
-        with open(go_mod, "r", encoding="utf-8") as f:
+        with open(go_mod, encoding="utf-8") as f:
             content = f.read()
             # 解析 require 部分
             require_match = re.search(r"require \((.*?)\)", content, re.DOTALL)
@@ -451,7 +447,7 @@ def _detect_go_tech_stack(project_path: Path, category: ProjectCategory) -> Tech
             dependencies=dependencies,
         )
 
-    except IOError:
+    except OSError:
         return TechStack(
             category=category,
             language="go",

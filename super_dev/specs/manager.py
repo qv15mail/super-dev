@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Spec-Driven Development 管理器
 
@@ -8,14 +7,22 @@ Spec-Driven Development 管理器
 创建时间：2025-12-30
 """
 
-import yaml
-from pathlib import Path
-from typing import Optional
 from datetime import datetime
+from pathlib import Path
+
+import yaml  # type: ignore[import-untyped]
 
 from .models import (
-    Spec, Requirement, Scenario, Change, ChangeStatus,
-    Proposal, Task, TaskStatus, SpecDelta, DeltaType
+    Change,
+    ChangeStatus,
+    DeltaType,
+    Proposal,
+    Requirement,
+    Scenario,
+    Spec,
+    SpecDelta,
+    Task,
+    TaskStatus,
 )
 
 
@@ -36,7 +43,7 @@ class SpecManager:
         """获取规范文件路径"""
         return self.specs_dir / spec_name / "spec.md"
 
-    def load_spec(self, spec_name: str) -> Optional[Spec]:
+    def load_spec(self, spec_name: str) -> Spec | None:
         """加载规范"""
         spec_path = self.get_spec_path(spec_name)
         if not spec_path.exists():
@@ -96,7 +103,9 @@ class SpecManager:
                 spec.purpose += line.strip() + "\n"
             elif current_section == "requirement" and current_req:
                 if line.strip().startswith(("SHALL", "MUST", "SHOULD", "MAY")):
-                    current_req.description = line.strip()
+                    parts = line.strip().split(" ", 1)
+                    current_req.keyword = parts[0]
+                    current_req.description = parts[1] if len(parts) > 1 else ""
                 elif line.startswith("- GIVEN"):
                     if current_req.scenarios:
                         current_req.scenarios[-1].given = line[7:].strip()
@@ -131,7 +140,7 @@ class ChangeManager:
         """获取变更目录路径"""
         return self.changes_dir / change_id
 
-    def load_change(self, change_id: str) -> Optional[Change]:
+    def load_change(self, change_id: str) -> Change | None:
         """加载变更"""
         change_path = self.get_change_path(change_id)
         if not change_path.exists():
@@ -199,7 +208,7 @@ class ChangeManager:
                 "updated_at": change.updated_at.isoformat()
             }, f, allow_unicode=True)
 
-    def list_changes(self, status: Optional[ChangeStatus] = None) -> list[Change]:
+    def list_changes(self, status: ChangeStatus | None = None) -> list[Change]:
         """列出所有变更"""
         if not self.changes_dir.exists():
             return []
@@ -313,7 +322,7 @@ class ChangeManager:
     def _format_tasks(self, tasks: list[Task]) -> str:
         """格式化任务为 Markdown"""
         lines = ["# Tasks", ""]
-        groups = {}
+        groups: dict[str, list[Task]] = {}
         for task in tasks:
             group = task.id.split(".")[0]
             if group not in groups:
@@ -357,11 +366,63 @@ class ChangeManager:
                             delta_type = DeltaType.REMOVED
                             break
 
+                    requirements: list[Requirement] = []
+                    current_req: Requirement | None = None
+                    current_scenario: Scenario | None = None
+
+                    for raw_line in content.split("\n"):
+                        line = raw_line.strip()
+                        if line.startswith("### Requirement:"):
+                            if current_req:
+                                requirements.append(current_req)
+                            req_name = line[len("### Requirement:"):].strip()
+                            current_req = Requirement(name=req_name)
+                            current_scenario = None
+                            continue
+
+                        if current_req is None:
+                            continue
+
+                        if line.startswith(("SHALL ", "MUST ", "SHOULD ", "MAY ")):
+                            parts = line.split(" ", 1)
+                            current_req.keyword = parts[0]
+                            current_req.description = parts[1] if len(parts) > 1 else ""
+                            continue
+
+                        if line.startswith("#### Scenario"):
+                            current_scenario = Scenario()
+                            current_req.scenarios.append(current_scenario)
+                            continue
+
+                        if line.startswith("- GIVEN"):
+                            if current_scenario is None:
+                                current_scenario = Scenario()
+                                current_req.scenarios.append(current_scenario)
+                            current_scenario.given = line[len("- GIVEN"):].strip()
+                            continue
+
+                        if line.startswith("- WHEN"):
+                            if current_scenario is None:
+                                current_scenario = Scenario()
+                                current_req.scenarios.append(current_scenario)
+                            current_scenario.when = line[len("- WHEN"):].strip()
+                            continue
+
+                        if line.startswith("- THEN"):
+                            if current_scenario is None:
+                                current_scenario = Scenario()
+                                current_req.scenarios.append(current_scenario)
+                            current_scenario.then = line[len("- THEN"):].strip()
+                            continue
+
+                    if current_req:
+                        requirements.append(current_req)
+
                     deltas.append(SpecDelta(
                         spec_name=spec_dir.name,
                         delta_type=delta_type,
                         description="",
-                        requirements=[]
+                        requirements=requirements
                     ))
 
         return deltas

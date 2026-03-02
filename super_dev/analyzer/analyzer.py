@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Super Dev 项目分析器核心模块
 """
@@ -6,7 +5,6 @@ Super Dev 项目分析器核心模块
 import ast
 import os
 from pathlib import Path
-from typing import Callable
 
 from .detectors import (
     detect_architecture_pattern,
@@ -15,15 +13,11 @@ from .detectors import (
 )
 from .models import (
     ArchitectureReport,
-    ArchitecturePattern,
-    DesignPattern,
     Dependency,
+    DesignPattern,
     PatternType,
     ProjectCategory,
-    ProjectType,
-    TechStack,
 )
-
 
 # 类型别名，向后兼容
 ProjectType = ProjectCategory
@@ -104,7 +98,7 @@ class ProjectAnalyzer:
             if depth > max_depth:
                 return None
 
-            tree = {}
+            tree: dict[str, dict | None] = {}
             try:
                 for item in sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name)):
                     # 跳过隐藏文件和目录
@@ -187,14 +181,14 @@ class ProjectAnalyzer:
 
                 file_path = Path(root) / file
                 try:
-                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    with open(file_path, encoding="utf-8", errors="ignore") as f:
                         lines = len(f.readlines())
                         total_lines += lines
                         file_count += 1
 
                         lang = lang_map[suffix]
                         languages_used[lang] = languages_used.get(lang, 0) + lines
-                except (IOError, UnicodeDecodeError):
+                except (OSError, UnicodeDecodeError):
                     pass
 
         return file_count, total_lines, languages_used
@@ -267,7 +261,7 @@ class ProjectAnalyzer:
             else:
                 self._detect_text_based_patterns(file_path, content, patterns)
 
-        except (IOError, UnicodeDecodeError):
+        except (OSError, UnicodeDecodeError):
             pass
 
     def _detect_python_ast_patterns(
@@ -287,7 +281,7 @@ class ProjectAnalyzer:
                 if isinstance(node, ast.FunctionDef):
                     self._check_observer_methods(node, file_path, patterns)
 
-        except (SyntaxError, IOError):
+        except (OSError, SyntaxError):
             pass
 
     def _check_singleton_class(
@@ -393,12 +387,13 @@ class ProjectAnalyzer:
         if self._report is None:
             self.analyze()
 
-        assert self._report is not None
+        if self._report is None:
+            raise RuntimeError("analyze() did not produce a report")
 
         lines = [
             f"项目类型: {self._report.category.value}",
             f"编程语言: {self._report.tech_stack.language}",
-            f"框架: {self._report.tech_stack.framework.value}",
+            f"框架: {self._report.tech_stack.framework.value if hasattr(self._report.tech_stack.framework, 'value') else self._report.tech_stack.framework}",
             f"文件数量: {self._report.file_count}",
             f"代码行数: {self._report.total_lines:,}",
         ]
@@ -418,7 +413,8 @@ class ProjectAnalyzer:
         if self._report is None:
             self.analyze()
 
-        assert self._report is not None
+        if self._report is None:
+            raise RuntimeError("analyze() did not produce a report")
         return self._report.tech_stack.dependencies
 
     def get_language_distribution(self) -> dict[str, float]:
@@ -431,7 +427,8 @@ class ProjectAnalyzer:
         if self._report is None:
             self.analyze()
 
-        assert self._report is not None
+        if self._report is None:
+            raise RuntimeError("analyze() did not produce a report")
 
         total = self._report.total_lines
         if total == 0:

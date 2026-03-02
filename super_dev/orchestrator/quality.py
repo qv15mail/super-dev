@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 质量评分引擎 - 基于文档内容和检查项计算真实质量分数
 
@@ -12,7 +11,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 
 @dataclass
@@ -295,7 +293,7 @@ class QualityScorer:
     # 通用阶段评分（fallback）
     # ------------------------------------------------------------------
 
-    def score_phase(self, phase_name: str, context_data: Optional[dict] = None) -> int:
+    def score_phase(self, phase_name: str, context_data: dict | None = None) -> int:
         """根据阶段名称路由到对应评分方法"""
         ctx = context_data or {}
         scorers = {

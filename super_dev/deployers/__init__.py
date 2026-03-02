@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 部署模块 - CI/CD 流水线生成和数据库迁移
 
@@ -9,10 +8,12 @@
 """
 
 from .cicd import CICDGenerator
-from .migration import MigrationGenerator, DatabaseType, ORMType
+from .delivery import DeliveryPackager
+from .migration import DatabaseType, MigrationGenerator, ORMType
 
 __all__ = [
     "CICDGenerator",
+    "DeliveryPackager",
     "MigrationGenerator",
     "DatabaseType",
     "ORMType",

@@ -1,0 +1,113 @@
+# Bitbucket Pipelines CI/CD for 用户认证系统
+image: node:18
+
+definitions:
+  services:
+    postgres:
+      image: postgres:15
+      variables:
+        POSTGRES_DB: test_db
+        POSTGRES_PASSWORD: postgres
+    redis:
+      image: redis:7
+
+  caches:
+    node: node_modules
+
+pipelines:
+  branches:
+    main:
+      - step:
+          name: 'Build and Test'
+          caches:
+            - node
+          services:
+            - postgres
+            - redis
+          script:
+            - npm ci
+            - npm run lint
+            - npm run type-check
+            - npm test -- --coverage --watchAll=false
+          after-script:
+            - pipe: atlassian/code-insights:0.5.0
+              variables:
+                REPORT_TYPE: 'coverage'
+                FORMAT: 'cobertura'
+                FILE: 'coverage/cobertura-coverage.xml'
+
+      - step:
+          name: 'Build Docker Image'
+          script:
+            - docker build -t ${REGISTRY_URL}/用户认证系统:${BITBUCKET_BUILD_NUMBER} .
+            - docker push ${REGISTRY_URL}/用户认证系统:${BITBUCKET_BUILD_NUMBER}
+          services:
+            - docker
+
+      - step:
+          name: 'Deploy to Production'
+          deployment: production
+          script:
+            - pipe: atlassian/kubectl-deploy:1.7.0
+              variables:
+                KUBE_CONFIG: ${KUBE_CONFIG_PROD}
+                KUBECTL_VERSION: '1.28.0'
+                RESOURCE_PATH: 'k8s/'
+                SELECTOR: 'app=用户认证系统'
+                CONTAINER: '用户认证系统'
+                IMAGE: ${REGISTRY_URL}/用户认证系统:${BITBUCKET_BUILD_NUMBER}
+
+    develop:
+      - step:
+          name: 'Build and Test'
+          caches:
+            - node
+          services:
+            - postgres
+            - redis
+          script:
+            - npm ci
+            - npm run lint
+            - npm run type-check
+            - npm test -- --coverage --watchAll=false
+
+      - step:
+          name: 'Build Docker Image'
+          script:
+            - docker build -t ${REGISTRY_URL}/用户认证系统:${BITBUCKET_BUILD_NUMBER} .
+            - docker push ${REGISTRY_URL}/用户认证系统:${BITBUCKET_BUILD_NUMBER}
+          services:
+            - docker
+
+      - step:
+          name: 'Deploy to Dev'
+          deployment: development
+          script:
+            - pipe: atlassian/kubectl-deploy:1.7.0
+              variables:
+                KUBE_CONFIG: ${KUBE_CONFIG_DEV}
+                KUBECTL_VERSION: '1.28.0'
+                RESOURCE_PATH: 'k8s/'
+                SELECTOR: 'app=用户认证系统'
+                CONTAINER: '用户认证系统'
+                IMAGE: ${REGISTRY_URL}/用户认证系统:${BITBUCKET_BUILD_NUMBER}
+
+  pull-requests:
+    - step:
+        name: 'PR Build and Test'
+        caches:
+          - node
+        services:
+          - postgres
+          - redis
+        script:
+          - npm ci
+          - npm run lint
+          - npm run type-check
+          - npm test -- --coverage --watchAll=false
+        after-script:
+          - pipe: atlassian/code-insights:0.5.0
+            variables:
+              REPORT_TYPE: 'coverage'
+              FORMAT: 'cobertura'
+              FILE: 'coverage/cobertura-coverage.xml'

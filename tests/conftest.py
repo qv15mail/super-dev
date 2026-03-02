@@ -1,16 +1,16 @@
-# -*- coding: utf-8 -*-
 """
 Super Dev 测试配置
 """
 
-import pytest
-import tempfile
 import shutil
+import tempfile
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
+
+import pytest
 
 from super_dev.config import ConfigManager, ProjectConfig
-from super_dev.orchestrator import WorkflowEngine, WorkflowContext
+from super_dev.orchestrator import WorkflowContext, WorkflowEngine
 
 
 @pytest.fixture(autouse=True)

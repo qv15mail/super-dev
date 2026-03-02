@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Super Dev Spec-Driven Development (SDD) 模块
 
@@ -9,21 +8,21 @@ Super Dev Spec-Driven Development (SDD) 模块
 最后修改：2025-12-30
 """
 
+from .generator import SpecGenerator
+from .manager import ChangeManager, SpecManager
 from .models import (
-    Spec,
-    Requirement,
-    Scenario,
     Change,
     ChangeStatus,
+    DeltaType,
     Proposal,
+    Requirement,
+    Scenario,
+    Spec,
+    SpecDelta,
     Task,
     TaskStatus,
-    DeltaType,
-    SpecDelta,
 )
-from .manager import SpecManager, ChangeManager
-from .generator import SpecGenerator
-from .validator import SpecValidator, ValidationResult, ValidationError
+from .validator import SpecValidator, ValidationError, ValidationResult
 
 __all__ = [
     "Spec",

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Spec 构建器 - 自动创建 Spec 规范
 
@@ -10,8 +9,8 @@ Spec 构建器 - 自动创建 Spec 规范
 
 from pathlib import Path
 
-from ..specs import SpecGenerator, ChangeManager, SpecManager
-from ..specs.models import TaskStatus, DeltaType, Task
+from ..specs import ChangeManager, SpecGenerator, SpecManager
+from ..specs.models import DeltaType, Task, TaskStatus
 from .requirement_parser import RequirementParser
 
 
@@ -46,7 +45,7 @@ class SpecBuilder:
         change_id = self.name.replace('_', '-').lower()
 
         # 1. 创建变更提案
-        change = self.spec_generator.create_change(
+        self.spec_generator.create_change(
             change_id=change_id,
             title=self.name.replace('-', ' ').title(),
             description=self.description,

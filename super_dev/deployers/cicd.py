@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 CI/CD 生成器 - 自动生成 CI/CD 流水线配置
 
@@ -8,8 +7,9 @@ CI/CD 生成器 - 自动生成 CI/CD 流水线配置
 创建时间：2025-12-30
 """
 
+import re
 from pathlib import Path
-from typing import Optional, Literal
+from typing import Literal
 
 
 class CICDGenerator:
@@ -23,11 +23,20 @@ class CICDGenerator:
         platform: Literal["github", "gitlab", "jenkins", "azure", "bitbucket", "all"] = "github"
     ):
         self.project_dir = Path(project_dir).resolve()
-        self.name = name
+        self.display_name = name
+        self.name = self._sanitize_resource_name(name)
         self.tech_stack = tech_stack
         self.platform = platform
         self.frontend = tech_stack.get("frontend", "react")
         self.backend = tech_stack.get("backend", "node")
+
+    def _sanitize_resource_name(self, name: str) -> str:
+        lowered = name.strip().lower()
+        sanitized = re.sub(r"[^a-z0-9-]+", "-", lowered)
+        sanitized = re.sub(r"-{2,}", "-", sanitized).strip("-")
+        if not sanitized:
+            return "super-dev-app"
+        return sanitized[:63]
 
     def generate(self) -> dict[str, str]:
         """生成所有 CI/CD 配置文件"""
@@ -70,145 +79,80 @@ on:
     branches: [main, develop]
 
 jobs:
-  # ========== 代码质量检查 ==========
-  lint:
-    name: Lint
+  quality:
+    name: Quality
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
       - name: Setup Node.js
-        if: ${{{{ matrix.backend == 'node' }}}}
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
       - name: Setup Python
-        if: ${{{{ matrix.backend == 'python' }}}}
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
+        if: ${{{{ hashFiles('frontend/package.json') != '' }}}}
+        run: npm --prefix frontend ci
+
+      - name: Install backend node dependencies
+        if: ${{{{ hashFiles('backend/package.json') != '' }}}}
+        run: npm --prefix backend ci
+
+      - name: Install Python dependencies
         run: |
-          if [ "${{{{ matrix.backend }}}}" == "node" ]; then
-            npm ci
-          else
+          if [ -f backend/requirements.txt ] || [ -f requirements.txt ] || [ -f pyproject.toml ] || [ -f backend/pyproject.toml ]; then
             pip install -e ".[dev]"
           fi
 
-      - name: Run linter
+      - name: Run linters
         run: |
-          if [ "${{{{ matrix.backend }}}}" == "node" ]; then
-            npm run lint
-          else
-            npm run lint || pylint **/*.py
+          if [ -f frontend/package.json ]; then
+            npm --prefix frontend run lint --if-present
+          fi
+          if [ -f backend/package.json ]; then
+            npm --prefix backend run lint --if-present
+          fi
+          if [ -d super_dev ]; then
+            ruff check super_dev tests
           fi
 
-    strategy:
-      matrix:
-        backend: ["{self.backend}"]
-
-  # ========== 类型检查 ==========
-  type-check:
-    name: Type Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        if: ${{{{ matrix.frontend == 'react' }}}}
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      - name: Setup Python
-        if: ${{{{ matrix.backend == 'python' }}}}
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
+      - name: Run type checks
         run: |
-          if [ "${{{{ matrix.frontend }}}}" == "react" ]; then
-            npm ci
+          if [ -f frontend/package.json ]; then
+            npm --prefix frontend run type-check --if-present
           fi
-          if [ "${{{{ matrix.backend }}}}" == "python" ]; then
-            pip install -e ".[dev]"
+          if [ -f backend/package.json ]; then
+            npm --prefix backend run type-check --if-present
           fi
-
-      - name: Run type check
-        run: |
-          if [ "${{{{ matrix.frontend }}}}" == "react" ]; then
-            npm run type-check
-          fi
-          if [ "${{{{ matrix.backend }}}}" == "python" ]; then
+          if [ -d super_dev ]; then
             mypy .
           fi
 
-    strategy:
-      matrix:
-        frontend: ["{self.frontend}"]
-        backend: ["{self.backend}"]
-
-  # ========== 单元测试 ==========
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test_db
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-      redis:
-        image: redis:7
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: |
-          npm ci
-          pip install -e ".[dev]"
-
       - name: Run tests
         run: |
-          npm test -- --coverage --watchAll=false
-          pytest --cov=.
+          if [ -f frontend/package.json ]; then
+            npm --prefix frontend run test --if-present
+          fi
+          if [ -f backend/package.json ]; then
+            npm --prefix backend run test --if-present
+          fi
+          if [ -d tests ]; then
+            pytest -q
+          fi
 
       - name: Upload coverage
+        if: ${{{{ hashFiles('coverage.xml', 'frontend/coverage/cobertura-coverage.xml', 'backend/coverage/cobertura-coverage.xml') != '' }}}}
         uses: codecov/codecov-action@v3
         with:
-          files: ./coverage/lcov.info,./coverage.xml
+          files: ./coverage.xml,./frontend/coverage/cobertura-coverage.xml,./backend/coverage/cobertura-coverage.xml
           flags: unittests
           name: codecov-umbrella
 
-  # ========== 安全扫描 ==========
   security:
     name: Security Scan
     runs-on: ubuntu-latest
@@ -229,14 +173,19 @@ jobs:
           sarif_file: 'trivy-results.sarif'
 
       - name: Run npm audit
-        run: npm audit --audit-level=moderate
+        run: |
+          if [ -f frontend/package.json ]; then
+            (cd frontend && npm audit --audit-level=moderate || true)
+          fi
+          if [ -f backend/package.json ]; then
+            (cd backend && npm audit --audit-level=moderate || true)
+          fi
         continue-on-error: true
 
-  # ========== 构建镜像 ==========
   build:
     name: Build Docker Image
     runs-on: ubuntu-latest
-    needs: [lint, type-check, test]
+    needs: [quality, security]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v3
@@ -268,7 +217,7 @@ jobs:
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   workflow_dispatch:
 
 jobs:
@@ -351,7 +300,7 @@ jobs:
     def _generate_gitlab_ci(self) -> str:
         """生成 GitLab CI 配置"""
         return f"""stages:
-  - lint
+  - quality
   - test
   - build
   - deploy
@@ -360,16 +309,39 @@ variables:
   DOCKER_IMAGE: ${{CI_REGISTRY_IMAGE}}/{self.name}
   DOCKER_TLS_CERTDIR: "/certs"
 
-# ========== 代码检查 ==========
-lint:
-  stage: lint
-  image: node:18-alpine
+# ========== 质量检查 ==========
+quality:
+  stage: quality
+  image: python:3.11-alpine
+  before_script:
+    - apk add --no-cache nodejs npm git
   script:
-    - npm ci
-    - npm run lint
+    - |
+      if [ -f frontend/package.json ]; then
+        npm --prefix frontend ci
+      fi
+      if [ -f backend/package.json ]; then
+        npm --prefix backend ci
+      fi
+      if [ -f backend/requirements.txt ] || [ -f requirements.txt ] || [ -f pyproject.toml ]; then
+        pip install -e ".[dev]"
+      fi
+    - |
+      if [ -f frontend/package.json ]; then
+        npm --prefix frontend run lint --if-present
+        npm --prefix frontend run type-check --if-present
+      fi
+      if [ -f backend/package.json ]; then
+        npm --prefix backend run lint --if-present
+      fi
+      if [ -d super_dev ]; then
+        ruff check super_dev tests
+        mypy super_dev
+      fi
   cache:
     paths:
-      - node_modules/
+      - frontend/node_modules/
+      - backend/node_modules/
   only:
     - merge_requests
     - main
@@ -378,7 +350,9 @@ lint:
 # ========== 单元测试 ==========
 test:
   stage: test
-  image: node:18-alpine
+  image: python:3.11-alpine
+  before_script:
+    - apk add --no-cache nodejs npm
   services:
     - postgres:15-alpine
     - redis:7-alpine
@@ -388,19 +362,32 @@ test:
     POSTGRES_DB: test_db
     REDIS_HOST: redis
   script:
-    - npm ci
-    - npm test -- --coverage --watchAll=false
-  coverage: '/All files[^|]*\\|[^|]*\\s+([\\d\\.]+)/'
+    - |
+      if [ -f frontend/package.json ]; then
+        npm --prefix frontend ci
+        npm --prefix frontend run test --if-present
+      fi
+      if [ -f backend/package.json ]; then
+        npm --prefix backend ci
+        npm --prefix backend run test --if-present
+      fi
+      if [ -d tests ]; then
+        pip install -e ".[dev]"
+        pytest -q
+      fi
   cache:
     paths:
-      - node_modules/
+      - frontend/node_modules/
+      - backend/node_modules/
   artifacts:
     reports:
       coverage_report:
         coverage_format: cobertura
-        path: coverage/cobertura-coverage.xml
+        path: frontend/coverage/cobertura-coverage.xml
     paths:
       - coverage/
+      - frontend/coverage/
+      - backend/coverage/
     expire_in: 1 week
   only:
     - merge_requests
@@ -494,12 +481,23 @@ deploy:prod:
             parallel {{
                 stage('Frontend') {{
                     steps {{
-                        sh 'npm ci'
+                        script {{
+                            if (fileExists('frontend/package.json')) {{
+                                sh 'npm --prefix frontend ci'
+                            }}
+                        }}
                     }}
                 }}
                 stage('Backend') {{
                     steps {{
-                        sh 'pip install -e ".[dev]"'
+                        script {{
+                            if (fileExists('backend/package.json')) {{
+                                sh 'npm --prefix backend ci'
+                            }}
+                            if (fileExists('requirements.txt') || fileExists('backend/requirements.txt') || fileExists('pyproject.toml')) {{
+                                sh 'pip install -e ".[dev]"'
+                            }}
+                        }}
                     }}
                 }}
             }}
@@ -507,30 +505,53 @@ deploy:prod:
 
         stage('Lint') {{
             steps {{
-                sh 'npm run lint || pylint **/*.py'
+                script {{
+                    if (fileExists('frontend/package.json')) {{
+                        sh 'npm --prefix frontend run lint --if-present'
+                    }}
+                    if (fileExists('backend/package.json')) {{
+                        sh 'npm --prefix backend run lint --if-present'
+                    }}
+                    if (fileExists('super_dev')) {{
+                        sh 'ruff check super_dev tests'
+                    }}
+                }}
             }}
         }}
 
         stage('Type Check') {{
             steps {{
-                sh 'npm run type-check || mypy .'
+                script {{
+                    if (fileExists('frontend/package.json')) {{
+                        sh 'npm --prefix frontend run type-check --if-present'
+                    }}
+                    if (fileExists('backend/package.json')) {{
+                        sh 'npm --prefix backend run type-check --if-present'
+                    }}
+                    if (fileExists('super_dev')) {{
+                        sh 'mypy super_dev'
+                    }}
+                }}
             }}
         }}
 
         stage('Test') {{
             steps {{
-                sh '''
-                    npm test -- --coverage --watchAll=false
-                    pytest --cov=. --cov-report=xml
-                '''
+                script {{
+                    if (fileExists('frontend/package.json')) {{
+                        sh 'npm --prefix frontend run test --if-present'
+                    }}
+                    if (fileExists('backend/package.json')) {{
+                        sh 'npm --prefix backend run test --if-present'
+                    }}
+                    if (fileExists('tests')) {{
+                        sh 'pytest -q'
+                    }}
+                }}
             }}
             post {{
                 always {{
-                    publishHTML([
-                        reportDir: 'coverage/lcov-report',
-                        reportFiles: 'index.html',
-                        reportName: 'Coverage Report'
-                    ])
+                    echo 'Tests finished'
                 }}
             }}
         }}
@@ -1006,19 +1027,41 @@ stages:
             displayName: 'Install Node.js'
 
           - script: |
-              npm ci
+              if [ -f frontend/package.json ]; then
+                npm --prefix frontend ci
+              fi
+              if [ -f backend/package.json ]; then
+                npm --prefix backend ci
+              fi
+              if [ -f requirements.txt ] || [ -f backend/requirements.txt ] || [ -f pyproject.toml ]; then
+                python -m pip install -e ".[dev]"
+              fi
             displayName: 'Install dependencies'
 
           - script: |
-              npm run lint
-            displayName: 'Run linter'
+              if [ -f frontend/package.json ]; then
+                npm --prefix frontend run lint --if-present
+                npm --prefix frontend run type-check --if-present
+              fi
+              if [ -f backend/package.json ]; then
+                npm --prefix backend run lint --if-present
+              fi
+              if [ -d super_dev ]; then
+                ruff check super_dev tests
+                mypy super_dev
+              fi
+            displayName: 'Run quality checks'
 
           - script: |
-              npm run type-check
-            displayName: 'Run type check'
-
-          - script: |
-              npm test -- --coverage --watchAll=false
+              if [ -f frontend/package.json ]; then
+                npm --prefix frontend run test --if-present
+              fi
+              if [ -f backend/package.json ]; then
+                npm --prefix backend run test --if-present
+              fi
+              if [ -d tests ]; then
+                pytest -q
+              fi
             displayName: 'Run tests'
 
           - task: PublishCodeCoverageResults@1
@@ -1114,7 +1157,8 @@ definitions:
       image: redis:7
 
   caches:
-    node: node_modules
+    node_frontend: frontend/node_modules
+    node_backend: backend/node_modules
 
 pipelines:
   branches:
@@ -1122,15 +1166,18 @@ pipelines:
       - step:
           name: 'Build and Test'
           caches:
-            - node
+            - node_frontend
+            - node_backend
           services:
             - postgres
             - redis
           script:
-            - npm ci
-            - npm run lint
-            - npm run type-check
-            - npm test -- --coverage --watchAll=false
+            - if [ -f frontend/package.json ]; then npm --prefix frontend ci; fi
+            - if [ -f backend/package.json ]; then npm --prefix backend ci; fi
+            - if [ -f frontend/package.json ]; then npm --prefix frontend run lint --if-present; npm --prefix frontend run type-check --if-present; fi
+            - if [ -f backend/package.json ]; then npm --prefix backend run lint --if-present; fi
+            - if [ -f frontend/package.json ]; then npm --prefix frontend run test --if-present; fi
+            - if [ -f backend/package.json ]; then npm --prefix backend run test --if-present; fi
           after-script:
             - pipe: atlassian/code-insights:0.5.0
               variables:
@@ -1163,15 +1210,18 @@ pipelines:
       - step:
           name: 'Build and Test'
           caches:
-            - node
+            - node_frontend
+            - node_backend
           services:
             - postgres
             - redis
           script:
-            - npm ci
-            - npm run lint
-            - npm run type-check
-            - npm test -- --coverage --watchAll=false
+            - if [ -f frontend/package.json ]; then npm --prefix frontend ci; fi
+            - if [ -f backend/package.json ]; then npm --prefix backend ci; fi
+            - if [ -f frontend/package.json ]; then npm --prefix frontend run lint --if-present; npm --prefix frontend run type-check --if-present; fi
+            - if [ -f backend/package.json ]; then npm --prefix backend run lint --if-present; fi
+            - if [ -f frontend/package.json ]; then npm --prefix frontend run test --if-present; fi
+            - if [ -f backend/package.json ]; then npm --prefix backend run test --if-present; fi
 
       - step:
           name: 'Build Docker Image'
@@ -1198,15 +1248,18 @@ pipelines:
     - step:
         name: 'PR Build and Test'
         caches:
-          - node
+          - node_frontend
+          - node_backend
         services:
           - postgres
           - redis
         script:
-          - npm ci
-          - npm run lint
-          - npm run type-check
-          - npm test -- --coverage --watchAll=false
+          - if [ -f frontend/package.json ]; then npm --prefix frontend ci; fi
+          - if [ -f backend/package.json ]; then npm --prefix backend ci; fi
+          - if [ -f frontend/package.json ]; then npm --prefix frontend run lint --if-present; npm --prefix frontend run type-check --if-present; fi
+          - if [ -f backend/package.json ]; then npm --prefix backend run lint --if-present; fi
+          - if [ -f frontend/package.json ]; then npm --prefix frontend run test --if-present; fi
+          - if [ -f backend/package.json ]; then npm --prefix backend run test --if-present; fi
         after-script:
           - pipe: atlassian/code-insights:0.5.0
             variables:

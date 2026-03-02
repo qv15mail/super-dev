@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 AI 提示词生成器 - 生成可直接给 AI 的提示词
 
@@ -24,11 +23,11 @@ class AIPromptGenerator:
     def generate(self) -> str:
         """生成 AI 提示词"""
         # 读取项目配置
-        import yaml
+        import yaml  # type: ignore[import-untyped]
         config_path = self.project_dir / "super-dev.yaml"
-        project_config = {}
+        project_config: dict = {}
         if config_path.exists():
-            with open(config_path, 'r', encoding='utf-8') as f:
+            with open(config_path, encoding='utf-8') as f:
                 project_config = yaml.safe_load(f)
 
         # 读取生成的文档

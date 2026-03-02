@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 开发：Excellent（11964948@qq.com）
 功能：Design Token 生成器
@@ -7,9 +6,6 @@
 最后修改：2025-12-30
 """
 
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass
-from .aesthetics import AestheticDirection
 
 
 class TokenGenerator:
@@ -28,7 +24,7 @@ class TokenGenerator:
         self,
         primary: str,
         palette_type: str = "monochromatic",
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """
         生成色彩 tokens
 
@@ -52,58 +48,58 @@ class TokenGenerator:
         else:
             return self._generate_monochromatic_palette(base_color)
 
-    def _generate_monochromatic_palette(self, base_hsl: tuple) -> Dict[str, str]:
+    def _generate_monochromatic_palette(self, base_hsl: tuple) -> dict[str, str]:
         """生成单色调色板"""
-        h, s, l = base_hsl
+        h, s, lightness = base_hsl
 
         return {
-            "50": self._hsl_to_hex(h, s, min(l + 45, 100)),
-            "100": self._hsl_to_hex(h, s, min(l + 40, 100)),
-            "200": self._hsl_to_hex(h, s, min(l + 30, 100)),
-            "300": self._hsl_to_hex(h, s, min(l + 20, 100)),
-            "400": self._hsl_to_hex(h, s, min(l + 10, 100)),
-            "500": self._hsl_to_hex(h, s, l),
-            "600": self._hsl_to_hex(h, s, max(l - 10, 0)),
-            "700": self._hsl_to_hex(h, s, max(l - 20, 0)),
-            "800": self._hsl_to_hex(h, s, max(l - 30, 0)),
-            "900": self._hsl_to_hex(h, s, max(l - 40, 0)),
-            "950": self._hsl_to_hex(h, s, max(l - 45, 0)),
+            "50": self._hsl_to_hex(h, s, min(lightness + 45, 100)),
+            "100": self._hsl_to_hex(h, s, min(lightness + 40, 100)),
+            "200": self._hsl_to_hex(h, s, min(lightness + 30, 100)),
+            "300": self._hsl_to_hex(h, s, min(lightness + 20, 100)),
+            "400": self._hsl_to_hex(h, s, min(lightness + 10, 100)),
+            "500": self._hsl_to_hex(h, s, lightness),
+            "600": self._hsl_to_hex(h, s, max(lightness - 10, 0)),
+            "700": self._hsl_to_hex(h, s, max(lightness - 20, 0)),
+            "800": self._hsl_to_hex(h, s, max(lightness - 30, 0)),
+            "900": self._hsl_to_hex(h, s, max(lightness - 40, 0)),
+            "950": self._hsl_to_hex(h, s, max(lightness - 45, 0)),
         }
 
-    def _generate_analogous_palette(self, base_hsl: tuple) -> Dict[str, str]:
+    def _generate_analogous_palette(self, base_hsl: tuple) -> dict[str, str]:
         """生成类比调色板"""
-        h, s, l = base_hsl
+        h, s, lightness = base_hsl
 
         return {
-            "primary": self._hsl_to_hex(h, s, l),
-            "secondary": self._hsl_to_hex((h + 30) % 360, s, l),
-            "accent": self._hsl_to_hex((h - 30) % 360, s, l),
-            "muted": self._hsl_to_hex(h, s * 0.5, l * 1.1),
+            "primary": self._hsl_to_hex(h, s, lightness),
+            "secondary": self._hsl_to_hex((h + 30) % 360, s, lightness),
+            "accent": self._hsl_to_hex((h - 30) % 360, s, lightness),
+            "muted": self._hsl_to_hex(h, s * 0.5, lightness * 1.1),
         }
 
-    def _generate_complementary_palette(self, base_hsl: tuple) -> Dict[str, str]:
+    def _generate_complementary_palette(self, base_hsl: tuple) -> dict[str, str]:
         """生成互补调色板"""
-        h, s, l = base_hsl
+        h, s, lightness = base_hsl
 
         return {
-            "primary": self._hsl_to_hex(h, s, l),
-            "secondary": self._hsl_to_hex((h + 180) % 360, s, l),
-            "accent": self._hsl_to_hex((h + 90) % 360, s, l),
-            "muted": self._hsl_to_hex(h, s * 0.6, l * 1.1),
+            "primary": self._hsl_to_hex(h, s, lightness),
+            "secondary": self._hsl_to_hex((h + 180) % 360, s, lightness),
+            "accent": self._hsl_to_hex((h + 90) % 360, s, lightness),
+            "muted": self._hsl_to_hex(h, s * 0.6, lightness * 1.1),
         }
 
-    def _generate_triadic_palette(self, base_hsl: tuple) -> Dict[str, str]:
+    def _generate_triadic_palette(self, base_hsl: tuple) -> dict[str, str]:
         """生成三元调色板"""
-        h, s, l = base_hsl
+        h, s, lightness = base_hsl
 
         return {
-            "primary": self._hsl_to_hex(h, s, l),
-            "secondary": self._hsl_to_hex((h + 120) % 360, s, l),
-            "tertiary": self._hsl_to_hex((h + 240) % 360, s, l),
-            "accent": self._hsl_to_hex((h + 60) % 360, s, l),
+            "primary": self._hsl_to_hex(h, s, lightness),
+            "secondary": self._hsl_to_hex((h + 120) % 360, s, lightness),
+            "tertiary": self._hsl_to_hex((h + 240) % 360, s, lightness),
+            "accent": self._hsl_to_hex((h + 60) % 360, s, lightness),
         }
 
-    def generate_spacing_tokens(self, base_unit: int = 8) -> Dict[str, str]:
+    def generate_spacing_tokens(self, base_unit: int = 8) -> dict[str, str]:
         """
         生成间距 tokens（8pt 栅格）
 
@@ -141,7 +137,7 @@ class TokenGenerator:
             "64": f"{base_unit * 64}px",
         }
 
-    def generate_shadow_tokens(self, elevation: int = 3) -> Dict[str, str]:
+    def generate_shadow_tokens(self, elevation: int = 3) -> dict[str, str]:
         """
         生成阴影 tokens（Material Design 风格）
 
@@ -162,7 +158,7 @@ class TokenGenerator:
 
         return shadows
 
-    def generate_animation_tokens(self) -> Dict[str, str]:
+    def generate_animation_tokens(self) -> dict[str, str]:
         """
         生成动画 tokens
 
@@ -181,7 +177,7 @@ class TokenGenerator:
             "easing-bounce": "cubic-bezier(0.68, -0.55, 0.265, 1.55)",
         }
 
-    def _hex_to_hsl(self, hex_color: str) -> tuple:
+    def _hex_to_hsl(self, hex_color: str) -> tuple[int, int, int]:
         """Hex 转 HSL"""
         hex_color = hex_color.lstrip("#")
 
@@ -197,7 +193,7 @@ class TokenGenerator:
         delta = max_val - min_val
 
         # Hue
-        h = 0
+        h: float = 0.0
         if delta == 0:
             h = 0
         elif max_val == r:
@@ -208,38 +204,41 @@ class TokenGenerator:
             h = 60 * (((r - g) / delta) + 4)
 
         # Saturation
-        s = 0
+        s: float = 0.0
         if max_val == 0:
             s = 0
         else:
             s = (delta / max_val) * 100
 
         # Lightness
-        l = ((max_val + min_val) / 2) * 100
+        lightness: float = ((max_val + min_val) / 2) * 100
 
-        return (round(h), round(s), round(l))
+        return (round(h), round(s), round(lightness))
 
-    def _hsl_to_hex(self, h: float, s: float, l: float) -> str:
+    def _hsl_to_hex(self, h: float, s: float, lightness: float) -> str:
         """HSL 转 Hex"""
         s /= 100
-        l /= 100
+        lightness /= 100
 
-        c = (1 - abs(2 * l - 1)) * s
+        c = (1 - abs(2 * lightness - 1)) * s
         x = c * (1 - abs((h / 60) % 2 - 1))
-        m = l - c / 2
+        m = lightness - c / 2
 
+        r: float
+        g: float
+        b: float
         if 0 <= h < 60:
-            r, g, b = c, x, 0
+            r, g, b = c, x, 0.0
         elif 60 <= h < 120:
-            r, g, b = x, c, 0
+            r, g, b = x, c, 0.0
         elif 120 <= h < 180:
-            r, g, b = 0, c, x
+            r, g, b = 0.0, c, x
         elif 180 <= h < 240:
-            r, g, b = 0, x, c
+            r, g, b = 0.0, x, c
         elif 240 <= h < 300:
-            r, g, b = x, 0, c
+            r, g, b = x, 0.0, c
         else:
-            r, g, b = c, 0, x
+            r, g, b = c, 0.0, x
 
         r = int((r + m) * 255)
         g = int((g + m) * 255)
@@ -251,7 +250,7 @@ class TokenGenerator:
         self,
         primary_color: str,
         palette_type: str = "monochromatic",
-    ) -> Dict[str, Dict[str, str]]:
+    ) -> dict[str, dict[str, str]]:
         """
         生成所有 tokens
 

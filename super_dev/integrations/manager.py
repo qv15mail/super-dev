@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 多平台 AI Coding 工具集成管理器
 """
@@ -173,7 +172,7 @@ class IntegrationManager:
         """
         return """\
 ---
-description: Super Dev 流水线式 AI Coding 辅助工作流 - 从需求到交付的 11 阶段自动化流程
+description: Super Dev 流水线式 AI Coding 辅助工作流 - 从需求到交付的 12 阶段自动化流程
 ---
 
 # Super Dev Pipeline Workflow
@@ -232,17 +231,18 @@ super-dev pipeline "你的需求描述" --platform web --frontend react --backen
 ### 第 5-6 阶段：质量保障
 
 - 红队审查（安全 + 性能 + 架构）
-- 质量门禁（0-1 项目 ≥50 分，1-N+1 项目 ≥80 分）
+- 质量门禁（统一标准：80+）
 
 ### 第 7-8 阶段：交付准备
 
 - 代码审查指南
 - AI 提示词生成（直接传给 AI 开始开发）
 
-### 第 9-10 阶段：部署配置
+### 第 9-11 阶段：部署与交付
 
 - CI/CD 配置（GitHub/GitLab/Jenkins/Azure/Bitbucket）
 - 数据库迁移脚本（Prisma/TypeORM/SQLAlchemy 等 6 种 ORM）
+- 项目交付包（manifest + report + zip）
 
 ## 执行规则
 
@@ -255,7 +255,7 @@ super-dev pipeline "你的需求描述" --platform web --frontend react --backen
 ## 常用命令
 
 ```bash
-super-dev pipeline "需求"      # 完整 11 阶段流水线
+super-dev pipeline "需求"      # 完整 12 阶段流水线
 super-dev create "需求"        # 生成文档 + Spec
 super-dev quality --type all   # 质量检查
 super-dev expert SECURITY "需求"  # 单专家调用

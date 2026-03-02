@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Spec-Driven Development 数据模型
 
@@ -9,10 +8,8 @@ Spec-Driven Development 数据模型
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
-from pathlib import Path
-from typing import Optional
 from datetime import datetime
+from enum import Enum
 
 
 class ChangeStatus(Enum):
@@ -85,6 +82,18 @@ class Requirement:
 
         return "\n".join(lines)
 
+    def to_dict(self) -> dict:
+        """转换为字典"""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "keyword": self.keyword,
+            "scenarios": [
+                {"given": s.given, "when": s.when, "then": s.then}
+                for s in self.scenarios
+            ],
+        }
+
 
 @dataclass
 class Spec:
@@ -111,7 +120,7 @@ class Spec:
 
         if self.purpose:
             lines.extend([
-                f"## Purpose",
+                "## Purpose",
                 self.purpose,
                 ""
             ])
@@ -284,7 +293,7 @@ class Change:
     id: str                   # 变更 ID (目录名，如 "add-user-auth")
     title: str                # 变更标题
     status: ChangeStatus = ChangeStatus.DRAFT
-    proposal: Optional[Proposal] = None
+    proposal: Proposal | None = None
     tasks: list[Task] = field(default_factory=list)
     spec_deltas: list[SpecDelta] = field(default_factory=list)
     design_notes: str = ""    # 设计笔记 (可选)
@@ -331,7 +340,7 @@ class Change:
             "completion_rate": self.completion_rate
         }
 
-    def get_task_by_id(self, task_id: str) -> Optional[Task]:
+    def get_task_by_id(self, task_id: str) -> Task | None:
         """根据 ID 获取任务"""
         for task in self.tasks:
             if task.id == task_id:

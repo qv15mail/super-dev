@@ -2,81 +2,85 @@ name: CD
 
 on:
   push:
-    branches: [main]
+    tags:
+      - "v*"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional release tag to validate (for manual dry-run metadata)"
+        required: false
+        default: ""
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  # ========== 部署到开发环境 ==========
-  deploy-dev:
-    name: Deploy to Development
+  release-readiness:
+    name: Release Readiness
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop'
-    environment:
-      name: development
-      url: https://dev.构建一个宠物护理预约平台-先做前端.example.com
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Configure kubectl
-        uses: azure/k8s-set-context@v3
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          method: kubeconfig
-          kubeconfig: ${ '{' } secrets.KUBE_CONFIG_DEV {}' }
+          python-version: "3.11"
+          cache: "pip"
 
-      - name: Deploy to Kubernetes
+      - name: Install dependencies
         run: |
-          kubectl apply -f k8s/ -n dev
-          kubectl rollout restart deployment/构建一个宠物护理预约平台-先做前端 -n dev
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install bandit pip-audit build twine
 
-      - name: Verify deployment
-        run: |
-          kubectl rollout status deployment/构建一个宠物护理预约平台-先做前端 -n dev
+      - name: Run Preflight
+        run: bash scripts/preflight.sh
 
-  # ========== 部署到生产环境 ==========
-  deploy-prod:
-    name: Deploy to Production
+      - name: Upload Preflight Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preflight-report
+          path: output/release/**
+          if-no-files-found: warn
+
+  publish-pypi:
+    name: Publish to PyPI
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    environment:
-      name: production
-      url: https://构建一个宠物护理预约平台-先做前端.example.com
+    needs: [release-readiness]
+    if: startsWith(github.ref, 'refs/tags/v')
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Configure kubectl
-        uses: azure/k8s-set-context@v3
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          method: kubeconfig
-          kubeconfig: ${ '{' } secrets.KUBE_CONFIG_PROD {}' }
+          python-version: "3.11"
+          cache: "pip"
 
-      - name: Create backup
+      - name: Install build tools
         run: |
-          kubectl get deployment 构建一个宠物护理预约平台-先做前端 -n prod -o yaml > backup-{ '{' } github.sha {}' }.yaml
+          python -m pip install --upgrade pip
+          pip install build twine
 
-      - name: Deploy to Kubernetes
+      - name: Build Distribution
         run: |
-          kubectl apply -f k8s/ -n prod
-          kubectl rollout restart deployment/构建一个宠物护理预约平台-先做前端 -n prod
+          rm -rf dist/ build/ *.egg-info
+          python -m build
+          twine check dist/*
 
-      - name: Verify deployment
+      - name: Enforce PyPI Token
         run: |
-          kubectl rollout status deployment/构建一个宠物护理预约平台-先做前端 -n prod
+          if [ -z "${{ secrets.PYPI_API_TOKEN }}" ]; then
+            echo "::error::PYPI_API_TOKEN is required for tag release publishing."
+            exit 1
+          fi
 
-      - name: Health check
-        run: |
-          for i in { '{' } {1..30} {}'; do
-            if curl -f https://构建一个宠物护理预约平台-先做前端.example.com/health; then
-              echo "Health check passed"
-              exit 0
-            fi
-            echo "Waiting for health check... ($i/30)"
-            sleep 10
-          done
-          echo "Health check failed"
-          exit 1
-
-      - name: Rollback on failure
-        if: failure()
-        run: |
-          kubectl apply -f backup-{ '{' } github.sha {}' }.yaml
-          kubectl rollout undo deployment/构建一个宠物护理预约平台-先做前端 -n prod
+      - name: Upload to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: twine upload dist/*

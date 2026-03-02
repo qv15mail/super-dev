@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Spec-Driven Development 验证器
 
@@ -11,7 +10,6 @@ Spec-Driven Development 验证器
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
 
 
 @dataclass
@@ -28,9 +26,9 @@ class ValidationError:
 class ValidationResult:
     """验证结果"""
     is_valid: bool
-    errors: List[ValidationError] = field(default_factory=list)
-    warnings: List[ValidationError] = field(default_factory=list)
-    info: List[ValidationError] = field(default_factory=list)
+    errors: list[ValidationError] = field(default_factory=list)
+    warnings: list[ValidationError] = field(default_factory=list)
+    info: list[ValidationError] = field(default_factory=list)
 
     @property
     def total_issues(self) -> int:
@@ -68,9 +66,9 @@ class SpecValidator:
 
     def validate_change(self, change_id: str) -> ValidationResult:
         """验证变更"""
-        errors = []
-        warnings = []
-        info = []
+        errors: list[ValidationError] = []
+        warnings: list[ValidationError] = []
+        info: list[ValidationError] = []
 
         change_dir = self.changes_dir / change_id
         if not change_dir.exists():
@@ -136,8 +134,8 @@ class SpecValidator:
 
     def validate_spec(self, spec_name: str) -> ValidationResult:
         """验证规范"""
-        errors = []
-        warnings = []
+        errors: list[ValidationError] = []
+        warnings: list[ValidationError] = []
 
         spec_file = self.specs_dir / spec_name / "spec.md"
         if not spec_file.exists():
@@ -235,8 +233,8 @@ class SpecValidator:
 
     def _validate_proposal(self, proposal_file: Path) -> ValidationResult:
         """验证提案文件"""
-        errors = []
-        warnings = []
+        errors: list[ValidationError] = []
+        warnings: list[ValidationError] = []
 
         content = proposal_file.read_text(encoding="utf-8")
 
@@ -273,8 +271,8 @@ class SpecValidator:
 
     def _validate_tasks(self, tasks_file: Path) -> ValidationResult:
         """验证任务文件"""
-        errors = []
-        warnings = []
+        errors: list[ValidationError] = []
+        warnings: list[ValidationError] = []
 
         content = tasks_file.read_text(encoding="utf-8")
         lines = content.split("\n")
@@ -334,8 +332,8 @@ class SpecValidator:
 
     def _validate_spec_delta(self, spec_file: Path) -> ValidationResult:
         """验证规范增量文件"""
-        errors = []
-        warnings = []
+        errors: list[ValidationError] = []
+        warnings: list[ValidationError] = []
 
         content = spec_file.read_text(encoding="utf-8")
         lines = content.split("\n")
@@ -392,8 +390,8 @@ class SpecValidator:
 
     def validate_all(self) -> ValidationResult:
         """验证所有变更"""
-        all_errors = []
-        all_warnings = []
+        all_errors: list[ValidationError] = []
+        all_warnings: list[ValidationError] = []
 
         if not self.changes_dir.exists():
             return ValidationResult(

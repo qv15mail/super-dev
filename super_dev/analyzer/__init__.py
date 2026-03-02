@@ -1,20 +1,19 @@
-# -*- coding: utf-8 -*-
 """
 Super Dev 项目分析器
 用于自动检测和分析项目结构
 """
 
-from .analyzer import ProjectAnalyzer, ArchitectureReport
+from .analyzer import ArchitectureReport, ProjectAnalyzer
 from .detectors import detect_project_type, detect_tech_stack
 from .models import (
+    ArchitecturePattern,
     Dependency,
     DesignPattern,
+    FrameworkType,
     PatternType,
-    TechStack,
     ProjectCategory,
     ProjectType,
-    FrameworkType,
-    ArchitecturePattern,
+    TechStack,
 )
 
 __all__ = [

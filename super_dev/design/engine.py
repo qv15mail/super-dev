@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 开发：Excellent（11964948@qq.com）
 功能：设计智能引擎
@@ -9,14 +8,13 @@
 
 import csv
 import re
-import json
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
+from collections import defaultdict
 from dataclasses import dataclass
 from math import log
-from collections import defaultdict
-from .aesthetics import AestheticEngine, AestheticDirection
+from pathlib import Path
+from typing import Any, cast
 
+from .aesthetics import AestheticEngine
 
 # ============ 配置 ============
 DATA_DIR = Path(__file__).parent.parent / "data" / "design"
@@ -29,9 +27,9 @@ class SearchResult:
     """搜索结果"""
     score: float
     relevance: str  # high, medium, low
-    data: Dict[str, Any]
+    data: dict[str, Any]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "score": self.score,
             "relevance": self.relevance,
@@ -55,20 +53,20 @@ class EnhancedBM25:
         self.k1 = k1
         self.b = b
         self.epsilon = epsilon  # IDF 平滑参数
-        self.corpus = []
-        self.doc_lengths = []
-        self.avgdl = 0
-        self.idf = {}
-        self.doc_freqs = defaultdict(int)
+        self.corpus: list[list[str]] = []
+        self.doc_lengths: list[int] = []
+        self.avgdl: float = 0.0
+        self.idf: dict[str, float] = {}
+        self.doc_freqs: defaultdict[str, int] = defaultdict(int)
         self.N = 0
-        self.field_weights = {}  # 字段权重
+        self.field_weights: dict[str, float] = {}  # 字段权重
 
-    def tokenize(self, text: str) -> List[str]:
+    def tokenize(self, text: str) -> list[str]:
         """分词 - 支持中英文"""
         # 移除标点
         text = re.sub(r'[^\w\s\u4e00-\u9fff]', ' ', str(text).lower())
         # 分词（英文按空格，中文按字符）
-        words = []
+        words: list[str] = []
         for word in text.split():
             if re.match(r'[\u4e00-\u9fff]', word):
                 # 中文，按字符分
@@ -79,7 +77,7 @@ class EnhancedBM25:
                     words.append(word)
         return words
 
-    def fit(self, documents: List[str], field_weights: Optional[Dict[str, float]] = None):
+    def fit(self, documents: list[str], field_weights: dict[str, float] | None = None):
         """构建索引"""
         self.field_weights = field_weights or {}
         self.corpus = [self.tokenize(doc) for doc in documents]
@@ -103,15 +101,15 @@ class EnhancedBM25:
             idf = log((self.N - freq + 0.5) / (freq + 0.5) + 1)
             self.idf[word] = max(idf, self.epsilon)
 
-    def score(self, query: str, phrase_boost: float = 1.5) -> List[Tuple[int, float]]:
+    def score(self, query: str, phrase_boost: float = 1.5) -> list[tuple[int, float]]:
         """评分 - 支持短语匹配加成"""
         query_tokens = self.tokenize(query)
-        scores = []
+        scores: list[tuple[int, float]] = []
 
         for idx, doc in enumerate(self.corpus):
-            score = 0
+            score = 0.0
             doc_len = self.doc_lengths[idx]
-            term_freqs = defaultdict(int)
+            term_freqs: defaultdict[str, int] = defaultdict(int)
 
             for word in doc:
                 term_freqs[word] += 1
@@ -150,7 +148,7 @@ class DesignIntelligenceEngine:
     5. 与项目工作流集成
     """
 
-    def __init__(self, data_dir: Optional[Path] = None):
+    def __init__(self, data_dir: Path | None = None):
         """
         初始化设计智能引擎
 
@@ -159,10 +157,10 @@ class DesignIntelligenceEngine:
         """
         self.data_dir = data_dir or DATA_DIR
         self.aesthetic_engine = AestheticEngine()
-        self._cache = {}
+        self._cache: dict[str, dict[str, Any]] = {}
 
         # 领域配置（扩展版）
-        self.domain_configs = {
+        self.domain_configs: dict[str, dict[str, Any]] = {
             "style": {
                 "file": "styles.csv",
                 "search_cols": ["name", "category", "keywords", "best_for"],
@@ -232,10 +230,10 @@ class DesignIntelligenceEngine:
     def search(
         self,
         query: str,
-        domain: Optional[str] = None,
+        domain: str | None = None,
         max_results: int = MAX_RESULTS,
         use_cache: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         搜索设计资产
 
@@ -263,7 +261,7 @@ class DesignIntelligenceEngine:
             return {"error": f"Unknown domain: {domain}", "domain": domain}
 
         # 加载数据
-        filepath = self.data_dir / config["file"]
+        filepath = self.data_dir / str(config["file"])
         if not filepath.exists():
             # 如果文件不存在，返回空结果
             return {
@@ -277,8 +275,8 @@ class DesignIntelligenceEngine:
         # 执行搜索
         results = self._search_csv(
             filepath,
-            config["search_cols"],
-            config["output_cols"],
+            cast(list[str], config["search_cols"]),
+            cast(list[str], config["output_cols"]),
             query,
             max_results,
         )
@@ -300,9 +298,9 @@ class DesignIntelligenceEngine:
         self,
         product_type: str,
         industry: str,
-        keywords: List[str],
+        keywords: list[str],
         platform: str = "web",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         AI 驱动的完整设计系统推荐
 
@@ -348,7 +346,7 @@ class DesignIntelligenceEngine:
             "implementation_stack": self._get_stack_recommendation(platform),
         }
 
-    def generate_design_tokens(self, design_system: Dict[str, Any]) -> str:
+    def generate_design_tokens(self, design_system: dict[str, Any]) -> str:
         """
         生成 Design Tokens
 
@@ -431,28 +429,28 @@ class DesignIntelligenceEngine:
         }
 
         # 计算每个领域的匹配分数
-        scores = {}
+        scores: dict[str, int] = {}
         for domain, keywords in domain_keywords.items():
             scores[domain] = sum(1 for kw in keywords if kw in query_lower)
 
         # 返回最高分的领域
-        best = max(scores, key=scores.get)
+        best = max(scores, key=lambda key: scores[key])
         return best if scores[best] > 0 else "style"
 
     def _search_csv(
         self,
         filepath: Path,
-        search_cols: List[str],
-        output_cols: List[str],
+        search_cols: list[str],
+        output_cols: list[str],
         query: str,
         max_results: int,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """在 CSV 文件中搜索"""
         try:
-            with open(filepath, "r", encoding="utf-8") as f:
+            with open(filepath, encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 data = list(reader)
-        except Exception as e:
+        except Exception:
             return []
 
         if not data:
@@ -487,7 +485,7 @@ class DesignIntelligenceEngine:
 
         return results
 
-    def _get_stack_recommendation(self, platform: str) -> Dict[str, str]:
+    def _get_stack_recommendation(self, platform: str) -> dict[str, str]:
         """获取技术栈推荐"""
         stack_map = {
             "web": {
@@ -511,7 +509,7 @@ class DesignIntelligenceEngine:
         }
         return stack_map.get(platform, stack_map["web"])
 
-    def get_available_domains(self) -> List[str]:
+    def get_available_domains(self) -> list[str]:
         """获取可用的搜索领域"""
         return list(self.domain_configs.keys())
 
@@ -519,7 +517,7 @@ class DesignIntelligenceEngine:
         """清除缓存"""
         self._cache.clear()
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """获取统计信息"""
         stats = {
             "domains": len(self.domain_configs),
