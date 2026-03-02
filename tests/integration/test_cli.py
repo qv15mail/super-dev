@@ -369,6 +369,26 @@ class TestCLISkillAndIntegrate:
 class TestCLIPipeline:
     """测试完整流水线关键产物"""
 
+    def test_direct_requirement_entry_generates_core_artifacts(self, temp_project_dir: Path, monkeypatch):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        monkeypatch.setenv("SUPER_DEV_DISABLE_WEB", "1")
+
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["构建一个支持登录和看板的平台"])
+            assert result == 0
+
+            output_dir = temp_project_dir / "output"
+            assert any(output_dir.glob("*-research.md"))
+            assert any(output_dir.glob("*-prd.md"))
+            assert any(output_dir.glob("*-architecture.md"))
+            assert any(output_dir.glob("*-uiux.md"))
+            assert any(output_dir.glob("*-quality-gate.md"))
+            assert any((temp_project_dir / "output" / "delivery").glob("*-delivery-manifest.json"))
+        finally:
+            os.chdir(original_cwd)
+
     def test_pipeline_generates_core_artifacts(self, temp_project_dir: Path, monkeypatch):
         original_cwd = os.getcwd()
         os.chdir(temp_project_dir)

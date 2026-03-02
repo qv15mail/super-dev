@@ -13,14 +13,14 @@ python3 --version
 
 ## 2. 安装
 
-### 方式 A：GitHub 直装（推荐）
+### 方式 A：PyPI 安装（推荐）
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.0
+pip install -U super-dev
 super-dev --version
 ```
 
-### 方式 B：PyPI 安装
+### 方式 B：安装指定版本（复现/回滚）
 
 ```bash
 pip install super-dev==2.0.0
@@ -33,18 +33,19 @@ super-dev --version
 super-dev 2.0.0
 ```
 
-## 3. 一句话运行完整流水线
+## 3. 需求直达（推荐）
 
 ```bash
-super-dev pipeline "构建一个电商后台，包含登录、订单、支付" \
-  --platform web \
-  --frontend react \
-  --backend python \
-  --domain ecommerce \
-  --cicd github
+super-dev "构建一个电商后台，包含登录、订单、支付"
 ```
 
 执行后会在 `output/`、`.super-dev/`、前后端骨架目录中生成完整产物，且在 `output/delivery/` 自动生成交付清单、交付报告和 zip 交付包。
+
+如需精细控制平台参数，可使用显式 pipeline：
+
+```bash
+super-dev pipeline "构建一个电商后台，包含登录、订单、支付" --platform web --frontend react --backend python --domain ecommerce --cicd github
+```
 
 ## 4. 常用命令
 

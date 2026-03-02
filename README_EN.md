@@ -88,10 +88,10 @@ CI includes a dedicated `Platform Compatibility` job that verifies Skill and int
 
 ## Installation
 
-### Option 1: Install from PyPI (released build, recommended)
+### Option 1: Install from PyPI (recommended)
 
 ```bash
-pip install super-dev==2.0.0
+pip install -U super-dev
 super-dev --version
 ```
 
@@ -99,10 +99,10 @@ PyPI page:
 
 - https://pypi.org/project/super-dev/
 
-### Option 2: Upgrade to the latest released version
+### Option 2: Install a pinned version (repro/rollback)
 
 ```bash
-pip install -U super-dev
+pip install super-dev==2.0.0
 super-dev --version
 ```
 
@@ -126,15 +126,18 @@ super-dev --version
 
 ## Quick Start
 
-### One command for full pipeline
+### Mode A: Direct requirement mode (recommended)
 
 ```bash
-super-dev pipeline "Build an ecommerce admin with auth, orders, and payments" \
-  --platform web \
-  --frontend react \
-  --backend python \
-  --domain ecommerce \
-  --cicd github
+super-dev "Build an ecommerce admin with auth, orders, and payments"
+```
+
+This command automatically routes to the full pipeline (requirement enrichment -> docs -> spec -> scaffold -> red-team -> quality gate -> CI/CD -> migration and delivery package).
+
+### Mode B: Explicit pipeline (advanced)
+
+```bash
+super-dev pipeline "Build an ecommerce admin with auth, orders, and payments" --platform web --frontend react --backend python --domain ecommerce --cicd github
 ```
 
 ### Common commands
@@ -143,7 +146,7 @@ super-dev pipeline "Build an ecommerce admin with auth, orders, and payments" \
 super-dev init my-project
 super-dev analyze .
 super-dev create "User authentication system"
-super-dev pipeline "User authentication system"
+super-dev "User authentication system"
 super-dev spec init
 super-dev spec list
 super-dev quality --type all

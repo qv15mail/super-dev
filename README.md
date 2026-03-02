@@ -89,10 +89,10 @@ CI 内置 `Platform Compatibility` 门禁，自动验证 Claude Code / Codex CLI
 
 ## 安装
 
-### 方式 1：PyPI 安装（发布版，推荐）
+### 方式 1：PyPI 安装（推荐）
 
 ```bash
-pip install super-dev==2.0.0
+pip install -U super-dev
 super-dev --version
 ```
 
@@ -100,10 +100,10 @@ PyPI 页面：
 
 - https://pypi.org/project/super-dev/
 
-### 方式 2：升级到最新发布版
+### 方式 2：安装指定版本（复现/回滚）
 
 ```bash
-pip install -U super-dev
+pip install super-dev==2.0.0
 super-dev --version
 ```
 
@@ -127,15 +127,18 @@ super-dev --version
 
 ## 快速开始
 
-### 一句话执行完整流水线
+### 方式 A：需求直达模式（推荐）
 
 ```bash
-super-dev pipeline "构建一个带登录、订单、支付的电商后台" \
-  --platform web \
-  --frontend react \
-  --backend python \
-  --domain ecommerce \
-  --cicd github
+super-dev "构建一个带登录、订单、支付的电商后台"
+```
+
+上面这条命令会自动进入完整流水线（需求增强 → 文档 → Spec → 骨架 → 红队 → 质量门禁 → CI/CD → 迁移与交付包）。
+
+### 方式 B：显式 pipeline（高级用法）
+
+```bash
+super-dev pipeline "构建一个带登录、订单、支付的电商后台" --platform web --frontend react --backend python --domain ecommerce --cicd github
 ```
 
 ### 常用命令
@@ -147,7 +150,7 @@ super-dev analyze .
 
 # 核心流水线
 super-dev create "用户认证系统"
-super-dev pipeline "用户认证系统"
+super-dev "用户认证系统"
 
 # 规范管理
 super-dev spec init
