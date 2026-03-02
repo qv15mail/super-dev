@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -25,7 +26,7 @@ class ArtifactSpec:
 class DeliveryPackager:
     """交付包生成器"""
 
-    def __init__(self, project_dir: Path, name: str, version: str = "2.0.0"):
+    def __init__(self, project_dir: Path, name: str, version: str = "2.0.1"):
         self.project_dir = Path(project_dir).resolve()
         self.name = name
         self.version = version
@@ -61,6 +62,16 @@ class DeliveryPackager:
                 }
             )
 
+        spec_task_summary = self._collect_spec_task_summary()
+        if spec_task_summary["task_files"] > 0:
+            if int(spec_task_summary["pending"]) > 0:
+                missing_required.append(
+                    {
+                        "path": ".super-dev/changes/*/tasks.md",
+                        "reason": f"存在未完成 Spec 任务: {spec_task_summary['pending']}",
+                    }
+                )
+
         included_files = sorted(set(included_files))
         status = "ready" if not missing_required else "incomplete"
 
@@ -72,6 +83,7 @@ class DeliveryPackager:
             "cicd_platform": cicd_platform,
             "included_files": included_files,
             "missing_required": missing_required,
+            "spec_tasks": spec_task_summary,
             "summary": {
                 "included_count": len(included_files),
                 "missing_required_count": len(missing_required),
@@ -117,6 +129,7 @@ class DeliveryPackager:
             ArtifactSpec(output_dir / f"{self.name}-quality-gate.md", True, "缺少质量门禁报告"),
             ArtifactSpec(output_dir / f"{self.name}-code-review.md", True, "缺少代码审查指南"),
             ArtifactSpec(output_dir / f"{self.name}-ai-prompt.md", True, "缺少 AI 提示词"),
+            ArtifactSpec(output_dir / f"{self.name}-task-execution.md", True, "缺少 Spec 任务执行报告"),
             ArtifactSpec(output_dir / "frontend" / "index.html", True, "缺少前端演示页面"),
             ArtifactSpec(output_dir / "frontend" / "styles.css", True, "缺少前端演示样式"),
             ArtifactSpec(output_dir / "frontend" / "app.js", True, "缺少前端演示脚本"),
@@ -220,6 +233,20 @@ class DeliveryPackager:
         else:
             lines.append("- 无")
         lines.append("")
+
+        spec_tasks = manifest.get("spec_tasks", {})
+        if isinstance(spec_tasks, dict):
+            lines.extend(
+                [
+                    "## Spec任务摘要",
+                    "",
+                    f"- tasks.md 文件数: {spec_tasks.get('task_files', 0)}",
+                    f"- 总任务数: {spec_tasks.get('total', 0)}",
+                    f"- 已完成: {spec_tasks.get('completed', 0)}",
+                    f"- 进行中/未完成: {spec_tasks.get('pending', 0)}",
+                    "",
+                ]
+            )
         return "\n".join(lines)
 
     def _relative(self, path: Path) -> str:
@@ -227,3 +254,30 @@ class DeliveryPackager:
             return str(path.relative_to(self.project_dir))
         except ValueError:
             return str(path)
+
+    def _collect_spec_task_summary(self) -> dict[str, int]:
+        task_files = list((self.project_dir / ".super-dev" / "changes").glob("*/tasks.md"))
+        total = 0
+        completed = 0
+        in_progress = 0
+        for task_file in task_files:
+            for line in task_file.read_text(encoding="utf-8", errors="ignore").splitlines():
+                stripped = line.strip()
+                if not stripped.startswith("- ["):
+                    continue
+                status = stripped[2:5]
+                if not re.match(r"^\[[ x~_]\]$", status):
+                    continue
+                total += 1
+                if status == "[x]":
+                    completed += 1
+                elif status == "[~]":
+                    in_progress += 1
+        pending = max(0, total - completed)
+        return {
+            "task_files": len(task_files),
+            "total": total,
+            "completed": completed,
+            "pending": pending,
+            "in_progress": in_progress,
+        }

@@ -189,11 +189,11 @@ class SkillManager:
         target_dir.mkdir(parents=True, exist_ok=True)
         skill_content = f"""# {skill_name} - Super Dev AI Coding Skill
 
-> 版本: 2.0.0 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
+> 版本: 2.0.1 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
 
 ---
 
-## 🎯 Skill 角色定义
+## Skill 角色定义
 
 你是一个由 **10 位顶级专家**组成的 AI 开发战队成员。当用户调用 Super Dev 时，你需要根据任务类型自动切换专家角色：
 
@@ -212,7 +212,7 @@ class SkillManager:
 
 ---
 
-## 🚀 12 阶段开发流水线
+## 12 阶段开发流水线
 
 接到任务后，**严格按以下顺序执行**：
 
@@ -233,7 +233,7 @@ class SkillManager:
 
 ---
 
-## 📋 开始前必读（强制）
+## 开始前必读（强制）
 
 **在写任何一行代码之前**，必须先读取以下文档：
 
@@ -245,7 +245,7 @@ class SkillManager:
 
 ---
 
-## ⚡ 执行规则
+## 执行规则
 
 ### 前端先行原则
 - 先完成前端骨架并可演示，再实现后端 API
@@ -272,9 +272,12 @@ class SkillManager:
 
 ---
 
-## 🔧 常用命令参考
+## 常用命令参考
 
 ```bash
+# 需求直达模式（推荐）
+super-dev "实现一个包含登录、订单、支付的系统"
+
 # 查看当前 Spec
 super-dev spec view
 
@@ -291,7 +294,7 @@ super-dev expert ARCHITECT "评审微服务拆分方案"
 
 ---
 
-## ✅ 交付标准
+## 交付标准
 
 所有任务完成后，确认：
 

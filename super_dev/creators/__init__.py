@@ -14,6 +14,7 @@ from .implementation_builder import ImplementationScaffoldBuilder
 from .prompt_generator import AIPromptGenerator
 from .requirement_parser import RequirementParser
 from .spec_builder import SpecBuilder
+from .task_executor import SpecTaskExecutor
 
 __all__ = [
     "ProjectCreator",
@@ -21,6 +22,7 @@ __all__ = [
     "FrontendScaffoldBuilder",
     "ImplementationScaffoldBuilder",
     "SpecBuilder",
+    "SpecTaskExecutor",
     "AIPromptGenerator",
     "RequirementParser",
 ]

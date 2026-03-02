@@ -18,13 +18,13 @@ English | [简体中文](README.md)
 
 ## Version
 
-Current version: `2.0.0`
+Current version: `2.0.1`
 
-Current quality baseline (2026-03-01):
+Current quality baseline (2026-03-02):
 
 - `ruff check super_dev tests` passed
-- `mypy super_dev` passed (55 source files)
-- `pytest -q` passed (199 passed)
+- `mypy super_dev` passed (56 source files)
+- `pytest -q` passed (full suite passing on current branch)
 - `bandit -ll -r super_dev` passed (0 medium/high findings)
 - `pip-audit .` passed (0 vulnerabilities)
 
@@ -36,8 +36,8 @@ Current quality baseline (2026-03-01):
 
 - requirement intelligence and enrichment
 - PRD / architecture / UIUX / execution docs
-- frontend demo scaffold + implementation scaffold
-- red-team review + quality gate
+- frontend demo scaffold + backend/frontend implementation pack (routes/services/repositories/tests/migrations)
+- red-team review + quality gate (including Spec task completion checks)
 - code review guide + AI prompts
 - CI/CD + deploy remediation templates + DB migrations + delivery package (manifest/report/zip)
 
@@ -55,7 +55,7 @@ Current quality baseline (2026-03-01):
 | Stage 1 | Professional docs generation |
 | Stage 2 | Frontend demo scaffold generation |
 | Stage 3 | Spec creation |
-| Stage 4 | Frontend/backend implementation scaffold (optional) |
+| Stage 4 | Frontend/backend implementation pack + Spec task execution loop (auto-repair + task execution report) |
 | Stage 5 | Red-team review (optional) |
 | Stage 6 | Quality gate (optional threshold override) |
 | Stage 7 | Code review guide |
@@ -92,7 +92,6 @@ CI includes a dedicated `Platform Compatibility` job that verifies Skill and int
 
 ```bash
 pip install -U super-dev
-super-dev --version
 ```
 
 PyPI page:
@@ -102,15 +101,13 @@ PyPI page:
 ### Option 2: Install a pinned version (repro/rollback)
 
 ```bash
-pip install super-dev==2.0.0
-super-dev --version
+pip install super-dev==2.0.1
 ```
 
 ### Option 3: Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.0
-super-dev --version
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.1
 ```
 
 ### Option 4: Developer install from source
@@ -119,7 +116,6 @@ super-dev --version
 git clone https://github.com/shangyankeji/super-dev.git
 cd super-dev
 pip install -e ".[dev]"
-super-dev --version
 ```
 
 ---
@@ -145,14 +141,71 @@ super-dev pipeline "Build an ecommerce admin with auth, orders, and payments" --
 ```bash
 super-dev init my-project
 super-dev analyze .
-super-dev create "User authentication system"
 super-dev "User authentication system"
+super-dev pipeline "User authentication system" --platform web --frontend react --backend node --cicd github
 super-dev spec init
 super-dev spec list
+super-dev task run <change_id>
 super-dev quality --type all
 super-dev deploy --cicd github
 super-dev studio --port 8765
 ```
+
+---
+
+## Scenario-Based Usage (0-to-1 / 1-to-N+1)
+
+### 0-to-1: Build from scratch
+
+Use this when you only have requirements and no existing codebase.
+
+```bash
+mkdir new-project && cd new-project
+super-dev "Build an enterprise task management platform with auth, RBAC, projects, tasks, and reporting"
+```
+
+After generation, review these artifacts first:
+
+- `output/*-prd.md`
+- `output/*-architecture.md`
+- `output/*-uiux.md`
+- `.super-dev/changes/*/tasks.md`
+- `output/*-task-execution.md`
+- `output/*-redteam.md`
+- `output/*-quality-gate.md`
+- `output/delivery/*-delivery-manifest.json`
+
+### 1-to-N+1 (including 1-to-1+N): iterate on an existing product
+
+Use this when your project already exists and you are adding capabilities in controlled increments.
+
+```bash
+cd your-existing-project
+super-dev analyze .
+super-dev spec init
+super-dev spec propose add-billing --title "Introduce Billing Center" --description "Plans, subscriptions, invoices, payment callbacks"
+super-dev spec add-req add-billing billing subscription "The system SHALL support subscription lifecycle management"
+super-dev task run add-billing
+super-dev quality --type all
+```
+
+Recommended operating model:
+
+1. Keep each `change_id` focused on one capability area.
+2. Run red-team and quality checks per change.
+3. Merge and release in small slices, not large cross-domain bundles.
+
+### Commercial release checks
+
+```bash
+./scripts/preflight.sh
+```
+
+Release criteria:
+
+- red-team has no critical blockers
+- quality gate score is `>= 80`
+- delivery manifest status is `ready`
 
 ---
 
@@ -171,6 +224,8 @@ Related docs:
 - [Publishing Guide](docs/PUBLISHING.md)
 - [Release Runbook](docs/RELEASE_RUNBOOK.md)
 - [Quickstart](docs/QUICKSTART.md)
+- [Detailed Workflow Guide (EN)](docs/WORKFLOW_GUIDE_EN.md)
+- [Detailed Workflow Guide (ZH)](docs/WORKFLOW_GUIDE.md)
 
 ---
 

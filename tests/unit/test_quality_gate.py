@@ -219,3 +219,38 @@ class TestQualityGateChecker:
         names = {c.name: c for c in checks}
         assert checker._has_js_test_script() is True
         assert names["测试执行"].status.value == "passed"
+
+    def test_spec_task_completion_passed(self, temp_project_dir: Path):
+        task_file = temp_project_dir / ".super-dev" / "changes" / "demo" / "tasks.md"
+        task_file.parent.mkdir(parents=True, exist_ok=True)
+        task_file.write_text(
+            "# Tasks\n\n- [x] **1.1: done**\n- [x] **1.2: done**\n",
+            encoding="utf-8",
+        )
+
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="0-1",
+        )
+        check = checker._check_spec_task_completion()
+        assert check.status.value == "passed"
+        assert check.score == 100
+
+    def test_spec_task_completion_failed_with_pending(self, temp_project_dir: Path):
+        task_file = temp_project_dir / ".super-dev" / "changes" / "demo" / "tasks.md"
+        task_file.parent.mkdir(parents=True, exist_ok=True)
+        task_file.write_text(
+            "# Tasks\n\n- [x] **1.1: done**\n- [ ] **1.2: pending**\n",
+            encoding="utf-8",
+        )
+
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="1-N+1",
+        )
+        check = checker._check_spec_task_completion()
+        assert check.status.value == "failed"

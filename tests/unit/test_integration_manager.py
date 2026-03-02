@@ -43,3 +43,12 @@ class TestIntegrationManager:
                 full_path = temp_project_dir / file_path
                 assert full_path.exists()
                 assert "Super Dev" in full_path.read_text(encoding="utf-8")
+
+    def test_antigravity_rules_use_direct_requirement_mode(self, temp_project_dir: Path):
+        manager = IntegrationManager(temp_project_dir)
+        files = manager.setup("antigravity", force=True)
+
+        assert len(files) == 1
+        content = files[0].read_text(encoding="utf-8")
+        assert 'super-dev "需求"' in content
+        assert 'super-dev pipeline "需求"' in content

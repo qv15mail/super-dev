@@ -8,6 +8,7 @@
 """
 
 import json
+import re
 import shutil
 import subprocess  # nosec B404
 from dataclasses import dataclass, field
@@ -645,6 +646,8 @@ class QualityGateChecker:
                 details="未检测到可执行测试用例",
             ))
 
+        checks.append(self._check_spec_task_completion())
+
         coverage_percent = self._read_coverage_percent()
         if coverage_percent is None:
             warning_score = 70 if self.is_zero_to_one else 50
@@ -689,6 +692,75 @@ class QualityGateChecker:
             ))
 
         return checks
+
+    def _check_spec_task_completion(self) -> QualityCheck:
+        """检查 Spec 任务完成度"""
+        task_files = list((self.project_dir / ".super-dev" / "changes").glob("*/tasks.md"))
+        if not task_files:
+            warning_score = 70 if self.is_zero_to_one else 50
+            return QualityCheck(
+                name="Spec任务完成度",
+                category="testing",
+                description="Spec 任务闭环状态",
+                status=CheckStatus.WARNING,
+                score=warning_score,
+                weight=self.CHECKS_CONFIG["testing"]["weight"],
+                details="未发现 .super-dev/changes/*/tasks.md",
+            )
+
+        total = 0
+        completed = 0
+        in_progress = 0
+        for task_file in task_files:
+            for line in task_file.read_text(encoding="utf-8", errors="ignore").splitlines():
+                stripped = line.strip()
+                if not stripped.startswith("- ["):
+                    continue
+                marker = stripped[2:5]
+                if not re.match(r"^\[[ x~_]\]$", marker):
+                    continue
+                total += 1
+                if marker == "[x]":
+                    completed += 1
+                elif marker == "[~]":
+                    in_progress += 1
+
+        if total == 0:
+            warning_score = 70 if self.is_zero_to_one else 50
+            return QualityCheck(
+                name="Spec任务完成度",
+                category="testing",
+                description="Spec 任务闭环状态",
+                status=CheckStatus.WARNING,
+                score=warning_score,
+                weight=self.CHECKS_CONFIG["testing"]["weight"],
+                details="发现 tasks.md 但未解析到任务项",
+            )
+
+        pending = total - completed
+        completion_rate = int((completed / total) * 100)
+        if pending == 0 and in_progress == 0:
+            return QualityCheck(
+                name="Spec任务完成度",
+                category="testing",
+                description="Spec 任务闭环状态",
+                status=CheckStatus.PASSED,
+                score=100,
+                weight=self.CHECKS_CONFIG["testing"]["weight"],
+                details=f"任务完成 {completed}/{total}",
+            )
+
+        score = max(20, completion_rate)
+        check_status = CheckStatus.FAILED if completion_rate < 80 else CheckStatus.WARNING
+        return QualityCheck(
+            name="Spec任务完成度",
+            category="testing",
+            description="Spec 任务闭环状态",
+            status=check_status,
+            score=score,
+            weight=self.CHECKS_CONFIG["testing"]["weight"],
+            details=f"任务完成 {completed}/{total}，未完成 {pending}",
+        )
 
     def _check_code_quality(self) -> list[QualityCheck]:
         """检查代码质量工具"""

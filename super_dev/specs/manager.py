@@ -7,6 +7,7 @@ Spec-Driven Development 管理器
 创建时间：2025-12-30
 """
 
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -147,6 +148,34 @@ class ChangeManager:
             return None
 
         change = Change(id=change_id, title=change_id.replace("-", " ").title())
+
+        # 加载元数据
+        meta_path = change_path / "change.yaml"
+        if meta_path.exists():
+            with open(meta_path, encoding="utf-8") as f:
+                metadata = yaml.safe_load(f) or {}
+            title = metadata.get("title")
+            if isinstance(title, str) and title.strip():
+                change.title = title.strip()
+
+            raw_status = str(metadata.get("status", "")).strip().lower()
+            for status in ChangeStatus:
+                if status.value == raw_status:
+                    change.status = status
+                    break
+
+            created_at = metadata.get("created_at")
+            if isinstance(created_at, str):
+                try:
+                    change.created_at = datetime.fromisoformat(created_at)
+                except ValueError:
+                    pass
+            updated_at = metadata.get("updated_at")
+            if isinstance(updated_at, str):
+                try:
+                    change.updated_at = datetime.fromisoformat(updated_at)
+                except ValueError:
+                    pass
 
         # 加载提案
         proposal_path = change_path / "proposal.md"
@@ -295,27 +324,71 @@ class ChangeManager:
 
     def _parse_tasks(self, content: str) -> list[Task]:
         """解析任务"""
-        tasks = []
+        tasks: list[Task] = []
+        current_task: Task | None = None
+        task_pattern = re.compile(
+            r"^-\s*\[(?P<marker>[ xX~_])\]\s+\*\*(?P<id>[^:]+):\s*(?P<title>.*?)\*\*\s*$"
+        )
+        fallback_pattern = re.compile(
+            r"^-\s*\[(?P<marker>[ xX~_])\]\s+(?P<id>\d+(?:\.\d+)*)\s*:?\s*(?P<title>.+)$"
+        )
+
         for line in content.split("\n"):
-            if line.strip().startswith("- [") or line.strip().startswith("- [~") or line.strip().startswith("- [x]"):
-                # 解析任务行: - [ ] **1.1: Task Title**
-                status_str = line[3:5]
+            stripped = line.strip()
+            if not stripped:
+                continue
+
+            task_match = task_pattern.match(stripped) or fallback_pattern.match(stripped)
+            if task_match:
+                if current_task:
+                    tasks.append(current_task)
+                marker = task_match.group("marker")
                 status = {
-                    "[ ]": TaskStatus.PENDING,
-                    "[~": TaskStatus.IN_PROGRESS,
-                    "[x]": TaskStatus.COMPLETED,
-                    "[_]": TaskStatus.SKIPPED,
-                }.get(status_str, TaskStatus.PENDING)
+                    " ": TaskStatus.PENDING,
+                    "~": TaskStatus.IN_PROGRESS,
+                    "x": TaskStatus.COMPLETED,
+                    "X": TaskStatus.COMPLETED,
+                    "_": TaskStatus.SKIPPED,
+                }.get(marker, TaskStatus.PENDING)
+                current_task = Task(
+                    id=task_match.group("id").strip(),
+                    title=task_match.group("title").strip(),
+                    status=status,
+                )
+                continue
 
-                rest = line[5:].strip()
+            if current_task is None or not stripped.startswith("-"):
+                continue
 
-                # 提取 ID 和标题
-                if rest.startswith("**"):
-                    parts = rest.split(":", 1)
-                    if len(parts) == 2:
-                        task_id = parts[0][2:].strip()
-                        title = parts[1].split("*", 1)[0].strip()
-                        tasks.append(Task(id=task_id, title=title, status=status))
+            detail = stripped[1:].strip()
+            detail_lower = detail.lower()
+            if detail_lower.startswith("refs:"):
+                refs_part = detail.split(":", 1)[1].strip() if ":" in detail else ""
+                refs = [
+                    token.strip().strip("`")
+                    for token in refs_part.split(",")
+                    if token.strip().strip("`")
+                ]
+                current_task.spec_refs = refs
+                continue
+
+            if detail_lower.startswith("depends on:"):
+                depends_part = detail.split(":", 1)[1].strip() if ":" in detail else ""
+                dependencies = [token.strip() for token in depends_part.split(",") if token.strip()]
+                current_task.dependencies = dependencies
+                continue
+
+            if detail_lower.startswith("assigned to:"):
+                current_task.assigned_to = detail.split(":", 1)[1].strip() if ":" in detail else ""
+                continue
+
+            if current_task.description:
+                current_task.description = f"{current_task.description}\n{detail}"
+            else:
+                current_task.description = detail
+
+        if current_task:
+            tasks.append(current_task)
 
         return tasks
 
@@ -329,13 +402,19 @@ class ChangeManager:
                 groups[group] = []
             groups[group].append(task)
 
-        for group in sorted(groups.keys()):
+        def _group_sort_key(value: str) -> tuple[int, int | str]:
+            if value.isdigit():
+                return (0, int(value))
+            return (1, value)
+
+        for group in sorted(groups.keys(), key=_group_sort_key):
             group_name = {
-                "1": "1. Setup",
-                "2": "2. Backend",
-                "3": "3. Frontend",
-                "4": "4. Testing",
-                "5": "5. Documentation"
+                "1": "1. Planning",
+                "2": "2. Frontend",
+                "3": "3. Backend",
+                "4": "4. Integration & Quality",
+                "5": "5. Testing",
+                "6": "6. Documentation",
             }.get(group, f"{group}. Other")
             lines.append(f"## {group_name}")
             lines.append("")

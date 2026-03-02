@@ -188,6 +188,9 @@ class Task:
         if self.description:
             lines.append(f"  - {self.description}")
 
+        if self.assigned_to:
+            lines.append(f"  - Assigned to: {self.assigned_to}")
+
         if self.spec_refs:
             lines.append(f"  - Refs: {', '.join(f'`{r}`' for r in self.spec_refs)}")
 

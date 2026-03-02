@@ -1,6 +1,6 @@
 # Super Dev 快速开始
 
-> 面向 `2.0.0` 版本，5-10 分钟完成从安装到首次流水线运行。
+> 面向 `2.0.1` 版本，5-10 分钟完成从安装到首次流水线运行。
 
 ## 1. 环境要求
 
@@ -17,20 +17,12 @@ python3 --version
 
 ```bash
 pip install -U super-dev
-super-dev --version
 ```
 
 ### 方式 B：安装指定版本（复现/回滚）
 
 ```bash
-pip install super-dev==2.0.0
-super-dev --version
-```
-
-预期输出示例：
-
-```text
-super-dev 2.0.0
+pip install super-dev==2.0.1
 ```
 
 ## 3. 需求直达（推荐）
@@ -40,6 +32,7 @@ super-dev "构建一个电商后台，包含登录、订单、支付"
 ```
 
 执行后会在 `output/`、`.super-dev/`、前后端骨架目录中生成完整产物，且在 `output/delivery/` 自动生成交付清单、交付报告和 zip 交付包。
+同时会生成 `output/*-task-execution.md`，用于记录 Spec 任务执行、自动修复和未完成项。
 
 如需精细控制平台参数，可使用显式 pipeline：
 
@@ -51,7 +44,7 @@ super-dev pipeline "构建一个电商后台，包含登录、订单、支付" -
 
 ```bash
 super-dev --help
-super-dev create "用户认证系统"
+super-dev "用户认证系统"
 super-dev spec init
 super-dev spec list
 super-dev quality --type all

@@ -34,45 +34,81 @@ class ImplementationScaffoldBuilder:
 
     def generate(self, requirements: list[dict]) -> dict:
         """生成前后端实现骨架"""
+        module_requirements = self._build_module_requirements(requirements)
         result: dict[str, list[str]] = {
             "frontend_files": [],
             "backend_files": [],
         }
 
         if self.frontend != "none":
-            result["frontend_files"] = self._generate_frontend(requirements)
+            result["frontend_files"] = self._generate_frontend(module_requirements)
 
         if self.backend != "none":
-            result["backend_files"] = self._generate_backend(requirements)
+            result["backend_files"] = self._generate_backend(module_requirements)
 
         return result
 
-    def _generate_frontend(self, requirements: list[dict]) -> list[str]:
+    def _generate_frontend(self, module_requirements: dict[str, list[str]]) -> list[str]:
         frontend_dir = self.project_dir / "frontend"
         src_dir = frontend_dir / "src"
         modules_dir = src_dir / "modules"
         modules_dir.mkdir(parents=True, exist_ok=True)
 
-        module_names = [req.get("spec_name", "core") for req in requirements]
-        unique_modules = []
-        for module_name in module_names:
-            if module_name not in unique_modules:
-                unique_modules.append(module_name)
+        unique_modules = list(module_requirements.keys())
 
         files: list[str] = []
 
         frontend_kind = self.frontend.lower()
         if frontend_kind == "react":
-            files.extend(self._generate_react_frontend(frontend_dir, src_dir, modules_dir, unique_modules))
+            files.extend(
+                self._generate_react_frontend(
+                    frontend_dir,
+                    src_dir,
+                    modules_dir,
+                    unique_modules,
+                    module_requirements,
+                )
+            )
         elif frontend_kind == "vue":
-            files.extend(self._generate_vue_frontend(frontend_dir, src_dir, modules_dir, unique_modules))
+            files.extend(
+                self._generate_vue_frontend(
+                    frontend_dir,
+                    src_dir,
+                    modules_dir,
+                    unique_modules,
+                    module_requirements,
+                )
+            )
         elif frontend_kind == "svelte":
-            files.extend(self._generate_svelte_frontend(frontend_dir, src_dir, modules_dir, unique_modules))
+            files.extend(
+                self._generate_svelte_frontend(
+                    frontend_dir,
+                    src_dir,
+                    modules_dir,
+                    unique_modules,
+                    module_requirements,
+                )
+            )
         elif frontend_kind == "angular":
-            files.extend(self._generate_angular_frontend(frontend_dir, src_dir, unique_modules))
+            files.extend(
+                self._generate_angular_frontend(
+                    frontend_dir,
+                    src_dir,
+                    unique_modules,
+                    module_requirements,
+                )
+            )
         else:
             # 默认回落到 React
-            files.extend(self._generate_react_frontend(frontend_dir, src_dir, modules_dir, unique_modules))
+            files.extend(
+                self._generate_react_frontend(
+                    frontend_dir,
+                    src_dir,
+                    modules_dir,
+                    unique_modules,
+                    module_requirements,
+                )
+            )
 
         readme_file = frontend_dir / "README.md"
         readme_file.write_text(
@@ -90,26 +126,24 @@ class ImplementationScaffoldBuilder:
 
         return files
 
-    def _generate_backend(self, requirements: list[dict]) -> list[str]:
+    def _generate_backend(self, module_requirements: dict[str, list[str]]) -> list[str]:
         backend_dir = self.project_dir / "backend"
         src_dir = backend_dir / "src"
         src_dir.mkdir(parents=True, exist_ok=True)
 
-        module_names = [req.get("spec_name", "core") for req in requirements]
-        unique_modules = []
-        for module_name in module_names:
-            if module_name not in unique_modules:
-                unique_modules.append(module_name)
+        unique_modules = list(module_requirements.keys())
 
         files: list[str] = []
         if self.backend == "python":
+            files.extend(self._generate_python_feature_pack(src_dir, module_requirements))
+
             app_file = src_dir / "app.py"
-            app_file.write_text(self._build_fastapi_app(unique_modules), encoding="utf-8")
+            app_file.write_text(self._build_fastapi_app(module_requirements), encoding="utf-8")
             files.append(str(app_file))
 
             requirements_file = backend_dir / "requirements.txt"
             requirements_file.write_text(
-                "fastapi>=0.110.0\nuvicorn>=0.27.0\npytest>=7.0.0\n",
+                "fastapi>=0.110.0\nuvicorn>=0.27.0\npytest>=7.0.0\npydantic>=2.0.1\n",
                 encoding="utf-8",
             )
             files.append(str(requirements_file))
@@ -125,7 +159,10 @@ class ImplementationScaffoldBuilder:
                 encoding="utf-8",
             )
             files.append(str(smoke_test))
+            files.extend(self._generate_python_tests(tests_dir, module_requirements))
         elif self.backend == "node":
+            files.extend(self._generate_node_feature_pack(src_dir, module_requirements))
+
             package_json = {
                 "name": f"{self.package_name}-backend",
                 "version": "0.1.0",
@@ -144,7 +181,7 @@ class ImplementationScaffoldBuilder:
             files.append(str(package_file))
 
             app_file = src_dir / "app.js"
-            app_file.write_text(self._build_express_app(unique_modules), encoding="utf-8")
+            app_file.write_text(self._build_express_app(module_requirements), encoding="utf-8")
             files.append(str(app_file))
 
             test_file = src_dir / "app.test.js"
@@ -159,6 +196,9 @@ class ImplementationScaffoldBuilder:
                 encoding="utf-8",
             )
             files.append(str(test_file))
+            tests_dir = backend_dir / "tests"
+            tests_dir.mkdir(parents=True, exist_ok=True)
+            files.extend(self._generate_node_tests(tests_dir, module_requirements))
         elif self.backend == "go":
             app_file = src_dir / "main.go"
             app_file.write_text(self._build_go_app(unique_modules), encoding="utf-8")
@@ -174,6 +214,7 @@ class ImplementationScaffoldBuilder:
             files.append(str(pom_file))
         else:
             # 未知后端类型，回落到 node
+            files.extend(self._generate_node_feature_pack(src_dir, module_requirements))
             package_json = {
                 "name": f"{self.package_name}-backend",
                 "version": "0.1.0",
@@ -186,7 +227,7 @@ class ImplementationScaffoldBuilder:
             files.append(str(package_file))
 
             app_file = src_dir / "app.js"
-            app_file.write_text(self._build_express_app(unique_modules), encoding="utf-8")
+            app_file.write_text(self._build_express_app(module_requirements), encoding="utf-8")
             files.append(str(app_file))
 
             test_file = src_dir / "app.test.js"
@@ -201,10 +242,14 @@ class ImplementationScaffoldBuilder:
                 encoding="utf-8",
             )
             files.append(str(test_file))
+            tests_dir = backend_dir / "tests"
+            tests_dir.mkdir(parents=True, exist_ok=True)
+            files.extend(self._generate_node_tests(tests_dir, module_requirements))
 
         api_contract = backend_dir / "API_CONTRACT.md"
         api_contract.write_text(self._build_api_contract(unique_modules), encoding="utf-8")
         files.append(str(api_contract))
+        files.extend(self._generate_sql_migrations(backend_dir, unique_modules))
 
         return files
 
@@ -214,6 +259,7 @@ class ImplementationScaffoldBuilder:
         src_dir: Path,
         modules_dir: Path,
         unique_modules: list[str],
+        module_requirements: dict[str, list[str]],
     ) -> list[str]:
         files: list[str] = []
         package_json = {
@@ -259,7 +305,10 @@ class ImplementationScaffoldBuilder:
 
         for module_name in unique_modules:
             module_file = modules_dir / f"{module_name}.tsx"
-            module_file.write_text(self._build_module_component(module_name), encoding="utf-8")
+            module_file.write_text(
+                self._build_module_component(module_name, module_requirements.get(module_name, [])),
+                encoding="utf-8",
+            )
             files.append(str(module_file))
 
         return files
@@ -270,6 +319,7 @@ class ImplementationScaffoldBuilder:
         src_dir: Path,
         modules_dir: Path,
         unique_modules: list[str],
+        module_requirements: dict[str, list[str]],
     ) -> list[str]:
         files: list[str] = []
         package_json = {
@@ -318,7 +368,10 @@ class ImplementationScaffoldBuilder:
 
         for module_name in unique_modules:
             module_file = modules_dir / f"{module_name}.vue"
-            module_file.write_text(self._build_vue_module(module_name), encoding="utf-8")
+            module_file.write_text(
+                self._build_vue_module(module_name, module_requirements.get(module_name, [])),
+                encoding="utf-8",
+            )
             files.append(str(module_file))
 
         return files
@@ -329,6 +382,7 @@ class ImplementationScaffoldBuilder:
         src_dir: Path,
         modules_dir: Path,
         unique_modules: list[str],
+        module_requirements: dict[str, list[str]],
     ) -> list[str]:
         files: list[str] = []
         package_json = {
@@ -379,7 +433,10 @@ class ImplementationScaffoldBuilder:
 
         for module_name in unique_modules:
             module_file = modules_dir / f"{module_name}.svelte"
-            module_file.write_text(self._build_svelte_module(module_name), encoding="utf-8")
+            module_file.write_text(
+                self._build_svelte_module(module_name, module_requirements.get(module_name, [])),
+                encoding="utf-8",
+            )
             files.append(str(module_file))
 
         return files
@@ -389,6 +446,7 @@ class ImplementationScaffoldBuilder:
         frontend_dir: Path,
         src_dir: Path,
         unique_modules: list[str],
+        module_requirements: dict[str, list[str]],
     ) -> list[str]:
         files: list[str] = []
         package_json = {
@@ -426,7 +484,10 @@ class ImplementationScaffoldBuilder:
         app_dir.mkdir(parents=True, exist_ok=True)
 
         component_file = app_dir / "app.component.ts"
-        component_file.write_text(self._build_angular_component(unique_modules), encoding="utf-8")
+        component_file.write_text(
+            self._build_angular_component(unique_modules, module_requirements),
+            encoding="utf-8",
+        )
         files.append(str(component_file))
 
         module_file = app_dir / "app.module.ts"
@@ -495,42 +556,42 @@ class ImplementationScaffoldBuilder:
             "}\n"
         )
 
-    def _build_module_component(self, module_name: str) -> str:
+    def _build_module_component(self, module_name: str, req_names: list[str]) -> str:
         component = self._to_component(module_name)
+        checklist = "\n".join(f"        <li>{req}</li>" for req in req_names) or "        <li>待补充需求</li>"
         return (
             "import React from 'react';\n\n"
             f"export default function {component}() {{\n"
             "  return (\n"
             "    <div>\n"
             f"      <p>{module_name} 模块初始骨架已创建，可在此实现业务逻辑。</p>\n"
+            "      <ul>\n"
+            f"{checklist}\n"
+            "      </ul>\n"
             "    </div>\n"
             "  );\n"
             "}\n"
         )
 
-    def _build_express_app(self, modules: list[str]) -> str:
-        routes = []
-        for module_name in modules:
-            routes.append(
-
-                    f"app.get('/api/{module_name}', (req, res) => {{\n"
-                    "  res.json({\n"
-                    f"    module: '{module_name}',\n"
-                    "    status: 'todo',\n"
-                    "    message: 'Module scaffold created by Super Dev'\n"
-                    "  });\n"
-                    "});"
-
-            )
+    def _build_express_app(self, module_requirements: dict[str, list[str]]) -> str:
+        imports = []
+        mount_lines = []
+        for module_name in module_requirements:
+            route_segment = self._safe_route_segment(module_name)
+            variable = f"{self._safe_identifier(module_name)}Router"
+            imports.append(f"const {variable} = require('./routes/{route_segment}.route');")
+            mount_lines.append(f"app.use('/api/{route_segment}', {variable});")
 
         return (
             "const express = require('express');\n\n"
+            + "\n".join(imports)
+            + "\n\n"
             "const app = express();\n"
             "app.use(express.json());\n\n"
             "app.get('/health', (_req, res) => {\n"
             "  res.json({ status: 'ok' });\n"
             "});\n\n"
-            + "\n\n".join(routes)
+            + "\n".join(mount_lines)
             + "\n\n"
             "const port = process.env.PORT || 3001;\n"
             "app.listen(port, () => {\n"
@@ -538,30 +599,26 @@ class ImplementationScaffoldBuilder:
             "});\n"
         )
 
-    def _build_fastapi_app(self, modules: list[str]) -> str:
-        route_blocks = []
-        for module_name in modules:
-            function_name = self._safe_identifier(module_name)
+    def _build_fastapi_app(self, module_requirements: dict[str, list[str]]) -> str:
+        imports = []
+        include_routes = []
+        for module_name in module_requirements:
             route_segment = self._safe_route_segment(module_name)
-            route_blocks.append(
-
-                    f"@app.get('/api/{route_segment}')\n"
-                    f"def get_{function_name}():\n"
-                    "    return {\n"
-                    f"        'module': '{module_name}',\n"
-                    "        'status': 'todo',\n"
-                    "        'message': 'Module scaffold created by Super Dev'\n"
-                    "    }\n"
-
+            variable = f"{self._safe_identifier(module_name)}_router"
+            imports.append(
+                f"from .routes.{route_segment}_route import router as {variable}"
             )
+            include_routes.append(f"app.include_router({variable})")
 
         return (
-            "from fastapi import FastAPI\n\n"
+            "from fastapi import FastAPI\n"
+            + "\n".join(imports)
+            + "\n\n"
             "app = FastAPI(title='Super Dev Backend Scaffold')\n\n"
             "@app.get('/health')\n"
             "def health():\n"
             "    return {'status': 'ok'}\n\n"
-            + "\n\n".join(route_blocks)
+            + "\n".join(include_routes)
             + "\n"
         )
 
@@ -577,8 +634,226 @@ class ImplementationScaffoldBuilder:
         for module_name in modules:
             route_segment = self._safe_route_segment(module_name)
             lines.append(f"| {module_name} | GET | /api/{route_segment} | 获取 {module_name} 模块初始数据 |")
+            lines.append(f"| {module_name} | POST | /api/{route_segment} | 创建 {module_name} 模块初始数据 |")
         lines.append("")
         return "\n".join(lines)
+
+    def _generate_node_feature_pack(self, src_dir: Path, module_requirements: dict[str, list[str]]) -> list[str]:
+        files: list[str] = []
+        routes_dir = src_dir / "routes"
+        services_dir = src_dir / "services"
+        repositories_dir = src_dir / "repositories"
+        routes_dir.mkdir(parents=True, exist_ok=True)
+        services_dir.mkdir(parents=True, exist_ok=True)
+        repositories_dir.mkdir(parents=True, exist_ok=True)
+
+        for module_name in module_requirements:
+            route_segment = self._safe_route_segment(module_name)
+            identifier = self._safe_identifier(module_name)
+            title = self._to_component(module_name)
+
+            repository_file = repositories_dir / f"{route_segment}.repository.js"
+            repository_file.write_text(
+                (
+                    f"const {identifier}Store = [];\n\n"
+                    f"function list{title}() {{\n"
+                    f"  return {identifier}Store;\n"
+                    "}\n\n"
+                    f"function create{title}(payload) {{\n"
+                    f"  const record = {{ id: {identifier}Store.length + 1, ...payload }};\n"
+                    f"  {identifier}Store.push(record);\n"
+                    "  return record;\n"
+                    "}\n\n"
+                    f"module.exports = {{ list{title}, create{title} }};\n"
+                ),
+                encoding="utf-8",
+            )
+            files.append(str(repository_file))
+
+            service_file = services_dir / f"{route_segment}.service.js"
+            service_file.write_text(
+                (
+                    f"const repository = require('../repositories/{route_segment}.repository');\n\n"
+                    f"function list{title}Items() {{\n"
+                    f"  return repository.list{title}();\n"
+                    "}\n\n"
+                    f"function create{title}Item(payload) {{\n"
+                    f"  return repository.create{title}(payload);\n"
+                    "}\n\n"
+                    f"module.exports = {{ list{title}Items, create{title}Item }};\n"
+                ),
+                encoding="utf-8",
+            )
+            files.append(str(service_file))
+
+            route_file = routes_dir / f"{route_segment}.route.js"
+            route_file.write_text(
+                (
+                    "const express = require('express');\n"
+                    f"const service = require('../services/{route_segment}.service');\n\n"
+                    "const router = express.Router();\n\n"
+                    "router.get('/', (_req, res) => {\n"
+                    "  res.json({\n"
+                    f"    module: '{module_name}',\n"
+                    f"    items: service.list{title}Items()\n"
+                    "  });\n"
+                    "});\n\n"
+                    "router.post('/', (req, res) => {\n"
+                    f"  const item = service.create{title}Item(req.body || {{ module: '{module_name}' }});\n"
+                    "  res.status(201).json(item);\n"
+                    "});\n\n"
+                    "module.exports = router;\n"
+                ),
+                encoding="utf-8",
+            )
+            files.append(str(route_file))
+
+        return files
+
+    def _generate_node_tests(self, tests_dir: Path, module_requirements: dict[str, list[str]]) -> list[str]:
+        files: list[str] = []
+        for module_name in module_requirements:
+            route_segment = self._safe_route_segment(module_name)
+            title = self._to_component(module_name)
+            test_file = tests_dir / f"{route_segment}.service.test.js"
+            test_file.write_text(
+                (
+                    "const test = require('node:test');\n"
+                    "const assert = require('node:assert/strict');\n"
+                    f"const service = require('../src/services/{route_segment}.service');\n\n"
+                    f"test('{module_name} service scaffold', () => {{\n"
+                    f"  const created = service.create{title}Item({{ name: 'sample' }});\n"
+                    "  assert.equal(created.id > 0, true);\n"
+                    f"  const items = service.list{title}Items();\n"
+                    "  assert.equal(Array.isArray(items), true);\n"
+                    "});\n"
+                ),
+                encoding="utf-8",
+            )
+            files.append(str(test_file))
+        return files
+
+    def _generate_python_feature_pack(self, src_dir: Path, module_requirements: dict[str, list[str]]) -> list[str]:
+        files: list[str] = []
+        init_file = src_dir / "__init__.py"
+        init_file.write_text("", encoding="utf-8")
+        files.append(str(init_file))
+
+        routes_dir = src_dir / "routes"
+        services_dir = src_dir / "services"
+        repositories_dir = src_dir / "repositories"
+        routes_dir.mkdir(parents=True, exist_ok=True)
+        services_dir.mkdir(parents=True, exist_ok=True)
+        repositories_dir.mkdir(parents=True, exist_ok=True)
+        for package_dir in (routes_dir, services_dir, repositories_dir):
+            pkg_init = package_dir / "__init__.py"
+            pkg_init.write_text("", encoding="utf-8")
+            files.append(str(pkg_init))
+
+        for module_name in module_requirements:
+            route_segment = self._safe_route_segment(module_name)
+            identifier = self._safe_identifier(module_name)
+            title = self._to_component(module_name)
+
+            repository_file = repositories_dir / f"{route_segment}_repository.py"
+            repository_file.write_text(
+                (
+                    "from __future__ import annotations\n\n"
+                    f"{identifier}_store: list[dict] = []\n\n"
+                    f"def list_{identifier}() -> list[dict]:\n"
+                    f"    return {identifier}_store\n\n"
+                    f"def create_{identifier}(payload: dict) -> dict:\n"
+                    f"    record = {{'id': len({identifier}_store) + 1, **payload}}\n"
+                    f"    {identifier}_store.append(record)\n"
+                    "    return record\n"
+                ),
+                encoding="utf-8",
+            )
+            files.append(str(repository_file))
+
+            service_file = services_dir / f"{route_segment}_service.py"
+            service_file.write_text(
+                (
+                    "from __future__ import annotations\n\n"
+                    f"from ..repositories.{route_segment}_repository import create_{identifier}, list_{identifier}\n\n"
+                    f"def list_{identifier}_items() -> list[dict]:\n"
+                    f"    return list_{identifier}()\n\n"
+                    f"def create_{identifier}_item(payload: dict) -> dict:\n"
+                    f"    return create_{identifier}(payload)\n"
+                ),
+                encoding="utf-8",
+            )
+            files.append(str(service_file))
+
+            route_file = routes_dir / f"{route_segment}_route.py"
+            route_file.write_text(
+                (
+                    "from __future__ import annotations\n\n"
+                    "from fastapi import APIRouter\n"
+                    "from pydantic import BaseModel\n\n"
+                    f"from ..services.{route_segment}_service import create_{identifier}_item, list_{identifier}_items\n\n"
+                    f"class {title}CreateRequest(BaseModel):\n"
+                    "    name: str = 'sample'\n\n"
+                    f"router = APIRouter(prefix='/api/{route_segment}', tags=['{module_name}'])\n\n"
+                    "@router.get('')\n"
+                    f"def get_{identifier}_items() -> dict:\n"
+                    "    return {\n"
+                    f"        'module': '{module_name}',\n"
+                    f"        'items': list_{identifier}_items(),\n"
+                    "    }\n\n"
+                    "@router.post('', status_code=201)\n"
+                    f"def post_{identifier}_item(payload: {title}CreateRequest) -> dict:\n"
+                    f"    return create_{identifier}_item(payload.model_dump())\n"
+                ),
+                encoding="utf-8",
+            )
+            files.append(str(route_file))
+
+        return files
+
+    def _generate_python_tests(self, tests_dir: Path, module_requirements: dict[str, list[str]]) -> list[str]:
+        files: list[str] = []
+        for module_name in module_requirements:
+            route_segment = self._safe_route_segment(module_name)
+            identifier = self._safe_identifier(module_name)
+            test_file = tests_dir / f"test_{route_segment}_service.py"
+            test_file.write_text(
+                (
+                    "from pathlib import Path\n"
+                    "import sys\n\n"
+                    "sys.path.insert(0, str(Path(__file__).resolve().parents[1]))\n\n"
+                    f"from src.services.{route_segment}_service import create_{identifier}_item, list_{identifier}_items\n\n"
+                    f"def test_{identifier}_service_scaffold() -> None:\n"
+                    f"    created = create_{identifier}_item({{'name': 'sample'}})\n"
+                    "    assert created['id'] > 0\n"
+                    f"    items = list_{identifier}_items()\n"
+                    "    assert isinstance(items, list)\n"
+                ),
+                encoding="utf-8",
+            )
+            files.append(str(test_file))
+        return files
+
+    def _generate_sql_migrations(self, backend_dir: Path, modules: list[str]) -> list[str]:
+        files: list[str] = []
+        migrations_dir = backend_dir / "migrations"
+        migrations_dir.mkdir(parents=True, exist_ok=True)
+        for index, module_name in enumerate(modules, start=1):
+            route_segment = self._safe_route_segment(module_name)
+            file_path = migrations_dir / f"{index:03d}_create_{route_segment}.sql"
+            file_path.write_text(
+                (
+                    f"-- Super Dev scaffold migration for module: {module_name}\n"
+                    f"CREATE TABLE IF NOT EXISTS {route_segment}_items (\n"
+                    "  id INTEGER PRIMARY KEY,\n"
+                    "  name VARCHAR(255) NOT NULL,\n"
+                    "  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n"
+                    ");\n"
+                ),
+                encoding="utf-8",
+            )
+            files.append(str(file_path))
+        return files
 
     def _build_go_app(self, modules: list[str]) -> str:
         handlers = []
@@ -705,10 +980,14 @@ class ImplementationScaffoldBuilder:
             "</style>\n"
         )
 
-    def _build_vue_module(self, module_name: str) -> str:
+    def _build_vue_module(self, module_name: str, req_names: list[str]) -> str:
+        list_items = "\n".join(f"  <li>{req}</li>" for req in req_names) or "  <li>待补充需求</li>"
         return (
             "<template>\n"
             f"  <p>{module_name} 模块初始骨架已创建，可在此实现业务逻辑。</p>\n"
+            "  <ul>\n"
+            f"{list_items}\n"
+            "  </ul>\n"
             "</template>\n"
         )
 
@@ -740,17 +1019,29 @@ class ImplementationScaffoldBuilder:
             "</style>\n"
         )
 
-    def _build_svelte_module(self, module_name: str) -> str:
-        return f"<p>{module_name} 模块初始骨架已创建，可在此实现业务逻辑。</p>\n"
+    def _build_svelte_module(self, module_name: str, req_names: list[str]) -> str:
+        items = "\n".join(f"<li>{req}</li>" for req in req_names) or "<li>待补充需求</li>"
+        return (
+            f"<p>{module_name} 模块初始骨架已创建，可在此实现业务逻辑。</p>\n"
+            "<ul>\n"
+            f"{items}\n"
+            "</ul>\n"
+        )
 
-    def _build_angular_component(self, modules: list[str]) -> str:
+    def _build_angular_component(self, modules: list[str], module_requirements: dict[str, list[str]]) -> str:
         sections = []
         for module_name in modules:
+            req_items = "".join(
+                f"  <li>{req}</li>" for req in module_requirements.get(module_name, [])
+            ) or "  <li>待补充需求</li>"
             sections.append(
 
                     "<section style=\"border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin:8px 0;\">\n"
                     f"  <h3>{self._to_component(module_name)}</h3>\n"
                     f"  <p>{module_name} 模块初始骨架已创建，可在此实现业务逻辑。</p>\n"
+                    "  <ul>\n"
+                    f"{req_items}\n"
+                    "  </ul>\n"
                     "</section>"
 
             )
@@ -767,6 +1058,18 @@ class ImplementationScaffoldBuilder:
             "})\n"
             "export class AppComponent {}\n"
         )
+
+    def _build_module_requirements(self, requirements: list[dict]) -> dict[str, list[str]]:
+        module_requirements: dict[str, list[str]] = {}
+        for item in requirements:
+            module = str(item.get("spec_name", "core")).strip() or "core"
+            req_name = str(item.get("req_name", "todo")).strip() or "todo"
+            existing = module_requirements.setdefault(module, [])
+            if req_name not in existing:
+                existing.append(req_name)
+        if not module_requirements:
+            module_requirements["core"] = ["core-flow"]
+        return module_requirements
 
     def _safe_identifier(self, name: str) -> str:
         cleaned = "".join(ch if ch.isalnum() else "_" for ch in name.lower())

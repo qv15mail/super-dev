@@ -1,4 +1,4 @@
-# 发布指南（2.0.0）
+# 发布指南（2.0.1）
 
 > 面向 Super Dev 2.x 的标准发布流程。
 
@@ -29,17 +29,21 @@
 ## 2. 构建与发布
 
 ```bash
-rm -rf dist/ build/ *.egg-info
-python3 -m build
-twine check dist/*
-twine upload dist/*
+export PYPI_API_TOKEN="<your-token>"
+./scripts/publish.sh --repository pypi --yes
 ```
+
+`publish.sh` 会执行：
+
+- 预检（默认执行，可用 `--skip-preflight` 跳过）
+- 构建与 `twine check`
+- 使用 `__token__ + PYPI_API_TOKEN` 非交互上传 PyPI
 
 ## 3. Git Tag 与 Release
 
 ```bash
-git tag v2.0.0
-git push origin v2.0.0
+git tag v2.0.1
+git push origin v2.0.1
 ```
 
 然后在 GitHub 创建 Release，关联本次变更说明。
@@ -49,10 +53,9 @@ git push origin v2.0.0
 ## 4. 发布后验证
 
 ```bash
-pip install --no-cache-dir super-dev==2.0.0
-super-dev --version
+pip install --no-cache-dir super-dev==2.0.1
 super-dev --help
-super-dev pipeline --help
+super-dev "构建一个包含登录和订单的系统"
 ```
 
 ## 5. 回滚/应急策略

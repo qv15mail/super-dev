@@ -7,7 +7,7 @@
 - 确认版本号已更新：`pyproject.toml`
 - 确认更新日志已更新：`CHANGELOG.md`
 - 确认主分支状态与发布分支策略（建议从 `main` 发布）
-- 确认 PyPI 凭证可用（`~/.pypirc` 或 CI Secret）
+- 确认 PyPI Token 可用（`PYPI_API_TOKEN` 或 CI Secret）
 - GitHub Tag 发布必须配置 `PYPI_API_TOKEN`（未配置将被 CD 强制阻断）
 
 ## 2. 预检（必须通过）
@@ -50,13 +50,12 @@
 ## 3. 正式发布步骤
 
 1. 运行预检并确保通过。
-2. 构建并检查包：
-   - `rm -rf dist/ build/ *.egg-info`
-   - `python3 -m build`
-   - `twine check dist/*`
-3. 上传 PyPI：
-   - `twine upload dist/*`
-4. 打 Tag 并推送：
+2. 执行发布脚本（非交互）：
+   - `export PYPI_API_TOKEN="<your-token>"`
+   - `./scripts/release.sh --repository pypi --yes`
+3. 如需自动打 Tag 并推送：
+   - `./scripts/release.sh --repository pypi --push-tag --yes`
+4. 手动打 Tag 并推送（可选）：
    - `git tag v<version>`
    - `git push origin v<version>`
 5. 创建 GitHub Release（附变更说明和风险提示）。
@@ -64,10 +63,9 @@
 ## 4. 发布后验证
 
 - `pip install --no-cache-dir super-dev==<version>`
-- `super-dev --version`
 - 核心命令冒烟：
   - `super-dev --help`
-  - `super-dev expert --list`
+  - `super-dev "构建一个包含登录和订单的系统"`
 
 ## 5. 回滚策略（必须预案）
 
@@ -80,10 +78,9 @@
 示例：
 
 ```bash
-# 重新构建补丁版本
-rm -rf dist/ build/ *.egg-info
-python3 -m build
-twine upload dist/*
+# 发布补丁版本（非交互）
+export PYPI_API_TOKEN="<your-token>"
+./scripts/publish.sh --repository pypi --yes
 ```
 
 ## 6. 紧急处理

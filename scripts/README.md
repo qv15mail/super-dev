@@ -44,9 +44,9 @@ python3 scripts/check_delivery_ready.py --smoke --project-dir .
 ./scripts/release.sh
 ```
 
-## 推荐顺序（2.0.0）
+## 推荐顺序（2.0.1）
 
 1. `./scripts/preflight.sh`
 2. `python3 -m build && twine check dist/*`
 3. `twine upload dist/*`
-4. `git tag v2.0.0 && git push origin v2.0.0`
+4. `git tag v2.0.1 && git push origin v2.0.1`

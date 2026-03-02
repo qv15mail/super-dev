@@ -366,8 +366,65 @@ class TestCLISkillAndIntegrate:
             os.chdir(original_cwd)
 
 
+class TestCLITask:
+    """测试 task 命令"""
+
+    def test_task_run_status_and_list(self, temp_project_dir: Path):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            changes_dir = temp_project_dir / ".super-dev" / "changes" / "demo-change"
+            changes_dir.mkdir(parents=True, exist_ok=True)
+            (changes_dir / "change.yaml").write_text(
+                (
+                    "id: demo-change\n"
+                    "title: Demo Change\n"
+                    "status: proposed\n"
+                    "created_at: 2026-03-02T00:00:00\n"
+                    "updated_at: 2026-03-02T00:00:00\n"
+                ),
+                encoding="utf-8",
+            )
+            (changes_dir / "tasks.md").write_text(
+                (
+                    "# Tasks\n\n"
+                    "## 1. Frontend\n\n"
+                    "- [ ] **1.1: 实现 auth 前端模块**\n\n"
+                    "## 2. Backend\n\n"
+                    "- [ ] **2.1: 实现 auth 后端能力**\n\n"
+                    "## 4. Testing\n\n"
+                    "- [ ] **4.1: 执行质量门禁前检查**\n"
+                ),
+                encoding="utf-8",
+            )
+
+            cli = SuperDevCLI()
+            run_result = cli.run(["task", "run", "demo-change", "--backend", "python"])
+            assert run_result == 0
+            assert (temp_project_dir / "output" / "demo-change-task-execution.md").exists()
+
+            status_result = cli.run(["task", "status", "demo-change"])
+            assert status_result == 0
+
+            list_result = cli.run(["task", "list"])
+            assert list_result == 0
+        finally:
+            os.chdir(original_cwd)
+
+
 class TestCLIPipeline:
     """测试完整流水线关键产物"""
+
+    def test_help_and_version_alias_do_not_trigger_pipeline(self, temp_project_dir: Path):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            assert cli.run(["help"]) == 0
+            assert cli.run(["version"]) == 0
+            assert not (temp_project_dir / "output").exists()
+        finally:
+            os.chdir(original_cwd)
 
     def test_direct_requirement_entry_generates_core_artifacts(self, temp_project_dir: Path, monkeypatch):
         original_cwd = os.getcwd()
@@ -407,9 +464,13 @@ class TestCLIPipeline:
             assert any(output_dir.glob("*-execution-plan.md"))
             assert any(output_dir.glob("*-frontend-blueprint.md"))
             assert any(output_dir.glob("*-ai-prompt.md"))
+            assert any(output_dir.glob("*-task-execution.md"))
 
             assert (temp_project_dir / "frontend" / "src" / "App.tsx").exists()
             assert (temp_project_dir / "backend" / "API_CONTRACT.md").exists()
+            assert (temp_project_dir / "backend" / "src" / "routes" / "auth.route.js").exists()
+            assert (temp_project_dir / "backend" / "src" / "services" / "auth.service.js").exists()
+            assert any((temp_project_dir / "backend" / "migrations").glob("*_create_auth.sql"))
             assert (temp_project_dir / ".github" / "workflows" / "ci.yml").exists()
             assert (temp_project_dir / ".gitlab-ci.yml").exists()
             assert (temp_project_dir / "Jenkinsfile").exists()

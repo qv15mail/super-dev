@@ -810,6 +810,53 @@ class SuperDevCLI:
             help="强制刷新数据"
         )
 
+        # task 命令 - 独立执行/查看 Spec 任务闭环
+        task_parser = subparsers.add_parser(
+            "task",
+            help="Spec 任务闭环执行",
+            description="执行或查看 `.super-dev/changes/*/tasks.md` 的任务状态"
+        )
+        task_parser.add_argument(
+            "action",
+            choices=["run", "status", "list"],
+            help="任务操作类型"
+        )
+        task_parser.add_argument(
+            "change_id",
+            nargs="?",
+            help="变更 ID（run/status 必填）"
+        )
+        task_parser.add_argument(
+            "-p", "--platform",
+            choices=["web", "mobile", "wechat", "desktop"],
+            help="目标平台（可选，默认取项目配置）"
+        )
+        task_parser.add_argument(
+            "-f", "--frontend",
+            choices=["react", "vue", "angular", "svelte", "none"],
+            help="前端框架（可选，默认取项目配置）"
+        )
+        task_parser.add_argument(
+            "-b", "--backend",
+            choices=["node", "python", "go", "java", "none"],
+            help="后端框架（可选，默认取项目配置）"
+        )
+        task_parser.add_argument(
+            "-d", "--domain",
+            choices=["", "fintech", "ecommerce", "medical", "social", "iot", "education", "auth", "content"],
+            help="业务领域（可选，默认取项目配置）"
+        )
+        task_parser.add_argument(
+            "--project-name",
+            help="任务执行报告中的项目名（默认取配置名或 change_id）"
+        )
+        task_parser.add_argument(
+            "--max-retries",
+            type=int,
+            default=1,
+            help="失败自动修复重试次数（默认: 1）"
+        )
+
         # pipeline 命令 - 完整流水线
         pipeline_parser = subparsers.add_parser(
             "pipeline",
@@ -894,6 +941,15 @@ class SuperDevCLI:
             退出码
         """
         argv = list(args) if args is not None else sys.argv[1:]
+
+        # 兼容 `super-dev help` / `super-dev version` 这类用户习惯输入
+        if len(argv) == 1 and argv[0] == "help":
+            self._print_banner()
+            self.parser.print_help()
+            return 0
+        if len(argv) == 1 and argv[0] == "version":
+            self.console.print(f"super-dev {__version__}")
+            return 0
 
         # 直达入口：`super-dev <需求描述>`
         if self._is_direct_requirement_input(argv):
@@ -1286,7 +1342,7 @@ class SuperDevCLI:
         rows = "\n".join(
             f"<li><a href=\"{doc.name}\" target=\"_blank\">{doc.name}</a></li>"
             for doc in docs[:20]
-        ) or "<li>未找到可预览文档，请先运行 super-dev create 或 super-dev pipeline。</li>"
+        ) or "<li>未找到可预览文档，请先运行 super-dev \"你的需求\" 或 super-dev create。</li>"
 
         fallback_html = f"""<!doctype html>
 <html lang="zh-CN">
@@ -2240,6 +2296,7 @@ class SuperDevCLI:
 
             # ========== 第 4 阶段: 生成实现骨架 ==========
             scaffold_result: dict[str, list[str]] = {"frontend_files": [], "backend_files": []}
+            task_execution_summary = None
             if not args.skip_scaffold:
                 self.console.print("[cyan]第 4 阶段: 生成前后端实现骨架...[/cyan]")
                 implementation_builder = ImplementationScaffoldBuilder(
@@ -2255,6 +2312,28 @@ class SuperDevCLI:
                 self.console.print(
                     f"  [green]✓[/green] 后端骨架文件: {len(scaffold_result['backend_files'])} 个"
                 )
+                from .creators import SpecTaskExecutor
+
+                task_executor = SpecTaskExecutor(project_dir=project_dir, project_name=project_name)
+                task_execution_summary = task_executor.execute(
+                    change_id=change_id,
+                    tech_stack=tech_stack,
+                    max_retries=1,
+                )
+                self.console.print(
+                    f"  [green]✓[/green] Spec 任务执行: {task_execution_summary.completed_tasks}/{task_execution_summary.total_tasks}"
+                )
+                self.console.print(
+                    f"  [green]✓[/green] 任务报告: {task_execution_summary.report_file}"
+                )
+                if task_execution_summary.failed_tasks:
+                    self.console.print(
+                        f"  [yellow]未完成任务: {', '.join(task_execution_summary.failed_tasks)}[/yellow]"
+                    )
+                if task_execution_summary.repaired_actions:
+                    self.console.print(
+                        f"  [dim]自动修复: {len(task_execution_summary.repaired_actions)} 项[/dim]"
+                    )
                 self.console.print("")
             else:
                 self.console.print("[yellow]第 4 阶段: 生成前后端实现骨架 (跳过)[/yellow]")
@@ -2471,6 +2550,11 @@ class SuperDevCLI:
                 self.console.print("    - frontend/src/*")
                 self.console.print("    - backend/src/*")
                 self.console.print("    - backend/API_CONTRACT.md")
+                self.console.print("    - backend/migrations/*.sql")
+                if task_execution_summary is not None:
+                    self.console.print(
+                        f"    - {Path(str(task_execution_summary.report_file)).relative_to(project_dir)}"
+                    )
                 self.console.print("")
             self.console.print("  CI/CD:")
             for file_path in cicd_files.keys():
@@ -2932,9 +3016,89 @@ class SuperDevCLI:
 
         known_commands = {
             "init", "analyze", "workflow", "studio", "expert", "quality", "preview",
-            "deploy", "create", "design", "spec", "pipeline", "config", "skill", "integrate",
+            "deploy", "create", "design", "spec", "task", "pipeline", "config", "skill", "integrate",
         }
         return first not in known_commands
+
+    def _cmd_task(self, args) -> int:
+        """Spec 任务执行与状态查看"""
+        from .creators import SpecTaskExecutor
+        from .specs import ChangeManager
+
+        project_dir = Path.cwd()
+        manager = ChangeManager(project_dir)
+
+        if args.action == "list":
+            changes = manager.list_changes()
+            if not changes:
+                self.console.print("[dim]没有找到变更[/dim]")
+                return 0
+            self.console.print("[cyan]变更任务概览:[/cyan]")
+            for change in changes:
+                completed = sum(1 for task in change.tasks if task.status.value == "completed")
+                total = len(change.tasks)
+                self.console.print(
+                    f"  - {change.id}: {change.status.value} | 任务 {completed}/{total}"
+                )
+            return 0
+
+        if not args.change_id:
+            self.console.print("[red]请提供 change_id[/red]")
+            return 1
+
+        loaded_change = manager.load_change(args.change_id)
+        if not loaded_change:
+            self.console.print(f"[red]变更不存在: {args.change_id}[/red]")
+            return 1
+
+        if args.action == "status":
+            completed = sum(1 for task in loaded_change.tasks if task.status.value == "completed")
+            in_progress = sum(1 for task in loaded_change.tasks if task.status.value == "in_progress")
+            pending = sum(1 for task in loaded_change.tasks if task.status.value == "pending")
+            self.console.print(f"[cyan]任务状态: {loaded_change.id}[/cyan]")
+            self.console.print(f"  标题: {loaded_change.title}")
+            self.console.print(f"  状态: {loaded_change.status.value}")
+            self.console.print(f"  已完成: {completed}")
+            self.console.print(f"  进行中: {in_progress}")
+            self.console.print(f"  待处理: {pending}")
+            for task in loaded_change.tasks:
+                marker = "[x]" if task.status.value == "completed" else "[~]" if task.status.value == "in_progress" else "[ ]"
+                self.console.print(f"  {marker} {task.id} {task.title}")
+            return 0
+
+        config_manager = get_config_manager()
+        config_exists = config_manager.exists()
+        config = config_manager.config
+
+        tech_stack = {
+            "platform": args.platform or (config.platform if config_exists else "web"),
+            "frontend": args.frontend or (self._normalize_pipeline_frontend(config.frontend) if config_exists else "react"),
+            "backend": args.backend or (config.backend if config_exists else "node"),
+            "domain": args.domain if args.domain is not None else (config.domain if config_exists else ""),
+        }
+
+        project_name = (
+            args.project_name
+            or (config.name if config_exists and config.name else args.change_id)
+        )
+
+        executor = SpecTaskExecutor(project_dir=project_dir, project_name=project_name)
+        summary = executor.execute(
+            change_id=args.change_id,
+            tech_stack=tech_stack,
+            max_retries=max(0, int(args.max_retries)),
+        )
+
+        self.console.print("[green]✓ Spec 任务执行完成[/green]")
+        self.console.print(f"  变更: {summary.change_id}")
+        self.console.print(f"  完成: {summary.completed_tasks}/{summary.total_tasks}")
+        self.console.print(f"  报告: {summary.report_file}")
+        if summary.repaired_actions:
+            self.console.print(f"  自动修复: {len(summary.repaired_actions)} 项")
+        if summary.failed_tasks:
+            self.console.print(f"  [yellow]未完成任务: {', '.join(summary.failed_tasks)}[/yellow]")
+            return 1
+        return 0
 
     def _normalize_pipeline_frontend(self, frontend: str) -> str:
         """将 init 的前端框架映射到 pipeline 可接受值"""

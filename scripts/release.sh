@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
-# -*- coding: utf-8 -*-
-"""
-Super Dev 自动发布脚本
-用于自动化发布流程：测试、构建、上传到 PyPI
-"""
 
-set -e
+set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
@@ -19,289 +14,124 @@ else
     exit 1
 fi
 
-# 颜色定义
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+REPOSITORY="pypi"
+ALLOW_DIRTY=0
+SKIP_PREFLIGHT=0
+SKIP_BENCHMARK=0
+PUSH_TAG=0
+YES=0
 
-# 日志函数
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+usage() {
+    cat <<'EOF'
+Usage: ./scripts/release.sh [options]
+
+Options:
+  --repository <pypi|testpypi>  Upload target (default: pypi)
+  --allow-dirty                 Allow dirty git worktree in preflight
+  --skip-preflight              Skip preflight checks
+  --skip-benchmark              Skip benchmark in preflight
+  --push-tag                    Create and push git tag v<version>
+  --yes                         Non-interactive mode (no confirmation prompt)
+  -h, --help                    Show this help
+
+Environment:
+  PYPI_API_TOKEN                API token for PyPI upload
+  TEST_PYPI_API_TOKEN           API token for TestPyPI upload (fallback: PYPI_API_TOKEN)
+EOF
 }
 
-log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-# 获取版本号
-get_version() {
-    "$PYTHON_BIN" -c "from super_dev import __version__; print(__version__)"
-}
-
-# 检查是否在正确的分支上
-check_branch() {
-    BRANCH=$(git branch --show-current)
-    if [ "$BRANCH" != "main" ]; then
-        log_warning "当前不在 main 分支，当前分支: $BRANCH"
-        read -p "是否继续? (y/n) " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            log_error "发布已取消"
-            exit 1
-        fi
-    fi
-}
-
-# 运行测试
-run_tests() {
-    log_info "运行测试套件..."
-
-    # 单元测试
-    log_info "运行单元测试..."
-    pytest tests/unit/ -v
-    if [ $? -ne 0 ]; then
-        log_error "单元测试失败"
-        exit 1
-    fi
-
-    # 集成测试
-    log_info "运行集成测试..."
-    pytest tests/integration/ -v
-    if [ $? -ne 0 ]; then
-        log_error "集成测试失败"
-        exit 1
-    fi
-
-    # 代码风格检查
-    log_info "检查代码风格..."
-    ruff check super_dev/
-    if [ $? -ne 0 ]; then
-        log_error "代码风格检查失败"
-        exit 1
-    fi
-
-    # 类型检查
-    log_info "运行类型检查..."
-    mypy super_dev/
-    if [ $? -ne 0 ]; then
-        log_warning "类型检查有警告，继续..."
-    fi
-
-    log_success "所有测试通过!"
-}
-
-# 交付门禁烟雾验证
-run_delivery_gate() {
-    log_info "运行交付门禁 smoke..."
-    "$PYTHON_BIN" scripts/check_delivery_ready.py --smoke --project-dir "$(pwd)"
-    if [ $? -ne 0 ]; then
-        log_error "交付门禁 smoke 失败"
-        exit 1
-    fi
-    log_success "交付门禁 smoke 通过!"
-}
-
-# 构建包
-build_package() {
-    log_info "构建包..."
-
-    # 清理旧的构建文件
-    rm -rf dist/ build/ *.egg-info
-
-    # 构建
-    "$PYTHON_BIN" -m build
-
-    if [ $? -ne 0 ]; then
-        log_error "构建失败"
-        exit 1
-    fi
-
-    log_success "包构建完成!"
-}
-
-# 检查包
-check_package() {
-    log_info "检查包..."
-
-    twine check dist/*
-
-    if [ $? -ne 0 ]; then
-        log_error "包检查失败"
-        exit 1
-    fi
-
-    log_success "包检查通过!"
-}
-
-# 上传到 TestPyPI
-upload_test_pypi() {
-    log_info "上传到 TestPyPI..."
-
-    read -p "TestPyPI 用户名: " TEST_USERNAME
-    read -p "TestPyPI 密码: " -s TEST_PASSWORD
-    echo
-
-    twine upload --repository testpypi dist/* \
-        --username "$TEST_USERNAME" \
-        --password "$TEST_PASSWORD"
-
-    if [ $? -eq 0 ]; then
-        log_success "已上传到 TestPyPI!"
-        log_info "测试安装: pip install --index-url https://test.pypi.org/simple/ super-dev"
-    fi
-}
-
-# 上传到 PyPI
-upload_pypi() {
-    log_info "上传到 PyPI..."
-
-    read -p "PyPI 用户名: " PYPI_USERNAME
-    read -p "PyPI 密码: " -s PYPI_PASSWORD
-    echo
-
-    twine upload dist/* \
-        --username "$PYPI_USERNAME" \
-        --password "$PYPI_PASSWORD"
-
-    if [ $? -eq 0 ]; then
-        log_success "已上传到 PyPI!"
-        log_info "安装: pip install super-dev"
-    fi
-}
-
-# 创建 Git Tag
-create_tag() {
-    VERSION=$(get_version)
-    TAG="v$VERSION"
-
-    log_info "创建 Git Tag: $TAG"
-
-    # 检查 tag 是否已存在
-    if git rev-parse "$TAG" >/dev/null 2>&1; then
-        log_warning "Tag $TAG 已存在"
-        read -p "是否删除并重新创建? (y/n) " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            git tag -d "$TAG"
-            git push origin ":refs/tags/$TAG" || true
-        else
-            return
-        fi
-    fi
-
-    # 创建 tag
-    git tag -a "$TAG" -m "Release $VERSION"
-
-    # 推送 tag
-    git push origin "$TAG"
-
-    log_success "Tag $TAG 已创建并推送!"
-}
-
-# 更新 CHANGELOG
-update_changelog() {
-    VERSION=$(get_version)
-    DATE=$(date +%Y-%m-%d)
-
-    log_info "更新 CHANGELOG.md..."
-
-    # 在 CHANGELOG.md 中添加新版本
-    sed -i.bak "s/\[Unreleased\]/[$VERSION] - $DATE/" CHANGELOG.md
-    sed -i.bak "s/\[Unreleased\]/[Unreleased]\n\n## [$VERSION] - $DATE/" CHANGELOG.md
-    rm -f CHANGELOG.md.bak
-
-    git add CHANGELOG.md
-    git commit -m "chore: update CHANGELOG for $VERSION"
-
-    log_success "CHANGELOG 已更新!"
-}
-
-# 主流程
-main() {
-    log_info "======================================"
-    log_info "Super Dev 自动发布脚本"
-    log_info "======================================"
-    echo ""
-
-    # 显示当前版本
-    VERSION=$(get_version)
-    log_info "当前版本: $VERSION"
-    echo ""
-
-    # 确认发布
-    read -p "确认发布版本 $VERSION? (y/n) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_error "发布已取消"
-        exit 1
-    fi
-
-    # 检查分支
-    check_branch
-
-    # 运行测试
-    run_tests
-
-    # 交付门禁验证
-    run_delivery_gate
-
-    # 更新 CHANGELOG
-    update_changelog
-
-    # 构建包
-    build_package
-
-    # 检查包
-    check_package
-
-    # 创建 Git Tag
-    create_tag
-
-    # 选择上传目标
-    echo ""
-    log_info "选择上传目标:"
-    echo "1) TestPyPI (测试)"
-    echo "2) PyPI (正式)"
-    echo "3) 跳过上传"
-    echo ""
-    read -p "请选择 (1-3): " CHOICE
-
-    case $CHOICE in
-        1)
-            upload_test_pypi
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --repository)
+            REPOSITORY="${2:-}"
+            shift 2
             ;;
-        2)
-            upload_pypi
+        --allow-dirty)
+            ALLOW_DIRTY=1
+            shift
             ;;
-        3)
-            log_info "跳过上传"
+        --skip-preflight)
+            SKIP_PREFLIGHT=1
+            shift
+            ;;
+        --skip-benchmark)
+            SKIP_BENCHMARK=1
+            shift
+            ;;
+        --push-tag)
+            PUSH_TAG=1
+            shift
+            ;;
+        --yes)
+            YES=1
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
             ;;
         *)
-            log_error "无效选择"
-            exit 1
+            echo "[ERROR] Unknown argument: $1"
+            usage
+            exit 2
             ;;
     esac
+done
 
-    echo ""
-    log_success "======================================"
-    log_success "发布完成!"
-    log_success "======================================"
-    echo ""
-    log_info "后续步骤:"
-    log_info "1. 在 GitHub 创建 Release: https://github.com/shangyankeji/super-dev/releases/new"
-    log_info "2. 发布公告到社交媒体"
-    log_info "3. 更新文档和示例"
-}
+if [[ "$REPOSITORY" != "pypi" && "$REPOSITORY" != "testpypi" ]]; then
+    echo "[ERROR] --repository must be pypi or testpypi"
+    exit 2
+fi
 
-# 运行主流程
-main
+VERSION="$("$PYTHON_BIN" -c "from super_dev import __version__; print(__version__)")"
+TAG="v${VERSION}"
+BRANCH="$(git branch --show-current 2>/dev/null || true)"
+
+echo "[INFO] Release version: ${VERSION}"
+echo "[INFO] Current branch: ${BRANCH:-unknown}"
+echo "[INFO] Target repository: ${REPOSITORY}"
+
+if [[ "$ALLOW_DIRTY" -ne 1 && -n "$(git status --porcelain)" ]]; then
+    echo "[ERROR] Working tree is dirty. Commit or stash changes, or use --allow-dirty."
+    exit 1
+fi
+
+if [[ "$YES" -ne 1 ]]; then
+    read -r -p "Proceed with release ${VERSION}? (y/N): " confirm
+    if [[ "${confirm,,}" != "y" ]]; then
+        echo "[INFO] Release cancelled"
+        exit 0
+    fi
+fi
+
+PUBLISH_ARGS=("./scripts/publish.sh" "--repository" "$REPOSITORY")
+if [[ "$ALLOW_DIRTY" -eq 1 ]]; then
+    PUBLISH_ARGS+=("--allow-dirty")
+fi
+if [[ "$SKIP_PREFLIGHT" -eq 1 ]]; then
+    PUBLISH_ARGS+=("--skip-preflight")
+fi
+if [[ "$SKIP_BENCHMARK" -eq 1 ]]; then
+    PUBLISH_ARGS+=("--skip-benchmark")
+fi
+if [[ "$YES" -eq 1 ]]; then
+    PUBLISH_ARGS+=("--yes")
+fi
+
+echo "[INFO] Running publish step"
+"${PUBLISH_ARGS[@]}"
+
+if [[ "$PUSH_TAG" -eq 1 ]]; then
+    if git rev-parse "$TAG" >/dev/null 2>&1; then
+        echo "[ERROR] Git tag ${TAG} already exists"
+        exit 1
+    fi
+    echo "[INFO] Creating git tag ${TAG}"
+    git tag -a "$TAG" -m "Release ${VERSION}"
+    git push origin "$TAG"
+    echo "[PASS] Git tag pushed: ${TAG}"
+else
+    echo "[INFO] Tag step skipped (use --push-tag to enable)"
+fi
+
+echo "[PASS] Release flow completed for ${VERSION}"

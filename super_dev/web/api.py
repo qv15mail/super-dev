@@ -117,7 +117,7 @@ class DeployRemediationExportRequest(BaseModel):
 app = FastAPI(
     title="Super Dev API",
     description="顶级 AI 开发战队 - Web API",
-    version="2.0.0"
+    version="2.0.1"
 )
 
 # CORS 配置
@@ -643,7 +643,7 @@ def _generate_deploy_remediation_files(
 @app.get("/api/health")
 async def health_check():
     """健康检查"""
-    return {"status": "healthy", "version": "2.0.0"}
+    return {"status": "healthy", "version": "2.0.1"}
 
 
 @app.get("/api/config")

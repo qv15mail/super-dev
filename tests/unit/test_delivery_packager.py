@@ -22,6 +22,7 @@ def _seed_required_files(temp_project_dir: Path, name: str) -> None:
     _write(output_dir / f"{name}-quality-gate.md")
     _write(output_dir / f"{name}-code-review.md")
     _write(output_dir / f"{name}-ai-prompt.md")
+    _write(output_dir / f"{name}-task-execution.md")
 
     _write(output_dir / "frontend" / "index.html")
     _write(output_dir / "frontend" / "styles.css")
@@ -39,13 +40,17 @@ def _seed_required_files(temp_project_dir: Path, name: str) -> None:
     _write(temp_project_dir / "bitbucket-pipelines.yml")
 
     _write(temp_project_dir / "prisma" / "migrations" / "0001_init" / "migration.sql")
+    _write(
+        temp_project_dir / ".super-dev" / "changes" / "demo" / "tasks.md",
+        "# Tasks\n\n- [x] **1.1: done**\n",
+    )
 
 
 def test_delivery_packager_ready(temp_project_dir: Path) -> None:
     name = "demo"
     _seed_required_files(temp_project_dir, name)
 
-    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.0")
+    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.1")
     result = packager.package(cicd_platform="all")
 
     assert result["status"] == "ready"
@@ -63,6 +68,7 @@ def test_delivery_packager_ready(temp_project_dir: Path) -> None:
     assert manifest["status"] == "ready"
     assert "output/demo-prd.md" in manifest["included_files"]
     assert "prisma/migrations/0001_init/migration.sql" in manifest["included_files"]
+    assert manifest["spec_tasks"]["pending"] == 0
 
     with ZipFile(archive_path, "r") as archive:
         entries = set(archive.namelist())
@@ -78,7 +84,7 @@ def test_delivery_packager_incomplete_without_migrations(temp_project_dir: Path)
         if file_path.is_file():
             file_path.unlink()
 
-    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.0")
+    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.1")
     result = packager.package(cicd_platform="all")
 
     assert result["status"] == "incomplete"
@@ -88,3 +94,21 @@ def test_delivery_packager_incomplete_without_migrations(temp_project_dir: Path)
     assert isinstance(missing_items, list)
     missing_paths = {item["path"] for item in missing_items if isinstance(item, dict)}
     assert "migrations/*" in missing_paths
+
+
+def test_delivery_packager_incomplete_with_pending_spec_tasks(temp_project_dir: Path) -> None:
+    name = "demo"
+    _seed_required_files(temp_project_dir, name)
+    (temp_project_dir / ".super-dev" / "changes" / "demo" / "tasks.md").write_text(
+        "# Tasks\n\n- [ ] **1.1: pending**\n",
+        encoding="utf-8",
+    )
+
+    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.1")
+    result = packager.package(cicd_platform="all")
+
+    assert result["status"] == "incomplete"
+    missing_items = result["missing_required"]
+    assert isinstance(missing_items, list)
+    reasons = {item["path"] for item in missing_items if isinstance(item, dict)}
+    assert ".super-dev/changes/*/tasks.md" in reasons

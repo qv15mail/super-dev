@@ -3,7 +3,7 @@
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.1.html).
 
 ## [Unreleased]
 
@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added dedicated CI `Platform Compatibility` job for multi-target integration visibility.
 - Tag-based CD publishing now hard-fails when `PYPI_API_TOKEN` is missing (no silent skip).
 
-## [2.0.0] - 2026-03-01
+## [2.0.1] - 2026-03-01
 
 ### Added
 
@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Unified product version to `2.0.0` across package metadata, runtime metadata, API version, docs, and examples.
+- Unified product version to `2.0.1` across package metadata, runtime metadata, API version, docs, and examples.
 - Rewritten `README.md` and `README_EN.md` to match current real capabilities.
 - Rewritten publishing/install/quickstart docs to align with current CLI behavior.
 - Pipeline documentation aligned to actual Stage `0`~`11` execution.

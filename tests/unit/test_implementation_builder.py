@@ -27,6 +27,11 @@ class TestImplementationScaffoldBuilder:
         assert (temp_project_dir / "frontend" / "src" / "App.tsx").exists()
         assert (temp_project_dir / "backend" / "src" / "app.js").exists()
         assert (temp_project_dir / "backend" / "src" / "app.test.js").exists()
+        assert (temp_project_dir / "backend" / "src" / "routes" / "auth.route.js").exists()
+        assert (temp_project_dir / "backend" / "src" / "services" / "auth.service.js").exists()
+        assert (temp_project_dir / "backend" / "src" / "repositories" / "auth.repository.js").exists()
+        assert (temp_project_dir / "backend" / "tests" / "auth.service.test.js").exists()
+        assert (temp_project_dir / "backend" / "migrations" / "001_create_auth.sql").exists()
         assert (temp_project_dir / "backend" / "API_CONTRACT.md").exists()
 
     def test_generate_python_backend_scaffold(self, temp_project_dir: Path):
@@ -40,8 +45,13 @@ class TestImplementationScaffoldBuilder:
 
         assert result["frontend_files"] == []
         assert (temp_project_dir / "backend" / "src" / "app.py").exists()
+        assert (temp_project_dir / "backend" / "src" / "routes" / "core_route.py").exists()
+        assert (temp_project_dir / "backend" / "src" / "services" / "core_service.py").exists()
+        assert (temp_project_dir / "backend" / "src" / "repositories" / "core_repository.py").exists()
         assert (temp_project_dir / "backend" / "requirements.txt").exists()
         assert (temp_project_dir / "backend" / "tests" / "test_smoke.py").exists()
+        assert (temp_project_dir / "backend" / "tests" / "test_core_service.py").exists()
+        assert (temp_project_dir / "backend" / "migrations" / "001_create_core.sql").exists()
 
     def test_generate_vue_go_scaffold(self, temp_project_dir: Path):
         builder = ImplementationScaffoldBuilder(
