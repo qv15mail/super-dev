@@ -134,76 +134,16 @@ class ImplementationScaffoldBuilder:
         unique_modules = list(module_requirements.keys())
 
         files: list[str] = []
-        if self.backend == "python":
-            files.extend(self._generate_python_feature_pack(src_dir, module_requirements))
-
-            app_file = src_dir / "app.py"
-            app_file.write_text(self._build_fastapi_app(module_requirements), encoding="utf-8")
-            files.append(str(app_file))
-
-            requirements_file = backend_dir / "requirements.txt"
-            requirements_file.write_text(
-                "fastapi>=0.110.0\nuvicorn>=0.27.0\npytest>=7.0.0\npydantic>=2.0.1\n",
-                encoding="utf-8",
-            )
-            files.append(str(requirements_file))
-
-            tests_dir = backend_dir / "tests"
-            tests_dir.mkdir(parents=True, exist_ok=True)
-            smoke_test = tests_dir / "test_smoke.py"
-            smoke_test.write_text(
-                (
-                    "def test_backend_scaffold_smoke() -> None:\n"
-                    "    assert True\n"
-                ),
-                encoding="utf-8",
-            )
-            files.append(str(smoke_test))
-            files.extend(self._generate_python_tests(tests_dir, module_requirements))
-        elif self.backend == "node":
-            files.extend(self._generate_node_feature_pack(src_dir, module_requirements))
-
-            package_json = {
-                "name": f"{self.package_name}-backend",
-                "version": "0.1.0",
-                "private": True,
-                "scripts": {
-                    "dev": "node src/app.js",
-                    "start": "node src/app.js",
-                    "test": "node --test",
-                },
-                "dependencies": {
-                    "express": "^4.19.0",
-                },
-            }
-            package_file = backend_dir / "package.json"
-            package_file.write_text(json.dumps(package_json, indent=2, ensure_ascii=False), encoding="utf-8")
-            files.append(str(package_file))
-
-            app_file = src_dir / "app.js"
-            app_file.write_text(self._build_express_app(module_requirements), encoding="utf-8")
-            files.append(str(app_file))
-
-            test_file = src_dir / "app.test.js"
-            test_file.write_text(
-                (
-                    "const test = require('node:test');\n"
-                    "const assert = require('node:assert/strict');\n\n"
-                    "test('backend scaffold smoke', () => {\n"
-                    "  assert.equal(1 + 1, 2);\n"
-                    "});\n"
-                ),
-                encoding="utf-8",
-            )
-            files.append(str(test_file))
-            tests_dir = backend_dir / "tests"
-            tests_dir.mkdir(parents=True, exist_ok=True)
-            files.extend(self._generate_node_tests(tests_dir, module_requirements))
-        elif self.backend == "go":
+        backend_kind = self.backend.lower()
+        if backend_kind == "python":
+            files.extend(self._generate_python_backend(backend_dir, src_dir, module_requirements))
+        elif backend_kind == "node":
+            files.extend(self._generate_node_backend(backend_dir, src_dir, module_requirements))
+        elif backend_kind == "go":
             app_file = src_dir / "main.go"
             app_file.write_text(self._build_go_app(unique_modules), encoding="utf-8")
             files.append(str(app_file))
-        elif self.backend == "java":
+        elif backend_kind == "java":
             app_file = backend_dir / "src" / "main" / "java" / "com" / "superdev" / "Application.java"
             app_file.parent.mkdir(parents=True, exist_ok=True)
             app_file.write_text(self._build_java_app(), encoding="utf-8")
@@ -212,45 +152,634 @@ class ImplementationScaffoldBuilder:
             pom_file = backend_dir / "pom.xml"
             pom_file.write_text(self._build_java_pom(), encoding="utf-8")
             files.append(str(pom_file))
+        elif backend_kind == "rust":
+            files.extend(self._generate_rust_backend(backend_dir, src_dir, unique_modules))
+        elif backend_kind == "php":
+            files.extend(self._generate_php_backend(backend_dir, unique_modules))
+        elif backend_kind == "ruby":
+            files.extend(self._generate_ruby_backend(backend_dir, unique_modules))
+        elif backend_kind == "csharp":
+            files.extend(self._generate_csharp_backend(backend_dir, unique_modules))
+        elif backend_kind == "kotlin":
+            files.extend(self._generate_kotlin_backend(backend_dir, unique_modules))
+        elif backend_kind == "swift":
+            files.extend(self._generate_swift_backend(backend_dir, unique_modules))
+        elif backend_kind == "elixir":
+            files.extend(self._generate_elixir_backend(backend_dir, unique_modules))
+        elif backend_kind == "scala":
+            files.extend(self._generate_scala_backend(backend_dir, unique_modules))
+        elif backend_kind == "dart":
+            files.extend(self._generate_dart_backend(backend_dir, unique_modules))
         else:
             # 未知后端类型，回落到 node
-            files.extend(self._generate_node_feature_pack(src_dir, module_requirements))
-            package_json = {
-                "name": f"{self.package_name}-backend",
-                "version": "0.1.0",
-                "private": True,
-                "scripts": {"dev": "node src/app.js", "start": "node src/app.js", "test": "node --test"},
-                "dependencies": {"express": "^4.19.0"},
-            }
-            package_file = backend_dir / "package.json"
-            package_file.write_text(json.dumps(package_json, indent=2, ensure_ascii=False), encoding="utf-8")
-            files.append(str(package_file))
-
-            app_file = src_dir / "app.js"
-            app_file.write_text(self._build_express_app(module_requirements), encoding="utf-8")
-            files.append(str(app_file))
-
-            test_file = src_dir / "app.test.js"
-            test_file.write_text(
-                (
-                    "const test = require('node:test');\n"
-                    "const assert = require('node:assert/strict');\n\n"
-                    "test('backend scaffold smoke', () => {\n"
-                    "  assert.equal(1 + 1, 2);\n"
-                    "});\n"
-                ),
-                encoding="utf-8",
-            )
-            files.append(str(test_file))
-            tests_dir = backend_dir / "tests"
-            tests_dir.mkdir(parents=True, exist_ok=True)
-            files.extend(self._generate_node_tests(tests_dir, module_requirements))
+            files.extend(self._generate_node_backend(backend_dir, src_dir, module_requirements))
 
         api_contract = backend_dir / "API_CONTRACT.md"
         api_contract.write_text(self._build_api_contract(unique_modules), encoding="utf-8")
         files.append(str(api_contract))
         files.extend(self._generate_sql_migrations(backend_dir, unique_modules))
 
+        return files
+
+    def _generate_python_backend(
+        self,
+        backend_dir: Path,
+        src_dir: Path,
+        module_requirements: dict[str, list[str]],
+    ) -> list[str]:
+        files: list[str] = []
+        files.extend(self._generate_python_feature_pack(src_dir, module_requirements))
+
+        app_file = src_dir / "app.py"
+        app_file.write_text(self._build_fastapi_app(module_requirements), encoding="utf-8")
+        files.append(str(app_file))
+
+        requirements_file = backend_dir / "requirements.txt"
+        requirements_file.write_text(
+            "fastapi>=0.110.0\nuvicorn>=0.27.0\npytest>=7.0.0\npydantic>=2.0.2\n",
+            encoding="utf-8",
+        )
+        files.append(str(requirements_file))
+
+        tests_dir = backend_dir / "tests"
+        tests_dir.mkdir(parents=True, exist_ok=True)
+        smoke_test = tests_dir / "test_smoke.py"
+        smoke_test.write_text(
+            (
+                "def test_backend_scaffold_smoke() -> None:\n"
+                "    assert True\n"
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(smoke_test))
+        files.extend(self._generate_python_tests(tests_dir, module_requirements))
+        return files
+
+    def _generate_node_backend(
+        self,
+        backend_dir: Path,
+        src_dir: Path,
+        module_requirements: dict[str, list[str]],
+    ) -> list[str]:
+        files: list[str] = []
+        files.extend(self._generate_node_feature_pack(src_dir, module_requirements))
+
+        package_json = {
+            "name": f"{self.package_name}-backend",
+            "version": "0.1.0",
+            "private": True,
+            "scripts": {
+                "dev": "node src/app.js",
+                "start": "node src/app.js",
+                "test": "node --test",
+            },
+            "dependencies": {
+                "express": "^4.19.0",
+            },
+        }
+        package_file = backend_dir / "package.json"
+        package_file.write_text(json.dumps(package_json, indent=2, ensure_ascii=False), encoding="utf-8")
+        files.append(str(package_file))
+
+        app_file = src_dir / "app.js"
+        app_file.write_text(self._build_express_app(module_requirements), encoding="utf-8")
+        files.append(str(app_file))
+
+        test_file = src_dir / "app.test.js"
+        test_file.write_text(
+            (
+                "const test = require('node:test');\n"
+                "const assert = require('node:assert/strict');\n\n"
+                "test('backend scaffold smoke', () => {\n"
+                "  assert.equal(1 + 1, 2);\n"
+                "});\n"
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(test_file))
+        tests_dir = backend_dir / "tests"
+        tests_dir.mkdir(parents=True, exist_ok=True)
+        files.extend(self._generate_node_tests(tests_dir, module_requirements))
+        return files
+
+    def _generate_rust_backend(self, backend_dir: Path, src_dir: Path, modules: list[str]) -> list[str]:
+        files: list[str] = []
+        route_lines = [
+            (
+                f"        .route(\"/api/{self._safe_route_segment(module_name)}\", "
+                f"get({self._safe_identifier(module_name)}_handler))"
+            )
+            for module_name in modules
+        ]
+        handler_lines = []
+        for module_name in modules:
+            handler = self._safe_identifier(module_name)
+            handler_lines.extend(
+                [
+                    f"async fn {handler}_handler() -> Json<Value> {{",
+                    f"    Json(json!({{\"module\": \"{module_name}\", \"status\": \"todo\"}}))",
+                    "}",
+                    "",
+                ]
+            )
+
+        cargo_file = backend_dir / "Cargo.toml"
+        cargo_file.write_text(
+            (
+                "[package]\n"
+                f"name = \"{self.package_name}-backend\"\n"
+                "version = \"0.1.0\"\n"
+                "edition = \"2021\"\n\n"
+                "[dependencies]\n"
+                "axum = \"0.7\"\n"
+                "tokio = { version = \"1\", features = [\"full\"] }\n"
+                "serde_json = \"1\"\n"
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(cargo_file))
+
+        main_file = src_dir / "main.rs"
+        main_file.write_text(
+            (
+                "use axum::{routing::get, Json, Router};\n"
+                "use serde_json::{json, Value};\n"
+                "use std::net::SocketAddr;\n\n"
+                "async fn health_handler() -> Json<Value> {\n"
+                "    Json(json!({\"status\": \"ok\"}))\n"
+                "}\n\n"
+                + "\n".join(handler_lines)
+                + "\n"
+                "#[tokio::main]\n"
+                "async fn main() {\n"
+                "    let app = Router::new()\n"
+                "        .route(\"/health\", get(health_handler))\n"
+                + ("\n".join(route_lines) + "\n" if route_lines else "")
+                + "        ;\n\n"
+                "    let addr = SocketAddr::from(([0, 0, 0, 0], 3001));\n"
+                "    println!(\"Backend scaffold running on http://{}\", addr);\n"
+                "    let listener = tokio::net::TcpListener::bind(addr).await.expect(\"bind failed\");\n"
+                "    axum::serve(listener, app).await.expect(\"server failed\");\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(main_file))
+        return files
+
+    def _generate_php_backend(self, backend_dir: Path, modules: list[str]) -> list[str]:
+        files: list[str] = []
+        route_blocks = [
+            (
+                f"if ($path === '/api/{self._safe_route_segment(module_name)}') {{\n"
+                f"    echo json_encode(['module' => '{module_name}', 'status' => 'todo']);\n"
+                "    return;\n"
+                "}\n"
+            )
+            for module_name in modules
+        ]
+
+        composer_file = backend_dir / "composer.json"
+        composer_file.write_text(
+            json.dumps(
+                {
+                    "name": f"{self.package_name}/backend",
+                    "type": "project",
+                    "require": {"php": "^8.2"},
+                    "scripts": {"serve": "php -S 0.0.0.0:3001 -t public"},
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(composer_file))
+
+        public_dir = backend_dir / "public"
+        public_dir.mkdir(parents=True, exist_ok=True)
+        index_file = public_dir / "index.php"
+        index_file.write_text(
+            (
+                "<?php\n"
+                "header('Content-Type: application/json');\n"
+                "$path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);\n\n"
+                "if ($path === '/health') {\n"
+                "    echo json_encode(['status' => 'ok']);\n"
+                "    return;\n"
+                "}\n\n"
+                + "".join(route_blocks)
+                + "\n"
+                "http_response_code(404);\n"
+                "echo json_encode(['error' => 'not-found']);\n"
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(index_file))
+        return files
+
+    def _generate_ruby_backend(self, backend_dir: Path, modules: list[str]) -> list[str]:
+        files: list[str] = []
+        route_blocks = [
+            (
+                f"get '/api/{self._safe_route_segment(module_name)}' do\n"
+                f"  {{ module: '{module_name}', status: 'todo' }}.to_json\n"
+                "end\n\n"
+            )
+            for module_name in modules
+        ]
+
+        gem_file = backend_dir / "Gemfile"
+        gem_file.write_text(
+            (
+                "source 'https://rubygems.org'\n\n"
+                "gem 'sinatra'\n"
+                "gem 'json'\n"
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(gem_file))
+
+        app_file = backend_dir / "app.rb"
+        app_file.write_text(
+            (
+                "require 'sinatra'\n"
+                "require 'json'\n\n"
+                "set :bind, '0.0.0.0'\n"
+                "set :port, 3001\n\n"
+                "before do\n"
+                "  content_type :json\n"
+                "end\n\n"
+                "get '/health' do\n"
+                "  { status: 'ok' }.to_json\n"
+                "end\n\n"
+                + "".join(route_blocks)
+                + "not_found do\n"
+                "  status 404\n"
+                "  { error: 'not-found' }.to_json\n"
+                "end\n"
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(app_file))
+        return files
+
+    def _generate_csharp_backend(self, backend_dir: Path, modules: list[str]) -> list[str]:
+        files: list[str] = []
+        route_lines = [
+            (
+                f"app.MapGet(\"/api/{self._safe_route_segment(module_name)}\", "
+                f"() => Results.Json(new {{ module = \"{module_name}\", status = \"todo\" }}));"
+            )
+            for module_name in modules
+        ]
+
+        csproj_file = backend_dir / f"{self.package_name}.csproj"
+        csproj_file.write_text(
+            (
+                "<Project Sdk=\"Microsoft.NET.Sdk.Web\">\n"
+                "  <PropertyGroup>\n"
+                "    <TargetFramework>net8.0</TargetFramework>\n"
+                "    <Nullable>enable</Nullable>\n"
+                "    <ImplicitUsings>enable</ImplicitUsings>\n"
+                "  </PropertyGroup>\n"
+                "</Project>\n"
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(csproj_file))
+
+        app_file = backend_dir / "Program.cs"
+        app_file.write_text(
+            (
+                "var builder = WebApplication.CreateBuilder(args);\n"
+                "var app = builder.Build();\n\n"
+                "app.MapGet(\"/health\", () => Results.Json(new { status = \"ok\" }));\n"
+                + "\n".join(route_lines)
+                + "\n\n"
+                "app.Run(\"http://0.0.0.0:3001\");\n"
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(app_file))
+        return files
+
+    def _generate_kotlin_backend(self, backend_dir: Path, modules: list[str]) -> list[str]:
+        files: list[str] = []
+        route_lines = [
+            (
+                f"        get(\"/api/{self._safe_route_segment(module_name)}\") {{\n"
+                f"            call.respond(mapOf(\"module\" to \"{module_name}\", \"status\" to \"todo\"))\n"
+                "        }\n"
+            )
+            for module_name in modules
+        ]
+
+        gradle_file = backend_dir / "build.gradle.kts"
+        gradle_file.write_text(
+            (
+                "plugins {\n"
+                "    kotlin(\"jvm\") version \"1.9.22\"\n"
+                "    application\n"
+                "}\n\n"
+                "repositories {\n"
+                "    mavenCentral()\n"
+                "}\n\n"
+                "dependencies {\n"
+                "    implementation(\"io.ktor:ktor-server-core:2.3.7\")\n"
+                "    implementation(\"io.ktor:ktor-server-cio:2.3.7\")\n"
+                "    implementation(\"io.ktor:ktor-server-content-negotiation:2.3.7\")\n"
+                "    implementation(\"io.ktor:ktor-serialization-kotlinx-json:2.3.7\")\n"
+                "    implementation(\"ch.qos.logback:logback-classic:1.4.14\")\n"
+                "}\n\n"
+                "application {\n"
+                "    mainClass.set(\"com.superdev.ApplicationKt\")\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(gradle_file))
+
+        settings_file = backend_dir / "settings.gradle.kts"
+        settings_file.write_text(f"rootProject.name = \"{self.package_name}-backend\"\n", encoding="utf-8")
+        files.append(str(settings_file))
+
+        app_file = backend_dir / "src" / "main" / "kotlin" / "com" / "superdev" / "Application.kt"
+        app_file.parent.mkdir(parents=True, exist_ok=True)
+        app_file.write_text(
+            (
+                "package com.superdev\n\n"
+                "import io.ktor.serialization.kotlinx.json.*\n"
+                "import io.ktor.server.application.*\n"
+                "import io.ktor.server.engine.*\n"
+                "import io.ktor.server.cio.*\n"
+                "import io.ktor.server.plugins.contentnegotiation.*\n"
+                "import io.ktor.server.response.*\n"
+                "import io.ktor.server.routing.*\n\n"
+                "fun main() {\n"
+                "    embeddedServer(CIO, port = 3001, host = \"0.0.0.0\") {\n"
+                "        install(ContentNegotiation) { json() }\n"
+                "        routing {\n"
+                "            get(\"/health\") { call.respond(mapOf(\"status\" to \"ok\")) }\n"
+                + "".join(route_lines)
+                + "        }\n"
+                "    }.start(wait = true)\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(app_file))
+        return files
+
+    def _generate_swift_backend(self, backend_dir: Path, modules: list[str]) -> list[str]:
+        files: list[str] = []
+        route_lines = [
+            (
+                f"app.get(\"api\", \"{self._safe_route_segment(module_name)}\") {{ _ in\n"
+                f"    [\"module\": \"{module_name}\", \"status\": \"todo\"]\n"
+                "}\n\n"
+            )
+            for module_name in modules
+        ]
+
+        package_file = backend_dir / "Package.swift"
+        package_file.write_text(
+            (
+                "// swift-tools-version:5.9\n"
+                "import PackageDescription\n\n"
+                "let package = Package(\n"
+                f"    name: \"{self.package_name}-backend\",\n"
+                "    platforms: [.macOS(.v13)],\n"
+                "    dependencies: [\n"
+                "        .package(url: \"https://github.com/vapor/vapor.git\", from: \"4.92.0\")\n"
+                "    ],\n"
+                "    targets: [\n"
+                "        .executableTarget(\n"
+                "            name: \"App\",\n"
+                "            dependencies: [.product(name: \"Vapor\", package: \"vapor\")]\n"
+                "        )\n"
+                "    ]\n"
+                ")\n"
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(package_file))
+
+        main_file = backend_dir / "Sources" / "App" / "main.swift"
+        main_file.parent.mkdir(parents=True, exist_ok=True)
+        main_file.write_text(
+            (
+                "import Vapor\n\n"
+                "let app = Application(.development)\n"
+                "defer { app.shutdown() }\n\n"
+                "app.get(\"health\") { _ in [\"status\": \"ok\"] }\n"
+                + "".join(route_lines)
+                + "app.http.server.configuration.hostname = \"0.0.0.0\"\n"
+                "app.http.server.configuration.port = 3001\n"
+                "try app.run()\n"
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(main_file))
+        return files
+
+    def _generate_elixir_backend(self, backend_dir: Path, modules: list[str]) -> list[str]:
+        files: list[str] = []
+        route_lines = [
+            (
+                f"    get \"/api/{self._safe_route_segment(module_name)}\" do\n"
+                f"      send_resp(conn, 200, Jason.encode!(%{{module: \"{module_name}\", status: \"todo\"}}))\n"
+                "    end\n"
+            )
+            for module_name in modules
+        ]
+
+        mix_file = backend_dir / "mix.exs"
+        mix_file.write_text(
+            (
+                "defmodule SuperDevBackend.MixProject do\n"
+                "  use Mix.Project\n\n"
+                "  def project do\n"
+                "    [\n"
+                "      app: :super_dev_backend,\n"
+                "      version: \"0.1.0\",\n"
+                "      elixir: \"~> 1.16\",\n"
+                "      start_permanent: Mix.env() == :prod,\n"
+                "      deps: deps()\n"
+                "    ]\n"
+                "  end\n\n"
+                "  def application do\n"
+                "    [extra_applications: [:logger], mod: {SuperDevBackend.Application, []}]\n"
+                "  end\n\n"
+                "  defp deps do\n"
+                "    [\n"
+                "      {:plug_cowboy, \"~> 2.7\"},\n"
+                "      {:jason, \"~> 1.4\"}\n"
+                "    ]\n"
+                "  end\n"
+                "end\n"
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(mix_file))
+
+        app_file = backend_dir / "lib" / "super_dev_backend.ex"
+        app_file.parent.mkdir(parents=True, exist_ok=True)
+        app_file.write_text(
+            (
+                "defmodule SuperDevBackend.Router do\n"
+                "  use Plug.Router\n\n"
+                "  plug :match\n"
+                "  plug :dispatch\n\n"
+                "  get \"/health\" do\n"
+                "    send_resp(conn, 200, Jason.encode!(%{status: \"ok\"}))\n"
+                "  end\n\n"
+                + "".join(route_lines)
+                + "\n"
+                "  match _ do\n"
+                "    send_resp(conn, 404, Jason.encode!(%{error: \"not-found\"}))\n"
+                "  end\n"
+                "end\n\n"
+                "defmodule SuperDevBackend.Application do\n"
+                "  use Application\n\n"
+                "  def start(_type, _args) do\n"
+                "    children = [\n"
+                "      {Plug.Cowboy, scheme: :http, plug: SuperDevBackend.Router, options: [port: 3001, ip: {0, 0, 0, 0}]}\n"
+                "    ]\n\n"
+                "    opts = [strategy: :one_for_one, name: SuperDevBackend.Supervisor]\n"
+                "    Supervisor.start_link(children, opts)\n"
+                "  end\n"
+                "end\n"
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(app_file))
+        return files
+
+    def _generate_scala_backend(self, backend_dir: Path, modules: list[str]) -> list[str]:
+        files: list[str] = []
+        route_lines = [
+            (
+                f"      path(\"api\" / \"{self._safe_route_segment(module_name)}\") {{\n"
+                f"        complete(HttpEntity(ContentTypes.`application/json`, "
+                f"\"{{\\\"module\\\":\\\"{module_name}\\\",\\\"status\\\":\\\"todo\\\"}}\"))\n"
+                "      }\n"
+            )
+            for module_name in modules
+        ]
+
+        sbt_file = backend_dir / "build.sbt"
+        sbt_file.write_text(
+            (
+                f'name := "{self.package_name}-backend"\n'
+                "version := \"0.1.0\"\n"
+                "scalaVersion := \"2.13.13\"\n\n"
+                "libraryDependencies ++= Seq(\n"
+                "  \"com.typesafe.akka\" %% \"akka-http\" % \"10.5.3\",\n"
+                "  \"com.typesafe.akka\" %% \"akka-stream\" % \"2.8.5\",\n"
+                "  \"com.typesafe.akka\" %% \"akka-actor-typed\" % \"2.8.5\"\n"
+                ")\n"
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(sbt_file))
+
+        app_file = backend_dir / "src" / "main" / "scala" / "Main.scala"
+        app_file.parent.mkdir(parents=True, exist_ok=True)
+        app_file.write_text(
+            (
+                "import akka.actor.typed.ActorSystem\n"
+                "import akka.actor.typed.scaladsl.Behaviors\n"
+                "import akka.http.scaladsl.Http\n"
+                "import akka.http.scaladsl.model._\n"
+                "import akka.http.scaladsl.server.Directives._\n"
+                "import scala.concurrent.ExecutionContextExecutor\n\n"
+                "object Main {\n"
+                "  def main(args: Array[String]): Unit = {\n"
+                "    implicit val system: ActorSystem[Nothing] = ActorSystem(Behaviors.empty, \"super-dev-backend\")\n"
+                "    implicit val executionContext: ExecutionContextExecutor = system.executionContext\n\n"
+                "    val route = concat(\n"
+                "      path(\"health\") {\n"
+                "        complete(HttpEntity(ContentTypes.`application/json`, \"{\\\"status\\\":\\\"ok\\\"}\"))\n"
+                "      },\n"
+                + ",\n".join(route_lines)
+                + "\n"
+                "    )\n\n"
+                "    Http().newServerAt(\"0.0.0.0\", 3001).bind(route)\n"
+                "  }\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(app_file))
+        return files
+
+    def _generate_dart_backend(self, backend_dir: Path, modules: list[str]) -> list[str]:
+        files: list[str] = []
+        case_lines = [
+            (
+                f"    case '/api/{self._safe_route_segment(module_name)}':\n"
+                f"      return _json({{'module': '{module_name}', 'status': 'todo'}});\n"
+            )
+            for module_name in modules
+        ]
+
+        pubspec_file = backend_dir / "pubspec.yaml"
+        pubspec_file.write_text(
+            (
+                f"name: {self.package_name.replace('-', '_')}_backend\n"
+                "description: Super Dev generated backend scaffold\n"
+                "version: 0.1.0\n"
+                "environment:\n"
+                "  sdk: '>=3.3.0 <4.0.0'\n"
+                "dependencies:\n"
+                "  shelf: ^1.4.1\n"
+                "  shelf_router: ^1.1.4\n"
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(pubspec_file))
+
+        server_file = backend_dir / "bin" / "server.dart"
+        server_file.parent.mkdir(parents=True, exist_ok=True)
+        server_file.write_text(
+            (
+                "import 'dart:convert';\n"
+                "import 'dart:io';\n\n"
+                "Response _json(Map<String, Object> payload, {int code = 200}) {\n"
+                "  return Response(code,\n"
+                "      body: jsonEncode(payload),\n"
+                "      headers: {'content-type': 'application/json'});\n"
+                "}\n\n"
+                "class Response {\n"
+                "  Response(this.statusCode, {required this.body, required this.headers});\n"
+                "  final int statusCode;\n"
+                "  final String body;\n"
+                "  final Map<String, String> headers;\n"
+                "}\n\n"
+                "Future<void> main() async {\n"
+                "  final server = await HttpServer.bind(InternetAddress.anyIPv4, 3001);\n"
+                "  print('Backend scaffold running on http://0.0.0.0:3001');\n"
+                "  await for (final request in server) {\n"
+                "    final path = request.uri.path;\n"
+                "    Response response;\n"
+                "    switch (path) {\n"
+                "      case '/health':\n"
+                "        response = _json({'status': 'ok'});\n"
+                "        break;\n"
+                + "".join(case_lines)
+                + "      default:\n"
+                "        response = _json({'error': 'not-found'}, code: 404);\n"
+                "    }\n"
+                "    request.response.statusCode = response.statusCode;\n"
+                "    response.headers.forEach(request.response.headers.set);\n"
+                "    request.response.write(response.body);\n"
+                "    await request.response.close();\n"
+                "  }\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        files.append(str(server_file))
         return files
 
     def _generate_react_frontend(

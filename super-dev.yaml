@@ -2,8 +2,8 @@ author: ''
 backend: node
 cli: {}
 database: postgresql
-description: 用户认证系统
-domain: ''
+description: 测试需求
+domain: saas
 experts:
 - PM
 - ARCHITECT
@@ -25,4 +25,6 @@ phases:
 - deployment
 platform: web
 quality_gate: 90
-version: 1.0.0
+host_compatibility_min_score: 80
+host_compatibility_min_ready_hosts: 1
+version: 2.0.2

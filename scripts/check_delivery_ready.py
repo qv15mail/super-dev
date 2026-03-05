@@ -3,8 +3,8 @@
 交付包门禁检查工具
 
 用途：
-1) 校验当前项目 output/delivery 下最新 manifest 是否为 ready
-2) 通过 --smoke 在临时目录执行一次离线 pipeline，验证交付链路端到端可用
+1. 校验当前项目 output/delivery 下最新 manifest 是否为 ready
+2. 通过 --smoke 在临时目录执行一次离线 pipeline，验证交付链路端到端可用
 """
 
 from __future__ import annotations
@@ -162,4 +162,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

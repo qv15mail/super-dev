@@ -22,6 +22,12 @@ def reset_global_config_manager():
     manager._global_config_manager = None
 
 
+@pytest.fixture(autouse=True)
+def allow_pipeline_without_host_in_tests(monkeypatch):
+    """测试默认关闭宿主硬门禁，避免依赖本机宿主安装状态。"""
+    monkeypatch.setenv("SUPER_DEV_ALLOW_NO_HOST", "1")
+
+
 @pytest.fixture
 def temp_project_dir() -> Generator[Path, None, None]:
     """临时项目目录"""

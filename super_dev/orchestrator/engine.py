@@ -406,6 +406,7 @@ class WorkflowEngine:
         frontend = user_input.get("frontend", "react")
         backend = user_input.get("backend", "node")
         domain = user_input.get("domain", "")
+        language_preferences = user_input.get("language_preferences", [])
 
         dispatcher = ExpertDispatcher(self.project_dir)
         result = dispatcher.dispatch_document_generation(
@@ -415,6 +416,7 @@ class WorkflowEngine:
             frontend=frontend,
             backend=backend,
             domain=domain,
+            language_preferences=language_preferences,
         )
 
         # 保存生成的文档到 output/ 目录
@@ -500,6 +502,14 @@ class WorkflowEngine:
             "domain": user_input.get("domain", ""),
         }
         threshold_override = user_input.get("quality_threshold")
+        host_compatibility_min_score_override = user_input.get(
+            "host_compatibility_min_score",
+            self.config_manager.config.host_compatibility_min_score,
+        )
+        host_compatibility_min_ready_hosts_override = user_input.get(
+            "host_compatibility_min_ready_hosts",
+            self.config_manager.config.host_compatibility_min_ready_hosts,
+        )
 
         # 重新加载红队报告（如果存在）
         redteam_report = None
@@ -519,6 +529,8 @@ class WorkflowEngine:
             tech_stack=tech_stack,
             redteam_report=redteam_report,
             threshold_override=threshold_override,
+            host_compatibility_min_score_override=host_compatibility_min_score_override,
+            host_compatibility_min_ready_hosts_override=host_compatibility_min_ready_hosts_override,
         )
 
         # 保存质量门禁报告
@@ -529,9 +541,14 @@ class WorkflowEngine:
 
         passed = expert_output.metadata.get("passed", False)
         if not passed:
+            effective_threshold = (
+                int(threshold_override)
+                if threshold_override is not None
+                else int(self.config_manager.config.quality_gate)
+            )
             raise QualityGateError(
                 score=expert_output.quality_score,
-                threshold=threshold_override or 80,
+                threshold=effective_threshold,
                 details={"phase": "qa", "report_path": str(qg_path)}
             )
 

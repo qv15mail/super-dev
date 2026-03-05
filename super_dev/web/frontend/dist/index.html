@@ -1,0 +1,2467 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Dev Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --bg-1: #f4f7f9;
+            --bg-2: #dce8ef;
+            --ink: #102a43;
+            --muted: #4b6378;
+            --primary: #0f766e;
+            --primary-deep: #155e75;
+            --accent: #c2410c;
+            --panel: #ffffff;
+            --line: #d4dde5;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at 5% 5%, rgba(15, 118, 110, 0.18), transparent 45%),
+                radial-gradient(circle at 90% 0%, rgba(194, 65, 12, 0.12), transparent 38%),
+                linear-gradient(150deg, var(--bg-1) 0%, var(--bg-2) 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1320px;
+            margin: 0 auto;
+            padding: 28px 24px 40px;
+        }
+
+        .header {
+            text-align: center;
+            color: var(--ink);
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-family: "Outfit", sans-serif;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            letter-spacing: 0.02em;
+        }
+
+        .header p {
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        .hero-strip {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .hero-pill {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(244, 249, 252, 0.95) 100%);
+            border: 1px solid rgba(212, 221, 229, 0.95);
+            border-radius: 14px;
+            padding: 10px 12px;
+            box-shadow: 0 10px 24px rgba(16, 42, 67, 0.08);
+            color: var(--ink);
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.35;
+        }
+
+        .hero-pill span {
+            display: block;
+            font-size: 11px;
+            color: var(--muted);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 2px;
+        }
+
+        .workspace {
+            display: grid;
+            grid-template-columns: 260px minmax(0, 1fr);
+            gap: 18px;
+            align-items: start;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(212, 221, 229, 0.9);
+            backdrop-filter: blur(4px);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 18px 48px rgba(16, 42, 67, 0.12);
+            margin-bottom: 20px;
+        }
+
+        .card h2 {
+            color: var(--ink);
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            font-family: "Outfit", sans-serif;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            color: var(--muted);
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+            background: rgba(255, 255, 255, 0.95);
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(120deg, var(--primary) 0%, var(--primary-deep) 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(15, 118, 110, 0.32);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .expert-card {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .expert-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .expert-card h3 {
+            color: var(--primary-deep);
+            margin-bottom: 8px;
+        }
+
+        .expert-card p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .tabs {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 0;
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid rgba(212, 221, 229, 0.9);
+            border-radius: 14px;
+            padding: 12px;
+            position: sticky;
+            top: 18px;
+            box-shadow: 0 16px 36px rgba(16, 42, 67, 0.1);
+        }
+
+        .tab {
+            padding: 11px 12px;
+            background: #f7fafc;
+            border: 1px solid #e3e9ef;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+            color: var(--ink);
+            font-weight: 600;
+        }
+
+        .tab.active {
+            background: linear-gradient(120deg, var(--primary) 0%, var(--primary-deep) 100%);
+            color: white;
+            border-color: transparent;
+            box-shadow: 0 8px 18px rgba(15, 118, 110, 0.25);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+        }
+
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .workflow-progress {
+            margin-top: 20px;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--primary-deep) 100%);
+            transition: width 0.3s;
+        }
+
+        .phase-list {
+            margin-top: 16px;
+        }
+
+        .phase-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .phase-item:last-child {
+            border-bottom: none;
+        }
+
+        .phase-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            font-size: 12px;
+        }
+
+        .phase-icon.pending {
+            background: #e0e0e0;
+            color: #666;
+        }
+
+        .phase-icon.running {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .phase-icon.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .phase-icon.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .workflow-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: #fff;
+        }
+
+        .btn-danger:hover {
+            background: #bb2d3b;
+        }
+
+        .runs-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+
+        .runs-table th,
+        .runs-table td {
+            text-align: left;
+            border-bottom: 1px solid #eee;
+            padding: 10px 8px;
+            font-size: 13px;
+        }
+
+        .runs-table tr:hover {
+            background: #fafafa;
+        }
+
+        .runs-table .clickable {
+            cursor: pointer;
+            color: var(--primary-deep);
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+
+        .form-hint {
+            margin-top: 6px;
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.4;
+        }
+
+        .artifact-list {
+            margin-top: 10px;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }
+
+        .artifact-list ul {
+            margin: 6px 0 0 18px;
+            font-size: 12px;
+            color: #444;
+        }
+
+        .redteam-panel {
+            margin-top: 12px;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }
+
+        .redteam-head {
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 13px;
+        }
+
+        .redteam-group {
+            margin-top: 10px;
+            border: 1px solid #ececec;
+            border-radius: 8px;
+            padding: 10px;
+            background: #fafafa;
+        }
+
+        .redteam-group h4 {
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .issue-row {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            border-bottom: 1px solid #eee;
+            padding: 8px 0;
+        }
+
+        .issue-row:last-child {
+            border-bottom: none;
+        }
+
+        .issue-body {
+            flex: 1;
+            min-width: 0;
+            font-size: 12px;
+            color: #333;
+        }
+
+        .issue-location {
+            margin-top: 4px;
+            color: #666;
+            word-break: break-all;
+        }
+
+        .issue-action {
+            padding: 5px 8px;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+
+        .severity-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 62px;
+            border-radius: 999px;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: lowercase;
+        }
+
+        .severity-badge.sev-critical {
+            background: #ffebee;
+            color: #b71c1c;
+        }
+
+        .severity-badge.sev-high {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .severity-badge.sev-medium {
+            background: #fff8e1;
+            color: #f57f17;
+        }
+
+        .severity-badge.sev-low {
+            background: #e8f5e9;
+            color: #1b5e20;
+        }
+
+        .expert-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .expert-panel {
+            background: #fff;
+            border: 1px solid #ececec;
+            border-radius: 8px;
+            padding: 14px;
+        }
+
+        .expert-panel h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .markdown-output {
+            white-space: pre-wrap;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 10px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 12px;
+            line-height: 1.45;
+            max-height: 360px;
+            overflow: auto;
+        }
+
+        .advice-history {
+            margin-top: 14px;
+        }
+
+        .advice-history .history-item {
+            border: 1px solid #ececec;
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+        }
+
+        .advice-history .history-item:hover {
+            background: #f8f9fa;
+        }
+
+        .advice-history .history-title {
+            font-size: 13px;
+            color: #333;
+        }
+
+        .advice-history .history-meta {
+            margin-top: 4px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .deploy-results {
+            margin-top: 16px;
+            border: 1px solid #ececec;
+            border-radius: 8px;
+            padding: 12px;
+            background: #fafafa;
+        }
+
+        .deploy-results ul {
+            margin: 8px 0 0 18px;
+            color: #444;
+            font-size: 13px;
+        }
+
+        .deploy-results .meta {
+            color: #666;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .precheck-panel {
+            margin-top: 16px;
+            border: 1px solid #ececec;
+            border-radius: 8px;
+            padding: 12px;
+            background: #fff;
+        }
+
+        .precheck-panel h3 {
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .precheck-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .precheck-list li {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            border-bottom: 1px solid #f0f0f0;
+            padding: 8px 0;
+            font-size: 13px;
+        }
+
+        .precheck-list li:last-child {
+            border-bottom: none;
+        }
+
+        .check-ok {
+            color: #2e7d32;
+            font-weight: 600;
+        }
+
+        .check-missing {
+            color: #c62828;
+            font-weight: 600;
+        }
+
+        .remediation-panel {
+            margin-top: 16px;
+            border: 1px solid #ececec;
+            border-radius: 8px;
+            padding: 12px;
+            background: #fff;
+        }
+
+        .remediation-panel h3 {
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .remediation-item {
+            border-bottom: 1px solid #f0f0f0;
+            padding: 8px 0;
+        }
+
+        .remediation-item:last-child {
+            border-bottom: none;
+        }
+
+        .remediation-item .title {
+            font-size: 13px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .remediation-item .desc {
+            margin-top: 2px;
+            color: #666;
+            font-size: 12px;
+        }
+
+        .remediation-item code {
+            display: inline-block;
+            margin-top: 6px;
+            background: #f6f8fa;
+            border: 1px solid #e5e8eb;
+            border-radius: 6px;
+            padding: 4px 6px;
+            font-size: 12px;
+            color: #333;
+        }
+
+        .export-panel {
+            margin-top: 12px;
+            border: 1px solid #e5e8eb;
+            border-radius: 8px;
+            background: #f8fafc;
+            padding: 10px 12px;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .host-overview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .host-stat {
+            border: 1px solid #e5e8eb;
+            border-radius: 10px;
+            padding: 10px 12px;
+            background: #fff;
+        }
+
+        .host-stat span {
+            display: block;
+            font-size: 12px;
+            color: #5f6c7b;
+            margin-bottom: 4px;
+        }
+
+        .host-stat strong {
+            font-size: 20px;
+            color: var(--ink);
+            font-family: "Outfit", sans-serif;
+        }
+
+        .host-matrix {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .host-card {
+            border: 1px solid #dde5eb;
+            border-radius: 10px;
+            background: #fff;
+            padding: 12px;
+            text-align: left;
+            cursor: pointer;
+            transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+        }
+
+        .host-card:hover {
+            transform: translateY(-1px);
+            border-color: #bfcdd9;
+            box-shadow: 0 8px 18px rgba(16, 42, 67, 0.08);
+        }
+
+        .host-card.active {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.14);
+        }
+
+        .host-card.ready {
+            border-left: 4px solid #2e7d32;
+        }
+
+        .host-card.not-ready {
+            border-left: 4px solid #c62828;
+        }
+
+        .host-card-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .host-card-name {
+            font-size: 15px;
+            color: #183b56;
+            font-weight: 700;
+        }
+
+        .host-card-id,
+        .host-card-file {
+            margin-top: 4px;
+            font-size: 12px;
+            color: #5f6c7b;
+            word-break: break-all;
+        }
+
+        .host-tag {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .host-tag-cli {
+            background: #e0f2fe;
+            color: #0c4a6e;
+        }
+
+        .host-tag-ide {
+            background: #ecfdf3;
+            color: #14532d;
+        }
+
+        .host-command-panel {
+            margin-top: 16px;
+            border: 1px solid #e5e8eb;
+            border-radius: 10px;
+            padding: 12px;
+            background: #fff;
+        }
+
+        .host-command-panel h3 {
+            margin-bottom: 8px;
+            font-size: 16px;
+            color: #17324d;
+        }
+
+        .host-command-item {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #eef2f6;
+        }
+
+        .host-command-item:first-of-type {
+            margin-top: 6px;
+            padding-top: 0;
+            border-top: none;
+        }
+
+        .host-command-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 4px;
+        }
+
+        .host-command-head strong {
+            font-size: 13px;
+            color: #334e68;
+        }
+
+        .host-command-desc {
+            font-size: 12px;
+            color: #6b7c8d;
+            margin-bottom: 6px;
+        }
+
+        .host-command-item code {
+            display: block;
+            width: 100%;
+            overflow-x: auto;
+            white-space: nowrap;
+            border-radius: 8px;
+            border: 1px solid #e5e8eb;
+            background: #f8fafc;
+            padding: 8px 10px;
+            font-size: 12px;
+            color: #243b53;
+        }
+
+        .host-doctor-panel {
+            margin-top: 12px;
+            border: 1px solid #e5e8eb;
+            border-radius: 10px;
+            background: #fcfdff;
+            padding: 12px;
+        }
+
+        .host-doctor-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 12px;
+            font-size: 13px;
+            color: #334e68;
+            margin-bottom: 8px;
+        }
+
+        .host-doctor-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .host-doctor-list li {
+            border-top: 1px solid #eef2f6;
+            padding: 8px 0;
+            font-size: 12px;
+            color: #4b6378;
+        }
+
+        .host-doctor-list li:first-child {
+            border-top: none;
+            padding-top: 0;
+        }
+
+        @keyframes panel-enter {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .card,
+        .expert-layout {
+            animation: panel-enter 260ms ease-out;
+        }
+
+        @media (max-width: 980px) {
+            .hero-strip {
+                grid-template-columns: 1fr;
+            }
+
+            .workspace {
+                grid-template-columns: 1fr;
+            }
+
+            .tabs {
+                position: static;
+                flex-direction: row;
+                flex-wrap: wrap;
+            }
+
+            .tab {
+                flex: 1 1 calc(50% - 8px);
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <div class="header">
+                <h1>Super Dev Dashboard</h1>
+                <p>超级开发战队 一个流水线式的AiCoding辅助工具</p>
+            </div>
+
+            <div class="hero-strip">
+                <div class="hero-pill"><span>Product</span>Pipeline-first AI Coding Copilot</div>
+                <div class="hero-pill"><span>Target</span>CLI + IDE hosts / Enterprise delivery</div>
+                <div class="hero-pill"><span>Flow</span>需求 -> 文档 -> Spec -> 开发 -> 红队 -> 门禁 -> 交付</div>
+            </div>
+
+            <div class="workspace">
+
+            <!-- 标签页 -->
+            <div class="tabs">
+                <button class="tab" :class="{ active: activeTab === 'init' }" @click="activeTab = 'init'">
+                    项目初始化
+                </button>
+                <button class="tab" :class="{ active: activeTab === 'workflow' }" @click="activeTab = 'workflow'">
+                    工作流执行
+                </button>
+                <button class="tab" :class="{ active: activeTab === 'experts' }" @click="activeTab = 'experts'">
+                    专家团队
+                </button>
+                <button class="tab" :class="{ active: activeTab === 'hosts' }" @click="activeTab = 'hosts'">
+                    宿主生态
+                </button>
+                <button class="tab" :class="{ active: activeTab === 'deploy' }" @click="activeTab = 'deploy'">
+                    交付部署
+                </button>
+            </div>
+
+            <!-- 项目初始化 -->
+            <div v-if="activeTab === 'init'" class="card">
+                <h2>初始化新项目</h2>
+                <div v-if="message" :class="['alert', message.type]">
+                    {{ message.text }}
+                </div>
+                <form @submit.prevent="initProject">
+                    <div class="form-group">
+                        <label>项目名称 *</label>
+                        <input v-model="initForm.name" type="text" required placeholder="my-project">
+                    </div>
+                    <div class="form-group">
+                        <label>项目描述</label>
+                        <textarea v-model="initForm.description" rows="3" placeholder="项目描述..."></textarea>
+                    </div>
+                    <div class="grid">
+                        <div class="form-group">
+                            <label>目标平台</label>
+                            <select v-model="initForm.platform">
+                                <option v-for="item in platformCatalog" :key="'platform-' + item.id" :value="item.id">
+                                    {{ item.name }}
+                                </option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>前端框架</label>
+                            <select v-model="initForm.frontend">
+                                <option v-for="item in frontendCatalog" :key="'frontend-' + item.id" :value="item.id">
+                                    {{ item.name }}
+                                </option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>后端模板（用于脚手架）</label>
+                            <select v-model="initForm.backend">
+                                <option v-for="item in backendCatalog" :key="'backend-' + item.id" :value="item.id">
+                                    {{ item.name }}
+                                </option>
+                            </select>
+                            <div class="form-hint">这里决定初始后端脚手架模板；语言能力可在下方“语言偏好”自由组合。</div>
+                        </div>
+                        <div class="form-group">
+                            <label>业务领域</label>
+                            <select v-model="initForm.domain">
+                                <option v-for="item in domainCatalog" :key="'domain-' + (item.id || 'general')" :value="item.id">
+                                    {{ item.name }}
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>语言偏好（可多选）</label>
+                        <select v-model="initForm.language_preferences" multiple size="8">
+                            <option v-for="lang in languageCatalog" :key="'init-' + lang.id" :value="lang.id">
+                                {{ lang.name }}
+                            </option>
+                        </select>
+                        <div class="form-hint">用于文档、实现建议与专家输出。支持主流语言组合，不限制模型编码语言。</div>
+                    </div>
+                    <div class="form-group">
+                        <label>质量门禁 ({{ initForm.quality_gate }}%)</label>
+                        <input v-model.number="initForm.quality_gate" type="range" min="0" max="100" step="5">
+                    </div>
+                    <div class="grid">
+                        <div class="form-group">
+                            <label>宿主兼容评分阈值</label>
+                            <input
+                                v-model.number="initForm.host_compatibility_min_score"
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="1"
+                            >
+                        </div>
+                        <div class="form-group">
+                            <label>最少 Ready Host 数</label>
+                            <input
+                                v-model.number="initForm.host_compatibility_min_ready_hosts"
+                                type="number"
+                                min="0"
+                                step="1"
+                            >
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" :disabled="loading">
+                        {{ loading ? '初始化中...' : '初始化项目' }}
+                    </button>
+                </form>
+            </div>
+
+            <!-- 工作流执行 -->
+            <div v-if="activeTab === 'workflow'" class="card">
+                <h2>执行工作流</h2>
+                <div v-if="message" :class="['alert', message.type]">
+                    {{ message.text }}
+                </div>
+                <div class="form-group">
+                    <label>项目目录</label>
+                    <input v-model="projectDir" type="text" placeholder="." />
+                </div>
+                <div class="form-group">
+                    <label>选择阶段</label>
+                    <div class="grid">
+                        <label v-for="phase in phases" :key="phase.id" style="display: flex; align-items: center;">
+                            <input type="checkbox" :value="phase.id" v-model="selectedPhases">
+                            <span style="margin-left: 8px;">{{ phase.name }}</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="grid">
+                    <div class="form-group">
+                        <label>质量门禁阈值</label>
+                        <input
+                            v-model.number="workflowForm.quality_gate"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="1"
+                        >
+                    </div>
+                    <div class="form-group">
+                        <label>宿主兼容评分阈值</label>
+                        <input
+                            v-model.number="workflowForm.host_compatibility_min_score"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="1"
+                        >
+                    </div>
+                    <div class="form-group">
+                        <label>最少 Ready Host 数</label>
+                        <input
+                            v-model.number="workflowForm.host_compatibility_min_ready_hosts"
+                            type="number"
+                            min="0"
+                            step="1"
+                        >
+                    </div>
+                    <div class="form-group">
+                        <label>运行语言偏好（可多选，留空则沿用项目配置）</label>
+                        <select v-model="workflowForm.language_preferences" multiple size="6">
+                            <option v-for="lang in languageCatalog" :key="'run-' + lang.id" :value="lang.id">
+                                {{ lang.name }}
+                            </option>
+                        </select>
+                    </div>
+                </div>
+                <div class="workflow-actions" style="margin-top: -4px;">
+                    <button @click="loadProjectConfig" class="btn btn-secondary" :disabled="loading">
+                        读取项目配置
+                    </button>
+                    <span style="font-size: 12px; color: #666; align-self: center;">
+                        运行时会同步更新 super-dev.yaml 对应门禁阈值
+                    </span>
+                </div>
+                <div class="workflow-actions">
+                    <button @click="runWorkflow" class="btn btn-primary" :disabled="loading || selectedPhases.length === 0">
+                        {{ loading ? '执行中...' : '执行工作流' }}
+                    </button>
+                    <button
+                        @click="cancelWorkflow"
+                        class="btn btn-danger"
+                        :disabled="!canCancelWorkflow || loading"
+                    >
+                        取消当前运行
+                    </button>
+                    <button @click="loadRunsHistory" class="btn btn-secondary" :disabled="loading">
+                        刷新历史
+                    </button>
+                </div>
+
+                <!-- 工作流进度 -->
+                <div v-if="workflowRunning" class="workflow-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" :style="{ width: workflowProgress + '%' }"></div>
+                    </div>
+                    <div class="phase-list">
+                        <div v-for="phase in phases" :key="phase.id" class="phase-item">
+                            <div class="phase-icon" :class="getPhaseStatus(phase.id)">
+                                {{ getPhaseIcon(phase.id) }}
+                            </div>
+                            <span>{{ phase.name }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 16px; margin-bottom: 0;">
+                    <h2 style="font-size: 1.2rem;">运行历史</h2>
+                    <table class="runs-table" v-if="runsHistory.length">
+                        <thead>
+                            <tr>
+                                <th>Run ID</th>
+                                <th>状态</th>
+                                <th>进度</th>
+                                <th>阶段</th>
+                                <th>更新时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="run in runsHistory" :key="run.run_id">
+                                <td>
+                                    <span class="clickable" @click="focusRun(run.run_id)">
+                                        {{ run.run_id }}
+                                    </span>
+                                </td>
+                                <td>{{ run.status }}</td>
+                                <td>{{ run.progress || 0 }}%</td>
+                                <td>{{ (run.completed_phases || []).length }}/{{ (run.requested_phases || []).length || '-' }}</td>
+                                <td>{{ formatTime(run.updated_at) }}</td>
+                                <td>
+                                    <button class="btn btn-secondary" style="padding:6px 10px;font-size:12px;" @click="downloadRunArtifacts(run)">
+                                        下载交付包
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-else class="loading">暂无运行记录</div>
+                    <div class="artifact-list" v-if="selectedRunArtifacts.length">
+                        <div style="font-size:13px;color:#333;"><strong>当前 Run 交付物预览</strong></div>
+                        <ul>
+                            <li v-for="item in selectedRunArtifacts.slice(0, 20)" :key="item.path">
+                                {{ item.relative_path }} ({{ item.size_bytes }} bytes)
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="redteam-panel" v-if="selectedRunRedteam">
+                        <div class="redteam-head">
+                            <strong>红队问题总览 (Run {{ selectedRunRedteam.run_id }})</strong>
+                            <div style="margin-top:4px;color:#666;">
+                                评分 {{ selectedRunRedteam.score }} / 100，
+                                Critical {{ selectedRunRedteam.critical_count }}，
+                                High {{ selectedRunRedteam.high_count }}
+                            </div>
+                            <div v-if="selectedRunRedteam.report_path" style="margin-top:4px;color:#666;">
+                                报告: {{ selectedRunRedteam.report_path }}
+                            </div>
+                        </div>
+
+                        <div
+                            class="redteam-group"
+                            v-for="group in selectedRunRedteam.groups"
+                            :key="group.id"
+                            v-if="group.items.length"
+                        >
+                            <h4>{{ group.label }} ({{ group.items.length }})</h4>
+                            <div
+                                class="issue-row"
+                                v-for="(issue, idx) in group.items.slice(0, 10)"
+                                :key="group.id + '-' + idx + '-' + issue.description"
+                            >
+                                <span class="severity-badge" :class="'sev-' + (issue.severity || 'low')">
+                                    {{ issue.severity || 'low' }}
+                                </span>
+                                <div class="issue-body">
+                                    <div>{{ issue.description }}</div>
+                                    <div class="issue-location" v-if="issue.file_path">
+                                        位置: {{ issue.file_path }}:{{ issue.line || 1 }}
+                                    </div>
+                                    <div class="issue-location">建议: {{ issue.recommendation }}</div>
+                                </div>
+                                <button
+                                    v-if="issue.file_path"
+                                    class="btn btn-secondary issue-action"
+                                    @click="copyIssueLocateCommand(issue)"
+                                >
+                                    复制定位命令
+                                </button>
+                            </div>
+                            <div v-if="group.items.length > 10" style="font-size:12px;color:#666;margin-top:6px;">
+                                仅展示前 10 条，完整内容见红队报告。
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 宿主生态 -->
+            <div v-if="activeTab === 'hosts'" class="card">
+                <h2>宿主工具生态</h2>
+                <div class="form-hint" style="margin-bottom: 12px;">
+                    使用 `super-dev onboard/doctor/setup` 完成接入；宿主内触发使用 `/super-dev "你的需求"` 或等价终端命令。
+                </div>
+
+                <div class="host-overview">
+                    <div class="host-stat">
+                        <span>宿主总数</span>
+                        <strong>{{ hostTools.length }}</strong>
+                    </div>
+                    <div class="host-stat">
+                        <span>CLI 宿主</span>
+                        <strong>{{ cliHostCount }}</strong>
+                    </div>
+                    <div class="host-stat">
+                        <span>IDE / 扩展宿主</span>
+                        <strong>{{ ideHostCount }}</strong>
+                    </div>
+                    <div class="host-stat">
+                        <span>当前筛选结果</span>
+                        <strong>{{ filteredHostTools.length }}</strong>
+                    </div>
+                </div>
+
+                <div class="grid">
+                    <div class="form-group">
+                        <label>宿主类型筛选</label>
+                        <select v-model="hostCategoryFilter" @change="syncSelectedHostWithFilter">
+                            <option value="all">全部</option>
+                            <option value="cli">CLI</option>
+                            <option value="ide">IDE / 扩展</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>当前宿主</label>
+                        <select v-model="selectedHostId">
+                            <option v-for="host in filteredHostTools" :key="'host-select-' + host.id" :value="host.id">
+                                {{ host.name }} ({{ host.id }})
+                            </option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="host-matrix" v-if="filteredHostTools.length">
+                    <button
+                        class="host-card"
+                        :class="{
+                            active: selectedHostTool && selectedHostTool.id === host.id,
+                            ready: hostReadyState(host.id) === true,
+                            'not-ready': hostReadyState(host.id) === false
+                        }"
+                        v-for="host in filteredHostTools"
+                        :key="'host-card-' + host.id"
+                        @click="selectHost(host.id)"
+                    >
+                        <div class="host-card-head">
+                            <span class="host-card-name">{{ host.name }}</span>
+                            <span class="host-tag" :class="'host-tag-' + host.category">{{ hostCategoryLabel(host.category) }}</span>
+                        </div>
+                        <div class="host-card-id">{{ host.id }}</div>
+                        <div v-if="host.integration_files && host.integration_files.length" class="host-card-file">
+                            规则: {{ host.integration_files[0] }}
+                        </div>
+                    </button>
+                </div>
+                <div v-else class="loading" style="padding: 18px 0 10px;">当前筛选没有匹配宿主。</div>
+
+                <div class="workflow-actions" style="margin-top: 12px;">
+                    <label style="display:flex; align-items:center; gap:8px; color:#555;">
+                        <input type="checkbox" v-model="hostDoctorAuto" />
+                        自动检测宿主（无检测结果时回退全部）
+                    </label>
+                    <button class="btn btn-secondary" :disabled="loading" @click="runHostDoctor(false)">
+                        {{ loading ? '诊断中...' : '诊断接入状态' }}
+                    </button>
+                    <button class="btn btn-primary" :disabled="loading" @click="runHostDoctor(true)">
+                        {{ loading ? '修复中...' : '诊断并修复' }}
+                    </button>
+                </div>
+
+                <div class="host-command-panel" v-if="selectedHostTool">
+                    <h3>{{ selectedHostTool.name }} 接入命令</h3>
+                    <div class="host-command-item" v-for="item in hostCommandItems" :key="'cmd-' + item.key">
+                        <div class="host-command-head">
+                            <strong>{{ item.label }}</strong>
+                            <button class="btn btn-secondary issue-action" @click="copyHostCommand(item.command)">
+                                复制
+                            </button>
+                        </div>
+                        <div class="host-command-desc">{{ item.description }}</div>
+                        <code>{{ item.command }}</code>
+                    </div>
+                    <div class="form-hint" style="margin-top: 10px;" v-if="selectedHostTool.slash_command_file">
+                        Slash 命令文件: {{ selectedHostTool.slash_command_file }}
+                    </div>
+                    <div style="margin-top: 8px;" v-if="selectedHostTool.integration_files && selectedHostTool.integration_files.length">
+                        <div class="form-hint"><strong>集成规则文件</strong></div>
+                        <ul style="margin: 6px 0 0 18px; font-size: 12px; color: #4b6378;">
+                            <li v-for="file in selectedHostTool.integration_files" :key="'ifile-' + file">{{ file }}</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="host-doctor-panel" v-if="hostDoctorResult && hostDoctorResult.compatibility">
+                    <div class="host-doctor-summary">
+                        <strong>兼容性评分 {{ hostDoctorResult.compatibility.overall_score }}/100</strong>
+                        <span>Ready {{ hostDoctorResult.compatibility.ready_hosts }}/{{ hostDoctorResult.compatibility.total_hosts }}</span>
+                        <span>检测到宿主 {{ (hostDoctorResult.detected_targets || []).length }}</span>
+                    </div>
+                    <ul class="host-doctor-list">
+                        <li v-for="target in hostDoctorResult.selected_targets || []" :key="'doctor-' + target">
+                            <strong>{{ target }}</strong>
+                            ·
+                            <span :class="hostReadyState(target) ? 'check-ok' : 'check-missing'">
+                                {{ hostReadyState(target) ? 'ready' : 'not ready' }}
+                            </span>
+                            · score {{ hostScore(target) }}
+                            <div v-if="hostMissingChecks(target).length" style="margin-top:4px;">
+                                缺失项: {{ hostMissingChecks(target).join(', ') }}
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 专家团队 -->
+            <div v-if="activeTab === 'experts'">
+                <div class="form-group">
+                    <label>项目目录</label>
+                    <input v-model="projectDir" type="text" placeholder="." />
+                </div>
+                <div class="expert-layout">
+                    <div>
+                        <div class="grid">
+                            <div v-for="expert in experts" :key="expert.id" class="expert-card" @click="selectExpert(expert)">
+                                <h3>{{ expert.name }}</h3>
+                                <p>{{ expert.description }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="expert-panel" v-if="selectedExpert">
+                        <h3>{{ selectedExpert.name }} 建议生成</h3>
+                        <div class="form-group">
+                            <label>问题描述</label>
+                            <textarea v-model="expertPrompt" rows="6" placeholder="描述你的问题或上下文..."></textarea>
+                        </div>
+                        <div class="workflow-actions">
+                            <button class="btn btn-primary" :disabled="loading" @click="generateExpertAdvice">
+                                {{ loading ? '生成中...' : '生成建议' }}
+                            </button>
+                            <button class="btn btn-secondary" :disabled="!expertAdvice" @click="copyExpertAdvice">
+                                复制建议
+                            </button>
+                            <button class="btn btn-secondary" :disabled="loading" @click="loadExpertAdviceHistory">
+                                刷新历史
+                            </button>
+                        </div>
+                        <div v-if="expertAdviceFile" style="margin-top: 10px; color:#666; font-size:12px;">
+                            已保存: {{ expertAdviceFile }}
+                        </div>
+                        <div v-if="expertAdvice" class="markdown-output" style="margin-top: 12px;" v-html="renderMarkdown(expertAdvice)">
+                        </div>
+                        <div class="advice-history">
+                            <h3 style="font-size: 14px; margin-bottom: 8px;">建议历史</h3>
+                            <div v-if="expertAdviceHistory.length">
+                                <div
+                                    class="history-item"
+                                    v-for="item in expertAdviceHistory"
+                                    :key="item.file_name"
+                                    @click="openExpertAdvice(item)"
+                                >
+                                    <div class="history-title">{{ item.file_name }}</div>
+                                    <div class="history-meta">{{ item.expert_id }} · {{ formatTime(item.updated_at) }}</div>
+                                </div>
+                            </div>
+                            <div v-else style="color:#666; font-size:12px;">暂无专家建议历史</div>
+                        </div>
+                    </div>
+                    <div class="expert-panel" v-else>
+                        <h3>专家建议</h3>
+                        <p style="color:#666;">点击左侧专家卡片后可输入问题并生成建议。</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 交付部署 -->
+            <div v-if="activeTab === 'deploy'" class="card">
+                <h2>交付与部署配置生成</h2>
+                <div v-if="message" :class="['alert', message.type]">
+                    {{ message.text }}
+                </div>
+                <div class="form-group">
+                    <label>项目目录</label>
+                    <input v-model="projectDir" type="text" placeholder="." />
+                </div>
+                <div class="grid">
+                    <div class="form-group">
+                        <label>项目名称 (可选覆盖)</label>
+                        <input v-model="deployForm.name" type="text" placeholder="留空则使用配置中的 name" />
+                    </div>
+                    <div class="form-group">
+                        <label>CI/CD 平台</label>
+                        <select v-model="deployForm.cicd_platform">
+                            <option v-for="item in deployPlatforms" :key="item.id" :value="item.id">
+                                {{ item.name }}
+                            </option>
+                        </select>
+                    </div>
+                </div>
+                <div class="workflow-actions">
+                    <label style="display:flex; align-items:center; gap:8px; color:#555;">
+                        <input type="checkbox" v-model="deployForm.include_runtime" />
+                        包含 Docker / K8s 运行时配置
+                    </label>
+                    <label style="display:flex; align-items:center; gap:8px; color:#555;">
+                        <input type="checkbox" v-model="deployForm.overwrite" />
+                        覆盖已存在文件
+                    </label>
+                    <label style="display:flex; align-items:center; gap:8px; color:#555;">
+                        <input
+                            type="checkbox"
+                            v-model="deployForm.split_by_platform"
+                            :disabled="deployForm.cicd_platform !== 'all'"
+                        />
+                        all 模式拆分平台模板
+                    </label>
+                </div>
+                <div class="workflow-actions">
+                    <button class="btn btn-secondary" :disabled="loading" @click="runDeployPrecheck">
+                        预检环境
+                    </button>
+                    <button class="btn btn-secondary" :disabled="loading" @click="loadDeployRemediation">
+                        生成修复建议
+                    </button>
+                    <button class="btn btn-secondary" :disabled="loading" @click="exportDeployRemediation">
+                        导出修复模板
+                    </button>
+                    <button class="btn btn-secondary" :disabled="loading" @click="downloadDeployRemediationBundle">
+                        下载修复包
+                    </button>
+                    <button class="btn btn-primary" :disabled="loading" @click="generateDeployConfigs">
+                        {{ loading ? '生成中...' : '生成部署配置' }}
+                    </button>
+                </div>
+
+                <div v-if="deployPrecheck" class="precheck-panel">
+                    <h3>部署预检</h3>
+                    <div class="meta" style="margin-bottom:8px;">
+                        目标文件: {{ deployPrecheck.target_count }}，已存在: {{ deployPrecheck.existing_count }}，待生成: {{ deployPrecheck.missing_count }}
+                    </div>
+                    <ul v-if="deployPrecheck.env_checks && deployPrecheck.env_checks.length" class="precheck-list">
+                        <li v-for="item in deployPrecheck.env_checks" :key="item.name">
+                            <span>{{ item.name }} · {{ item.description }}</span>
+                            <span :class="item.present ? 'check-ok' : 'check-missing'">
+                                {{ item.present ? '已配置' : '缺失' }}
+                            </span>
+                        </li>
+                    </ul>
+                    <div v-if="deployPrecheck.manual_requirements && deployPrecheck.manual_requirements.length" class="meta" style="margin-top:10px;">
+                        手动检查项: {{ deployPrecheck.manual_requirements.join('；') }}
+                    </div>
+                    <div class="meta" style="margin-top:10px;">
+                        自动预检结论:
+                        <strong :class="deployPrecheck.ready_for_generate ? 'check-ok' : 'check-missing'">
+                            {{ deployPrecheck.ready_for_generate ? '可生成' : '建议先补齐变量再生成' }}
+                        </strong>
+                    </div>
+                </div>
+
+                <div v-if="deployRemediation" class="remediation-panel">
+                    <h3>修复建议</h3>
+                    <div v-if="deployRemediation.items && deployRemediation.items.length">
+                        <div class="remediation-item" v-for="item in deployRemediation.items" :key="item.name">
+                            <div class="title">
+                                {{ item.name }}
+                                <span :class="item.present ? 'check-ok' : 'check-missing'">
+                                    {{ item.present ? '已配置' : '缺失' }}
+                                </span>
+                            </div>
+                            <div class="desc">{{ item.description }}</div>
+                            <code>{{ item.local_export_template }}</code>
+                        </div>
+                    </div>
+                    <div v-else class="meta">当前未发现缺失变量。</div>
+                    <div v-if="deployRemediation.platform_guidance && deployRemediation.platform_guidance.length" style="margin-top:10px;">
+                        <div class="meta"><strong>平台操作指引</strong></div>
+                        <ul style="margin:6px 0 0 18px; font-size:13px; color:#444;">
+                            <li v-for="(tip, idx) in deployRemediation.platform_guidance" :key="'tip-' + idx">{{ tip }}</li>
+                        </ul>
+                    </div>
+                    <div v-if="deployRemediation.manual_requirements && deployRemediation.manual_requirements.length" class="meta" style="margin-top:10px;">
+                        手动检查项: {{ deployRemediation.manual_requirements.join('；') }}
+                    </div>
+                    <div v-if="deployRemediationExport" class="export-panel">
+                        <div><strong>已导出模板</strong></div>
+                        <div class="meta">环境模板: {{ deployRemediationExport.env_file.path }}</div>
+                        <div class="meta">检查清单: {{ deployRemediationExport.checklist_file.path }}</div>
+                        <div class="meta" v-if="deployRemediationExport.per_platform_files && deployRemediationExport.per_platform_files.length">
+                            平台拆分: {{ deployRemediationExport.per_platform_files.length }} 组
+                        </div>
+                        <div v-if="deployRemediationExport.generated_files && deployRemediationExport.generated_files.length" style="margin-top:8px;">
+                            <div class="meta"><strong>导出文件列表</strong></div>
+                            <ul style="margin:6px 0 0 18px; font-size:12px; color:#444;">
+                                <li v-for="file in deployRemediationExport.generated_files" :key="'exp-' + file">{{ file }}</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="deployResult.generated_files.length || deployResult.skipped_files.length" class="deploy-results">
+                    <div><strong>生成结果</strong></div>
+                    <div class="meta">
+                        生成 {{ deployResult.generated_count }} 个，跳过 {{ deployResult.skipped_count }} 个
+                    </div>
+                    <div v-if="deployResult.generated_files.length" style="margin-top:8px;">
+                        <div><strong>已生成</strong></div>
+                        <ul>
+                            <li v-for="file in deployResult.generated_files" :key="'gen-' + file">{{ file }}</li>
+                        </ul>
+                    </div>
+                    <div v-if="deployResult.skipped_files.length" style="margin-top:8px;">
+                        <div><strong>已跳过 (文件已存在)</strong></div>
+                        <ul>
+                            <li v-for="file in deployResult.skipped_files" :key="'skip-' + file">{{ file }}</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                const defaultHostCommands = (hostId) => ({
+                    setup: `super-dev setup --host ${hostId} --force --yes`,
+                    onboard: `super-dev onboard --host ${hostId} --force --yes`,
+                    doctor: `super-dev doctor --host ${hostId} --repair --force`,
+                    run: 'super-dev "你的需求"',
+                    slash: '/super-dev "你的需求"',
+                });
+
+                return {
+                    activeTab: 'init',
+                    loading: false,
+                    message: null,
+                    initForm: {
+                        name: '',
+                        description: '',
+                        platform: 'web',
+                        frontend: 'react',
+                        backend: 'node',
+                        domain: '',
+                        language_preferences: ['python', 'typescript'],
+                        quality_gate: 80,
+                        host_compatibility_min_score: 80,
+                        host_compatibility_min_ready_hosts: 1
+                    },
+                    workflowForm: {
+                        quality_gate: 80,
+                        host_compatibility_min_score: 80,
+                        host_compatibility_min_ready_hosts: 1,
+                        language_preferences: []
+                    },
+                    platformCatalog: [
+                        { id: 'web', name: 'Web 应用' },
+                        { id: 'mobile', name: '移动应用' },
+                        { id: 'wechat', name: '微信小程序' },
+                        { id: 'desktop', name: '桌面应用' },
+                    ],
+                    frontendCatalog: [
+                        { id: 'react', name: 'React' },
+                        { id: 'vue', name: 'Vue' },
+                        { id: 'angular', name: 'Angular' },
+                        { id: 'svelte', name: 'Svelte' },
+                        { id: 'none', name: '无' },
+                    ],
+                    backendCatalog: [
+                        { id: 'node', name: 'Node.js' },
+                        { id: 'python', name: 'Python' },
+                        { id: 'go', name: 'Go' },
+                        { id: 'java', name: 'Java' },
+                        { id: 'rust', name: 'Rust' },
+                        { id: 'php', name: 'PHP' },
+                        { id: 'ruby', name: 'Ruby' },
+                        { id: 'csharp', name: 'C# (.NET)' },
+                        { id: 'kotlin', name: 'Kotlin' },
+                        { id: 'swift', name: 'Swift' },
+                        { id: 'elixir', name: 'Elixir' },
+                        { id: 'scala', name: 'Scala' },
+                        { id: 'dart', name: 'Dart' },
+                        { id: 'none', name: '无' },
+                    ],
+                    domainCatalog: [
+                        { id: '', name: '通用' },
+                        { id: 'fintech', name: '金融科技' },
+                        { id: 'ecommerce', name: '电子商务' },
+                        { id: 'medical', name: '医疗健康' },
+                        { id: 'social', name: '社交媒体' },
+                        { id: 'iot', name: '物联网' },
+                        { id: 'education', name: '在线教育' },
+                        { id: 'auth', name: '认证安全' },
+                        { id: 'content', name: '内容平台' },
+                        { id: 'saas', name: 'SaaS' },
+                    ],
+                    languageCatalog: [
+                        { id: 'python', name: 'Python' },
+                        { id: 'typescript', name: 'TypeScript' },
+                        { id: 'javascript', name: 'JavaScript' },
+                        { id: 'go', name: 'Go' },
+                        { id: 'java', name: 'Java' },
+                        { id: 'csharp', name: 'C#' },
+                        { id: 'cpp', name: 'C++' },
+                        { id: 'c', name: 'C' },
+                        { id: 'rust', name: 'Rust' },
+                        { id: 'kotlin', name: 'Kotlin' },
+                        { id: 'swift', name: 'Swift' },
+                        { id: 'objective-c', name: 'Objective-C' },
+                        { id: 'php', name: 'PHP' },
+                        { id: 'ruby', name: 'Ruby' },
+                        { id: 'scala', name: 'Scala' },
+                        { id: 'dart', name: 'Dart' },
+                        { id: 'elixir', name: 'Elixir' },
+                        { id: 'erlang', name: 'Erlang' },
+                        { id: 'clojure', name: 'Clojure' },
+                        { id: 'haskell', name: 'Haskell' },
+                        { id: 'ocaml', name: 'OCaml' },
+                        { id: 'fsharp', name: 'F#' },
+                        { id: 'lua', name: 'Lua' },
+                        { id: 'perl', name: 'Perl' },
+                        { id: 'groovy', name: 'Groovy' },
+                        { id: 'r', name: 'R' },
+                        { id: 'julia', name: 'Julia' },
+                        { id: 'matlab', name: 'MATLAB' },
+                        { id: 'sql', name: 'SQL' },
+                        { id: 'bash', name: 'Bash' },
+                        { id: 'powershell', name: 'PowerShell' },
+                        { id: 'solidity', name: 'Solidity' },
+                        { id: 'zig', name: 'Zig' },
+                        { id: 'nim', name: 'Nim' },
+                        { id: 'fortran', name: 'Fortran' },
+                        { id: 'assembly', name: 'Assembly' },
+                    ],
+                    hostCategoryFilter: 'all',
+                    selectedHostId: 'claude-code',
+                    hostTools: [
+                        { id: 'claude-code', name: 'Claude Code', category: 'cli', integration_files: ['.claude/CLAUDE.md'], slash_command_file: '.claude/commands/super-dev.md', commands: defaultHostCommands('claude-code') },
+                        { id: 'codex-cli', name: 'Codex CLI', category: 'cli', integration_files: ['.codex/AGENTS.md'], slash_command_file: '.codex/commands/super-dev.md', commands: defaultHostCommands('codex-cli') },
+                        { id: 'opencode', name: 'OpenCode', category: 'cli', integration_files: ['.opencode/AGENTS.md'], slash_command_file: '.opencode/commands/super-dev.md', commands: defaultHostCommands('opencode') },
+                        { id: 'gemini-cli', name: 'Gemini CLI', category: 'cli', integration_files: ['.gemini/AGENTS.md'], slash_command_file: '.gemini/commands/super-dev.md', commands: defaultHostCommands('gemini-cli') },
+                        { id: 'kiro-cli', name: 'Kiro CLI', category: 'cli', integration_files: ['.kiro/AGENTS.md'], slash_command_file: '.kiro/commands/super-dev.md', commands: defaultHostCommands('kiro-cli') },
+                        { id: 'cursor-cli', name: 'Cursor CLI', category: 'cli', integration_files: ['.cursor/AGENTS.md'], slash_command_file: '.cursor/commands/super-dev.md', commands: defaultHostCommands('cursor-cli') },
+                        { id: 'qoder-cli', name: 'Qoder CLI', category: 'cli', integration_files: ['.qoder/AGENTS.md'], slash_command_file: '.qoder/commands/super-dev.md', commands: defaultHostCommands('qoder-cli') },
+                        { id: 'codebuddy-cli', name: 'CodeBuddy CLI', category: 'cli', integration_files: ['.codebuddy/AGENTS.md'], slash_command_file: '.codebuddy/commands/super-dev.md', commands: defaultHostCommands('codebuddy-cli') },
+                        { id: 'iflow', name: 'iFlow', category: 'cli', integration_files: ['.iflow/AGENTS.md'], slash_command_file: '.iflow/commands/super-dev.md', commands: defaultHostCommands('iflow') },
+                        { id: 'aider', name: 'Aider', category: 'cli', integration_files: ['.aider/AGENTS.md'], slash_command_file: '.aider/commands/super-dev.md', commands: defaultHostCommands('aider') },
+                        { id: 'cursor', name: 'Cursor', category: 'ide', integration_files: ['.cursorrules'], slash_command_file: '.cursor/commands/super-dev.md', commands: defaultHostCommands('cursor') },
+                        { id: 'windsurf', name: 'Windsurf', category: 'ide', integration_files: ['.windsurfrules'], slash_command_file: '.windsurf/commands/super-dev.md', commands: defaultHostCommands('windsurf') },
+                        { id: 'cline', name: 'Cline', category: 'ide', integration_files: ['.clinerules'], slash_command_file: '.cline/commands/super-dev.md', commands: defaultHostCommands('cline') },
+                        { id: 'continue', name: 'Continue', category: 'ide', integration_files: ['.continue/rules/super-dev.md'], slash_command_file: '.continue/commands/super-dev.md', commands: defaultHostCommands('continue') },
+                        { id: 'vscode-copilot', name: 'VSCode Copilot', category: 'ide', integration_files: ['.github/copilot-instructions.md'], slash_command_file: '.github/commands/super-dev.md', commands: defaultHostCommands('vscode-copilot') },
+                        { id: 'jetbrains-ai', name: 'JetBrains AI', category: 'ide', integration_files: ['.idea/ai-assistant-rules.md'], slash_command_file: '.idea/commands/super-dev.md', commands: defaultHostCommands('jetbrains-ai') },
+                        { id: 'roo-code', name: 'Roo Code', category: 'ide', integration_files: ['.roo/rules.md'], slash_command_file: '.roo/commands/super-dev.md', commands: defaultHostCommands('roo-code') },
+                        { id: 'augment', name: 'Augment', category: 'ide', integration_files: ['.augment/rules.md'], slash_command_file: '.augment/commands/super-dev.md', commands: defaultHostCommands('augment') },
+                        { id: 'qoder', name: 'Qoder', category: 'ide', integration_files: ['.qoder/rules.md'], slash_command_file: '.qoder/commands/super-dev.md', commands: defaultHostCommands('qoder') },
+                        { id: 'trae', name: 'Trae', category: 'ide', integration_files: ['.trae/rules.md'], slash_command_file: '.trae/commands/super-dev.md', commands: defaultHostCommands('trae') },
+                        { id: 'codebuddy', name: 'CodeBuddy', category: 'ide', integration_files: ['.codebuddy/rules.md'], slash_command_file: '.codebuddy/commands/super-dev.md', commands: defaultHostCommands('codebuddy') },
+                        { id: 'antigravity', name: 'Antigravity', category: 'ide', integration_files: ['.agents/workflows/super-dev.md'], slash_command_file: '.agents/commands/super-dev.md', commands: defaultHostCommands('antigravity') },
+                        { id: 'tongyi-lingma', name: 'Tongyi Lingma', category: 'ide', integration_files: ['.lingma/rules.md'], slash_command_file: '.lingma/commands/super-dev.md', commands: defaultHostCommands('tongyi-lingma') },
+                        { id: 'codegeex', name: 'CodeGeeX', category: 'ide', integration_files: ['.codegeex/rules.md'], slash_command_file: '.codegeex/commands/super-dev.md', commands: defaultHostCommands('codegeex') },
+                    ],
+                    hostDoctorAuto: false,
+                    hostDoctorResult: null,
+                    phases: [],
+                    experts: [],
+                    selectedPhases: ['discovery', 'intelligence', 'drafting', 'redteam', 'qa', 'delivery', 'deployment'],
+                    workflowRunning: false,
+                    workflowProgress: 0,
+                    phaseStatus: {},
+                    projectDir: '.',
+                    currentRunId: null,
+                    currentRunStatus: null,
+                    pollTimer: null,
+                    runsHistory: [],
+                    selectedRunArtifacts: [],
+                    selectedRunRedteam: null,
+                    deployPlatforms: [
+                        { id: 'all', name: '全部平台' },
+                        { id: 'github', name: 'GitHub Actions' },
+                        { id: 'gitlab', name: 'GitLab CI' },
+                        { id: 'jenkins', name: 'Jenkins' },
+                        { id: 'azure', name: 'Azure DevOps' },
+                        { id: 'bitbucket', name: 'Bitbucket Pipelines' }
+                    ],
+                    deployForm: {
+                        cicd_platform: 'all',
+                        include_runtime: true,
+                        overwrite: true,
+                        split_by_platform: true,
+                        name: ''
+                    },
+                    deployResult: {
+                        generated_files: [],
+                        skipped_files: [],
+                        generated_count: 0,
+                        skipped_count: 0
+                    },
+                    deployPrecheck: null,
+                    deployRemediation: null,
+                    deployRemediationExport: null,
+                    selectedExpert: null,
+                    expertPrompt: '',
+                    expertAdvice: '',
+                    expertAdviceFile: '',
+                    expertAdviceHistory: []
+                }
+            },
+            async mounted() {
+                await this.loadCatalogs();
+                await this.loadPhases();
+                await this.loadExperts();
+                await this.loadRunsHistory();
+                await this.loadExpertAdviceHistory();
+                await this.loadProjectConfig();
+            },
+            beforeUnmount() {
+                if (this.pollTimer) {
+                    clearInterval(this.pollTimer);
+                    this.pollTimer = null;
+                }
+            },
+            computed: {
+                canCancelWorkflow() {
+                    return ['queued', 'running', 'cancelling'].includes(this.currentRunStatus || '');
+                },
+                filteredHostTools() {
+                    if (this.hostCategoryFilter === 'all') {
+                        return this.hostTools;
+                    }
+                    return this.hostTools.filter((item) => item.category === this.hostCategoryFilter);
+                },
+                selectedHostTool() {
+                    if (!this.filteredHostTools.length) return null;
+                    return this.filteredHostTools.find((item) => item.id === this.selectedHostId) || this.filteredHostTools[0];
+                },
+                cliHostCount() {
+                    return this.hostTools.filter((item) => item.category === 'cli').length;
+                },
+                ideHostCount() {
+                    return this.hostTools.filter((item) => item.category === 'ide').length;
+                },
+                hostCommandItems() {
+                    if (!this.selectedHostTool || !this.selectedHostTool.commands) return [];
+                    return [
+                        { key: 'setup', label: '一步接入', description: '执行 onboard + doctor，适合首次安装', command: this.selectedHostTool.commands.setup || '' },
+                        { key: 'onboard', label: '安装集成', description: '写入宿主规则和 slash 命令文件', command: this.selectedHostTool.commands.onboard || '' },
+                        { key: 'doctor', label: '修复诊断', description: '检查接入状态并自动修复常见问题', command: this.selectedHostTool.commands.doctor || '' },
+                        { key: 'run', label: '终端运行', description: '直接启动 Super Dev 流水线', command: this.selectedHostTool.commands.run || '' },
+                        { key: 'slash', label: '宿主会话命令', description: '在宿主对话输入该命令触发流水线', command: this.selectedHostTool.commands.slash || '' },
+                    ].filter((item) => typeof item.command === 'string' && item.command.trim());
+                }
+            },
+            methods: {
+                async loadCatalogs() {
+                    try {
+                        const response = await axios.get('/api/catalogs');
+                        const payload = response.data || {};
+                        const defaultHostCommands = (hostId) => ({
+                            setup: `super-dev setup --host ${hostId} --force --yes`,
+                            onboard: `super-dev onboard --host ${hostId} --force --yes`,
+                            doctor: `super-dev doctor --host ${hostId} --repair --force`,
+                            run: 'super-dev "你的需求"',
+                            slash: '/super-dev "你的需求"',
+                        });
+                        const normalizeCatalog = (items) => (
+                            items
+                                .filter((item) => item && typeof item.id === 'string' && typeof item.name === 'string')
+                                .map((item) => ({ id: item.id, name: item.name }))
+                        );
+                        const normalizeHostCatalog = (items) => (
+                            items
+                                .filter((item) => item && typeof item.id === 'string' && typeof item.name === 'string')
+                                .map((item) => {
+                                    const hostId = item.id;
+                                    const commands = item && typeof item.commands === 'object' ? item.commands : {};
+                                    return {
+                                        id: hostId,
+                                        name: item.name,
+                                        category: item.category === 'cli' ? 'cli' : 'ide',
+                                        integration_files: Array.isArray(item.integration_files)
+                                            ? item.integration_files.filter((v) => typeof v === 'string' && v.trim())
+                                            : [],
+                                        slash_command_file: typeof item.slash_command_file === 'string' ? item.slash_command_file : '',
+                                        commands: {
+                                            setup: typeof commands.setup === 'string' && commands.setup.trim() ? commands.setup : defaultHostCommands(hostId).setup,
+                                            onboard: typeof commands.onboard === 'string' && commands.onboard.trim() ? commands.onboard : defaultHostCommands(hostId).onboard,
+                                            doctor: typeof commands.doctor === 'string' && commands.doctor.trim() ? commands.doctor : defaultHostCommands(hostId).doctor,
+                                            run: typeof commands.run === 'string' && commands.run.trim() ? commands.run : defaultHostCommands(hostId).run,
+                                            slash: typeof commands.slash === 'string' && commands.slash.trim() ? commands.slash : defaultHostCommands(hostId).slash,
+                                        },
+                                    };
+                                })
+                        );
+
+                        if (Array.isArray(payload.platforms) && payload.platforms.length > 0) {
+                            this.platformCatalog = normalizeCatalog(payload.platforms);
+                        }
+
+                        if (Array.isArray(payload.frontends) && payload.frontends.length > 0) {
+                            this.frontendCatalog = normalizeCatalog(payload.frontends);
+                        }
+
+                        if (Array.isArray(payload.backends) && payload.backends.length > 0) {
+                            this.backendCatalog = normalizeCatalog(payload.backends);
+                        }
+
+                        if (Array.isArray(payload.domains) && payload.domains.length > 0) {
+                            this.domainCatalog = normalizeCatalog(payload.domains);
+                        }
+
+                        if (Array.isArray(payload.languages) && payload.languages.length > 0) {
+                            this.languageCatalog = normalizeCatalog(payload.languages);
+                        }
+
+                        if (Array.isArray(payload.cicd_platforms) && payload.cicd_platforms.length > 0) {
+                            this.deployPlatforms = normalizeCatalog(payload.cicd_platforms);
+                        }
+                        if (Array.isArray(payload.host_tools) && payload.host_tools.length > 0) {
+                            this.hostTools = normalizeHostCatalog(payload.host_tools);
+                        }
+                        if (!this.hostTools.some((item) => item.id === this.selectedHostId)) {
+                            this.selectedHostId = this.hostTools.length ? this.hostTools[0].id : '';
+                        }
+                    } catch (error) {
+                        console.error('Failed to load catalogs:', error);
+                    }
+                },
+
+                async initProject() {
+                    this.loading = true;
+                    this.message = null;
+
+                    try {
+                        const response = await axios.post('/api/init', this.initForm, {
+                            params: { project_dir: this.projectDir || '.' }
+                        });
+                        this.message = { type: 'success', text: '项目已初始化！' };
+                        this.initForm.name = '';
+                        this.initForm.description = '';
+                    } catch (error) {
+                        this.message = { type: 'error', text: error.response?.data?.detail || '初始化失败' };
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async loadProjectConfig() {
+                    try {
+                        const response = await axios.get('/api/config', {
+                            params: { project_dir: this.projectDir || '.' }
+                        });
+                        const config = response.data || {};
+                        const qualityGate = Number(config.quality_gate);
+                        const hostMinScore = Number(config.host_compatibility_min_score);
+                        const hostMinReady = Number(config.host_compatibility_min_ready_hosts);
+                        const languages = Array.isArray(config.language_preferences)
+                            ? config.language_preferences.filter((item) => typeof item === 'string' && item.trim())
+                            : [];
+                        const platform = typeof config.platform === 'string' ? config.platform : '';
+                        const frontend = typeof config.frontend === 'string' ? config.frontend : '';
+                        const backend = typeof config.backend === 'string' ? config.backend : '';
+                        const domain = typeof config.domain === 'string' ? config.domain : '';
+
+                        if (Number.isFinite(qualityGate)) {
+                            this.workflowForm.quality_gate = qualityGate;
+                            this.initForm.quality_gate = qualityGate;
+                        }
+                        if (Number.isFinite(hostMinScore)) {
+                            this.workflowForm.host_compatibility_min_score = hostMinScore;
+                            this.initForm.host_compatibility_min_score = hostMinScore;
+                        }
+                        if (Number.isFinite(hostMinReady)) {
+                            this.workflowForm.host_compatibility_min_ready_hosts = hostMinReady;
+                            this.initForm.host_compatibility_min_ready_hosts = hostMinReady;
+                        }
+                        if (languages.length) {
+                            this.workflowForm.language_preferences = [...languages];
+                            this.initForm.language_preferences = [...languages];
+                        }
+                        if (backend && this.backendCatalog.some((item) => item.id === backend)) {
+                            this.initForm.backend = backend;
+                        }
+                        if (platform && this.platformCatalog.some((item) => item.id === platform)) {
+                            this.initForm.platform = platform;
+                        }
+                        if (frontend && this.frontendCatalog.some((item) => item.id === frontend)) {
+                            this.initForm.frontend = frontend;
+                        }
+                        if (this.domainCatalog.some((item) => item.id === domain)) {
+                            this.initForm.domain = domain;
+                        }
+                    } catch (error) {
+                        const code = error?.response?.status;
+                        if (code !== 404) {
+                            this.message = { type: 'error', text: error.response?.data?.detail || '读取项目配置失败' };
+                        }
+                    }
+                },
+
+                async loadPhases() {
+                    try {
+                        const response = await axios.get('/api/phases');
+                        this.phases = response.data.phases;
+                    } catch (error) {
+                        console.error('Failed to load phases:', error);
+                    }
+                },
+
+                async loadExperts() {
+                    try {
+                        const response = await axios.get('/api/experts');
+                        this.experts = response.data.experts;
+                    } catch (error) {
+                        console.error('Failed to load experts:', error);
+                    }
+                },
+
+                async loadDeployPlatforms() {
+                    try {
+                        const response = await axios.get('/api/deploy/platforms');
+                        this.deployPlatforms = response.data.platforms || this.deployPlatforms;
+                    } catch (error) {
+                        console.error('Failed to load deploy platforms:', error);
+                    }
+                },
+
+                async generateDeployConfigs() {
+                    this.loading = true;
+                    try {
+                        const response = await axios.post('/api/deploy/generate', this.deployForm, {
+                            params: { project_dir: this.projectDir || '.' }
+                        });
+                        this.deployResult = {
+                            generated_files: response.data.generated_files || [],
+                            skipped_files: response.data.skipped_files || [],
+                            generated_count: response.data.generated_count || 0,
+                            skipped_count: response.data.skipped_count || 0
+                        };
+                        this.message = { type: 'success', text: '部署配置生成完成' };
+                    } catch (error) {
+                        this.message = { type: 'error', text: error.response?.data?.detail || '部署配置生成失败' };
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async runDeployPrecheck() {
+                    this.loading = true;
+                    try {
+                        const response = await axios.get('/api/deploy/precheck', {
+                            params: {
+                                project_dir: this.projectDir || '.',
+                                cicd_platform: this.deployForm.cicd_platform,
+                                include_runtime: this.deployForm.include_runtime
+                            }
+                        });
+                        this.deployPrecheck = response.data;
+                        this.message = {
+                            type: response.data.ready_for_generate ? 'success' : 'info',
+                            text: response.data.ready_for_generate ? '预检通过，可直接生成' : '预检发现缺失项，建议先补齐'
+                        };
+                    } catch (error) {
+                        this.message = { type: 'error', text: error.response?.data?.detail || '部署预检失败' };
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async loadDeployRemediation() {
+                    this.loading = true;
+                    try {
+                        const response = await axios.get('/api/deploy/remediation', {
+                            params: {
+                                cicd_platform: this.deployForm.cicd_platform,
+                                only_missing: true
+                            }
+                        });
+                        this.deployRemediation = response.data;
+                        this.message = { type: 'info', text: '已生成部署修复建议' };
+                    } catch (error) {
+                        this.message = { type: 'error', text: error.response?.data?.detail || '生成修复建议失败' };
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async exportDeployRemediation() {
+                    this.loading = true;
+                    try {
+                        const response = await axios.post('/api/deploy/remediation/export', {
+                            cicd_platform: this.deployForm.cicd_platform,
+                            only_missing: true,
+                            split_by_platform: this.deployForm.split_by_platform
+                        }, {
+                            params: {
+                                project_dir: this.projectDir || '.'
+                            }
+                        });
+                        this.deployRemediationExport = response.data;
+                        this.message = { type: 'success', text: '修复模板已导出' };
+                    } catch (error) {
+                        this.message = { type: 'error', text: error.response?.data?.detail || '导出修复模板失败' };
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                downloadDeployRemediationBundle() {
+                    const params = new URLSearchParams({
+                        project_dir: this.projectDir || '.',
+                        cicd_platform: this.deployForm.cicd_platform,
+                        only_missing: 'true',
+                        split_by_platform: String(this.deployForm.split_by_platform)
+                    });
+                    window.open(`/api/deploy/remediation/archive?${params.toString()}`, '_blank');
+                },
+
+                async generateExpertAdvice() {
+                    if (!this.selectedExpert) return;
+                    this.loading = true;
+                    try {
+                        const response = await axios.post(
+                            `/api/experts/${this.selectedExpert.id}/advice`,
+                            { prompt: this.expertPrompt || '' },
+                            { params: { project_dir: this.projectDir || '.' } }
+                        );
+                        this.expertAdvice = response.data.content || '';
+                        this.expertAdviceFile = response.data.file_name || response.data.file_path || '';
+                        this.message = { type: 'success', text: `${this.selectedExpert.name} 建议已生成` };
+                        await this.loadExpertAdviceHistory();
+                    } catch (error) {
+                        this.message = { type: 'error', text: error.response?.data?.detail || '生成专家建议失败' };
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async copyExpertAdvice() {
+                    if (!this.expertAdvice) return;
+                    try {
+                        await navigator.clipboard.writeText(this.expertAdvice);
+                        this.message = { type: 'success', text: '专家建议已复制到剪贴板' };
+                    } catch (error) {
+                        this.message = { type: 'error', text: '复制失败，请手动复制' };
+                    }
+                },
+
+                async loadExpertAdviceHistory() {
+                    try {
+                        const response = await axios.get('/api/experts/advice/history', {
+                            params: {
+                                project_dir: this.projectDir || '.',
+                                limit: 20
+                            }
+                        });
+                        this.expertAdviceHistory = response.data.items || [];
+                    } catch (error) {
+                        this.expertAdviceHistory = [];
+                    }
+                },
+
+                async openExpertAdvice(item) {
+                    try {
+                        const response = await axios.get('/api/experts/advice/content', {
+                            params: {
+                                project_dir: this.projectDir || '.',
+                                file_name: item.file_name
+                            }
+                        });
+                        this.expertAdvice = response.data.content || '';
+                        this.expertAdviceFile = response.data.file_name || item.file_name;
+                        const expert = this.experts.find((x) => x.id === item.expert_id);
+                        if (expert) this.selectedExpert = expert;
+                    } catch (error) {
+                        this.message = { type: 'error', text: error.response?.data?.detail || '读取专家建议失败' };
+                    }
+                },
+
+                renderMarkdown(content) {
+                    if (!content) return '';
+                    if (window.marked && typeof window.marked.parse === 'function') {
+                        return window.marked.parse(content);
+                    }
+                    return content
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/\n/g, '<br>');
+                },
+
+                async runWorkflow() {
+                    this.loading = true;
+                    this.workflowRunning = true;
+                    this.message = null;
+                    this.workflowProgress = 0;
+                    this.phaseStatus = {};
+                    this.currentRunId = null;
+                    this.currentRunStatus = null;
+                    this.selectedRunRedteam = null;
+
+                    try {
+                        const response = await axios.post('/api/workflow/run', {
+                            phases: this.selectedPhases,
+                            quality_gate: this.workflowForm.quality_gate,
+                            host_compatibility_min_score: this.workflowForm.host_compatibility_min_score,
+                            host_compatibility_min_ready_hosts: this.workflowForm.host_compatibility_min_ready_hosts,
+                            language_preferences: this.workflowForm.language_preferences
+                        }, {
+                            params: { project_dir: this.projectDir || '.' }
+                        });
+
+                        this.message = { type: 'success', text: response.data.message };
+                        this.currentRunId = response.data.run_id;
+                        await this.refreshCurrentRunStatus();
+                        this.startPolling();
+                    } catch (error) {
+                        this.message = { type: 'error', text: error.response?.data?.detail || '执行失败' };
+                        this.workflowRunning = false;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                startPolling() {
+                    if (this.pollTimer) {
+                        clearInterval(this.pollTimer);
+                    }
+                    this.pollTimer = setInterval(async () => {
+                        await this.refreshCurrentRunStatus();
+                    }, 1500);
+                },
+
+                async refreshCurrentRunStatus() {
+                    if (!this.currentRunId) return;
+                    try {
+                        const response = await axios.get(`/api/workflow/status/${this.currentRunId}`, {
+                            params: { project_dir: this.projectDir || '.' }
+                        });
+                        const run = response.data;
+                        this.currentRunStatus = run.status;
+                        this.workflowProgress = run.progress || 0;
+                        this.phaseStatus = this.buildPhaseStatusMap(run);
+                        this.syncRedteamView(run);
+
+                        if (['completed', 'failed', 'cancelled'].includes(run.status)) {
+                            this.workflowRunning = false;
+                            if (this.pollTimer) {
+                                clearInterval(this.pollTimer);
+                                this.pollTimer = null;
+                            }
+                            await this.loadRunsHistory();
+                            if (run.status === 'completed') {
+                                this.message = { type: 'success', text: '工作流执行完成！' };
+                            } else if (run.status === 'cancelled') {
+                                this.message = { type: 'info', text: '工作流已取消。' };
+                            } else {
+                                this.message = { type: 'error', text: run.message || '工作流执行失败' };
+                            }
+                        }
+                    } catch (error) {
+                        this.message = { type: 'error', text: error.response?.data?.detail || '查询状态失败' };
+                    }
+                },
+
+                buildPhaseStatusMap(run) {
+                    const map = {};
+                    const requested = run.requested_phases || [];
+                    const completed = new Set(run.completed_phases || []);
+                    requested.forEach((phaseId) => {
+                        if (completed.has(phaseId)) {
+                            map[phaseId] = 'success';
+                        } else {
+                            map[phaseId] = 'pending';
+                        }
+                    });
+
+                    if (['running', 'cancelling'].includes(run.status)) {
+                        const next = requested.find((p) => !completed.has(p));
+                        if (next) map[next] = 'running';
+                    } else if (run.status === 'failed') {
+                        const next = requested.find((p) => !completed.has(p));
+                        if (next) map[next] = 'error';
+                    } else if (run.status === 'cancelled') {
+                        requested.forEach((phaseId) => {
+                            if (!completed.has(phaseId)) map[phaseId] = 'cancelled';
+                        });
+                    }
+                    return map;
+                },
+
+                async cancelWorkflow() {
+                    if (!this.currentRunId || !this.canCancelWorkflow) return;
+                    this.loading = true;
+                    try {
+                        const response = await axios.post(`/api/workflow/cancel/${this.currentRunId}`, null, {
+                            params: { project_dir: this.projectDir || '.' }
+                        });
+                        this.message = { type: 'info', text: response.data.message || '取消请求已发送' };
+                        await this.refreshCurrentRunStatus();
+                    } catch (error) {
+                        this.message = { type: 'error', text: error.response?.data?.detail || '取消失败' };
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async loadRunsHistory() {
+                    try {
+                        const response = await axios.get('/api/workflow/runs', {
+                            params: {
+                                project_dir: this.projectDir || '.',
+                                limit: 20
+                            }
+                        });
+                        this.runsHistory = response.data.runs || [];
+                        if (this.currentRunId) {
+                            const current = this.runsHistory.find((item) => item.run_id === this.currentRunId);
+                            if (current) this.syncRedteamView(current);
+                        }
+                    } catch (error) {
+                        this.runsHistory = [];
+                    }
+                },
+
+                async focusRun(runId) {
+                    const run = this.runsHistory.find((item) => item.run_id === runId);
+                    this.selectedRunRedteam = null;
+                    if (run && run.project_dir) {
+                        this.projectDir = run.project_dir;
+                    }
+                    if (run) {
+                        this.syncRedteamView(run);
+                    }
+                    this.currentRunId = runId;
+                    this.workflowRunning = true;
+                    await this.refreshCurrentRunStatus();
+                    await this.loadRunArtifacts(runId);
+                    if (['queued', 'running', 'cancelling'].includes(this.currentRunStatus)) {
+                        this.startPolling();
+                    }
+                },
+
+                async loadRunArtifacts(runId) {
+                    try {
+                        const response = await axios.get(`/api/workflow/artifacts/${runId}`, {
+                            params: { project_dir: this.projectDir || '.' }
+                        });
+                        this.selectedRunArtifacts = response.data.items || [];
+                    } catch (error) {
+                        this.selectedRunArtifacts = [];
+                    }
+                },
+
+                downloadRunArtifacts(run) {
+                    const runId = run.run_id;
+                    const runProjectDir = run.project_dir || this.projectDir || '.';
+                    const params = new URLSearchParams({
+                        project_dir: runProjectDir
+                    });
+                    window.open(`/api/workflow/artifacts/${runId}/archive?${params.toString()}`, '_blank');
+                },
+
+                syncRedteamView(run) {
+                    this.selectedRunRedteam = this.extractRedteamFromRun(run);
+                },
+
+                extractRedteamFromRun(run) {
+                    if (!run || !Array.isArray(run.results)) return null;
+                    const redteamPhase = run.results.find((item) => item.phase === 'redteam');
+                    if (!redteamPhase || !redteamPhase.output || typeof redteamPhase.output !== 'object') {
+                        return null;
+                    }
+
+                    const output = redteamPhase.output;
+                    const issues = output.issues || {};
+                    const groups = [
+                        { id: 'security', label: '安全问题', items: Array.isArray(issues.security) ? issues.security : [] },
+                        { id: 'performance', label: '性能问题', items: Array.isArray(issues.performance) ? issues.performance : [] },
+                        { id: 'architecture', label: '架构问题', items: Array.isArray(issues.architecture) ? issues.architecture : [] }
+                    ];
+
+                    const total = groups.reduce((sum, group) => sum + group.items.length, 0);
+                    if (!total) return null;
+
+                    return {
+                        run_id: run.run_id || this.currentRunId || '-',
+                        score: output.score ?? redteamPhase.quality_score ?? 0,
+                        critical_count: output.critical_count ?? 0,
+                        high_count: output.high_count ?? 0,
+                        report_path: output.report_path || '',
+                        groups
+                    };
+                },
+
+                hostCategoryLabel(category) {
+                    return category === 'cli' ? 'CLI' : 'IDE';
+                },
+
+                selectHost(hostId) {
+                    this.selectedHostId = hostId;
+                },
+
+                syncSelectedHostWithFilter() {
+                    if (!this.filteredHostTools.length) {
+                        this.selectedHostId = '';
+                        return;
+                    }
+                    if (!this.filteredHostTools.some((item) => item.id === this.selectedHostId)) {
+                        this.selectedHostId = this.filteredHostTools[0].id;
+                    }
+                },
+
+                async copyHostCommand(command) {
+                    if (!command || typeof command !== 'string') return;
+                    try {
+                        await navigator.clipboard.writeText(command);
+                        this.message = { type: 'success', text: '已复制命令，可在宿主或终端执行' };
+                    } catch (error) {
+                        this.message = { type: 'error', text: '复制失败，请手动复制命令' };
+                    }
+                },
+
+                hostReadyState(hostId) {
+                    const hosts = this.hostDoctorResult?.report?.hosts;
+                    if (!hosts || typeof hosts !== 'object') return null;
+                    const item = hosts[hostId];
+                    if (!item || typeof item !== 'object') return null;
+                    return Boolean(item.ready);
+                },
+
+                hostScore(hostId) {
+                    const map = this.hostDoctorResult?.compatibility?.hosts;
+                    if (!map || typeof map !== 'object') return '0';
+                    const item = map[hostId];
+                    if (!item || typeof item !== 'object') return '0';
+                    return Number(item.score || 0).toFixed(2);
+                },
+
+                hostMissingChecks(hostId) {
+                    const hosts = this.hostDoctorResult?.report?.hosts;
+                    if (!hosts || typeof hosts !== 'object') return [];
+                    const item = hosts[hostId];
+                    if (!item || typeof item !== 'object' || !Array.isArray(item.missing)) return [];
+                    return item.missing;
+                },
+
+                async runHostDoctor(repair) {
+                    this.loading = true;
+                    try {
+                        const params = {
+                            project_dir: this.projectDir || '.',
+                            auto: this.hostDoctorAuto,
+                            host: this.hostDoctorAuto ? undefined : (this.selectedHostId || undefined),
+                            repair: Boolean(repair),
+                            force: Boolean(repair),
+                        };
+                        const response = await axios.get('/api/hosts/doctor', { params });
+                        this.hostDoctorResult = response.data || null;
+                        const ready = Boolean(response?.data?.report?.overall_ready);
+                        this.message = {
+                            type: ready ? 'success' : 'info',
+                            text: ready ? '宿主诊断通过：当前目标均 Ready' : '宿主诊断完成：存在未就绪项，请按建议修复'
+                        };
+                    } catch (error) {
+                        this.message = { type: 'error', text: error.response?.data?.detail || '宿主诊断失败' };
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                buildIssueLocateCommand(issue) {
+                    if (!issue || !issue.file_path) return '';
+                    const line = issue.line || 1;
+                    return `code -g "${issue.file_path}:${line}"`;
+                },
+
+                async copyIssueLocateCommand(issue) {
+                    const command = this.buildIssueLocateCommand(issue);
+                    if (!command) return;
+                    try {
+                        await navigator.clipboard.writeText(command);
+                        this.message = { type: 'success', text: '已复制定位命令，可在终端执行' };
+                    } catch (error) {
+                        this.message = { type: 'error', text: '复制失败，请手动复制定位路径' };
+                    }
+                },
+
+                formatTime(value) {
+                    if (!value) return '-';
+                    try {
+                        return new Date(value).toLocaleString();
+                    } catch (e) {
+                        return value;
+                    }
+                },
+
+                getPhaseStatus(phaseId) {
+                    return this.phaseStatus[phaseId] || 'pending';
+                },
+
+                getPhaseIcon(phaseId) {
+                    const status = this.getPhaseStatus(phaseId);
+                    switch (status) {
+                        case 'running': return '⟳';
+                        case 'success': return '✓';
+                        case 'cancelled': return '■';
+                        case 'error': return '✗';
+                        default: return '○';
+                    }
+                },
+
+                selectExpert(expert) {
+                    this.selectedExpert = expert;
+                    this.expertPrompt = '';
+                    this.expertAdvice = '';
+                    this.expertAdviceFile = '';
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

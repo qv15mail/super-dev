@@ -14,10 +14,12 @@ import subprocess  # nosec B404
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TypedDict
 
+import yaml  # type: ignore[import-untyped]
 from defusedxml import ElementTree
 
+from ..config import ConfigManager
 from .redteam import RedTeamReport
 
 
@@ -167,6 +169,14 @@ class QualityGateResult:
         return "\n".join(lines)
 
 
+class HostProfileMetrics(TypedDict):
+    label: str
+    overall_score: float
+    ready_hosts: int
+    total_hosts: int
+    bounded_score: int
+
+
 class QualityGateChecker:
     """质量门禁检查器"""
 
@@ -175,6 +185,8 @@ class QualityGateChecker:
     WARNING_THRESHOLD = 60
     # 0-1 场景与增量场景统一使用 80+ 标准
     PASS_THRESHOLD_ZERO_TO_ONE = 80
+    HOST_COMPAT_MIN_SCORE = 80
+    HOST_COMPAT_MIN_READY_HOSTS = 1
 
     # 检查项配置
     CHECKS_CONFIG = {
@@ -207,15 +219,76 @@ class QualityGateChecker:
         tech_stack: dict,
         scenario_override: str | None = None,
         threshold_override: int | None = None,
+        host_compatibility_min_score_override: int | None = None,
+        host_compatibility_min_ready_hosts_override: int | None = None,
     ):
         self.project_dir = Path(project_dir).resolve()
         self.name = name
         self.tech_stack = tech_stack
         self.threshold_override = threshold_override
+        config = ConfigManager(self.project_dir).load()
+        self.host_profile_targets = [
+            item.strip()
+            for item in getattr(config, "host_profile_targets", [])
+            if isinstance(item, str) and item.strip()
+        ]
+        self.host_profile_enforce_selected = bool(
+            getattr(config, "host_profile_enforce_selected", False)
+        )
+        self.host_compatibility_min_score = self._coerce_host_compat_score(
+            host_compatibility_min_score_override
+            if host_compatibility_min_score_override is not None
+            else config.host_compatibility_min_score
+        )
+        self.host_compatibility_min_ready_hosts = self._coerce_host_compat_ready_hosts(
+            host_compatibility_min_ready_hosts_override
+            if host_compatibility_min_ready_hosts_override is not None
+            else config.host_compatibility_min_ready_hosts
+        )
         if scenario_override in {"0-1", "1-N+1"}:
             self.is_zero_to_one = scenario_override == "0-1"
         else:
             self.is_zero_to_one = self._detect_zero_to_one_scenario()
+
+    def _coerce_host_compat_score(self, value: object) -> int:
+        score = self._coerce_int(value, default=self.HOST_COMPAT_MIN_SCORE)
+        return max(0, min(100, score))
+
+    def _coerce_host_compat_ready_hosts(self, value: object) -> int:
+        ready_hosts = self._coerce_int(value, default=self.HOST_COMPAT_MIN_READY_HOSTS)
+        return max(0, ready_hosts)
+
+    def _coerce_float(self, value: object, default: float) -> float:
+        if isinstance(value, bool):
+            return float(value)
+        if isinstance(value, int | float):
+            return float(value)
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return default
+            try:
+                return float(text)
+            except ValueError:
+                return default
+        return default
+
+    def _coerce_int(self, value: object, default: int) -> int:
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return default
+            try:
+                return int(text)
+            except ValueError:
+                return default
+        return default
 
     def _detect_zero_to_one_scenario(self) -> bool:
         """
@@ -843,7 +916,446 @@ class QualityGateChecker:
                     details="未找到 python 解释器，跳过语法检查",
                 ))
 
+        checks.append(self._check_pipeline_observability())
+        checks.append(self._check_host_compatibility())
+        checks.append(self._check_knowledge_governance())
+        checks.append(self._check_launch_rehearsal())
+        checks.append(self._check_rehearsal_verification_report())
+
         return checks
+
+    def _check_pipeline_observability(self) -> QualityCheck:
+        output_dir = self.project_dir / "output"
+        metric_files = sorted(output_dir.glob("*-pipeline-metrics.json")) if output_dir.exists() else []
+        if not metric_files:
+            return QualityCheck(
+                name="Pipeline 可观测性",
+                category="code_quality",
+                description="流水线指标报告",
+                status=CheckStatus.WARNING,
+                score=60 if self.is_zero_to_one else 50,
+                weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                details="未发现 output/*-pipeline-metrics.json",
+            )
+
+        latest = max(metric_files, key=lambda path: path.stat().st_mtime)
+        try:
+            payload = json.loads(latest.read_text(encoding="utf-8"))
+        except Exception:
+            return QualityCheck(
+                name="Pipeline 可观测性",
+                category="code_quality",
+                description="流水线指标报告",
+                status=CheckStatus.FAILED,
+                score=30,
+                weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                details=f"指标文件不可解析: {latest.name}",
+            )
+
+        success = bool(payload.get("success", False))
+        success_rate = float(payload.get("success_rate", 0))
+        if success and success_rate >= 90:
+            status = CheckStatus.PASSED
+            score = 100
+        elif success:
+            status = CheckStatus.WARNING
+            score = 80
+        else:
+            status = CheckStatus.FAILED
+            score = 40
+
+        return QualityCheck(
+            name="Pipeline 可观测性",
+            category="code_quality",
+            description="流水线指标报告",
+            status=status,
+            score=score,
+            weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+            details=f"{latest.name} | success_rate={success_rate:.1f}%",
+        )
+
+    def _check_host_compatibility(self) -> QualityCheck:
+        min_score = float(self.host_compatibility_min_score)
+        min_ready_hosts = self.host_compatibility_min_ready_hosts
+        warning_threshold = max(40.0, min_score - 20.0)
+
+        output_dir = self.project_dir / "output"
+        reports = sorted(output_dir.glob("*-host-compatibility.json")) if output_dir.exists() else []
+        if not reports:
+            return QualityCheck(
+                name="宿主兼容性",
+                category="code_quality",
+                description="AI Coding 宿主接入兼容性报告",
+                status=CheckStatus.WARNING,
+                score=70 if self.is_zero_to_one else 60,
+                weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                details=(
+                    "未发现 output/*-host-compatibility.json "
+                    f"(目标阈值: score>={min_score:.0f}, ready_hosts>={min_ready_hosts})"
+                ),
+            )
+
+        latest = max(reports, key=lambda path: path.stat().st_mtime)
+        try:
+            payload = json.loads(latest.read_text(encoding="utf-8"))
+        except Exception:
+            return QualityCheck(
+                name="宿主兼容性",
+                category="code_quality",
+                description="AI Coding 宿主接入兼容性报告",
+                status=CheckStatus.FAILED,
+                score=30,
+                weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                details=f"兼容性报告不可解析: {latest.name}",
+            )
+
+        compatibility = payload.get("compatibility", {}) if isinstance(payload, dict) else {}
+        if not isinstance(compatibility, dict):
+            return QualityCheck(
+                name="宿主兼容性",
+                category="code_quality",
+                description="AI Coding 宿主接入兼容性报告",
+                status=CheckStatus.FAILED,
+                score=30,
+                weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                details=f"兼容性报告结构非法: {latest.name}",
+            )
+
+        try:
+            overall_score = float(compatibility.get("overall_score", 0))
+        except (TypeError, ValueError):
+            overall_score = 0.0
+        try:
+            ready_hosts = int(compatibility.get("ready_hosts", 0))
+        except (TypeError, ValueError):
+            ready_hosts = 0
+        try:
+            total_hosts = int(compatibility.get("total_hosts", 0))
+        except (TypeError, ValueError):
+            total_hosts = 0
+
+        bounded_score = max(0, min(100, int(round(overall_score))))
+        details = (
+            f"{latest.name} | overall={overall_score:.2f} | "
+            f"ready={ready_hosts}/{total_hosts}"
+        )
+
+        profile = self._host_profile_metrics(compatibility)
+        if profile is not None:
+            overall_score = self._coerce_float(profile.get("overall_score"), default=0.0)
+            ready_hosts = self._coerce_int(profile.get("ready_hosts"), default=0)
+            total_hosts = self._coerce_int(profile.get("total_hosts"), default=0)
+            bounded_score = self._coerce_int(profile.get("bounded_score"), default=0)
+            details = (
+                f"{latest.name} | profile={profile['label']} | overall={overall_score:.2f} | "
+                f"ready={ready_hosts}/{total_hosts}"
+            )
+
+        if overall_score >= min_score and ready_hosts >= min_ready_hosts:
+            return QualityCheck(
+                name="宿主兼容性",
+                category="code_quality",
+                description="AI Coding 宿主接入兼容性报告",
+                status=CheckStatus.PASSED,
+                score=bounded_score,
+                weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                details=details,
+            )
+
+        if overall_score >= warning_threshold:
+            return QualityCheck(
+                name="宿主兼容性",
+                category="code_quality",
+                description="AI Coding 宿主接入兼容性报告",
+                status=CheckStatus.WARNING,
+                score=bounded_score,
+                weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                details=(
+                    f"{details}（建议至少 {min_score:.0f} 分且 "
+                    f"ready host >= {min_ready_hosts}）"
+                ),
+            )
+
+        return QualityCheck(
+            name="宿主兼容性",
+            category="code_quality",
+            description="AI Coding 宿主接入兼容性报告",
+            status=CheckStatus.FAILED,
+            score=max(20, bounded_score),
+            weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+            details=f"{details}（低于最低建议阈值）",
+        )
+
+    def _host_profile_metrics(self, compatibility: dict[str, object]) -> HostProfileMetrics | None:
+        if not self.host_profile_enforce_selected or not self.host_profile_targets:
+            return None
+
+        hosts_obj = compatibility.get("hosts", {})
+        hosts = hosts_obj if isinstance(hosts_obj, dict) else {}
+        selected = [item for item in self.host_profile_targets if item in hosts]
+        if not selected:
+            return {
+                "label": ",".join(self.host_profile_targets),
+                "overall_score": 0.0,
+                "ready_hosts": 0,
+                "total_hosts": len(self.host_profile_targets),
+                "bounded_score": 0,
+            }
+
+        score_values: list[float] = []
+        ready_hosts = 0
+        for target in selected:
+            host_data = hosts.get(target, {})
+            if isinstance(host_data, dict):
+                try:
+                    score_values.append(float(host_data.get("score", 0.0)))
+                except (TypeError, ValueError):
+                    score_values.append(0.0)
+                if bool(host_data.get("ready", False)):
+                    ready_hosts += 1
+            else:
+                score_values.append(0.0)
+
+        overall_score = sum(score_values) / len(score_values) if score_values else 0.0
+        bounded_score = max(0, min(100, int(round(overall_score))))
+        return {
+            "label": ",".join(selected),
+            "overall_score": overall_score,
+            "ready_hosts": ready_hosts,
+            "total_hosts": len(selected),
+            "bounded_score": bounded_score,
+        }
+
+    def _check_knowledge_governance(self) -> QualityCheck:
+        config_file = self.project_dir / "super-dev.yaml"
+        config_domains: list[str] = []
+        config_ttl = 1800
+        if config_file.exists():
+            try:
+                raw_config = yaml.safe_load(config_file.read_text(encoding="utf-8"))
+                if isinstance(raw_config, dict):
+                    domains_raw = raw_config.get("knowledge_allowed_domains", [])
+                    if isinstance(domains_raw, list):
+                        config_domains = [
+                            str(item).strip().lower()
+                            for item in domains_raw
+                            if str(item).strip()
+                        ]
+                    ttl_raw = raw_config.get("knowledge_cache_ttl_seconds", 1800)
+                    if isinstance(ttl_raw, int):
+                        config_ttl = ttl_raw
+                    elif isinstance(ttl_raw, str) and ttl_raw.strip().isdigit():
+                        config_ttl = int(ttl_raw.strip())
+            except Exception:
+                pass
+
+        cache_dir = self.project_dir / "output" / "knowledge-cache"
+        bundles = sorted(cache_dir.glob("*-knowledge-bundle.json")) if cache_dir.exists() else []
+        if not bundles:
+            return QualityCheck(
+                name="知识增强治理",
+                category="code_quality",
+                description="知识来源白名单与缓存可审计性",
+                status=CheckStatus.WARNING,
+                score=70 if self.is_zero_to_one else 60,
+                weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                details="未发现 output/knowledge-cache/*-knowledge-bundle.json",
+            )
+
+        latest = max(bundles, key=lambda path: path.stat().st_mtime)
+        try:
+            bundle = json.loads(latest.read_text(encoding="utf-8"))
+        except Exception:
+            return QualityCheck(
+                name="知识增强治理",
+                category="code_quality",
+                description="知识来源白名单与缓存可审计性",
+                status=CheckStatus.FAILED,
+                score=30,
+                weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                details=f"知识缓存不可解析: {latest.name}",
+            )
+        if not isinstance(bundle, dict):
+            return QualityCheck(
+                name="知识增强治理",
+                category="code_quality",
+                description="知识来源白名单与缓存可审计性",
+                status=CheckStatus.FAILED,
+                score=30,
+                weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                details=f"知识缓存结构非法: {latest.name}",
+            )
+
+        signature = str(bundle.get("cache_signature", "")).strip()
+        if not signature:
+            return QualityCheck(
+                name="知识增强治理",
+                category="code_quality",
+                description="知识来源白名单与缓存可审计性",
+                status=CheckStatus.FAILED,
+                score=30,
+                weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                details="知识缓存缺少 cache_signature",
+            )
+
+        ttl_value = bundle.get("cache_ttl_seconds", config_ttl)
+        bundle_ttl = ttl_value if isinstance(ttl_value, int) else config_ttl
+        metadata = bundle.get("metadata", {})
+        metadata_dict = metadata if isinstance(metadata, dict) else {}
+        web_enabled = bool(metadata_dict.get("web_enabled", False))
+        bundle_domains_raw = metadata_dict.get("allowed_web_domains", [])
+        bundle_domains = (
+            [
+                str(item).strip().lower()
+                for item in bundle_domains_raw
+                if str(item).strip()
+            ]
+            if isinstance(bundle_domains_raw, list)
+            else []
+        )
+        web_stats = metadata_dict.get("web_stats", {})
+        filtered_out_count = 0
+        if isinstance(web_stats, dict):
+            raw_filtered = web_stats.get("filtered_out_count", 0)
+            if isinstance(raw_filtered, int):
+                filtered_out_count = raw_filtered
+
+        if bundle_ttl <= 0:
+            return QualityCheck(
+                name="知识增强治理",
+                category="code_quality",
+                description="知识来源白名单与缓存可审计性",
+                status=CheckStatus.WARNING,
+                score=70,
+                weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                details="knowledge_cache_ttl_seconds <= 0，缓存治理策略关闭",
+            )
+
+        if web_enabled and not bundle_domains:
+            return QualityCheck(
+                name="知识增强治理",
+                category="code_quality",
+                description="知识来源白名单与缓存可审计性",
+                status=CheckStatus.WARNING,
+                score=75,
+                weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                details="联网知识未配置白名单域名",
+            )
+
+        config_domain_set = set(config_domains)
+        bundle_domain_set = set(bundle_domains)
+        if config_domain_set and bundle_domain_set and config_domain_set != bundle_domain_set:
+            return QualityCheck(
+                name="知识增强治理",
+                category="code_quality",
+                description="知识来源白名单与缓存可审计性",
+                status=CheckStatus.WARNING,
+                score=80,
+                weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                details="缓存白名单与项目配置不一致",
+            )
+
+        details = (
+            f"{latest.name} | ttl={bundle_ttl}s | "
+            f"domains={len(bundle_domains)} | filtered_out={filtered_out_count}"
+        )
+        return QualityCheck(
+            name="知识增强治理",
+            category="code_quality",
+            description="知识来源白名单与缓存可审计性",
+            status=CheckStatus.PASSED,
+            score=100,
+            weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+            details=details,
+        )
+
+    def _check_launch_rehearsal(self) -> QualityCheck:
+        rehearsal_dir = self.project_dir / "output" / "rehearsal"
+        required_patterns = [
+            "*-launch-rehearsal.md",
+            "*-rollback-playbook.md",
+            "*-smoke-checklist.md",
+        ]
+        found = 0
+        if rehearsal_dir.exists():
+            for pattern in required_patterns:
+                if any(rehearsal_dir.glob(pattern)):
+                    found += 1
+
+        if found == len(required_patterns):
+            return QualityCheck(
+                name="发布演练准备",
+                category="code_quality",
+                description="发布演练与回滚手册",
+                status=CheckStatus.PASSED,
+                score=100,
+                weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                details="发布演练文档齐全",
+            )
+        if found == 0:
+            return QualityCheck(
+                name="发布演练准备",
+                category="code_quality",
+                description="发布演练与回滚手册",
+                status=CheckStatus.WARNING,
+                score=60 if self.is_zero_to_one else 50,
+                weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                details="未发现 output/rehearsal/* 发布演练文档",
+            )
+        return QualityCheck(
+            name="发布演练准备",
+            category="code_quality",
+            description="发布演练与回滚手册",
+            status=CheckStatus.WARNING,
+            score=75,
+            weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+            details=f"发布演练文档不完整 ({found}/{len(required_patterns)})",
+        )
+
+    def _check_rehearsal_verification_report(self) -> QualityCheck:
+        rehearsal_dir = self.project_dir / "output" / "rehearsal"
+        if not rehearsal_dir.exists():
+            return QualityCheck(
+                name="发布演练验证报告",
+                category="code_quality",
+                description="发布演练验证结果",
+                status=CheckStatus.WARNING,
+                score=60 if self.is_zero_to_one else 50,
+                weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                details="未发现 output/rehearsal 目录",
+            )
+
+        has_md = any(rehearsal_dir.glob("*-rehearsal-report.md"))
+        has_json = any(rehearsal_dir.glob("*-rehearsal-report.json"))
+        if has_md and has_json:
+            return QualityCheck(
+                name="发布演练验证报告",
+                category="code_quality",
+                description="发布演练验证结果",
+                status=CheckStatus.PASSED,
+                score=100,
+                weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                details="已生成 rehearsal markdown + json 报告",
+            )
+        if has_md or has_json:
+            return QualityCheck(
+                name="发布演练验证报告",
+                category="code_quality",
+                description="发布演练验证结果",
+                status=CheckStatus.WARNING,
+                score=80,
+                weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+                details="发布演练报告格式不完整（需同时包含 md 与 json）",
+            )
+        return QualityCheck(
+            name="发布演练验证报告",
+            category="code_quality",
+            description="发布演练验证结果",
+            status=CheckStatus.WARNING,
+            score=70 if self.is_zero_to_one else 60,
+            weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+            details="未发现 output/rehearsal/*-rehearsal-report.(md|json)",
+        )
 
     def _calculate_total_score(self, checks: list[QualityCheck]) -> int:
         """计算总分"""

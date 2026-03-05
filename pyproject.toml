@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "super-dev"
-version = "2.0.1"
-description = "顶级 AI 开发战队 - God-Tier Development Team"
+version = "2.0.2"
+description = "Super Dev - Pipeline AI Coding Assistant"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -42,7 +42,7 @@ dependencies = [
     "tenacity>=8.2.0",
     "fastapi>=0.110.0",
     "uvicorn>=0.27.0",
-    "tomli>=2.0.1; python_version<'3.11'",
+    "tomli>=2.0.0; python_version<'3.11'",
 ]
 
 [project.optional-dependencies]

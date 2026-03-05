@@ -10,6 +10,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..catalogs import HOST_TOOL_IDS
+
 
 @dataclass
 class SkillInstallResult:
@@ -25,16 +27,24 @@ class SkillManager:
     TARGET_PATHS = {
         "claude-code": ".claude/skills",
         "codex-cli": ".codex/skills",
-        "opencode": ".opencode/skills",
-        "cursor": ".super-dev/skills/cursor",
-        "qoder": ".super-dev/skills/qoder",
-        "trae": ".super-dev/skills/trae",
-        "codebuddy": ".super-dev/skills/codebuddy",
-        "antigravity": ".super-dev/skills/antigravity",
+        "gemini-cli": ".gemini/skills",
+        "kimi-cli": ".kimi/skills",
+        "kiro-cli": ".kiro/skills",
+        "qoder-cli": ".qoder/skills",
+        "qoder": ".qoder/skills",
     }
 
     def __init__(self, project_dir: Path):
         self.project_dir = Path(project_dir).resolve()
+
+    @classmethod
+    def coverage_gaps(cls) -> dict[str, list[str]]:
+        declared = set(HOST_TOOL_IDS)
+        target_keys = set(cls.TARGET_PATHS)
+        return {
+            "missing_in_skill_targets": sorted(declared - target_keys),
+            "extra_in_skill_targets": sorted(target_keys - declared),
+        }
 
     def list_targets(self) -> list[str]:
         return list(self.TARGET_PATHS.keys())
@@ -189,13 +199,13 @@ class SkillManager:
         target_dir.mkdir(parents=True, exist_ok=True)
         skill_content = f"""# {skill_name} - Super Dev AI Coding Skill
 
-> 版本: 2.0.1 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
+> 版本: 2.0.2 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
 
 ---
 
 ## Skill 角色定义
 
-你是一个由 **10 位顶级专家**组成的 AI 开发战队成员。当用户调用 Super Dev 时，你需要根据任务类型自动切换专家角色：
+你是“**超级开发战队**”的一员，由 10 位专家协同完成流水线式 AI Coding 交付。当用户调用 Super Dev 时，你需要根据任务类型自动切换专家角色：
 
 | 专家角色 | 触发场景 | 核心职责 |
 |:---|:---|:---|
@@ -220,7 +230,7 @@ class SkillManager:
 第 0 阶段  需求增强    → 解析需求 + 注入知识库 + 联网检索
 第 1 阶段  文档生成    → PRD + 架构设计 + UI/UX 文档
 第 2 阶段  前端骨架    → 先交付可演示前端（前端先行原则）
-第 3 阶段  Spec 创建   → OpenSpec 风格规范 + 任务列表
+第 3 阶段  Spec 创建   → 结构化规范 + 任务列表
 第 4 阶段  实现骨架    → 前后端目录结构 + API 契约
 第 5 阶段  红队审查    → 安全 + 性能 + 架构三维审查
 第 6 阶段  质量门禁    → 统一阈值（80+）

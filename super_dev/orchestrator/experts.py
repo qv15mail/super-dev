@@ -91,6 +91,7 @@ class ExpertDispatcher:
         frontend: str = "react",
         backend: str = "node",
         domain: str = "",
+        language_preferences: list[str] | None = None,
         **kwargs,
     ) -> ExpertTeamResult:
         """
@@ -107,6 +108,7 @@ class ExpertDispatcher:
             frontend=frontend,
             backend=backend,
             domain=domain,
+            language_preferences=language_preferences,
             **kwargs,
         )
 
@@ -191,6 +193,8 @@ class ExpertDispatcher:
         tech_stack: dict,
         redteam_report=None,
         threshold_override: int | None = None,
+        host_compatibility_min_score_override: int | None = None,
+        host_compatibility_min_ready_hosts_override: int | None = None,
     ) -> ExpertOutput:
         """QA 专家：调度质量门禁检查"""
         from ..reviewers.quality_gate import QualityGateChecker
@@ -200,6 +204,8 @@ class ExpertDispatcher:
             name=name,
             tech_stack=tech_stack,
             threshold_override=threshold_override,
+            host_compatibility_min_score_override=host_compatibility_min_score_override,
+            host_compatibility_min_ready_hosts_override=host_compatibility_min_ready_hosts_override,
         )
         result = checker.check(redteam_report=redteam_report)
         content = result.to_markdown()

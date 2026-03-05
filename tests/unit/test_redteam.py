@@ -61,6 +61,35 @@ def run_cmd(user_input: str):
         assert "命令执行" in categories
         assert any("app.py:" in i.description for i in report.security_issues)
 
+    def test_ignores_security_signals_inside_test_files(self, temp_project_dir: Path):
+        src_dir = temp_project_dir / "src"
+        tests_dir = temp_project_dir / "tests"
+        src_dir.mkdir(parents=True, exist_ok=True)
+        tests_dir.mkdir(parents=True, exist_ok=True)
+
+        (src_dir / "app.py").write_text("def health():\n    return 'ok'\n", encoding="utf-8")
+        (tests_dir / "test_vulnerable.py").write_text(
+            """
+import subprocess
+
+API_KEY = "sk_live_real_secret_123456"
+
+def test_case():
+    return subprocess.run("echo test", shell=True)
+""",
+            encoding="utf-8",
+        )
+
+        reviewer = RedTeamReviewer(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"backend": "python", "frontend": "none"},
+        )
+        report = reviewer.review()
+        categories = {i.category for i in report.security_issues}
+        assert "硬编码凭据" not in categories
+        assert "命令执行" not in categories
+
     def test_ignores_placeholder_secrets(self, temp_project_dir: Path):
         src_dir = temp_project_dir / "src"
         src_dir.mkdir(parents=True, exist_ok=True)

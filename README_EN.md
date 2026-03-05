@@ -2,7 +2,8 @@
 
 <div align="center">
 
-# God-Tier AI Development Team
+# Super Dev Squad
+### An AI delivery orchestration tool for commercial-grade outcomes
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
@@ -10,7 +11,7 @@
 [![Lint](https://img.shields.io/badge/lint-ruff-success)](https://docs.astral.sh/ruff/)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-success)](.github/workflows/ci.yml)
 
-English | [简体中文](README.md)
+[简体中文](README.md) | English
 
 </div>
 
@@ -18,99 +19,84 @@ English | [简体中文](README.md)
 
 ## Version
 
-Current version: `2.0.1`
-
-Current quality baseline (2026-03-02):
-
-- `ruff check super_dev tests` passed
-- `mypy super_dev` passed (56 source files)
-- `pytest -q` passed (full suite passing on current branch)
-- `bandit -ll -r super_dev` passed (0 medium/high findings)
-- `pip-audit .` passed (0 vulnerabilities)
+Current version: `2.0.2`
 
 ---
 
-## What Super Dev Does
+## Project Introduction
 
-`Super Dev` is an orchestration-first AI engineering tool for commercial-grade delivery. Starting from one requirement sentence, it generates production-ready project assets:
+`Super Dev` is an AI delivery orchestration tool built for commercial-grade outcomes. Its core goal is to help teams turn project intent into executable engineering assets:
 
-- requirement intelligence and enrichment
-- PRD / architecture / UIUX / execution docs
-- frontend demo scaffold + backend/frontend implementation pack (routes/services/repositories/tests/migrations)
-- red-team review + quality gate (including Spec task completion checks)
-- code review guide + AI prompts
-- CI/CD + deploy remediation templates + DB migrations + delivery package (manifest/report/zip)
+- Convert requirements into production artifacts: PRD, architecture, UI/UX, spec, task plans, and delivery manifests
+- Run development through a standardized pipeline: traceable, resumable, auditable, and reviewable
+- Enforce quality at every stage: policy governance, red-team checks, quality gates, and release rehearsals
+- Unify collaboration across CLI and IDE hosts under one delivery standard
 
 ---
 
-## Core Capabilities
+## Core Features
 
-### 1) 12-stage pipeline (Stage 0 to Stage 11)
+### 1. Host Onboarding Governance
 
-`super-dev pipeline` currently executes:
+- Unified onboarding for mainstream CLI/IDE hosts
+- Auto generation of host rules, `/super-dev` mapping, and skill paths
+- End-to-end onboarding loop with `detect/onboard/doctor/setup/install`
 
-| Stage | Description |
-|:---|:---|
-| Stage 0 | Requirement enrichment (local knowledge + optional web search) |
-| Stage 1 | Professional docs generation |
-| Stage 2 | Frontend demo scaffold generation |
-| Stage 3 | Spec creation |
-| Stage 4 | Frontend/backend implementation pack + Spec task execution loop (auto-repair + task execution report) |
-| Stage 5 | Red-team review (optional) |
-| Stage 6 | Quality gate (optional threshold override) |
-| Stage 7 | Code review guide |
-| Stage 8 | AI prompt generation |
-| Stage 9 | CI/CD config generation |
-| Stage 10 | Deploy remediation templates |
-| Stage 11 | Database migration scripts + delivery package |
+### 2. Pipeline-Oriented Delivery, Stage 0 to Stage 12
 
-### 2) Spec-Driven Development (SDD)
+- Requirement enrichment -> docs -> spec -> scaffold -> red-team -> quality gate -> delivery
+- Resume support for failed/interrupted runs (`run --resume`)
+- Works for both greenfield and iterative delivery
 
-Built-in `.super-dev/specs`, `changes`, and `archive` workflow for proposal-driven development.
+### 3. Policy Governance (Policy DSL)
 
-### 3) Expert Collaboration
+- `default / balanced / enterprise` presets
+- Enforce red-team and quality gates
+- Minimum quality threshold and CI/CD whitelist
+- Required host and ready+score hard checks
 
-PM / ARCHITECT / UI / UX / SECURITY / CODE / DBA / QA / DEVOPS / RCA expert roles are integrated.
+### 4. Host Profile and Compatibility Gate
 
-### 4) Design Intelligence Engine
+- Auto-detect available hosts and score readiness
+- Emit compatibility report and history
+- `--save-profile` writes host profile into `super-dev.yaml`
 
-Supports design search, design system generation, tokens, landing patterns, chart recommendations, UX guidance, stack best practices, and code snippets.
+### 5. Auditable Delivery Assets
 
-### 5) Web API / Studio
+- `pipeline-metrics` telemetry
+- `pipeline-contract` stage evidence
+- `resume-audit` for resumed runs
+- Delivery package: manifest/report/archive
 
-FastAPI backend + Studio mode for workflow execution, status polling, config access, and deployment template export.
+### 6. Commercial-Grade Gate Chain
 
-### 6) Cross-platform compatibility gate
-
-CI includes a dedicated `Platform Compatibility` job that verifies Skill and integration paths for Claude Code / Codex CLI / OpenCode / Antigravity / Cursor / Qoder / Trae / CodeBuddy.
+- Red-team checks (security/performance/architecture)
+- Quality gate (scenario + policy thresholds)
+- Release rehearsal and rollback playbooks
 
 ---
 
-## Installation
+## Installation Options
 
-### Option 1: Install from PyPI (recommended)
+### 1. PyPI (recommended)
 
 ```bash
 pip install -U super-dev
 ```
 
-PyPI page:
-
-- https://pypi.org/project/super-dev/
-
-### Option 2: Install a pinned version (repro/rollback)
+### 2. Pin a specific version
 
 ```bash
-pip install super-dev==2.0.1
+pip install super-dev==2.0.2
 ```
 
-### Option 3: Install from GitHub tag
+### 3. Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.1
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.2
 ```
 
-### Option 4: Developer install from source
+### 4. Source install for development
 
 ```bash
 git clone https://github.com/shangyankeji/super-dev.git
@@ -120,126 +106,250 @@ pip install -e ".[dev]"
 
 ---
 
-## Quick Start
+## Simplest Usage (For End Users)
 
-### Mode A: Direct requirement mode (recommended)
+### CLI Hosts (Claude Code / Codex CLI / Gemini CLI / Kimi CLI / Kiro CLI / Qoder CLI)
+
+1. Run `super-dev` in your project root to finish onboarding.  
+2. In the host session, run: `/super-dev your requirement`.
+
+### IDE Host (Qoder)
+
+1. Run `super-dev` in your project root to finish onboarding.  
+2. In IDE Agent Chat, try: `/super-dev your requirement`.  
+3. If slash is not supported in the current IDE build, use:
+   `super-dev "your requirement"` (terminal orchestration), then implement in IDE Chat based on `output/*` and `tasks.md`.
+
+---
+
+## Quick Start (Detailed)
+
+### 1. Enter onboarding guide right after install
 
 ```bash
-super-dev "Build an ecommerce admin with auth, orders, and payments"
+super-dev
 ```
 
-This command automatically routes to the full pipeline (requirement enrichment -> docs -> spec -> scaffold -> red-team -> quality gate -> CI/CD -> migration and delivery package).
+Running `super-dev` without arguments opens the interactive installer guide with multi-select hosts.
 
-### Mode B: Explicit pipeline (advanced)
+### 2. One-command non-interactive install
+
+Auto-detect and onboard installed hosts:
 
 ```bash
-super-dev pipeline "Build an ecommerce admin with auth, orders, and payments" --platform web --frontend react --backend python --domain ecommerce --cicd github
+super-dev install --auto --force --yes
 ```
 
-### Common commands
+Onboard all hosts:
 
 ```bash
-super-dev init my-project
-super-dev analyze .
-super-dev "User authentication system"
-super-dev pipeline "User authentication system" --platform web --frontend react --backend node --cicd github
-super-dev spec init
-super-dev spec list
-super-dev task run <change_id>
-super-dev quality --type all
-super-dev deploy --cicd github
-super-dev studio --port 8765
+super-dev install --all --force --yes
+```
+
+### 3. Build host profile
+
+```bash
+super-dev detect --auto --save-profile
+```
+
+This generates compatibility artifacts and updates `super-dev.yaml`:
+
+- `host_profile_targets`
+- `host_profile_enforce_selected=true`
+
+### 4. Initialize enterprise policy
+
+```bash
+super-dev policy init --preset enterprise --force
+super-dev policy show
+```
+
+### 5. Start pipeline delivery
+
+```bash
+super-dev "Build an enterprise CRM with auth, RBAC, accounts, opportunities, and reporting"
+```
+
+Or explicit mode:
+
+```bash
+super-dev pipeline "Build an enterprise CRM" --platform web --frontend react --backend python --cicd github
+```
+
+Host hard gate is enabled by default: pipeline execution is blocked when no `ready` host is available.
+
+### 6. Review key artifacts
+
+Check `output/` after each run:
+
+- `*-prd.md`
+- `*-architecture.md`
+- `*-uiux.md`
+- `*-redteam.md`
+- `*-quality-gate.md`
+- `*-pipeline-metrics.json`
+- `*-pipeline-contract.json`
+- `delivery/*-delivery-manifest.json`
+- `rehearsal/*-rehearsal-report.md`
+
+### 7. Trigger from host sessions
+
+If host supports slash command mapping:
+
+```text
+/super-dev your requirement
+```
+
+If slash mapping is unavailable, run the terminal entry in the same project root (local Super Dev orchestration only):
+
+```bash
+super-dev "your requirement"
+```
+
+- The terminal entry does not directly talk to the host model session
+- Code generation and code edits must still happen inside the onboarded host tool
+
+---
+
+## Usage Scenarios
+
+## 1. 0-to-1 (Greenfield)
+
+Use when you only have requirements and no production repository.
+
+### Recommended flow
+
+1. Create workspace and onboard hosts
+2. Run `detect --save-profile`
+3. Initialize `enterprise` policy
+4. Execute requirement-driven pipeline
+5. Implement and iterate against `tasks.md`
+6. Pass red-team, quality gate, and release rehearsal
+
+### Example
+
+```bash
+mkdir crm-project && cd crm-project
+pip install -U super-dev
+super-dev
+super-dev detect --auto --save-profile
+super-dev policy init --preset enterprise --force
+super-dev "Build an enterprise CRM with multi-tenant support, RBAC, leads, accounts, opportunities, and reporting"
 ```
 
 ---
 
-## Scenario-Based Usage (0-to-1 / 1-to-N+1)
+## 2. 1-N+1 (Iterative Delivery on Existing System)
 
-### 0-to-1: Build from scratch
+Use when you already have a product and need incremental capability rollout.
 
-Use this when you only have requirements and no existing codebase.
+### Recommended flow
 
-```bash
-mkdir new-project && cd new-project
-super-dev "Build an enterprise task management platform with auth, RBAC, projects, tasks, and reporting"
-```
+1. Analyze current repository
+2. Create spec change
+3. Execute tasks incrementally
+4. Pass red-team and quality gate for each change
+5. Merge and release in small batches
 
-After generation, review these artifacts first:
-
-- `output/*-prd.md`
-- `output/*-architecture.md`
-- `output/*-uiux.md`
-- `.super-dev/changes/*/tasks.md`
-- `output/*-task-execution.md`
-- `output/*-redteam.md`
-- `output/*-quality-gate.md`
-- `output/delivery/*-delivery-manifest.json`
-
-### 1-to-N+1 (including 1-to-1+N): iterate on an existing product
-
-Use this when your project already exists and you are adding capabilities in controlled increments.
+### Example
 
 ```bash
-cd your-existing-project
+cd existing-project
 super-dev analyze .
 super-dev spec init
-super-dev spec propose add-billing --title "Introduce Billing Center" --description "Plans, subscriptions, invoices, payment callbacks"
-super-dev spec add-req add-billing billing subscription "The system SHALL support subscription lifecycle management"
+super-dev spec propose add-billing --title "Add Billing Center" --description "plans, subscriptions, invoices, payment callbacks"
 super-dev task run add-billing
 super-dev quality --type all
 ```
 
-Recommended operating model:
+---
 
-1. Keep each `change_id` focused on one capability area.
-2. Run red-team and quality checks per change.
-3. Merge and release in small slices, not large cross-domain bundles.
+## Supported Hosts
 
-### Commercial release checks
+### CLI Hosts
+
+- `claude-code`
+- `codex-cli`
+- `gemini-cli`
+- `kimi-cli`
+- `kiro-cli`
+- `qoder-cli`
+
+### IDE / Extension Hosts
+
+- `qoder`
+
+### Host Adaptation Model (CLI/IDE)
+
+- `CLI hosts`: trigger `/super-dev` inside the host session, and let the host model perform code work
+- `IDE hosts`: trigger `/super-dev` in Agent Chat, then enforce execution through rules + skill constraints
+- `Terminal entry`: `super-dev "requirement"` only triggers local orchestration and does not directly call a host model session
+
+Inspect host adaptation matrix (official docs links, adaptation mode, injection paths, detection strategy):
 
 ```bash
-./scripts/preflight.sh
+super-dev integrate matrix
+super-dev integrate matrix --json
 ```
-
-Release criteria:
-
-- red-team has no critical blockers
-- quality gate score is `>= 80`
-- delivery manifest status is `ready`
 
 ---
 
-## Preflight and Release
+## Command Quick Reference
 
-Run this before release:
+```bash
+# onboarding
+super-dev
+super-dev install --auto --force --yes
+super-dev detect --auto --save-profile
+super-dev doctor --auto --repair --force
+super-dev integrate matrix --target codex-cli
+
+# pipeline delivery
+super-dev "your requirement"
+super-dev pipeline "your requirement" --platform web --frontend react --backend python --cicd github
+super-dev run --resume
+
+# policy governance
+super-dev policy presets
+super-dev policy init --preset enterprise --force
+super-dev policy show
+
+# spec and task flow
+super-dev spec init
+super-dev spec list
+super-dev task run <change_id>
+
+# quality and release
+super-dev quality --type all
+super-dev metrics --history --limit 20
+super-dev deploy --cicd all --rehearsal --rehearsal-verify
+```
+
+---
+
+## Pre-release Check
 
 ```bash
 ./scripts/preflight.sh
 ```
 
-Preflight includes `ruff`, `mypy`, `pytest`, `delivery-smoke`, `bandit`, `pip-audit`, benchmark, build, and `twine check`.
+---
 
-Related docs:
+## Related Docs
 
+- [Workflow Guide](docs/WORKFLOW_GUIDE_EN.md)
+- [Quick Start](docs/QUICKSTART.md)
 - [Publishing Guide](docs/PUBLISHING.md)
-- [Release Runbook](docs/RELEASE_RUNBOOK.md)
-- [Quickstart](docs/QUICKSTART.md)
-- [Detailed Workflow Guide (EN)](docs/WORKFLOW_GUIDE_EN.md)
-- [Detailed Workflow Guide (ZH)](docs/WORKFLOW_GUIDE.md)
+- [Install Options](docs/INSTALL_OPTIONS.md)
 
 ---
 
-## Key Project Structure
+## WeChat Official Account
 
-```text
-super_dev/                 # Core source code
-output/                    # Generated artifacts
-scripts/                   # Preflight / release scripts
-docs/                      # Product and release docs
-```
+![Super Dev WeChat Official Account](wechat.png)
 
 ---
 
 ## License
 
-MIT License
+MIT

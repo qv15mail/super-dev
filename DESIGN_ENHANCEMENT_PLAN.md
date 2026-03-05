@@ -2,7 +2,7 @@
 
 ## 一、功能对比分析
 
-### UI UX Pro Max 功能
+### 同类工具功能参考
 | 类别 | 数量 | 说明 |
 |:---|:-----|:-----|
 | UI 风格 | 45+ | Glassmorphism, Neumorphism, Minimalism, Brutalism, Aurora UI |
@@ -24,7 +24,7 @@
 | 设计系统生成 | 完整 | CSS 变量、Tailwind 配置 |
 
 ### 功能差距
-| 功能 | UI UX Pro Max | Super Dev | 状态 |
+| 功能 | 同类工具 | Super Dev | 状态 |
 |:---|:-----|:-----|:-----|
 | UI 风格 | 45+ | 100+ | 超越 |
 | 美学方向 | 有限 | 26+ | 超越 |
@@ -227,7 +227,7 @@ super-dev design build \
 
 完成所有增强后，Super Dev 将拥有：
 
-| 功能 | 数量/能力 | 对比 UI UX Pro Max |
+| 功能 | 数量/能力 | 对比同类工具 |
 |:---|:-----|:-----|
 | UI 风格 | 100+ | 2.2x |
 | 美学方向 | 26+ | 独有 |
@@ -240,4 +240,4 @@ super-dev design build \
 | 代码生成 | 5+ 框架 | 独有 |
 | 搜索引擎 | BM25+ | 更强 |
 
-**总体评估**: 完全超越 UI UX Pro Max
+**总体评估**: 在关键能力上全面领先同类工具

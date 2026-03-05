@@ -51,6 +51,101 @@ class TestWebAPI:
         payload = config_resp.json()
         assert payload["name"] == "api-demo"
         assert payload["frontend"] == "react"
+        assert payload["language_preferences"] == []
+        assert payload["host_compatibility_min_score"] == 80
+        assert payload["host_compatibility_min_ready_hosts"] == 1
+
+    def test_policy_get_and_update(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+
+        preset_resp = client.get("/api/policy/presets")
+        assert preset_resp.status_code == 200
+        preset_ids = {item["id"] for item in preset_resp.json()["presets"]}
+        assert {"default", "balanced", "enterprise"}.issubset(preset_ids)
+
+        get_resp = client.get(
+            "/api/policy",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert get_resp.status_code == 200
+        default_payload = get_resp.json()
+        assert default_payload["require_redteam"] is True
+        assert default_payload["require_quality_gate"] is True
+        assert default_payload["min_quality_threshold"] == 80
+        assert default_payload["enforce_required_hosts_ready"] is False
+        assert default_payload["min_required_host_score"] == 80
+        assert default_payload["policy_exists"] is False
+
+        update_resp = client.put(
+            "/api/policy",
+            params={"project_dir": str(temp_project_dir)},
+            json={
+                "preset": "enterprise",
+                "min_quality_threshold": 88,
+                "allowed_cicd_platforms": ["github", "gitlab"],
+                "required_hosts": ["codex-cli", "claude-code"],
+                "enforce_required_hosts_ready": True,
+                "min_required_host_score": 86,
+            },
+        )
+        assert update_resp.status_code == 200
+        updated_payload = update_resp.json()
+        assert updated_payload["min_quality_threshold"] == 88
+        assert updated_payload["allowed_cicd_platforms"] == ["github", "gitlab"]
+        assert updated_payload["require_host_profile"] is True
+        assert set(updated_payload["required_hosts"]) == {"codex-cli", "claude-code"}
+        assert updated_payload["enforce_required_hosts_ready"] is True
+        assert updated_payload["min_required_host_score"] == 86
+        assert updated_payload["policy_exists"] is True
+
+        policy_path = temp_project_dir / ".super-dev" / "policy.yaml"
+        assert policy_path.exists()
+
+        get_after_resp = client.get(
+            "/api/policy",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert get_after_resp.status_code == 200
+        get_after_payload = get_after_resp.json()
+        assert get_after_payload["min_quality_threshold"] == 88
+        assert set(get_after_payload["required_hosts"]) == {"codex-cli", "claude-code"}
+
+    def test_policy_update_rejects_invalid_values(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+        invalid_threshold = client.put(
+            "/api/policy",
+            params={"project_dir": str(temp_project_dir)},
+            json={"min_quality_threshold": 101},
+        )
+        assert invalid_threshold.status_code == 400
+
+        invalid_cicd = client.put(
+            "/api/policy",
+            params={"project_dir": str(temp_project_dir)},
+            json={"allowed_cicd_platforms": ["github", "unknown"]},
+        )
+        assert invalid_cicd.status_code == 400
+
+        invalid_host = client.put(
+            "/api/policy",
+            params={"project_dir": str(temp_project_dir)},
+            json={"required_hosts": ["codex-cli", "not-a-host"]},
+        )
+        assert invalid_host.status_code == 400
+
+        invalid_required_score = client.put(
+            "/api/policy",
+            params={"project_dir": str(temp_project_dir)},
+            json={"min_required_host_score": 101},
+        )
+        assert invalid_required_score.status_code == 400
+
+        invalid_preset = client.put(
+            "/api/policy",
+            params={"project_dir": str(temp_project_dir)},
+            json={"preset": "not-exists"},
+        )
+        assert invalid_preset.status_code == 400
 
     def test_workflow_run_and_status(self, temp_project_dir: Path, monkeypatch):
         client = TestClient(web_api.app)
@@ -134,6 +229,7 @@ class TestWebAPI:
             observed["frontend"] = context.user_input.get("frontend")
             observed["backend"] = context.user_input.get("backend")
             observed["domain"] = context.user_input.get("domain")
+            observed["language_preferences"] = context.user_input.get("language_preferences")
             observed["cicd"] = context.user_input.get("cicd")
             return {
                 Phase.DISCOVERY: PhaseResult(
@@ -157,6 +253,7 @@ class TestWebAPI:
                 "frontend": "vue",
                 "backend": "python",
                 "domain": "medical",
+                "language_preferences": ["python", "typescript", "rust"],
                 "cicd": "gitlab",
             },
         )
@@ -168,6 +265,7 @@ class TestWebAPI:
             "frontend": "vue",
             "backend": "python",
             "domain": "medical",
+            "language_preferences": ["python", "typescript", "rust"],
             "cicd": "gitlab",
         }
 
@@ -245,6 +343,21 @@ class TestWebAPI:
             json={"phases": ["not-a-phase"]},
         )
         assert run_resp.status_code == 400
+
+    def test_init_rejects_invalid_host_compatibility_threshold(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+        resp = client.post(
+            "/api/init",
+            params={"project_dir": str(temp_project_dir)},
+            json={
+                "name": "api-invalid-threshold",
+                "platform": "web",
+                "frontend": "react",
+                "backend": "node",
+                "host_compatibility_min_score": 120,
+            },
+        )
+        assert resp.status_code == 400
 
     def test_workflow_status_not_found(self):
         client = TestClient(web_api.app)
@@ -512,6 +625,89 @@ class TestWebAPI:
         payload = resp.json()
         ids = {item["id"] for item in payload["platforms"]}
         assert {"all", "github", "gitlab", "jenkins", "azure", "bitbucket"}.issubset(ids)
+
+    def test_catalogs_endpoint(self):
+        client = TestClient(web_api.app)
+        resp = client.get("/api/catalogs")
+        assert resp.status_code == 200
+        payload = resp.json()
+
+        platform_ids = {item["id"] for item in payload["platforms"]}
+        assert {"web", "mobile", "wechat", "desktop"}.issubset(platform_ids)
+
+        frontend_ids = {item["id"] for item in payload["frontends"]}
+        assert {"react", "vue", "angular", "svelte", "none"}.issubset(frontend_ids)
+
+        backend_ids = {item["id"] for item in payload["backends"]}
+        assert {"node", "python", "rust", "csharp", "dart", "none"}.issubset(backend_ids)
+
+        domain_ids = {item["id"] for item in payload["domains"]}
+        assert {"", "fintech", "auth", "content", "saas"}.issubset(domain_ids)
+
+        cicd_platform_ids = {item["id"] for item in payload["cicd_platforms"]}
+        assert {"all", "github", "gitlab", "jenkins", "azure", "bitbucket"}.issubset(cicd_platform_ids)
+
+        host_tool_ids = {item["id"] for item in payload["host_tools"]}
+        assert {
+            "claude-code",
+            "codex-cli",
+            "gemini-cli",
+            "kimi-cli",
+            "kiro-cli",
+            "qoder-cli",
+            "qoder",
+        }.issubset(host_tool_ids)
+        claude_host = next(item for item in payload["host_tools"] if item["id"] == "claude-code")
+        assert claude_host["category"] == "cli"
+        assert ".claude/CLAUDE.md" in claude_host["integration_files"]
+        assert claude_host["slash_command_file"] == ".claude/commands/super-dev.md"
+        assert claude_host["commands"]["setup"].startswith("super-dev setup --host claude-code")
+
+        language_ids = {item["id"] for item in payload["languages"]}
+        assert {"python", "typescript", "rust", "sql", "assembly"}.issubset(language_ids)
+
+    def test_hosts_doctor_endpoint(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+        resp = client.get(
+            "/api/hosts/doctor",
+            params={
+                "project_dir": str(temp_project_dir),
+                "host": "claude-code",
+            },
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["status"] == "success"
+        assert payload["selected_targets"] == ["claude-code"]
+        assert "report" in payload
+        assert "compatibility" in payload
+        host = payload["report"]["hosts"]["claude-code"]
+        assert host["ready"] is False
+        assert {"integrate", "skill", "slash"}.issubset(set(host["missing"]))
+
+    def test_hosts_doctor_endpoint_ready_after_files_present(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+        (temp_project_dir / ".claude" / "CLAUDE.md").parent.mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / ".claude" / "CLAUDE.md").write_text("ok", encoding="utf-8")
+        (temp_project_dir / ".claude" / "commands").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / ".claude" / "commands" / "super-dev.md").write_text("ok", encoding="utf-8")
+        (temp_project_dir / ".claude" / "skills" / "super-dev-core").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / ".claude" / "skills" / "super-dev-core" / "SKILL.md").write_text(
+            "# skill",
+            encoding="utf-8",
+        )
+
+        resp = client.get(
+            "/api/hosts/doctor",
+            params={
+                "project_dir": str(temp_project_dir),
+                "host": "claude-code",
+            },
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["report"]["hosts"]["claude-code"]["ready"] is True
+        assert payload["compatibility"]["hosts"]["claude-code"]["score"] == 100.0
 
     def test_deploy_precheck_github(self, temp_project_dir: Path, monkeypatch):
         client = TestClient(web_api.app)

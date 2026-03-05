@@ -10,6 +10,8 @@
 from .cicd import CICDGenerator
 from .delivery import DeliveryPackager
 from .migration import DatabaseType, MigrationGenerator, ORMType
+from .rehearsal import LaunchRehearsalGenerator
+from .rehearsal_runner import LaunchRehearsalRunner
 
 __all__ = [
     "CICDGenerator",
@@ -17,4 +19,6 @@ __all__ = [
     "MigrationGenerator",
     "DatabaseType",
     "ORMType",
+    "LaunchRehearsalGenerator",
+    "LaunchRehearsalRunner",
 ]

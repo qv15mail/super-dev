@@ -138,14 +138,14 @@ class MigrationGenerator:
         """从 Spec 规范加载实体定义"""
         entities = []
 
-        # 1) 尝试从当前规范读取
+        # 1. 尝试从当前规范读取
         spec_dir = self.project_dir / ".super-dev" / "specs"
         if spec_dir.exists():
             for spec_file in spec_dir.rglob("spec.md"):
                 content = spec_file.read_text(encoding='utf-8')
                 entities.extend(self._parse_entities_from_spec(content))
 
-        # 2) 尝试从变更提案规范读取（pipeline 常见路径）
+        # 2. 尝试从变更提案规范读取（pipeline 常见路径）
         changes_dir = self.project_dir / ".super-dev" / "changes"
         change_spec_files: list[Path] = []
         if changes_dir.exists():
@@ -154,13 +154,13 @@ class MigrationGenerator:
                 content = spec_file.read_text(encoding='utf-8')
                 entities.extend(self._parse_entities_from_spec(content))
 
-        # 3) 没有显式实体定义时，按模块线索推断（优先于默认模板）
+        # 3. 没有显式实体定义时，按模块线索推断（优先于默认模板）
         if not entities:
             module_hints = self._collect_module_hints(change_spec_files)
             if module_hints:
                 entities = self._generate_entities_from_modules(module_hints)
 
-        # 4) 最后兜底默认实体
+        # 4. 最后兜底默认实体
         if not entities:
             entities = self._generate_default_entities()
 

@@ -8,9 +8,11 @@
 """
 
 import asyncio
+import glob
 import json
 import os
 import re
+import shutil
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,6 +26,21 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from super_dev import __description__, __version__
+from super_dev.catalogs import (
+    BACKEND_TEMPLATE_CATALOG,
+    CICD_PLATFORM_CATALOG,
+    CICD_PLATFORM_IDS,
+    CICD_PLATFORM_TARGET_IDS,
+    DOMAIN_CATALOG,
+    HOST_COMMAND_CANDIDATES,
+    HOST_PATH_PATTERNS,
+    HOST_TOOL_CATALOG,
+    HOST_TOOL_CATEGORY_MAP,
+    LANGUAGE_PREFERENCE_CATALOG,
+    PIPELINE_FRONTEND_TEMPLATE_CATALOG,
+    PLATFORM_CATALOG,
+)
 from super_dev.config import ConfigManager
 from super_dev.deployers import CICDGenerator
 from super_dev.experts import (
@@ -35,7 +52,10 @@ from super_dev.experts import (
 from super_dev.experts import (
     list_experts as list_expert_catalog,
 )
+from super_dev.integrations.manager import IntegrationManager
 from super_dev.orchestrator import Phase, WorkflowContext, WorkflowEngine
+from super_dev.policy import PipelinePolicy, PipelinePolicyManager
+from super_dev.skills import SkillManager
 
 # ==================== 数据模型 ====================
 
@@ -47,7 +67,12 @@ class ProjectInitRequest(BaseModel):
     frontend: str = "react"
     backend: str = "node"
     domain: str = ""
+    language_preferences: list[str] = []
     quality_gate: int = 80
+    host_compatibility_min_score: int = 80
+    host_compatibility_min_ready_hosts: int = 1
+    host_profile_targets: list[str] = []
+    host_profile_enforce_selected: bool = False
 
 
 class ProjectConfigResponse(BaseModel):
@@ -59,7 +84,12 @@ class ProjectConfigResponse(BaseModel):
     frontend: str
     backend: str
     domain: str
+    language_preferences: list[str]
     quality_gate: int
+    host_compatibility_min_score: int
+    host_compatibility_min_ready_hosts: int
+    host_profile_targets: list[str]
+    host_profile_enforce_selected: bool
     phases: list[str]
     experts: list[str]
 
@@ -68,6 +98,11 @@ class WorkflowRunRequest(BaseModel):
     """工作流运行请求"""
     phases: list[str] | None = None
     quality_gate: int | None = None
+    host_compatibility_min_score: int | None = None
+    host_compatibility_min_ready_hosts: int | None = None
+    host_profile_targets: list[str] | None = None
+    host_profile_enforce_selected: bool | None = None
+    language_preferences: list[str] | None = None
     name: str | None = None
     description: str | None = None
     platform: str | None = None
@@ -112,12 +147,37 @@ class DeployRemediationExportRequest(BaseModel):
     checklist_file_name: str | None = None
 
 
+class PipelinePolicyResponse(BaseModel):
+    require_redteam: bool
+    require_quality_gate: bool
+    min_quality_threshold: int
+    allowed_cicd_platforms: list[str]
+    require_host_profile: bool
+    required_hosts: list[str]
+    enforce_required_hosts_ready: bool
+    min_required_host_score: int
+    policy_file: str
+    policy_exists: bool
+
+
+class PipelinePolicyUpdateRequest(BaseModel):
+    preset: str | None = None
+    require_redteam: bool | None = None
+    require_quality_gate: bool | None = None
+    min_quality_threshold: int | None = None
+    allowed_cicd_platforms: list[str] | None = None
+    require_host_profile: bool | None = None
+    required_hosts: list[str] | None = None
+    enforce_required_hosts_ready: bool | None = None
+    min_required_host_score: int | None = None
+
+
 # ==================== FastAPI 应用 ====================
 
 app = FastAPI(
     title="Super Dev API",
-    description="顶级 AI 开发战队 - Web API",
-    version="2.0.1"
+    description=f"{__description__} - Web API",
+    version=__version__
 )
 
 # CORS 配置
@@ -135,7 +195,9 @@ _RUN_STORE: dict[str, dict[str, Any]] = {}
 _RUN_STORE_LOCK = Lock()
 
 CICDPlatform = Literal["github", "gitlab", "jenkins", "azure", "bitbucket", "all"]
-VALID_CICD_PLATFORMS: set[str] = {"github", "gitlab", "jenkins", "azure", "bitbucket", "all"}
+VALID_CICD_PLATFORMS: set[str] = set(CICD_PLATFORM_IDS)
+SUPPORTED_BACKEND_TEMPLATES: list[dict[str, str]] = BACKEND_TEMPLATE_CATALOG
+SUPPORTED_LANGUAGE_PREFERENCES: list[dict[str, str]] = LANGUAGE_PREFERENCE_CATALOG
 
 _DEPLOY_CICD_FILE_MAP: dict[str, list[str]] = {
     "github": [".github/workflows/ci.yml", ".github/workflows/cd.yml"],
@@ -353,6 +415,243 @@ def _sanitize_project_name(name: str) -> str:
     return sanitized.lower() or "my-project"
 
 
+def _default_host_commands(host_id: str) -> dict[str, str]:
+    return {
+        "setup": f"super-dev setup --host {host_id} --force --yes",
+        "onboard": f"super-dev onboard --host {host_id} --force --yes",
+        "doctor": f"super-dev doctor --host {host_id} --repair --force",
+        "run": 'super-dev "你的需求"',
+        "slash": '/super-dev "你的需求"',
+    }
+
+
+def _build_host_tool_catalog_payload() -> list[dict[str, Any]]:
+    payload: list[dict[str, Any]] = []
+    for item in HOST_TOOL_CATALOG:
+        host_id = item["id"]
+        target = IntegrationManager.TARGETS.get(host_id)
+        payload.append(
+            {
+                "id": host_id,
+                "name": item["name"],
+                "category": HOST_TOOL_CATEGORY_MAP.get(host_id, "ide"),
+                "integration_files": list(target.files) if target else [],
+                "slash_command_file": IntegrationManager.SLASH_COMMAND_FILES.get(host_id, ""),
+                "commands": _default_host_commands(host_id),
+            }
+        )
+    return payload
+
+
+def _detect_host_targets(available_targets: list[str]) -> tuple[list[str], dict[str, list[str]]]:
+    detected: list[str] = []
+    details: dict[str, list[str]] = {}
+    for target in available_targets:
+        reasons: list[str] = []
+        for command in HOST_COMMAND_CANDIDATES.get(target, []):
+            if shutil.which(command):
+                reasons.append(f"cmd:{command}")
+                break
+
+        for pattern in HOST_PATH_PATTERNS.get(target, []):
+            expanded = os.path.expanduser(pattern)
+            if glob.glob(expanded):
+                reasons.append(f"path:{pattern}")
+                break
+
+        if reasons:
+            detected.append(target)
+            details[target] = reasons
+    return detected, details
+
+
+def _collect_host_diagnostics(
+    *,
+    project_dir: Path,
+    targets: list[str],
+    skill_name: str,
+    check_integrate: bool,
+    check_skill: bool,
+    check_slash: bool,
+) -> dict[str, Any]:
+    integration_targets = IntegrationManager.TARGETS
+    slash_map = IntegrationManager.SLASH_COMMAND_FILES
+    skill_paths = SkillManager.TARGET_PATHS
+
+    report: dict[str, Any] = {"hosts": {}, "overall_ready": True}
+    for target in targets:
+        host_report: dict[str, Any] = {
+            "ready": True,
+            "checks": {},
+            "missing": [],
+            "suggestions": [],
+        }
+
+        if check_integrate:
+            integration_target = integration_targets.get(target)
+            integrate_files = [project_dir / item for item in integration_target.files] if integration_target else []
+            integrate_ok = all(path.exists() for path in integrate_files)
+            host_report["checks"]["integrate"] = {
+                "ok": integrate_ok,
+                "files": [str(item) for item in integrate_files],
+            }
+            if not integrate_ok:
+                host_report["ready"] = False
+                host_report["missing"].append("integrate")
+                host_report["suggestions"].append(
+                    f"super-dev integrate setup --target {target} --force"
+                )
+
+        if check_skill:
+            skill_root = skill_paths.get(target)
+            skill_file = project_dir / skill_root / skill_name / "SKILL.md" if skill_root else None
+            skill_path = str(skill_file) if skill_file else ""
+            skill_ok = skill_file.exists() if skill_file else False
+            host_report["checks"]["skill"] = {"ok": skill_ok, "file": skill_path}
+            if not skill_ok:
+                host_report["ready"] = False
+                host_report["missing"].append("skill")
+                host_report["suggestions"].append(
+                    f"super-dev skill install super-dev --target {target} --name {skill_name} --force"
+                )
+
+        if check_slash:
+            slash_relative = slash_map.get(target)
+            slash_file = project_dir / slash_relative if slash_relative else None
+            slash_ok = slash_file.exists() if slash_file else False
+            host_report["checks"]["slash"] = {
+                "ok": slash_ok,
+                "file": str(slash_file) if slash_file else "",
+            }
+            if not slash_ok:
+                host_report["ready"] = False
+                host_report["missing"].append("slash")
+                host_report["suggestions"].append(
+                    f"super-dev onboard --host {target} --skip-integrate --skip-skill --force --yes"
+                )
+
+        report["hosts"][target] = host_report
+        if not host_report["ready"]:
+            report["overall_ready"] = False
+
+    return report
+
+
+def _build_host_compatibility_summary(
+    *,
+    report: dict[str, Any],
+    targets: list[str],
+    check_integrate: bool,
+    check_skill: bool,
+    check_slash: bool,
+) -> dict[str, Any]:
+    enabled_checks = []
+    if check_integrate:
+        enabled_checks.append("integrate")
+    if check_skill:
+        enabled_checks.append("skill")
+    if check_slash:
+        enabled_checks.append("slash")
+
+    per_host: dict[str, dict[str, Any]] = {}
+    total_passed = 0
+    total_possible = 0
+    ready_hosts = 0
+    hosts = report.get("hosts", {})
+    if not isinstance(hosts, dict):
+        hosts = {}
+
+    for target in targets:
+        host = hosts.get(target, {})
+        checks = host.get("checks", {}) if isinstance(host, dict) else {}
+        if not isinstance(checks, dict):
+            checks = {}
+        passed = 0
+        possible = len(enabled_checks)
+        for check_name in enabled_checks:
+            check_value = checks.get(check_name, {})
+            if isinstance(check_value, dict) and bool(check_value.get("ok", False)):
+                passed += 1
+        score = round((passed / possible) * 100, 2) if possible > 0 else 100.0
+        per_host[target] = {
+            "score": score,
+            "passed": passed,
+            "possible": possible,
+            "ready": bool(host.get("ready", False)) if isinstance(host, dict) else False,
+        }
+        total_passed += passed
+        total_possible += possible
+        if bool(host.get("ready", False)) if isinstance(host, dict) else False:
+            ready_hosts += 1
+
+    overall_score = round((total_passed / total_possible) * 100, 2) if total_possible > 0 else 100.0
+    return {
+        "overall_score": overall_score,
+        "ready_hosts": ready_hosts,
+        "total_hosts": len(targets),
+        "enabled_checks": enabled_checks,
+        "hosts": per_host,
+    }
+
+
+def _repair_host_diagnostics(
+    *,
+    project_dir: Path,
+    report: dict[str, Any],
+    skill_name: str,
+    force: bool,
+    check_integrate: bool,
+    check_skill: bool,
+    check_slash: bool,
+) -> dict[str, dict[str, str]]:
+    integration_manager = IntegrationManager(project_dir)
+    skill_manager = SkillManager(project_dir)
+    actions: dict[str, dict[str, str]] = {}
+
+    hosts = report.get("hosts", {})
+    if not isinstance(hosts, dict):
+        return actions
+
+    for target, host in hosts.items():
+        if not isinstance(target, str) or not isinstance(host, dict):
+            continue
+        missing = host.get("missing", [])
+        if not isinstance(missing, list):
+            continue
+
+        host_actions: dict[str, str] = {}
+        try:
+            if check_integrate and "integrate" in missing:
+                integration_manager.setup(target=target, force=force)
+                host_actions["integrate"] = "fixed"
+        except Exception as exc:
+            host_actions["integrate"] = f"failed: {exc}"
+
+        try:
+            if check_skill and "skill" in missing:
+                skill_manager.install(
+                    source="super-dev",
+                    target=target,
+                    name=skill_name,
+                    force=force,
+                )
+                host_actions["skill"] = "fixed"
+        except Exception as exc:
+            host_actions["skill"] = f"failed: {exc}"
+
+        try:
+            if check_slash and "slash" in missing:
+                integration_manager.setup_slash_command(target=target, force=force)
+                host_actions["slash"] = "fixed"
+        except Exception as exc:
+            host_actions["slash"] = f"failed: {exc}"
+
+        if host_actions:
+            actions[target] = host_actions
+
+    return actions
+
+
 def _resolve_deploy_targets(cicd_platform: str, include_runtime: bool) -> list[str]:
     selected = list(_DEPLOY_CICD_FILE_MAP[cicd_platform])
     if include_runtime:
@@ -370,7 +669,7 @@ def _resolve_deploy_env_hints(cicd_platform: str) -> list[dict[str, str]]:
     if cicd_platform == "all":
         merged: list[dict[str, str]] = []
         seen = set()
-        for platform in ("github", "gitlab", "azure", "bitbucket"):
+        for platform in CICD_PLATFORM_TARGET_IDS:
             for item in _DEPLOY_ENV_HINTS.get(platform, []):
                 key = item["name"]
                 if key in seen:
@@ -385,7 +684,7 @@ def _resolve_deploy_manual_hints(cicd_platform: str) -> list[str]:
     if cicd_platform == "all":
         merged: list[str] = []
         seen = set()
-        for platform in ("jenkins",):
+        for platform in CICD_PLATFORM_TARGET_IDS:
             for item in _DEPLOY_MANUAL_HINTS.get(platform, []):
                 if item in seen:
                     continue
@@ -441,7 +740,7 @@ def _resolve_deploy_platform_guidance(cicd_platform: str) -> list[str]:
     if cicd_platform == "all":
         merged: list[str] = []
         seen = set()
-        for platform in ("github", "gitlab", "jenkins", "azure", "bitbucket"):
+        for platform in CICD_PLATFORM_TARGET_IDS:
             for item in _DEPLOY_PLATFORM_GUIDANCE.get(platform, []):
                 if item in seen:
                     continue
@@ -584,7 +883,7 @@ def _generate_deploy_remediation_files(
     if should_split:
         platform_dir = output_dir / "platforms"
         platform_dir.mkdir(parents=True, exist_ok=True)
-        for platform in ("github", "gitlab", "jenkins", "azure", "bitbucket"):
+        for platform in CICD_PLATFORM_TARGET_IDS:
             platform_items = _collect_deploy_env_items(
                 cicd_platform=platform,
                 only_missing=only_missing,
@@ -638,12 +937,33 @@ def _generate_deploy_remediation_files(
     }
 
 
+def _normalize_string_list(values: list[str] | None) -> list[str]:
+    if values is None:
+        return []
+    return [str(item).strip() for item in values if str(item).strip()]
+
+
+def _build_policy_response(policy: PipelinePolicy, manager: PipelinePolicyManager) -> dict[str, Any]:
+    return {
+        "require_redteam": policy.require_redteam,
+        "require_quality_gate": policy.require_quality_gate,
+        "min_quality_threshold": policy.min_quality_threshold,
+        "allowed_cicd_platforms": policy.allowed_cicd_platforms,
+        "require_host_profile": policy.require_host_profile,
+        "required_hosts": policy.required_hosts,
+        "enforce_required_hosts_ready": policy.enforce_required_hosts_ready,
+        "min_required_host_score": policy.min_required_host_score,
+        "policy_file": str(manager.policy_path),
+        "policy_exists": manager.policy_path.exists(),
+    }
+
+
 # ==================== API 路由 ====================
 
 @app.get("/api/health")
 async def health_check():
     """健康检查"""
-    return {"status": "healthy", "version": "2.0.1"}
+    return {"status": "healthy", "version": __version__}
 
 
 @app.get("/api/config")
@@ -664,11 +984,137 @@ async def get_config(project_dir: str = ".") -> dict:
             "backend": config.backend,
             "database": config.database,
             "domain": config.domain,
+            "language_preferences": config.language_preferences,
             "quality_gate": config.quality_gate,
+            "host_compatibility_min_score": config.host_compatibility_min_score,
+            "host_compatibility_min_ready_hosts": config.host_compatibility_min_ready_hosts,
+            "host_profile_targets": config.host_profile_targets,
+            "host_profile_enforce_selected": config.host_profile_enforce_selected,
             "phases": config.phases,
             "experts": config.experts,
             "output_dir": config.output_dir,
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/policy", response_model=PipelinePolicyResponse)
+async def get_policy(project_dir: str = ".") -> dict[str, Any]:
+    """获取 pipeline policy"""
+    try:
+        manager = PipelinePolicyManager(Path(project_dir))
+        policy = manager.load()
+        return _build_policy_response(policy=policy, manager=manager)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/policy/presets")
+async def list_policy_presets() -> dict[str, Any]:
+    """列出可用策略预设"""
+    return {
+        "presets": [
+            {
+                "id": "default",
+                "description": "默认策略（兼顾灵活性）",
+            },
+            {
+                "id": "balanced",
+                "description": "团队协作增强（要求 host profile）",
+            },
+            {
+                "id": "enterprise",
+                "description": "商业级强治理（required hosts + ready 校验）",
+            },
+        ]
+    }
+
+
+@app.put("/api/policy", response_model=PipelinePolicyResponse)
+async def update_policy(
+    request: PipelinePolicyUpdateRequest,
+    project_dir: str = ".",
+) -> dict[str, Any]:
+    """更新 pipeline policy"""
+    try:
+        manager = PipelinePolicyManager(Path(project_dir))
+        preset_name = request.preset.strip().lower() if isinstance(request.preset, str) else ""
+        if preset_name:
+            current = manager.build_preset(preset_name)
+        else:
+            current = manager.load()
+
+        min_quality_threshold = current.min_quality_threshold
+        if request.min_quality_threshold is not None:
+            if request.min_quality_threshold < 0 or request.min_quality_threshold > 100:
+                raise HTTPException(status_code=400, detail="min_quality_threshold 必须在 0-100 之间")
+            min_quality_threshold = request.min_quality_threshold
+
+        allowed_cicd_platforms = current.allowed_cicd_platforms
+        if request.allowed_cicd_platforms is not None:
+            normalized = _normalize_string_list(request.allowed_cicd_platforms)
+            if not normalized:
+                raise HTTPException(status_code=400, detail="allowed_cicd_platforms 不能为空")
+            invalid = [item for item in normalized if item not in VALID_CICD_PLATFORMS]
+            if invalid:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"无效 CI/CD 平台: {', '.join(invalid)}",
+                )
+            allowed_cicd_platforms = normalized
+
+        required_hosts = current.required_hosts
+        if request.required_hosts is not None:
+            normalized_hosts = _normalize_string_list(request.required_hosts)
+            allowed_hosts = {item["id"] for item in HOST_TOOL_CATALOG}
+            invalid_hosts = [item for item in normalized_hosts if item not in allowed_hosts]
+            if invalid_hosts:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"无效宿主: {', '.join(invalid_hosts)}",
+                )
+            required_hosts = normalized_hosts
+
+        min_required_host_score = current.min_required_host_score
+        if request.min_required_host_score is not None:
+            if request.min_required_host_score < 0 or request.min_required_host_score > 100:
+                raise HTTPException(status_code=400, detail="min_required_host_score 必须在 0-100 之间")
+            min_required_host_score = request.min_required_host_score
+
+        updated = PipelinePolicy(
+            require_redteam=(
+                request.require_redteam
+                if request.require_redteam is not None
+                else current.require_redteam
+            ),
+            require_quality_gate=(
+                request.require_quality_gate
+                if request.require_quality_gate is not None
+                else current.require_quality_gate
+            ),
+            min_quality_threshold=min_quality_threshold,
+            allowed_cicd_platforms=allowed_cicd_platforms,
+            require_host_profile=(
+                request.require_host_profile
+                if request.require_host_profile is not None
+                else current.require_host_profile
+            ),
+            required_hosts=required_hosts,
+            enforce_required_hosts_ready=(
+                request.enforce_required_hosts_ready
+                if request.enforce_required_hosts_ready is not None
+                else current.enforce_required_hosts_ready
+            ),
+            min_required_host_score=min_required_host_score,
+        )
+        manager.save(updated)
+        return _build_policy_response(policy=updated, manager=manager)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -688,7 +1134,12 @@ async def init_project(request: ProjectInitRequest, project_dir: str = ".") -> d
             frontend=request.frontend,
             backend=request.backend,
             domain=request.domain,
-            quality_gate=request.quality_gate
+            language_preferences=request.language_preferences,
+            quality_gate=request.quality_gate,
+            host_compatibility_min_score=request.host_compatibility_min_score,
+            host_compatibility_min_ready_hosts=request.host_compatibility_min_ready_hosts,
+            host_profile_targets=request.host_profile_targets,
+            host_profile_enforce_selected=request.host_profile_enforce_selected,
         )
 
         return {
@@ -703,6 +1154,8 @@ async def init_project(request: ProjectInitRequest, project_dir: str = ".") -> d
         }
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -722,6 +1175,8 @@ async def update_config(
         return {"status": "success", "config": config.__dict__}
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -739,9 +1194,22 @@ async def run_workflow(
         if not manager.exists():
             raise HTTPException(status_code=404, detail="项目未初始化")
 
-        # 更新质量门禁
+        # 更新门禁配置
+        workflow_updates: dict[str, Any] = {}
         if request.quality_gate is not None:
-            manager.update(quality_gate=request.quality_gate)
+            workflow_updates["quality_gate"] = request.quality_gate
+        if request.host_compatibility_min_score is not None:
+            workflow_updates["host_compatibility_min_score"] = request.host_compatibility_min_score
+        if request.host_compatibility_min_ready_hosts is not None:
+            workflow_updates["host_compatibility_min_ready_hosts"] = request.host_compatibility_min_ready_hosts
+        if request.host_profile_targets is not None:
+            workflow_updates["host_profile_targets"] = request.host_profile_targets
+        if request.host_profile_enforce_selected is not None:
+            workflow_updates["host_profile_enforce_selected"] = request.host_profile_enforce_selected
+        if request.language_preferences is not None:
+            workflow_updates["language_preferences"] = request.language_preferences
+        if workflow_updates:
+            manager.update(**workflow_updates)
         config = manager.config
 
         # 解析阶段
@@ -819,10 +1287,35 @@ async def run_workflow(
                         "frontend": request.frontend or config.frontend,
                         "backend": request.backend or config.backend,
                         "domain": request.domain if request.domain is not None else config.domain,
+                        "language_preferences": (
+                            request.language_preferences
+                            if request.language_preferences is not None
+                            else config.language_preferences
+                        ),
                         "cicd": request.cicd or "github",
                         "orm": request.orm,
                         "offline": request.offline,
                         "quality_threshold": request.quality_gate,
+                        "host_compatibility_min_score": (
+                            request.host_compatibility_min_score
+                            if request.host_compatibility_min_score is not None
+                            else config.host_compatibility_min_score
+                        ),
+                        "host_compatibility_min_ready_hosts": (
+                            request.host_compatibility_min_ready_hosts
+                            if request.host_compatibility_min_ready_hosts is not None
+                            else config.host_compatibility_min_ready_hosts
+                        ),
+                        "host_profile_targets": (
+                            request.host_profile_targets
+                            if request.host_profile_targets is not None
+                            else config.host_profile_targets
+                        ),
+                        "host_profile_enforce_selected": (
+                            request.host_profile_enforce_selected
+                            if request.host_profile_enforce_selected is not None
+                            else config.host_profile_enforce_selected
+                        ),
                     },
                 )
                 results = await engine.run(
@@ -889,6 +1382,8 @@ async def run_workflow(
 
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1099,19 +1594,113 @@ async def list_phases() -> dict:
     return {"phases": phases}
 
 
+@app.get("/api/catalogs")
+async def get_catalogs() -> dict:
+    """返回前端初始化和工作流表单所需的选项目录。"""
+    return {
+        "platforms": PLATFORM_CATALOG,
+        "frontends": PIPELINE_FRONTEND_TEMPLATE_CATALOG,
+        "backends": SUPPORTED_BACKEND_TEMPLATES,
+        "domains": DOMAIN_CATALOG,
+        "cicd_platforms": CICD_PLATFORM_CATALOG,
+        "host_tools": _build_host_tool_catalog_payload(),
+        "languages": SUPPORTED_LANGUAGE_PREFERENCES,
+    }
+
+
+@app.get("/api/hosts/doctor")
+async def doctor_hosts(
+    project_dir: str = ".",
+    host: str | None = None,
+    auto: bool = False,
+    skill_name: str = "super-dev-core",
+    skip_integrate: bool = False,
+    skip_skill: bool = False,
+    skip_slash: bool = False,
+    repair: bool = False,
+    force: bool = False,
+) -> dict:
+    """诊断宿主接入状态，并返回兼容性评分。"""
+    project_dir_path = Path(project_dir).resolve()
+    available_targets = [item.name for item in IntegrationManager(project_dir_path).list_targets()]
+    detected_targets, detected_meta = _detect_host_targets(available_targets)
+
+    if host:
+        if host not in available_targets:
+            raise HTTPException(status_code=400, detail=f"不支持的 host: {host}")
+        targets = [host]
+    elif auto:
+        targets = detected_targets or available_targets
+    else:
+        targets = available_targets
+
+    check_integrate = not skip_integrate
+    check_skill = not skip_skill
+    check_slash = not skip_slash
+
+    report = _collect_host_diagnostics(
+        project_dir=project_dir_path,
+        targets=targets,
+        skill_name=skill_name,
+        check_integrate=check_integrate,
+        check_skill=check_skill,
+        check_slash=check_slash,
+    )
+    compatibility = _build_host_compatibility_summary(
+        report=report,
+        targets=targets,
+        check_integrate=check_integrate,
+        check_skill=check_skill,
+        check_slash=check_slash,
+    )
+    repair_actions: dict[str, dict[str, str]] = {}
+    if repair:
+        repair_actions = _repair_host_diagnostics(
+            project_dir=project_dir_path,
+            report=report,
+            skill_name=skill_name,
+            force=force,
+            check_integrate=check_integrate,
+            check_skill=check_skill,
+            check_slash=check_slash,
+        )
+        report = _collect_host_diagnostics(
+            project_dir=project_dir_path,
+            targets=targets,
+            skill_name=skill_name,
+            check_integrate=check_integrate,
+            check_skill=check_skill,
+            check_slash=check_slash,
+        )
+        compatibility = _build_host_compatibility_summary(
+            report=report,
+            targets=targets,
+            check_integrate=check_integrate,
+            check_skill=check_skill,
+            check_slash=check_slash,
+        )
+
+    report["compatibility"] = compatibility
+    if repair:
+        report["repair_actions"] = repair_actions
+
+    return {
+        "status": "success",
+        "project_dir": str(project_dir_path),
+        "selected_targets": targets,
+        "detected_targets": detected_targets,
+        "detection_details": detected_meta,
+        "report": report,
+        "compatibility": compatibility,
+        "auto": auto,
+        "repair": repair,
+    }
+
+
 @app.get("/api/deploy/platforms")
 async def list_deploy_platforms() -> dict:
     """列出支持的 CI/CD 平台"""
-    return {
-        "platforms": [
-            {"id": "all", "name": "全部平台"},
-            {"id": "github", "name": "GitHub Actions"},
-            {"id": "gitlab", "name": "GitLab CI"},
-            {"id": "jenkins", "name": "Jenkins"},
-            {"id": "azure", "name": "Azure DevOps"},
-            {"id": "bitbucket", "name": "Bitbucket Pipelines"},
-        ]
-    }
+    return {"platforms": CICD_PLATFORM_CATALOG}
 
 
 @app.get("/api/deploy/precheck")
@@ -1121,8 +1710,7 @@ async def precheck_deploy_configs(
     project_dir: str = ".",
 ) -> dict:
     """部署生成前预检（变量与目标文件状态）。"""
-    valid_platforms = {"github", "gitlab", "jenkins", "azure", "bitbucket", "all"}
-    if cicd_platform not in valid_platforms:
+    if cicd_platform not in VALID_CICD_PLATFORMS:
         raise HTTPException(
             status_code=400,
             detail=f"不支持的 cicd_platform: {cicd_platform}",
@@ -1172,8 +1760,7 @@ async def get_deploy_remediation(
     only_missing: bool = True,
 ) -> dict:
     """获取部署修复建议（环境变量模板 + 平台操作指引）。"""
-    valid_platforms = {"github", "gitlab", "jenkins", "azure", "bitbucket", "all"}
-    if cicd_platform not in valid_platforms:
+    if cicd_platform not in VALID_CICD_PLATFORMS:
         raise HTTPException(
             status_code=400,
             detail=f"不支持的 cicd_platform: {cicd_platform}",
@@ -1200,8 +1787,7 @@ async def export_deploy_remediation(
     project_dir: str = ".",
 ) -> dict:
     """导出部署修复模板文件（env 示例 + checklist）。"""
-    valid_platforms = {"github", "gitlab", "jenkins", "azure", "bitbucket", "all"}
-    if request.cicd_platform not in valid_platforms:
+    if request.cicd_platform not in VALID_CICD_PLATFORMS:
         raise HTTPException(
             status_code=400,
             detail=f"不支持的 cicd_platform: {request.cicd_platform}",
@@ -1263,8 +1849,7 @@ async def download_deploy_remediation_archive(
     project_dir: str = ".",
 ) -> FileResponse:
     """生成并下载部署修复模板压缩包。"""
-    valid_platforms = {"github", "gitlab", "jenkins", "azure", "bitbucket", "all"}
-    if cicd_platform not in valid_platforms:
+    if cicd_platform not in VALID_CICD_PLATFORMS:
         raise HTTPException(
             status_code=400,
             detail=f"不支持的 cicd_platform: {cicd_platform}",

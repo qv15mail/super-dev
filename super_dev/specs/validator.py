@@ -3,7 +3,7 @@ Spec-Driven Development 验证器
 
 开发：Excellent（11964948@qq.com）
 功能：验证规格格式和结构
-作用：检查 spec.md 和 change 的格式是否符合 OpenSpec 标准
+作用：检查 spec.md 和 change 的格式是否符合规范标准
 创建时间：2025-12-30
 """
 

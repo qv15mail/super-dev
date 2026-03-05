@@ -20,8 +20,13 @@ class TestKnowledgeAugmenter:
         bundle = augmenter.augment("实现登录认证流程", domain="auth")
 
         assert bundle["original_requirement"] == "实现登录认证流程"
+        assert "generated_at" in bundle
+        assert "citations" in bundle
+        assert "metadata" in bundle
+        assert "web_stats" in bundle["metadata"]
         assert len(bundle["local_knowledge"]) >= 1
         assert "请结合以下上下文实现" in bundle["enriched_requirement"]
+        assert len(bundle["citations"]["local"]) >= 1
 
     def test_render_markdown(self, temp_project_dir: Path):
         augmenter = KnowledgeAugmenter(project_dir=temp_project_dir, web_enabled=False)
@@ -92,3 +97,81 @@ class TestKnowledgeAugmenter:
         assert len(bundle["web_knowledge"]) == 1
         assert bundle["web_knowledge"][0]["title"] == "DDGS Result"
         assert fallback_called["value"] is False
+
+    def test_save_bundle_cache_file(self, temp_project_dir: Path):
+        augmenter = KnowledgeAugmenter(project_dir=temp_project_dir, web_enabled=False)
+        bundle = augmenter.augment("实现登录认证流程", domain="auth")
+        output_dir = temp_project_dir / "output"
+        cache_file = augmenter.save_bundle(
+            bundle=bundle,
+            output_dir=output_dir,
+            project_name="demo",
+            requirement="实现登录认证流程",
+            domain="auth",
+        )
+        assert cache_file.exists()
+        content = cache_file.read_text(encoding="utf-8")
+        assert '"original_requirement": "实现登录认证流程"' in content
+        assert '"cache_signature"' in content
+
+    def test_load_cached_bundle_hit(self, temp_project_dir: Path):
+        augmenter = KnowledgeAugmenter(project_dir=temp_project_dir, web_enabled=False, cache_ttl_seconds=1800)
+        bundle = augmenter.augment("实现登录认证流程", domain="auth")
+        output_dir = temp_project_dir / "output"
+        augmenter.save_bundle(
+            bundle=bundle,
+            output_dir=output_dir,
+            project_name="demo",
+            requirement="实现登录认证流程",
+            domain="auth",
+        )
+
+        cached = augmenter.load_cached_bundle(
+            output_dir=output_dir,
+            project_name="demo",
+            requirement="实现登录认证流程",
+            domain="auth",
+        )
+        assert cached is not None
+        assert cached.get("original_requirement") == "实现登录认证流程"
+
+    def test_web_items_filtered_by_allowed_domains(self, temp_project_dir: Path, monkeypatch):
+        augmenter = KnowledgeAugmenter(
+            project_dir=temp_project_dir,
+            web_enabled=True,
+            allowed_web_domains=["openai.com"],
+        )
+
+        monkeypatch.setattr(
+            augmenter,
+            "_collect_web_items_ddgs",
+            lambda query, max_results: [
+                KnowledgeItem(
+                    source="web",
+                    title="OpenAI API",
+                    snippet="official docs",
+                    link="https://platform.openai.com/docs/overview",
+                    score=3.0,
+                ),
+                KnowledgeItem(
+                    source="web",
+                    title="Random Blog",
+                    snippet="community post",
+                    link="https://example.org/blog",
+                    score=2.0,
+                ),
+            ],
+        )
+        monkeypatch.setattr(
+            augmenter,
+            "_collect_web_items_duckduckgo",
+            lambda query, max_results: [],
+        )
+
+        bundle = augmenter.augment("如何实现 agent orchestration", domain="ai")
+        web_items = bundle.get("web_knowledge", [])
+        web_stats = (bundle.get("metadata") or {}).get("web_stats", {})
+
+        assert len(web_items) == 1
+        assert web_items[0]["title"] == "OpenAI API"
+        assert web_stats.get("filtered_out_count") == 1

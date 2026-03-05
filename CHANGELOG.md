@@ -3,7 +3,7 @@
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.1.html).
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
@@ -23,27 +23,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.1
 - Added dedicated CI `Platform Compatibility` job for multi-target integration visibility.
 - Tag-based CD publishing now hard-fails when `PYPI_API_TOKEN` is missing (no silent skip).
 
-## [2.0.1] - 2026-03-01
+## [2.0.2] - 2026-03-05
 
 ### Added
 
-- New release preflight script: `scripts/preflight.sh`.
-- New release operations document: `docs/RELEASE_RUNBOOK.md`.
-- Deployment remediation export templates and checklist generation in pipeline.
+- `super-dev install` command added for PyPI users (host installation wizard in CLI).
+- `super-dev` without arguments now enters installer guide by default.
+- Interactive installer (`install.sh`) upgraded with multi-select host onboarding.
+- Policy presets (`default` / `balanced` / `enterprise`) with stronger governance controls.
+- Required-host readiness gate (`enforce_required_hosts_ready` + `min_required_host_score`).
+- Pipeline contract artifacts (`*-pipeline-contract.json/md`) integrated into delivery flow.
 
 ### Changed
 
-- Unified product version to `2.0.1` across package metadata, runtime metadata, API version, docs, and examples.
-- Rewritten `README.md` and `README_EN.md` to match current real capabilities.
-- Rewritten publishing/install/quickstart docs to align with current CLI behavior.
-- Pipeline documentation aligned to actual Stage `0`~`11` execution.
+- Unified product version to `2.0.2` across package metadata, runtime metadata, generated artifacts, and docs.
+- Rewritten `README.md` with updated onboarding, installation, host-governance, and usage flows.
+- Updated workflow/install docs for new default behavior (`super-dev` -> installer guide).
+- Host support matrix consistency checks added (catalog/integration/skill alignment).
 
 ### Fixed
 
-- End-to-end static quality cleanup: Ruff and mypy full-pass baseline.
-- Runtime workflow quality-score compatibility for `WorkflowContext.config` variants.
-- API run-state sanitization and type-stable serialization.
-- Multiple quality gate and orchestration edge cases in production flow.
+- Fixed command routing edge case where `policy` could be misinterpreted as direct requirement input.
+- Improved type stability and strict coercion in host-compatibility quality gate paths.
+- Reduced red-team false positives by ignoring vulnerability patterns in test fixture files.
+- Added stronger regression coverage for installer, policy, host profile, and contract reporting.
 
 ### Security
 

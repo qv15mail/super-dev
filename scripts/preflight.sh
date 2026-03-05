@@ -9,6 +9,7 @@ ALLOW_DIRTY=0
 SKIP_BENCHMARK=0
 SKIP_PACKAGE=0
 SKIP_DELIVERY_SMOKE=0
+SKIP_HOST_COMPAT_GATE=0
 
 for arg in "$@"; do
     case "$arg" in
@@ -24,9 +25,12 @@ for arg in "$@"; do
         --skip-delivery-smoke)
             SKIP_DELIVERY_SMOKE=1
             ;;
+        --skip-host-compat-gate)
+            SKIP_HOST_COMPAT_GATE=1
+            ;;
         *)
             echo "Unknown argument: $arg"
-            echo "Usage: ./scripts/preflight.sh [--allow-dirty] [--skip-benchmark] [--skip-package] [--skip-delivery-smoke]"
+            echo "Usage: ./scripts/preflight.sh [--allow-dirty] [--skip-benchmark] [--skip-package] [--skip-delivery-smoke] [--skip-host-compat-gate]"
             exit 2
             ;;
     esac
@@ -94,6 +98,13 @@ if [[ "$SKIP_DELIVERY_SMOKE" -ne 1 ]]; then
     run_check "delivery-smoke" "$PYTHON_BIN scripts/check_delivery_ready.py --smoke --project-dir \"$ROOT_DIR\""
 else
     echo "[WARN] delivery smoke skipped by --skip-delivery-smoke" | tee -a "$SUMMARY_FILE"
+fi
+
+if [[ "$SKIP_HOST_COMPAT_GATE" -ne 1 ]]; then
+    run_check "host-compat-detect" "$PYTHON_BIN -m super_dev.cli detect --auto --json >/dev/null"
+    run_check "host-compat-gate" "$PYTHON_BIN scripts/check_host_compatibility.py --project-dir \"$ROOT_DIR\" --min-score 80 --min-ready-hosts 1"
+else
+    echo "[WARN] host compatibility gate skipped by --skip-host-compat-gate" | tee -a "$SUMMARY_FILE"
 fi
 
 if require_python_module "bandit"; then

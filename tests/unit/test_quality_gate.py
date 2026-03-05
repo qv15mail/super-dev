@@ -254,3 +254,349 @@ class TestQualityGateChecker:
         )
         check = checker._check_spec_task_completion()
         assert check.status.value == "failed"
+
+    def test_pipeline_observability_check_passed(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-pipeline-metrics.json").write_text(
+            (
+                "{\n"
+                '  "project_name": "demo",\n'
+                '  "success": true,\n'
+                '  "success_rate": 100,\n'
+                '  "stages": []\n'
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="1-N+1",
+        )
+        check = checker._check_pipeline_observability()
+        assert check.status.value == "passed"
+
+    def test_host_compatibility_check_passed(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-host-compatibility.json").write_text(
+            (
+                "{\n"
+                '  "compatibility": {\n'
+                '    "overall_score": 92.5,\n'
+                '    "ready_hosts": 2,\n'
+                '    "total_hosts": 3\n'
+                "  }\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="1-N+1",
+        )
+        check = checker._check_host_compatibility()
+        assert check.status.value == "passed"
+        assert check.score == 92
+
+    def test_host_compatibility_check_failed_when_score_low(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-host-compatibility.json").write_text(
+            (
+                "{\n"
+                '  "compatibility": {\n'
+                '    "overall_score": 48,\n'
+                '    "ready_hosts": 0,\n'
+                '    "total_hosts": 5\n'
+                "  }\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="1-N+1",
+        )
+        check = checker._check_host_compatibility()
+        assert check.status.value == "failed"
+        assert check.score == 48
+
+    def test_host_compatibility_check_warning_when_missing(self, temp_project_dir: Path):
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="0-1",
+        )
+        check = checker._check_host_compatibility()
+        assert check.status.value == "warning"
+
+    def test_host_compatibility_uses_config_thresholds(self, temp_project_dir: Path):
+        (temp_project_dir / "super-dev.yaml").write_text(
+            (
+                "name: demo\n"
+                "host_compatibility_min_score: 90\n"
+                "host_compatibility_min_ready_hosts: 2\n"
+            ),
+            encoding="utf-8",
+        )
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-host-compatibility.json").write_text(
+            (
+                "{\n"
+                '  "compatibility": {\n'
+                '    "overall_score": 85,\n'
+                '    "ready_hosts": 1,\n'
+                '    "total_hosts": 3\n'
+                "  }\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="1-N+1",
+        )
+        check = checker._check_host_compatibility()
+        assert check.status.value == "warning"
+        assert "90" in check.details
+
+    def test_host_compatibility_override_thresholds_take_precedence(self, temp_project_dir: Path):
+        (temp_project_dir / "super-dev.yaml").write_text(
+            (
+                "name: demo\n"
+                "host_compatibility_min_score: 95\n"
+                "host_compatibility_min_ready_hosts: 3\n"
+            ),
+            encoding="utf-8",
+        )
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-host-compatibility.json").write_text(
+            (
+                "{\n"
+                '  "compatibility": {\n'
+                '    "overall_score": 82,\n'
+                '    "ready_hosts": 1,\n'
+                '    "total_hosts": 3\n'
+                "  }\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="1-N+1",
+            host_compatibility_min_score_override=80,
+            host_compatibility_min_ready_hosts_override=1,
+        )
+        check = checker._check_host_compatibility()
+        assert check.status.value == "passed"
+
+    def test_host_compatibility_uses_selected_host_profile(self, temp_project_dir: Path):
+        (temp_project_dir / "super-dev.yaml").write_text(
+            (
+                "name: demo\n"
+                "host_compatibility_min_score: 80\n"
+                "host_compatibility_min_ready_hosts: 1\n"
+                "host_profile_targets:\n"
+                "  - codex-cli\n"
+                "  - claude-code\n"
+                "host_profile_enforce_selected: true\n"
+            ),
+            encoding="utf-8",
+        )
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-host-compatibility.json").write_text(
+            (
+                "{\n"
+                '  "compatibility": {\n'
+                '    "overall_score": 20,\n'
+                '    "ready_hosts": 0,\n'
+                '    "total_hosts": 6,\n'
+                '    "hosts": {\n'
+                '      "codex-cli": {"score": 100, "ready": true},\n'
+                '      "claude-code": {"score": 90, "ready": true},\n'
+                '      "cursor": {"score": 0, "ready": false}\n'
+                "    }\n"
+                "  }\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="1-N+1",
+        )
+        check = checker._check_host_compatibility()
+        assert check.status.value == "passed"
+        assert "profile=codex-cli,claude-code" in check.details
+
+    def test_host_compatibility_selected_profile_missing_hosts(self, temp_project_dir: Path):
+        (temp_project_dir / "super-dev.yaml").write_text(
+            (
+                "name: demo\n"
+                "host_profile_targets:\n"
+                "  - codex-cli\n"
+                "host_profile_enforce_selected: true\n"
+            ),
+            encoding="utf-8",
+        )
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-host-compatibility.json").write_text(
+            (
+                "{\n"
+                '  "compatibility": {\n'
+                '    "overall_score": 100,\n'
+                '    "ready_hosts": 3,\n'
+                '    "total_hosts": 3,\n'
+                '    "hosts": {\n'
+                '      "cursor": {"score": 100, "ready": true}\n'
+                "    }\n"
+                "  }\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="1-N+1",
+        )
+        check = checker._check_host_compatibility()
+        assert check.status.value in {"warning", "failed"}
+
+    def test_launch_rehearsal_check_warning_when_missing(self, temp_project_dir: Path):
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="0-1",
+        )
+        check = checker._check_launch_rehearsal()
+        assert check.status.value == "warning"
+
+    def test_rehearsal_verification_report_passed(self, temp_project_dir: Path):
+        rehearsal_dir = temp_project_dir / "output" / "rehearsal"
+        rehearsal_dir.mkdir(parents=True, exist_ok=True)
+        (rehearsal_dir / "demo-rehearsal-report.md").write_text("# report", encoding="utf-8")
+        (rehearsal_dir / "demo-rehearsal-report.json").write_text('{"passed": true}', encoding="utf-8")
+
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="1-N+1",
+        )
+        check = checker._check_rehearsal_verification_report()
+        assert check.status.value == "passed"
+
+    def test_rehearsal_verification_report_warning_when_missing(self, temp_project_dir: Path):
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="0-1",
+        )
+        check = checker._check_rehearsal_verification_report()
+        assert check.status.value == "warning"
+
+    def test_knowledge_governance_passed(self, temp_project_dir: Path):
+        (temp_project_dir / "super-dev.yaml").write_text(
+            (
+                "name: demo\n"
+                "knowledge_allowed_domains:\n"
+                "  - openai.com\n"
+                "knowledge_cache_ttl_seconds: 120\n"
+            ),
+            encoding="utf-8",
+        )
+        cache_dir = temp_project_dir / "output" / "knowledge-cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        (cache_dir / "demo-knowledge-bundle.json").write_text(
+            (
+                "{\n"
+                '  "cache_signature": "abc123",\n'
+                '  "cache_ttl_seconds": 120,\n'
+                '  "metadata": {\n'
+                '    "web_enabled": true,\n'
+                '    "allowed_web_domains": ["openai.com"],\n'
+                '    "web_stats": {"filtered_out_count": 1}\n'
+                "  }\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="1-N+1",
+        )
+        check = checker._check_knowledge_governance()
+        assert check.status.value == "passed"
+
+    def test_knowledge_governance_failed_when_signature_missing(self, temp_project_dir: Path):
+        cache_dir = temp_project_dir / "output" / "knowledge-cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        (cache_dir / "demo-knowledge-bundle.json").write_text(
+            (
+                "{\n"
+                '  "cache_ttl_seconds": 120,\n'
+                '  "metadata": {"web_enabled": false}\n'
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="1-N+1",
+        )
+        check = checker._check_knowledge_governance()
+        assert check.status.value == "failed"
+
+    def test_knowledge_governance_warning_when_web_without_domains(self, temp_project_dir: Path):
+        cache_dir = temp_project_dir / "output" / "knowledge-cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        (cache_dir / "demo-knowledge-bundle.json").write_text(
+            (
+                "{\n"
+                '  "cache_signature": "abc123",\n'
+                '  "cache_ttl_seconds": 120,\n'
+                '  "metadata": {"web_enabled": true, "allowed_web_domains": []}\n'
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="0-1",
+        )
+        check = checker._check_knowledge_governance()
+        assert check.status.value == "warning"

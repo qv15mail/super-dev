@@ -2,7 +2,7 @@
 Super Dev Spec-Driven Development (SDD) 模块
 
 开发：Excellent（11964948@qq.com）
-功能：规范驱动开发工具，类似 OpenSpec
+功能：规范驱动开发工具
 作用：在开发前达成规范共识，让 AI 遵循规范而非随意发挥
 创建时间：2025-12-30
 最后修改：2025-12-30

@@ -28,6 +28,7 @@ class DocumentGenerator:
         style_solution: str | None = None,
         state_management: list[str] | None = None,
         testing_frameworks: list[str] | None = None,
+        language_preferences: list[str] | None = None,
     ):
         """初始化文档生成器"""
         self.name = name
@@ -40,7 +41,41 @@ class DocumentGenerator:
         self.style_solution = style_solution
         self.state_management = state_management or []
         self.testing_frameworks = testing_frameworks or []
+        self.language_preferences = self._normalize_language_preferences(language_preferences)
         self.requirement_parser = RequirementParser()
+
+    def _normalize_language_preferences(self, values: list[str] | None) -> list[str]:
+        normalized: list[str] = []
+        for item in values or []:
+            if not isinstance(item, str):
+                continue
+            token = item.strip().lower()
+            if token and token not in normalized:
+                normalized.append(token)
+        return normalized
+
+    def _display_language_name(self, language: str) -> str:
+        mapping = {
+            "csharp": "C#",
+            "cpp": "C++",
+            "javascript": "JavaScript",
+            "typescript": "TypeScript",
+            "objective-c": "Objective-C",
+            "matlab": "MATLAB",
+            "php": "PHP",
+            "sql": "SQL",
+            "r": "R",
+        }
+        if language in mapping:
+            return mapping[language]
+        if language in {"go", "java", "ruby", "scala", "swift", "kotlin", "rust", "dart", "elixir", "lua"}:
+            return language.capitalize()
+        return language.replace("-", " ").title()
+
+    def _language_preferences_inline(self) -> str:
+        if not self.language_preferences:
+            return "未指定（默认支持主流语言）"
+        return " / ".join(self._display_language_name(item) for item in self.language_preferences)
 
     def _analyze_project_for_design(self) -> dict:
         """分析项目特征用于设计推荐"""
@@ -154,7 +189,7 @@ class DocumentGenerator:
         return f"""# {self.name} - 产品需求文档 (PRD)
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.0.1
+> **版本**: v2.0.2
 > **状态**: 草稿
 
 ---
@@ -167,6 +202,7 @@ class DocumentGenerator:
 | **项目描述** | {self.description} |
 | **目标平台** | {self.platform.upper()} |
 | **业务领域** | {self.domain.upper()} |
+| **语言偏好** | {self._language_preferences_inline()} |
 
 ---
 
@@ -343,7 +379,7 @@ class DocumentGenerator:
 
 | 版本 | 日期 | 变更内容 | 作者 |
 |:---|:---|:---|:---|
-| v2.0.1 | {datetime.now().strftime('%Y-%m-%d')} | 初始版本 | Super Dev |
+| v2.0.2 | {datetime.now().strftime('%Y-%m-%d')} | 初始版本 | Super Dev |
 """
 
     def generate_architecture(self) -> str:
@@ -351,7 +387,7 @@ class DocumentGenerator:
         return f"""# {self.name} - 架构设计文档
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.0.1
+> **版本**: v2.0.2
 > **架构师**: Super Dev ARCHITECT 专家
 
 ---
@@ -375,6 +411,11 @@ class DocumentGenerator:
 ---
 
 ## 2. 技术栈
+
+### 2.0 语言工程策略
+
+- **业务偏好语言**: {self._language_preferences_inline()}
+- **落地策略**: 文档、Spec 与实现建议优先按偏好语言输出；跨模块场景可混合使用最合适语言。
 
 ### 2.1 前端技术栈
 
@@ -733,7 +774,7 @@ jobs:
         doc_parts.append(f"""# {self.name} - UI/UX 设计文档
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.0.1
+> **版本**: v2.0.2
 > **设计师**: Super Dev UI/UX 专家
 
 ---
@@ -750,6 +791,7 @@ jobs:
 | **行业领域** | {analysis['industry'].title()} | {self._get_industry_desc(analysis['industry'])} |
 | **风格倾向** | {analysis['style'].title()} | {self._get_style_desc(analysis['style'])} |
 | **技术栈** | {self.frontend.upper()} | 前端框架 |
+| **语言偏好** | {self._language_preferences_inline()} | 生成文档与实现建议的优先语言 |
 
 ### 0.2 设计推荐摘要
 
@@ -1215,6 +1257,15 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica
             "python": "FastAPI / Django",
             "go": "Gin / Echo",
             "java": "Spring Boot",
+            "rust": "Actix Web / Axum",
+            "php": "Laravel / Symfony",
+            "ruby": "Rails / Sinatra",
+            "csharp": "ASP.NET Core",
+            "kotlin": "Ktor / Spring Boot",
+            "swift": "Vapor",
+            "elixir": "Phoenix",
+            "scala": "Play / Akka HTTP",
+            "dart": "Shelf / Dart Frog",
         }
         return mapping.get(self.backend, "Express")
 
@@ -1229,6 +1280,15 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica
             "python": "SQLAlchemy / Django ORM",
             "go": "GORM",
             "java": "Hibernate / JPA",
+            "rust": "SeaORM / Diesel",
+            "php": "Eloquent / Doctrine",
+            "ruby": "Active Record",
+            "csharp": "Entity Framework Core",
+            "kotlin": "Exposed / Spring Data JPA",
+            "swift": "Fluent",
+            "elixir": "Ecto",
+            "scala": "Slick / Doobie",
+            "dart": "Drift / Prisma Client Dart",
         }
         return mapping.get(self.backend, "Prisma")
 

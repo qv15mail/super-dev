@@ -307,7 +307,7 @@ class RedTeamReviewer:
         issues: list[SecurityIssue] = []
         issue_keys: set[tuple[str, str]] = set()
 
-        # 1) 扫描代码中的高风险模式（真实信号）
+        # 1. 扫描代码中的高风险模式（真实信号）
         secret_pattern = re.compile(
             r'(?i)\b(api[_-]?key|secret|token|password)\b\s*[:=]\s*["\']([^"\']{6,})["\']'
         )
@@ -367,7 +367,7 @@ class RedTeamReviewer:
                     line=line_no,
                 ))
 
-        # 2) 框架级最低安全基线（中低风险建议）
+        # 2. 框架级最低安全基线（中低风险建议）
         if self.backend != "none":
             issues.append(SecurityIssue(
                 severity="medium",
@@ -627,11 +627,29 @@ class RedTeamReviewer:
         return dirname.startswith(".") and dirname not in {".github"}
 
     def _is_scannable_file(self, path: Path) -> bool:
+        if self._is_test_file(path):
+            return False
         suffix = path.suffix.lower()
         return suffix in self._CODE_EXTENSIONS or self._is_yaml_file(path)
 
     def _is_yaml_file(self, path: Path) -> bool:
         return path.suffix.lower() in {".yml", ".yaml"}
+
+    def _is_test_file(self, path: Path) -> bool:
+        lowered_parts = {part.lower() for part in path.parts}
+        if "tests" in lowered_parts or "__tests__" in lowered_parts:
+            return True
+
+        name = path.name.lower()
+        if re.match(r"^test_.*\.py$", name):
+            return True
+        if re.match(r".*_test\.py$", name):
+            return True
+        if re.match(r".*\.test\.(js|ts|jsx|tsx)$", name):
+            return True
+        if re.match(r".*\.spec\.(js|ts|jsx|tsx)$", name):
+            return True
+        return False
 
     def _looks_like_placeholder(self, value: str) -> bool:
         lowered = value.lower()
@@ -656,6 +674,14 @@ class RedTeamReviewer:
             re.compile(r".*\.test\.(js|ts|jsx|tsx)$"),
             re.compile(r".*\.spec\.(js|ts|jsx|tsx)$"),
         ]
+
+        # 优先基于文件系统快速判断（独立于漏洞扫描的文件过滤策略）
+        for dirpath, dirnames, filenames in os.walk(self.project_dir):
+            dirnames[:] = [d for d in dirnames if not self._should_skip_dir(d)]
+            for name in filenames:
+                if any(pattern.match(name) for pattern in test_name_patterns):
+                    return True
+
         for file_path, _ in source_files:
             name = file_path.name
             if any(pattern.match(name) for pattern in test_name_patterns):

@@ -1,4 +1,4 @@
-# Super Dev 安装方式（2.0.1）
+# Super Dev 安装方式（2.0.2）
 
 ## 方式 1：PyPI 安装（推荐）
 
@@ -11,7 +11,7 @@ pip install -U super-dev
 ## 方式 2：安装指定版本（复现/回滚）
 
 ```bash
-pip install super-dev==2.0.1
+pip install super-dev==2.0.2
 ```
 
 适用：需要稳定复现、灰度回滚。
@@ -19,7 +19,7 @@ pip install super-dev==2.0.1
 ## 方式 3：GitHub 直装（Tag）
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.1
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.2
 ```
 
 适用：希望直接基于 GitHub Tag 安装。
@@ -41,12 +41,12 @@ super-dev --help
 super-dev "构建一个带登录和订单管理的系统"
 ```
 
-## 升级到 2.0.1
+## 升级到 2.0.2
 
 ```bash
 # GitHub 方式
-pip install --upgrade "git+https://github.com/shangyankeji/super-dev.git@v2.0.1"
+pip install --upgrade "git+https://github.com/shangyankeji/super-dev.git@v2.0.2"
 
 # PyPI 方式
-pip install --upgrade "super-dev==2.0.1"
+pip install --upgrade "super-dev==2.0.2"
 ```

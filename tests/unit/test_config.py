@@ -4,6 +4,7 @@ Super Dev 配置管理单元测试
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from super_dev.config import ConfigManager, ProjectConfig, get_config_manager
@@ -21,6 +22,13 @@ class TestProjectConfig:
         assert config.frontend == "next"
         assert config.backend == "node"
         assert config.quality_gate == 80
+        assert config.host_compatibility_min_score == 80
+        assert config.host_compatibility_min_ready_hosts == 1
+        assert config.host_profile_targets == []
+        assert config.host_profile_enforce_selected is False
+        assert config.language_preferences == []
+        assert config.knowledge_allowed_domains == []
+        assert config.knowledge_cache_ttl_seconds == 1800
 
     def test_config_with_custom_values(self):
         """测试自定义配置"""
@@ -29,7 +37,14 @@ class TestProjectConfig:
             platform="mobile",
             frontend="vue",
             domain="fintech",
-            quality_gate=90
+            quality_gate=90,
+            host_compatibility_min_score=85,
+            host_compatibility_min_ready_hosts=2,
+            host_profile_targets=["codex-cli", "claude-code"],
+            host_profile_enforce_selected=True,
+            language_preferences=["python", "typescript"],
+            knowledge_allowed_domains=["openai.com"],
+            knowledge_cache_ttl_seconds=600,
         )
 
         assert config.name == "custom"
@@ -37,6 +52,13 @@ class TestProjectConfig:
         assert config.frontend == "vue"
         assert config.domain == "fintech"
         assert config.quality_gate == 90
+        assert config.host_compatibility_min_score == 85
+        assert config.host_compatibility_min_ready_hosts == 2
+        assert config.host_profile_targets == ["codex-cli", "claude-code"]
+        assert config.host_profile_enforce_selected is True
+        assert config.language_preferences == ["python", "typescript"]
+        assert config.knowledge_allowed_domains == ["openai.com"]
+        assert config.knowledge_cache_ttl_seconds == 600
 
 
 class TestConfigManager:
@@ -101,11 +123,51 @@ class TestConfigManager:
 
         updated = manager.update(
             description="Updated description",
-            quality_gate=90
+            quality_gate=90,
+            host_compatibility_min_score=88,
+            host_compatibility_min_ready_hosts=1,
         )
 
         assert updated.description == "Updated description"
         assert updated.quality_gate == 90
+        assert updated.host_compatibility_min_score == 88
+        assert updated.host_compatibility_min_ready_hosts == 1
+
+    def test_update_knowledge_domains_from_csv(self, temp_project_dir: Path):
+        manager = ConfigManager(temp_project_dir)
+        manager.create(name="original")
+
+        updated = manager.update(knowledge_allowed_domains="openai.com, python.org")
+        assert updated.knowledge_allowed_domains == ["openai.com", "python.org"]
+
+    def test_update_host_compatibility_thresholds_from_string(self, temp_project_dir: Path):
+        manager = ConfigManager(temp_project_dir)
+        manager.create(name="original")
+
+        updated = manager.update(
+            host_compatibility_min_score="86",
+            host_compatibility_min_ready_hosts="2",
+        )
+        assert updated.host_compatibility_min_score == 86
+        assert updated.host_compatibility_min_ready_hosts == 2
+
+    def test_update_host_profile_targets_from_csv(self, temp_project_dir: Path):
+        manager = ConfigManager(temp_project_dir)
+        manager.create(name="original")
+
+        updated = manager.update(
+            host_profile_targets="codex-cli, claude-code",
+            host_profile_enforce_selected="true",
+        )
+        assert updated.host_profile_targets == ["codex-cli", "claude-code"]
+        assert updated.host_profile_enforce_selected is True
+
+    def test_update_language_preferences_from_csv(self, temp_project_dir: Path):
+        manager = ConfigManager(temp_project_dir)
+        manager.create(name="original")
+
+        updated = manager.update(language_preferences="python, typescript, rust")
+        assert updated.language_preferences == ["python", "typescript", "rust"]
 
     def test_get_config_value(self, temp_project_dir: Path):
         """测试获取配置值"""
@@ -146,6 +208,20 @@ class TestConfigManager:
         assert is_valid
         assert len(errors) == 0
 
+    def test_validate_extended_backend(self, temp_project_dir: Path):
+        manager = ConfigManager(temp_project_dir)
+        manager.create(
+            name="valid-rust",
+            platform="web",
+            frontend="react",
+            backend="rust",
+            quality_gate=80,
+        )
+
+        is_valid, errors = manager.validate()
+        assert is_valid
+        assert len(errors) == 0
+
     def test_validate_invalid_platform(self, temp_project_dir: Path):
         """测试验证无效平台"""
         manager = ConfigManager(temp_project_dir)
@@ -166,6 +242,67 @@ class TestConfigManager:
 
         is_valid, errors = manager.validate()
         assert not is_valid
+
+    def test_validate_invalid_host_compatibility_score(self, temp_project_dir: Path):
+        manager = ConfigManager(temp_project_dir)
+        manager.create(name="invalid")
+        assert manager._config is not None
+        manager._config.host_compatibility_min_score = 101
+
+        is_valid, errors = manager.validate()
+        assert not is_valid
+        assert any("host_compatibility_min_score" in item for item in errors)
+
+    def test_validate_invalid_host_compatibility_ready_hosts(self, temp_project_dir: Path):
+        manager = ConfigManager(temp_project_dir)
+        manager.create(name="invalid")
+        assert manager._config is not None
+        manager._config.host_compatibility_min_ready_hosts = -1
+
+        is_valid, errors = manager.validate()
+        assert not is_valid
+        assert any("host_compatibility_min_ready_hosts" in item for item in errors)
+
+    def test_validate_invalid_host_profile_target(self, temp_project_dir: Path):
+        manager = ConfigManager(temp_project_dir)
+        manager.create(name="invalid")
+        assert manager._config is not None
+        manager._config.host_profile_targets = ["not-exists-host"]
+
+        is_valid, errors = manager.validate()
+        assert not is_valid
+        assert any("host_profile_targets" in item for item in errors)
+
+    def test_validate_invalid_language_preferences(self, temp_project_dir: Path):
+        manager = ConfigManager(temp_project_dir)
+        manager.create(name="invalid")
+        assert manager._config is not None
+        manager._config.language_preferences = ["python", ""]
+
+        is_valid, errors = manager.validate()
+        assert not is_valid
+        assert any("language_preferences" in item for item in errors)
+
+    def test_validate_invalid_knowledge_cache_ttl(self, temp_project_dir: Path):
+        manager = ConfigManager(temp_project_dir)
+        manager.create(name="invalid")
+        assert manager._config is not None
+        manager._config.knowledge_cache_ttl_seconds = -1
+
+        is_valid, errors = manager.validate()
+        assert not is_valid
+        assert any("knowledge_cache_ttl_seconds" in item for item in errors)
+
+    def test_create_raises_on_invalid_host_compatibility_threshold(self, temp_project_dir: Path):
+        manager = ConfigManager(temp_project_dir)
+        with pytest.raises(ValueError):
+            manager.create(name="invalid", host_compatibility_min_score=200)
+
+    def test_update_raises_on_invalid_quality_gate(self, temp_project_dir: Path):
+        manager = ConfigManager(temp_project_dir)
+        manager.create(name="valid")
+        with pytest.raises(ValueError):
+            manager.update(quality_gate=101)
 
 
 class TestGlobalConfigManager:

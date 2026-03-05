@@ -30,6 +30,7 @@ class ProjectCreator:
         style_solution: str | None = None,
         state_management: list[str] | None = None,
         testing_frameworks: list[str] | None = None,
+        language_preferences: list[str] | None = None,
     ):
         """初始化项目创建器"""
         self.project_dir = Path(project_dir).resolve()
@@ -43,6 +44,7 @@ class ProjectCreator:
         self.style_solution = style_solution
         self.state_management = state_management or []
         self.testing_frameworks = testing_frameworks or []
+        self.language_preferences = language_preferences or []
 
         # 确保输出目录存在
         self.output_dir = self.project_dir / "output"
@@ -60,6 +62,7 @@ class ProjectCreator:
             style_solution=style_solution,
             state_management=state_management,
             testing_frameworks=testing_frameworks,
+            language_preferences=language_preferences,
         )
         self.spec_builder = SpecBuilder(
             project_dir=self.project_dir,

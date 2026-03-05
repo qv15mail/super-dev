@@ -10,6 +10,11 @@ from super_dev.skills import SkillManager
 
 
 class TestSkillManager:
+    def test_coverage_gaps_are_empty(self):
+        gaps = SkillManager.coverage_gaps()
+        assert gaps["missing_in_skill_targets"] == []
+        assert gaps["extra_in_skill_targets"] == []
+
     def test_install_from_directory_and_uninstall(self, temp_project_dir: Path):
         source_skill = temp_project_dir / "my-skill"
         source_skill.mkdir(parents=True, exist_ok=True)
@@ -30,16 +35,7 @@ class TestSkillManager:
 
     @pytest.mark.parametrize(
         "target",
-        [
-            "claude-code",
-            "codex-cli",
-            "opencode",
-            "cursor",
-            "qoder",
-            "trae",
-            "codebuddy",
-            "antigravity",
-        ],
+        list(SkillManager.TARGET_PATHS.keys()),
     )
     def test_install_builtin_skill(self, temp_project_dir: Path, target: str):
         manager = SkillManager(temp_project_dir)

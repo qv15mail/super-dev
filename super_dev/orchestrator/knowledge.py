@@ -7,10 +7,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import re
 import urllib.parse
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -58,13 +61,35 @@ class KnowledgeAugmenter:
         "需求",
     }
 
-    def __init__(self, project_dir: Path, web_enabled: bool = True):
+    def __init__(
+        self,
+        project_dir: Path,
+        web_enabled: bool = True,
+        allowed_web_domains: list[str] | None = None,
+        cache_ttl_seconds: int | None = None,
+    ):
         self.project_dir = Path(project_dir).resolve()
         self.web_enabled = web_enabled
         self.docs_dir = self.project_dir / "docs"
         self.specs_dir = self.project_dir / ".super-dev" / "specs"
         self.data_dir = self.project_dir / "super_dev" / "data"
         self.builtin_data_dir = Path(__file__).resolve().parents[1] / "data"
+        env_domains = [
+            item.strip().lower()
+            for item in os.getenv("SUPER_DEV_KNOWLEDGE_ALLOWED_DOMAINS", "").split(",")
+            if item.strip()
+        ]
+        selected_domains = allowed_web_domains if allowed_web_domains is not None else env_domains
+        self.allowed_web_domains = [item.strip().lower() for item in selected_domains if item.strip()]
+        env_cache_ttl = os.getenv("SUPER_DEV_KNOWLEDGE_CACHE_TTL_SECONDS", "").strip()
+        env_cache_ttl_value = int(env_cache_ttl) if env_cache_ttl.isdigit() else 1800
+        self.cache_ttl_seconds = cache_ttl_seconds if cache_ttl_seconds is not None else env_cache_ttl_value
+        self._last_web_stats: dict[str, Any] = {
+            "provider": "none",
+            "raw_count": 0,
+            "filtered_count": 0,
+            "filtered_out_count": 0,
+        }
 
     def augment(
         self,
@@ -93,11 +118,21 @@ class KnowledgeAugmenter:
         )
 
         return {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "original_requirement": requirement,
             "domain": domain,
             "keywords": keywords,
             "local_knowledge": [item.to_dict() for item in local_items],
             "web_knowledge": [item.to_dict() for item in web_items],
+            "citations": {
+                "local": [self._to_citation(item) for item in local_items],
+                "web": [self._to_citation(item) for item in web_items],
+            },
+            "metadata": {
+                "web_enabled": self.web_enabled,
+                "allowed_web_domains": self.allowed_web_domains,
+                "web_stats": self._last_web_stats,
+            },
             "enriched_requirement": enriched_requirement,
         }
 
@@ -149,6 +184,65 @@ class KnowledgeAugmenter:
             ]
         )
         return "\n".join(lines)
+
+    def save_bundle(
+        self,
+        bundle: dict[str, Any],
+        output_dir: Path,
+        project_name: str,
+        requirement: str | None = None,
+        domain: str | None = None,
+    ) -> Path:
+        cache_dir = Path(output_dir) / "knowledge-cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = cache_dir / f"{project_name}-knowledge-bundle.json"
+        cached_bundle = dict(bundle)
+        cached_bundle.setdefault("generated_at", datetime.now(timezone.utc).isoformat())
+        if requirement is not None:
+            cached_bundle["cache_signature"] = self._bundle_signature(
+                requirement=requirement,
+                domain=domain or "",
+            )
+        cached_bundle["cache_ttl_seconds"] = self.cache_ttl_seconds
+        cache_file.write_text(json.dumps(cached_bundle, ensure_ascii=False, indent=2), encoding="utf-8")
+        return cache_file
+
+    def load_cached_bundle(
+        self,
+        output_dir: Path,
+        project_name: str,
+        requirement: str,
+        domain: str = "",
+    ) -> dict[str, Any] | None:
+        if self.cache_ttl_seconds <= 0:
+            return None
+
+        cache_file = Path(output_dir) / "knowledge-cache" / f"{project_name}-knowledge-bundle.json"
+        if not cache_file.exists():
+            return None
+        try:
+            payload = json.loads(cache_file.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+        if not isinstance(payload, dict):
+            return None
+
+        generated_at_raw = str(payload.get("generated_at", "")).strip()
+        cache_signature = str(payload.get("cache_signature", "")).strip()
+        if not generated_at_raw or not cache_signature:
+            return None
+
+        expected_signature = self._bundle_signature(requirement=requirement, domain=domain)
+        if cache_signature != expected_signature:
+            return None
+
+        generated_at = self._parse_datetime(generated_at_raw)
+        if generated_at is None:
+            return None
+        expired_at = generated_at + timedelta(seconds=self.cache_ttl_seconds)
+        if expired_at <= datetime.now(timezone.utc):
+            return None
+        return payload
 
     def _extract_keywords(self, text: str) -> list[str]:
         tokens = re.findall(r"[A-Za-z0-9_\u4e00-\u9fff]{2,}", text.lower())
@@ -232,6 +326,13 @@ class KnowledgeAugmenter:
             except ValueError:
                 return str(file_path)
 
+    def _to_citation(self, item: KnowledgeItem) -> dict[str, str]:
+        return {
+            "title": item.title,
+            "source": item.source,
+            "link": item.link,
+        }
+
     def _build_web_query(self, requirement: str, domain: str) -> str:
         if domain:
             return f"{requirement} {domain} best practices architecture ui ux"
@@ -239,12 +340,44 @@ class KnowledgeAugmenter:
 
     def _collect_web_items(self, query: str, max_results: int) -> list[KnowledgeItem]:
         if not self.web_enabled:
+            self._last_web_stats = {
+                "provider": "disabled",
+                "raw_count": 0,
+                "filtered_count": 0,
+                "filtered_out_count": 0,
+            }
             return []
 
+        provider = "ddgs"
         results = self._collect_web_items_ddgs(query=query, max_results=max_results)
-        if results:
-            return results
-        return self._collect_web_items_duckduckgo(query=query, max_results=max_results)
+        if not results:
+            provider = "duckduckgo"
+            results = self._collect_web_items_duckduckgo(query=query, max_results=max_results)
+        raw_count = len(results)
+        filtered = self._filter_web_items(results)[:max_results]
+        self._last_web_stats = {
+            "provider": provider,
+            "raw_count": raw_count,
+            "filtered_count": len(filtered),
+            "filtered_out_count": max(raw_count - len(filtered), 0),
+        }
+        return filtered
+
+    def _filter_web_items(self, items: list[KnowledgeItem]) -> list[KnowledgeItem]:
+        if not self.allowed_web_domains:
+            return items
+
+        filtered: list[KnowledgeItem] = []
+        for item in items:
+            if not item.link:
+                continue
+            parsed = urllib.parse.urlparse(item.link)
+            netloc = parsed.netloc.lower()
+            if netloc.startswith("www."):
+                netloc = netloc[4:]
+            if any(netloc == domain or netloc.endswith(f".{domain}") for domain in self.allowed_web_domains):
+                filtered.append(item)
+        return filtered
 
     def _collect_web_items_ddgs(self, query: str, max_results: int) -> list[KnowledgeItem]:
         try:
@@ -350,3 +483,23 @@ class KnowledgeAugmenter:
 
         joined = "；".join(notes)
         return f"{requirement}。请结合以下上下文实现：{joined}"
+
+    def _bundle_signature(self, requirement: str, domain: str) -> str:
+        normalized_requirement = requirement.strip().lower()
+        normalized_domain = domain.strip().lower()
+        allowed_domains = ",".join(sorted(self.allowed_web_domains))
+        payload = f"{normalized_requirement}|{normalized_domain}|{self.web_enabled}|{allowed_domains}"
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def _parse_datetime(self, value: str) -> datetime | None:
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        normalized = cleaned.replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)

@@ -4,8 +4,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
+
+from ..catalogs import HOST_TOOL_CATEGORY_MAP, HOST_TOOL_IDS
 
 
 @dataclass
@@ -13,6 +15,28 @@ class IntegrationTarget:
     name: str
     description: str
     files: list[str]
+
+
+@dataclass
+class HostAdapterProfile:
+    host: str
+    category: str
+    adapter_mode: str
+    host_model_provider: str
+    official_docs_url: str
+    docs_verified: bool
+    primary_entry: str
+    terminal_entry: str
+    terminal_entry_scope: str
+    integration_files: list[str]
+    slash_command_file: str
+    skill_dir: str
+    detection_commands: list[str]
+    detection_paths: list[str]
+    notes: str
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
 
 
 class IntegrationManager:
@@ -29,44 +53,133 @@ class IntegrationManager:
             description="Codex CLI 项目上下文注入",
             files=[".codex/AGENTS.md"],
         ),
-        "opencode": IntegrationTarget(
-            name="opencode",
-            description="OpenCode CLI 项目规则注入",
-            files=[".opencode/AGENTS.md"],
+        "gemini-cli": IntegrationTarget(
+            name="gemini-cli",
+            description="Gemini CLI 项目规则注入",
+            files=[".gemini/AGENTS.md"],
         ),
-        "cursor": IntegrationTarget(
-            name="cursor",
-            description="Cursor IDE 规则注入",
-            files=[".cursorrules"],
+        "kimi-cli": IntegrationTarget(
+            name="kimi-cli",
+            description="Kimi CLI 项目规则注入",
+            files=[".kimi/AGENTS.md"],
+        ),
+        "kiro-cli": IntegrationTarget(
+            name="kiro-cli",
+            description="Kiro CLI 项目规则注入",
+            files=[".kiro/AGENTS.md"],
+        ),
+        "qoder-cli": IntegrationTarget(
+            name="qoder-cli",
+            description="Qoder CLI 项目规则注入",
+            files=[".qoder/AGENTS.md"],
         ),
         "qoder": IntegrationTarget(
             name="qoder",
             description="Qoder IDE 规则注入",
             files=[".qoder/rules.md"],
         ),
-        "trae": IntegrationTarget(
-            name="trae",
-            description="Trae IDE 规则注入",
-            files=[".trae/rules.md"],
-        ),
-        "codebuddy": IntegrationTarget(
-            name="codebuddy",
-            description="CodeBuddy IDE 规则注入",
-            files=[".codebuddy/rules.md"],
-        ),
-        "antigravity": IntegrationTarget(
-            name="antigravity",
-            description="Antigravity IDE 工作流集成（.agents/workflows/）",
-            files=[".agents/workflows/super-dev.md"],
-        ),
     }
+    SLASH_COMMAND_FILES: dict[str, str] = {
+        "claude-code": ".claude/commands/super-dev.md",
+        "codex-cli": ".codex/commands/super-dev.md",
+        "gemini-cli": ".gemini/commands/super-dev.md",
+        "kimi-cli": ".kimi/commands/super-dev.md",
+        "kiro-cli": ".kiro/commands/super-dev.md",
+        "qoder-cli": ".qoder/commands/super-dev.md",
+        "qoder": ".qoder/commands/super-dev.md",
+    }
+    OFFICIAL_DOCS: dict[str, str] = {
+        "claude-code": "https://docs.anthropic.com/en/docs/claude-code/slash-commands",
+        "codex-cli": "https://platform.openai.com/docs/codex",
+        "gemini-cli": "https://google-gemini.github.io/gemini-cli/docs/",
+        "kimi-cli": "https://kimi.com/code/docs/cli/reference",
+        "kiro-cli": "https://kiro.dev/docs/cli/",
+        "qoder-cli": "https://docs.qoder.com/cli/using-cli",
+        "qoder": "https://docs.qoder.com/user-guide/rules",
+    }
+    DOCS_VERIFIED_TARGETS: set[str] = {key for key, value in OFFICIAL_DOCS.items() if bool(value)}
 
     def __init__(self, project_dir: Path):
         self.project_dir = Path(project_dir).resolve()
         self.templates_dir = self.project_dir / "templates"
 
+    @classmethod
+    def coverage_gaps(cls) -> dict[str, list[str]]:
+        declared = set(HOST_TOOL_IDS)
+        target_keys = set(cls.TARGETS)
+        slash_keys = set(cls.SLASH_COMMAND_FILES)
+        docs_keys = set(cls.OFFICIAL_DOCS)
+        verified_keys = set(cls.DOCS_VERIFIED_TARGETS)
+        declared_with_docs = {item for item, value in cls.OFFICIAL_DOCS.items() if bool(value)}
+        return {
+            "missing_in_targets": sorted(declared - target_keys),
+            "extra_in_targets": sorted(target_keys - declared),
+            "missing_in_slash": sorted(declared - slash_keys),
+            "extra_in_slash": sorted(slash_keys - declared),
+            "missing_in_docs_map": sorted(declared - docs_keys),
+            "extra_in_docs_map": sorted(docs_keys - declared),
+            "missing_official_docs_url": sorted(declared - declared_with_docs),
+            "unverified_docs": sorted(declared - verified_keys),
+        }
+
     def list_targets(self) -> list[IntegrationTarget]:
         return list(self.TARGETS.values())
+
+    def get_adapter_profile(self, target: str) -> HostAdapterProfile:
+        from ..catalogs import HOST_COMMAND_CANDIDATES, HOST_PATH_PATTERNS
+        from ..skills import SkillManager
+
+        if target not in self.TARGETS:
+            raise ValueError(f"Unsupported target: {target}")
+
+        category = HOST_TOOL_CATEGORY_MAP.get(target, "ide")
+        integration_files = list(self.TARGETS[target].files)
+        slash_file = self.SLASH_COMMAND_FILES.get(target, "")
+        skill_dir = SkillManager.TARGET_PATHS.get(target, "")
+        docs_url = self.OFFICIAL_DOCS.get(target, "")
+        docs_verified = target in self.DOCS_VERIFIED_TARGETS
+        adapter_mode = self._adapter_mode(target=target, category=category, integration_files=integration_files)
+
+        if category == "cli":
+            primary_entry = '/super-dev "<需求描述>"（在该 CLI 宿主会话内）'
+            notes = "CLI 宿主建议直接在当前会话执行 slash 命令。"
+        else:
+            primary_entry = '/super-dev "<需求描述>"（在 IDE Agent Chat 内）'
+            notes = "IDE 宿主优先通过 Agent Chat 触发，保持上下文连续。"
+
+        return HostAdapterProfile(
+            host=target,
+            category=category,
+            adapter_mode=adapter_mode,
+            host_model_provider="host",
+            official_docs_url=docs_url,
+            docs_verified=docs_verified,
+            primary_entry=primary_entry,
+            terminal_entry='super-dev "<需求描述>"',
+            terminal_entry_scope="仅触发本地编排，不直接调用宿主模型会话",
+            integration_files=integration_files,
+            slash_command_file=slash_file,
+            skill_dir=skill_dir,
+            detection_commands=list(HOST_COMMAND_CANDIDATES.get(target, [])),
+            detection_paths=list(HOST_PATH_PATTERNS.get(target, [])),
+            notes=notes,
+        )
+
+    def list_adapter_profiles(self, targets: list[str] | None = None) -> list[HostAdapterProfile]:
+        selected = targets or sorted(self.TARGETS.keys())
+        return [self.get_adapter_profile(target) for target in selected]
+
+    def _adapter_mode(self, *, target: str, category: str, integration_files: list[str]) -> str:
+        first_file = integration_files[0] if integration_files else ""
+        if category == "cli":
+            return "native-cli-session"
+        if first_file.startswith(".super-dev/skills/"):
+            return "compat-layer-via-project-skill"
+        if target == "vscode-copilot":
+            return "native-copilot-instruction-file"
+        if target == "jetbrains-ai":
+            return "native-jetbrains-ai-prompt-config"
+        return "native-ide-rule-file"
 
     def setup(self, target: str, force: bool = False) -> list[Path]:
         if target not in self.TARGETS:
@@ -91,6 +204,23 @@ class IntegrationManager:
             result[target] = self.setup(target=target, force=force)
         return result
 
+    def setup_slash_command(self, target: str, force: bool = False) -> Path | None:
+        relative = self.SLASH_COMMAND_FILES.get(target)
+        if relative is None:
+            raise ValueError(f"Unsupported target: {target}")
+        command_file = self.project_dir / relative
+        if command_file.exists() and not force:
+            return None
+        command_file.parent.mkdir(parents=True, exist_ok=True)
+        command_file.write_text(self._build_slash_command_content(target), encoding="utf-8")
+        return command_file
+
+    def setup_all_slash_commands(self, force: bool = False) -> dict[str, Path | None]:
+        result: dict[str, Path | None] = {}
+        for target in self.TARGETS:
+            result[target] = self.setup_slash_command(target=target, force=force)
+        return result
+
     def _build_content(self, target: str) -> str:
         if target == "cursor":
             cursor_template = self.templates_dir / ".cursorrules.template"
@@ -107,10 +237,34 @@ class IntegrationManager:
         if target == "antigravity":
             return self._antigravity_workflow_rules()
 
-        if target in {"qoder", "trae", "codebuddy"}:
+        if target in {
+            "cursor",
+            "windsurf",
+            "cline",
+            "continue",
+            "vscode-copilot",
+            "jetbrains-ai",
+            "roo-code",
+            "augment",
+            "qoder",
+            "trae",
+            "codebuddy",
+            "tongyi-lingma",
+            "codegeex",
+        }:
             return self._generic_ide_rules(target)
 
-        if target in {"codex-cli", "opencode"}:
+        if target in {
+            "codex-cli",
+            "opencode",
+            "gemini-cli",
+            "kiro-cli",
+            "cursor-cli",
+            "qoder-cli",
+            "codebuddy-cli",
+            "iflow",
+            "aider",
+        }:
             return self._generic_cli_rules(target)
 
         if target == "claude-code":
@@ -118,10 +272,36 @@ class IntegrationManager:
 
         return self._generic_cli_rules(target)
 
+    def _build_slash_command_content(self, target: str) -> str:
+        return (
+            f"# /super-dev ({target})\n\n"
+            "在当前项目触发 Super Dev 流水线。\n\n"
+            "## 定位\n"
+            "- Super Dev 本身不提供模型能力，不调用外部模型 API。\n"
+            "- 代码生成/修改能力完全来自当前宿主（Claude/Codex/Gemini/IDE Agent）。\n"
+            "- Super Dev 只负责流程规范、门禁与审计。\n\n"
+            "## 用法\n"
+            "/super-dev <需求描述>\n\n"
+            "## 终端替代入口（仅本地编排）\n"
+            "```bash\n"
+            "super-dev \"<需求描述>\"\n"
+            "```\n\n"
+            "## 建议\n"
+            "- 宿主会话运行目录应为项目根目录。\n"
+            "- 终端入口不直接调用宿主模型会话，代码生成与修改仍在宿主中完成。\n"
+        )
+
     def _generic_cli_rules(self, target: str) -> str:
         return (
             f"# Super Dev Integration for {target}\n\n"
+            "Super Dev 是“超级开发战队”，一个流水线式 AI Coding 辅助工具。\n"
+            "Super Dev does not provide model inference or coding APIs.\n"
+            "Use the host model/runtime as-is; Super Dev only enforces the delivery protocol.\n"
             "Use Super Dev generated artifacts as source of truth.\n\n"
+            "## Trigger\n"
+            '- Preferred: `/super-dev "<需求描述>"`\n'
+            '- Terminal entry (local orchestration only): `super-dev "<需求描述>"`\n'
+            "- Terminal entry does not directly talk to the host model session.\n\n"
             "## Required Context\n"
             "- output/*-prd.md\n"
             "- output/*-architecture.md\n"
@@ -138,6 +318,9 @@ class IntegrationManager:
     def _generic_ide_rules(self, target: str) -> str:
         return (
             f"# Super Dev IDE Rules ({target})\n\n"
+            "## Positioning\n"
+            "- Super Dev is a host-level workflow governor, not an LLM platform.\n"
+            "- Keep using the host's model capabilities; do not expect extra model APIs from Super Dev.\n\n"
             "## Working Agreement\n"
             "- Read generated documents before coding.\n"
             "- Respect Spec tasks sequence.\n"
@@ -153,6 +336,10 @@ class IntegrationManager:
         return (
             "# Super Dev Claude Code Integration\n\n"
             "This project uses a pipeline-driven development model.\n\n"
+            "## Positioning\n"
+            "- Super Dev does not own a model endpoint.\n"
+            "- Claude Code remains the execution host for coding capability.\n"
+            "- Super Dev provides governance: protocol, gates, and audit artifacts.\n\n"
             "## Before coding\n"
             "1. Read output/*-prd.md\n"
             "2. Read output/*-architecture.md\n"
@@ -225,7 +412,7 @@ super-dev "你的需求描述"
 ### 第 2-4 阶段：骨架构建
 
 - 前端可演示骨架（前端先行原则）
-- Spec 规范（OpenSpec 风格）
+- Spec 规范（结构化规范风格）
 - 前后端实现骨架 + API 契约
 
 ### 第 5-6 阶段：质量保障

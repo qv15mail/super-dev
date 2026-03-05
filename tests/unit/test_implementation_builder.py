@@ -4,6 +4,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from super_dev.creators.implementation_builder import ImplementationScaffoldBuilder
 
 
@@ -81,3 +83,36 @@ class TestImplementationScaffoldBuilder:
         backend_pkg = (temp_project_dir / "backend" / "package.json").read_text(encoding="utf-8")
         assert '"name": "super-dev-app-frontend"' in frontend_pkg
         assert '"name": "super-dev-app-backend"' in backend_pkg
+
+    @pytest.mark.parametrize(
+        ("backend", "expected_files"),
+        [
+            ("rust", ["backend/Cargo.toml", "backend/src/main.rs"]),
+            ("php", ["backend/composer.json", "backend/public/index.php"]),
+            ("ruby", ["backend/Gemfile", "backend/app.rb"]),
+            ("csharp", ["backend/Program.cs"]),
+            ("kotlin", ["backend/build.gradle.kts", "backend/src/main/kotlin/com/superdev/Application.kt"]),
+            ("swift", ["backend/Package.swift", "backend/Sources/App/main.swift"]),
+            ("elixir", ["backend/mix.exs", "backend/lib/super_dev_backend.ex"]),
+            ("scala", ["backend/build.sbt", "backend/src/main/scala/Main.scala"]),
+            ("dart", ["backend/pubspec.yaml", "backend/bin/server.dart"]),
+        ],
+    )
+    def test_generate_extended_backend_scaffold(self, temp_project_dir: Path, backend: str, expected_files: list[str]):
+        builder = ImplementationScaffoldBuilder(
+            project_dir=temp_project_dir,
+            name="demo",
+            frontend="none",
+            backend=backend,
+        )
+        result = builder.generate(requirements=[{"spec_name": "core", "req_name": "flow"}])
+
+        assert result["frontend_files"] == []
+        assert len(result["backend_files"]) > 0
+        for relative in expected_files:
+            assert (temp_project_dir / relative).exists()
+
+        assert (temp_project_dir / "backend" / "API_CONTRACT.md").exists()
+        assert (temp_project_dir / "backend" / "migrations" / "001_create_core.sql").exists()
+        if backend == "csharp":
+            assert any((temp_project_dir / "backend").glob("*.csproj"))

@@ -9,6 +9,9 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+!super_dev/web/frontend/
+!super_dev/web/frontend/dist/
+!super_dev/web/frontend/dist/index.html
 downloads/
 eggs/
 .eggs/

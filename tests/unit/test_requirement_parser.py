@@ -50,6 +50,20 @@ class TestDocumentGeneratorIntegration:
         assert "billing" in names
         assert "notification" in names
 
+    def test_document_generator_includes_language_preferences(self):
+        generator = DocumentGenerator(
+            name="polyglot-platform",
+            description="构建支持多端协作的智能平台",
+            frontend="react",
+            backend="python",
+            language_preferences=["python", "typescript", "rust"],
+        )
+
+        language_line = "Python / TypeScript / Rust"
+        assert language_line in generator.generate_prd()
+        assert language_line in generator.generate_architecture()
+        assert language_line in generator.generate_uiux()
+
 
 class TestFrontendScaffoldBuilder:
     def test_generate_frontend_scaffold(self, temp_project_dir: Path):

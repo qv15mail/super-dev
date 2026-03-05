@@ -1,4 +1,4 @@
-# Super Dev 详细使用指南（2.0.1）
+# Super Dev 详细使用指南（2.0.2）
 
 > 本文是项目级操作手册，覆盖：
 > - 指令大全（命令怎么用）
@@ -17,6 +17,8 @@
 ```bash
 super-dev "你的功能需求"
 ```
+
+默认启用宿主硬门禁：若没有 `ready` 宿主，流水线会阻断并提示先接入宿主。
 
 示例：
 
@@ -66,7 +68,7 @@ pip install -U super-dev
 指定版本：
 
 ```bash
-pip install super-dev==2.0.1
+pip install super-dev==2.0.2
 ```
 
 ### 2.2 初始化（可选，但团队项目建议）
@@ -82,6 +84,25 @@ super-dev init my-project --platform web --frontend react --backend node --domai
 super-dev config list
 ```
 
+可选：在 `super-dev.yaml` 中配置企业知识增强策略：
+
+```yaml
+knowledge_allowed_domains:
+  - openai.com
+  - python.org
+knowledge_cache_ttl_seconds: 1800
+language_preferences:
+  - python
+  - typescript
+  - rust
+host_compatibility_min_score: 80
+host_compatibility_min_ready_hosts: 1
+host_profile_targets:
+  - codex-cli
+  - claude-code
+host_profile_enforce_selected: true
+```
+
 ---
 
 ## 3. 指令大全（命令速查）
@@ -90,6 +111,7 @@ super-dev config list
 
 ```bash
 super-dev "需求描述"                  # 推荐：需求直达模式
+super-dev 做一个CRM系统               # 无需子命令，直接把文本作为需求
 super-dev pipeline "需求描述" ...      # 高级：显式参数模式
 super-dev create "需求描述"            # 快速生成文档 + Spec
 ```
@@ -117,6 +139,10 @@ super-dev quality --type all
 super-dev quality --type prd
 super-dev quality --type architecture
 super-dev quality --type uiux
+super-dev policy init
+super-dev policy init --preset enterprise --force
+super-dev policy presets
+super-dev policy show
 ```
 
 ### 3.4 部署与交付
@@ -125,6 +151,11 @@ super-dev quality --type uiux
 super-dev deploy --cicd github
 super-dev deploy --cicd all
 super-dev deploy --docker
+super-dev deploy --cicd all --rehearsal
+super-dev deploy --cicd all --rehearsal --rehearsal-verify
+super-dev pipeline "需求描述" --skip-rehearsal-verify   # 显式跳过发布演练门禁
+super-dev metrics
+super-dev metrics --history --limit 20
 ```
 
 ### 3.5 设计与专家
@@ -144,7 +175,9 @@ super-dev expert SECURITY "审查登录与会话安全"
 ```bash
 super-dev integrate list
 super-dev integrate setup --all --force
-super-dev integrate setup --target cursor --force
+super-dev integrate setup --target qoder --force
+super-dev integrate matrix
+super-dev integrate matrix --json
 
 super-dev skill targets
 super-dev skill install super-dev --target codex-cli --name super-dev-core --force
@@ -293,29 +326,74 @@ super-dev deploy --cicd all
 
 ## 7. 多工具安装与使用
 
-### 7.1 一键安装全部目标
+### 7.1 安装向导（默认，支持多选）
+
+```bash
+./install.sh
+super-dev install
+```
+
+说明：
+
+- 默认进入交互式安装引导
+- 可多选宿主（CLI/IDE）
+- 自动执行 onboard + doctor
+
+### 7.2 一键安装全部目标（非交互）
 
 ```bash
 ./install.sh --targets all
 ```
 
-### 7.2 仅安装规则，不装 skill
+### 7.3 仅安装规则，不装 skill
 
 ```bash
 ./install.sh --targets all --no-skill
 ```
 
-### 7.3 单平台安装
+### 7.4 单平台安装
 
 ```bash
-super-dev integrate setup --target cursor --force
-super-dev skill install super-dev --target cursor --name super-dev-core --force
+super-dev integrate setup --target qoder --force
+super-dev skill install super-dev --target qoder --name super-dev-core --force
 ```
+
+### 7.5 自动探测宿主并接入（推荐）
+
+```bash
+super-dev detect --json
+super-dev detect --auto --save-profile
+super-dev onboard --auto --yes --force
+super-dev doctor --auto --repair --force
+```
+
+`detect` 会默认生成：
+
+- `output/<project>-host-compatibility.json`
+- `output/<project>-host-compatibility.md`
+- `output/host-compatibility-history/*.json`
+- `output/host-compatibility-history/*.md`
+
+当使用 `--save-profile` 时，会自动更新 `super-dev.yaml`：
+
+- `host_profile_targets`
+- `host_profile_enforce_selected=true`
+
+流水线每次运行会产出契约审计：
+
+- `output/*-pipeline-contract.json`
+- `output/*-pipeline-contract.md`
+
+企业策略建议：
+
+1. 使用 `super-dev policy init --preset enterprise --force`。
+2. 先执行 `super-dev detect --auto --save-profile` 产出兼容报告。
+3. 在策略中启用 `enforce_required_hosts_ready=true`，并设置 `min_required_host_score`。
 
 支持目标：
 
-- CLI: `claude-code`, `codex-cli`, `opencode`
-- IDE: `antigravity`, `cursor`, `qoder`, `trae`, `codebuddy`
+- CLI: `claude-code`, `codex-cli`, `gemini-cli`, `kimi-cli`, `kiro-cli`, `qoder-cli`
+- IDE: `qoder`
 
 ---
 
@@ -357,7 +435,7 @@ super-dev quality --type all
 
 ```bash
 ./scripts/preflight.sh
-bash scripts/release.sh --version 2.0.1 --no-publish
+bash scripts/release.sh --version 2.0.2 --no-publish
 bash scripts/publish.sh --repository pypi
 ```
 

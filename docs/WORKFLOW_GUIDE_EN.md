@@ -1,4 +1,4 @@
-# Super Dev Workflow Guide (2.0.1)
+# Super Dev Workflow Guide (2.0.2)
 
 This is the practical handbook for running Super Dev in real projects. It covers:
 
@@ -19,6 +19,8 @@ Use natural language as the default interface:
 super-dev "Build an enterprise project management platform with auth, RBAC, projects, tasks, and analytics"
 ```
 
+Host hard gate is enabled by default. If no `ready` host is available, pipeline execution is blocked until onboarding is complete.
+
 That single command triggers the full pipeline end to end.
 
 ### Advanced entrypoint
@@ -35,6 +37,25 @@ super-dev pipeline "Build an enterprise project management platform with auth, R
   --quality-threshold 85
 ```
 
+Optional: set enterprise knowledge controls in `super-dev.yaml`:
+
+```yaml
+knowledge_allowed_domains:
+  - openai.com
+  - python.org
+knowledge_cache_ttl_seconds: 1800
+language_preferences:
+  - python
+  - typescript
+  - rust
+host_compatibility_min_score: 80
+host_compatibility_min_ready_hosts: 1
+host_profile_targets:
+  - codex-cli
+  - claude-code
+host_profile_enforce_selected: true
+```
+
 ---
 
 ## 2. Command Map
@@ -43,6 +64,7 @@ super-dev pipeline "Build an enterprise project management platform with auth, R
 
 ```bash
 super-dev "<requirement>"            # recommended default
+super-dev Build-an-enterprise-CRM    # direct text mode without subcommand
 super-dev pipeline "<requirement>"   # advanced explicit mode
 super-dev create "<requirement>"     # docs + spec focused path
 ```
@@ -69,6 +91,15 @@ super-dev task run <change_id>
 super-dev quality --type all
 super-dev deploy --cicd all
 super-dev deploy --docker
+super-dev deploy --cicd all --rehearsal
+super-dev deploy --cicd all --rehearsal --rehearsal-verify
+super-dev pipeline "<requirement>" --skip-rehearsal-verify
+super-dev policy init
+super-dev policy init --preset enterprise --force
+super-dev policy presets
+super-dev policy show
+super-dev metrics
+super-dev metrics --history --limit 20
 ```
 
 ### Expert and design tooling
@@ -88,6 +119,8 @@ super-dev design tokens --primary "#2563EB"
 ```bash
 super-dev integrate list
 super-dev integrate setup --all --force
+super-dev integrate matrix
+super-dev integrate matrix --json
 super-dev skill targets
 super-dev skill install super-dev --target codex-cli --name super-dev-core --force
 ```
@@ -183,10 +216,49 @@ If you need a local constrained run:
 
 Supported AI coding environments:
 
-- CLI: `claude-code`, `codex-cli`, `opencode`
-- IDE: `antigravity`, `cursor`, `qoder`, `trae`, `codebuddy`
+- CLI: `claude-code`, `codex-cli`, `gemini-cli`, `kimi-cli`, `kiro-cli`, `qoder-cli`
+- IDE: `qoder`
 
-One-command setup:
+Recommended auto-detect flow:
+
+```bash
+super-dev detect --json
+super-dev detect --auto --save-profile
+super-dev onboard --auto --yes --force
+super-dev doctor --auto --repair --force
+```
+
+`detect` generates by default:
+
+- `output/<project>-host-compatibility.json`
+- `output/<project>-host-compatibility.md`
+- `output/host-compatibility-history/*.json`
+- `output/host-compatibility-history/*.md`
+
+With `--save-profile`, Super Dev also updates `super-dev.yaml`:
+
+- `host_profile_targets`
+- `host_profile_enforce_selected=true`
+
+Each pipeline run emits contract-audit artifacts:
+
+- `output/*-pipeline-contract.json`
+- `output/*-pipeline-contract.md`
+
+Recommended enterprise flow:
+
+1. Initialize policy with `super-dev policy init --preset enterprise --force`.
+2. Run `super-dev detect --auto --save-profile` before pipeline execution.
+3. Keep `enforce_required_hosts_ready=true` and set `min_required_host_score` based on team baseline.
+
+Interactive installer (default, multi-select hosts):
+
+```bash
+./install.sh
+super-dev install
+```
+
+Non-interactive all-target setup:
 
 ```bash
 ./install.sh --targets all

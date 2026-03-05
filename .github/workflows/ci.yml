@@ -58,7 +58,7 @@ jobs:
           pip install bandit pip-audit build twine
 
       - name: Lint
-        run: ruff check super_dev tests scripts/check_delivery_ready.py --output-format concise
+        run: ruff check super_dev tests scripts/check_delivery_ready.py scripts/check_host_compatibility.py --output-format concise
 
       - name: Type Check
         run: mypy super_dev
@@ -68,6 +68,14 @@ jobs:
 
       - name: Delivery Gate Smoke
         run: python scripts/check_delivery_ready.py --smoke --project-dir .
+
+      - name: Generate Host Compatibility Report
+        run: |
+          python -m super_dev.cli setup --host codex-cli --force --skip-doctor
+          python -m super_dev.cli detect --host codex-cli --json > /tmp/host-compat.json
+
+      - name: Host Compatibility Gate
+        run: python scripts/check_host_compatibility.py --project-dir . --min-score 80 --min-ready-hosts 1
 
   security:
     name: Security Scan
