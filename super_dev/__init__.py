@@ -6,6 +6,6 @@
 最后修改：2025-12-30
 """
 
-__version__ = "2.0.2"
+__version__ = "2.0.3"
 __author__ = "Excellent"
 __description__ = "超级开发战队 - 一个流水线式的 AI Coding 辅助工具"

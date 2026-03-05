@@ -4242,11 +4242,23 @@ class SuperDevCLI:
         configured: list[str] = []
         for target in available_targets:
             integration_files = IntegrationManager.TARGETS[target].files
-            slash_file = IntegrationManager.SLASH_COMMAND_FILES.get(target, "")
             skill_dir = SkillManager.TARGET_PATHS.get(target, "")
 
             has_integration = any((project_dir / relative).exists() for relative in integration_files)
-            has_slash = bool(slash_file) and (project_dir / slash_file).exists()
+            if IntegrationManager.supports_slash(target):
+                project_slash_exists = IntegrationManager.resolve_slash_command_path(
+                    target=target,
+                    scope="project",
+                    project_dir=project_dir,
+                ).exists()
+                global_slash_exists = IntegrationManager.resolve_slash_command_path(
+                    target=target,
+                    scope="global",
+                ).exists()
+            else:
+                project_slash_exists = False
+                global_slash_exists = False
+            has_slash = project_slash_exists or global_slash_exists
             has_skill = bool(skill_dir) and (project_dir / skill_dir).exists()
             if has_integration or has_slash or has_skill:
                 configured.append(target)
@@ -4350,7 +4362,6 @@ class SuperDevCLI:
         from .skills import SkillManager
 
         integration_targets = IntegrationManager.TARGETS
-        slash_map = IntegrationManager.SLASH_COMMAND_FILES
         skill_paths = SkillManager.TARGET_PATHS
 
         report: dict[str, Any] = {"hosts": {}, "overall_ready": True}
@@ -4388,15 +4399,40 @@ class SuperDevCLI:
                     )
 
             if check_slash:
-                slash_file = project_dir / slash_map[target]
-                slash_ok = slash_file.exists()
-                host_report["checks"]["slash"] = {"ok": slash_ok, "file": str(slash_file)}
-                if not slash_ok:
-                    host_report["ready"] = False
-                    host_report["missing"].append("slash")
-                    host_report["suggestions"].append(
-                        f"super-dev onboard --host {target} --skip-integrate --skip-skill --force --yes"
+                if IntegrationManager.supports_slash(target):
+                    project_slash = IntegrationManager.resolve_slash_command_path(
+                        target=target,
+                        scope="project",
+                        project_dir=project_dir,
                     )
+                    global_slash = IntegrationManager.resolve_slash_command_path(
+                        target=target,
+                        scope="global",
+                    )
+                    project_ok = project_slash.exists()
+                    global_ok = global_slash.exists()
+                    slash_ok = project_ok or global_ok
+                    scope = "project" if project_ok else ("global" if global_ok else "missing")
+                    host_report["checks"]["slash"] = {
+                        "ok": slash_ok,
+                        "scope": scope,
+                        "project_file": str(project_slash),
+                        "global_file": str(global_slash),
+                    }
+                    if not slash_ok:
+                        host_report["ready"] = False
+                        host_report["missing"].append("slash")
+                        host_report["suggestions"].append(
+                            f"super-dev onboard --host {target} --skip-integrate --skip-skill --force --yes"
+                        )
+                else:
+                    host_report["checks"]["slash"] = {
+                        "ok": True,
+                        "scope": "n/a",
+                        "project_file": "",
+                        "global_file": "",
+                        "mode": "skill-only",
+                    }
 
             report["hosts"][target] = host_report
             if not host_report["ready"]:
@@ -4413,12 +4449,14 @@ class SuperDevCLI:
         check_skill: bool,
         check_slash: bool,
     ) -> dict[str, Any]:
+        from .integrations import IntegrationManager
+
         enabled_checks = []
         if check_integrate:
             enabled_checks.append("integrate")
         if check_skill:
             enabled_checks.append("skill")
-        if check_slash:
+        if check_slash and any(IntegrationManager.supports_slash(target) for target in targets):
             enabled_checks.append("slash")
 
         per_host: dict[str, dict[str, Any]] = {}
@@ -4511,9 +4549,11 @@ class SuperDevCLI:
                 host_actions["skill"] = f"failed: {exc}"
 
             try:
-                if check_slash and "slash" in missing:
+                if check_slash and integration_manager.supports_slash(target):
                     integration_manager.setup_slash_command(target=target, force=force)
-                    host_actions["slash"] = "fixed"
+                    integration_manager.setup_global_slash_command(target=target, force=force)
+                    if "slash" in missing:
+                        host_actions["slash"] = "fixed"
             except Exception as exc:
                 host_actions["slash"] = f"failed: {exc}"
 
@@ -4609,14 +4649,25 @@ class SuperDevCLI:
 
             if not args.skip_slash:
                 try:
-                    slash_file = integration_manager.setup_slash_command(
-                        target=target,
-                        force=args.force,
-                    )
-                    if slash_file is None:
-                        self.console.print("  [dim]- /super-dev 映射已存在（可加 --force 覆盖）[/dim]")
+                    if integration_manager.supports_slash(target):
+                        slash_file = integration_manager.setup_slash_command(
+                            target=target,
+                            force=args.force,
+                        )
+                        if slash_file is None:
+                            self.console.print("  [dim]- /super-dev 映射已存在（可加 --force 覆盖）[/dim]")
+                        else:
+                            self.console.print(f"  [green]✓[/green] /super-dev 映射: {slash_file}")
+                        global_slash_file = integration_manager.setup_global_slash_command(
+                            target=target,
+                            force=args.force,
+                        )
+                        if global_slash_file is None:
+                            self.console.print("  [dim]- 全局 /super-dev 映射已存在（可加 --force 覆盖）[/dim]")
+                        elif slash_file is None or global_slash_file.resolve() != slash_file.resolve():
+                            self.console.print(f"  [green]✓[/green] 全局 /super-dev 映射: {global_slash_file}")
                     else:
-                        self.console.print(f"  [green]✓[/green] /super-dev 映射: {slash_file}")
+                        self.console.print("  [dim]- 该宿主为 Skill-only 模式，已跳过 /super-dev 映射[/dim]")
                 except Exception as exc:
                     has_error = True
                     self.console.print(f"  [red]✗[/red] /super-dev 映射失败: {exc}")
@@ -4627,8 +4678,9 @@ class SuperDevCLI:
             return 1
 
         self.console.print("[green]✓ Onboard 完成[/green]")
-        self.console.print("[cyan]在宿主工具里可直接输入:[/cyan]")
-        self.console.print('  /super-dev "你的需求"')
+        self.console.print("[cyan]在宿主工具里触发方式:[/cyan]")
+        self.console.print('  - 原生 slash 宿主: /super-dev "你的需求"')
+        self.console.print('  - Skill-only 宿主: 调用 super-dev-core Skill，再按 output/* 与 tasks.md 执行')
         self.console.print("[dim]终端 super-dev \"你的需求\" 仅触发本地编排，不替代宿主会话编码[/dim]")
         return 0
 

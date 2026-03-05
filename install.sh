@@ -4,7 +4,7 @@
 #
 # 用法:
 #   ./install.sh                                # 交互式向导（支持多选宿主）
-#   ./install.sh --targets claude-code,codex-cli,qoder
+#   ./install.sh --targets claude-code,codex-cli,cursor-cli,opencode,iflow,qoder,windsurf,codebuddy
 #   ./install.sh --targets all --no-skill
 #
 
@@ -21,9 +21,9 @@ success() { echo -e "${GREEN}${NC} $1"; }
 warning() { echo -e "${YELLOW}${NC} $1"; }
 error() { echo -e "${RED}${NC} $1"; }
 
-ALL_TARGETS_CSV="claude-code,codex-cli,gemini-cli,kimi-cli,kiro-cli,qoder-cli,qoder"
-CLI_TARGETS_CSV="claude-code,codex-cli,gemini-cli,kimi-cli,kiro-cli,qoder-cli"
-IDE_TARGETS_CSV="qoder"
+ALL_TARGETS_CSV="claude-code,codebuddy-cli,codebuddy,codex-cli,cursor-cli,windsurf,gemini-cli,iflow,kimi-cli,kiro-cli,opencode,qoder-cli,cursor,kiro,qoder,trae"
+CLI_TARGETS_CSV="claude-code,codebuddy-cli,codex-cli,cursor-cli,gemini-cli,iflow,kimi-cli,kiro-cli,opencode,qoder-cli"
+IDE_TARGETS_CSV="codebuddy,cursor,kiro,qoder,trae,windsurf"
 
 TARGETS="$ALL_TARGETS_CSV"
 WITH_SKILL="true"
@@ -162,13 +162,13 @@ run_guided_selector() {
   echo ""
   echo "CLI 宿主:"
   for target in "${CLI_TARGET_ARRAY[@]}"; do
-    printf "  %2d) %s\n" "$index" "$target"
+    printf "  %2d. %s\n" "$index" "$target"
     index=$((index + 1))
   done
   echo ""
   echo "IDE 宿主:"
   for target in "${IDE_TARGET_ARRAY[@]}"; do
-    printf "  %2d) %s\n" "$index" "$target"
+    printf "  %2d. %s\n" "$index" "$target"
     index=$((index + 1))
   done
   echo ""
@@ -176,7 +176,7 @@ run_guided_selector() {
   echo "  cli  = 全选 CLI"
   echo "  ide  = 全选 IDE"
   echo "  all  = 全选全部"
-  echo "  也可直接输入宿主 id（如 codex-cli,qoder）"
+  echo "  也可直接输入宿主 id（如 codex-cli,cursor-cli,opencode,qoder,windsurf）"
 
   while true; do
     read -r -p "请输入编号/宿主ID（逗号分隔，可多选）: " input
@@ -261,7 +261,7 @@ Super Dev Installer
 
 Options:
   --targets <list>   目标平台，逗号分隔，或 all/cli/ide
-                     可选: claude-code,codex-cli,gemini-cli,kimi-cli,kiro-cli,qoder-cli,qoder
+                     可选: claude-code,codebuddy-cli,codebuddy,codex-cli,cursor-cli,windsurf,gemini-cli,iflow,kimi-cli,kiro-cli,opencode,qoder-cli,cursor,kiro,qoder,trae
   --no-skill         只生成宿主集成和 /super-dev 映射，不安装内置 skill
   --guided           强制进入交互式安装向导
   --no-guided        跳过交互向导（需配合 --targets）

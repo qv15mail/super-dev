@@ -189,7 +189,7 @@ class DocumentGenerator:
         return f"""# {self.name} - 产品需求文档 (PRD)
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.0.2
+> **版本**: v2.0.3
 > **状态**: 草稿
 
 ---
@@ -379,7 +379,7 @@ class DocumentGenerator:
 
 | 版本 | 日期 | 变更内容 | 作者 |
 |:---|:---|:---|:---|
-| v2.0.2 | {datetime.now().strftime('%Y-%m-%d')} | 初始版本 | Super Dev |
+| v2.0.3 | {datetime.now().strftime('%Y-%m-%d')} | 初始版本 | Super Dev |
 """
 
     def generate_architecture(self) -> str:
@@ -387,7 +387,7 @@ class DocumentGenerator:
         return f"""# {self.name} - 架构设计文档
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.0.2
+> **版本**: v2.0.3
 > **架构师**: Super Dev ARCHITECT 专家
 
 ---
@@ -774,7 +774,7 @@ jobs:
         doc_parts.append(f"""# {self.name} - UI/UX 设计文档
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.0.2
+> **版本**: v2.0.3
 > **设计师**: Super Dev UI/UX 专家
 
 ---
@@ -831,6 +831,15 @@ AI 基于项目特征，从设计数据库中为您推荐：
 2. **数据驱动**: 基于数据迭代设计
 3. **移动优先**: 响应式设计
 4. **无障碍**: 符合 WCAG 2.1 AA
+
+### 1.3 商业级 UI 执行红线（强制）
+
+1. **禁止 AI 模板化视觉**：禁止直接输出同质化模板页面与缺少信息层级的“拼块式 UI”。
+2. **禁止紫/粉渐变主视觉**：除非品牌规范明确要求，不允许使用紫色或粉色渐变作为主品牌视觉。
+3. **禁止 emoji 充当功能图标**：功能图标统一使用专业 SVG 图标库（如 Lucide/Heroicons/Tabler）。
+4. **禁止默认系统字体直出**：必须在文档中明确品牌字体组合与字号层级，页面必须体现明确字重与层级节奏。
+5. **必须具备可访问交互**：可见 focus 态、可读对比度、键盘可达、并兼容 reduced-motion。
+6. **必须有设计 token**：颜色、间距、圆角、阴影和动效时长需以 token 形式统一管理。
 
 ---
 
@@ -916,7 +925,7 @@ module.exports = {{
             doc_parts.append("""#### 字体家族
 
 ```css
-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Segoe UI', sans-serif;
 ```
 
 #### 字号层级

@@ -474,6 +474,19 @@ class TestCLISkillAndIntegrate:
         finally:
             os.chdir(original_cwd)
 
+    def test_onboard_skill_only_host_skips_slash_mapping(self, temp_project_dir: Path):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["onboard", "--host", "trae", "--force", "--yes"])
+            assert result == 0
+            assert (temp_project_dir / ".trae" / "rules.md").exists()
+            assert (temp_project_dir / ".trae" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert not (temp_project_dir / ".trae" / "commands" / "super-dev.md").exists()
+        finally:
+            os.chdir(original_cwd)
+
     def test_onboard_yes_defaults_to_all_targets(self, temp_project_dir: Path):
         original_cwd = os.getcwd()
         os.chdir(temp_project_dir)
@@ -525,6 +538,34 @@ class TestCLISkillAndIntegrate:
 
             after = cli.run(["doctor", "--host", "claude-code"])
             assert after == 0
+        finally:
+            os.chdir(original_cwd)
+
+    def test_doctor_accepts_global_slash_mapping_when_project_slash_missing(
+        self,
+        temp_project_dir: Path,
+        monkeypatch,
+    ):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            fake_home = temp_project_dir / "fake-home"
+            fake_home.mkdir(parents=True, exist_ok=True)
+            monkeypatch.setenv("HOME", str(fake_home))
+
+            cli = SuperDevCLI()
+            onboard = cli.run(["onboard", "--host", "claude-code", "--force", "--yes"])
+            assert onboard == 0
+
+            project_slash = temp_project_dir / ".claude" / "commands" / "super-dev.md"
+            assert project_slash.exists()
+            project_slash.unlink()
+
+            global_slash = fake_home / ".claude" / "commands" / "super-dev.md"
+            assert global_slash.exists()
+
+            result = cli.run(["doctor", "--host", "claude-code"])
+            assert result == 0
         finally:
             os.chdir(original_cwd)
 

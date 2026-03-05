@@ -19,7 +19,7 @@
 
 ## Version
 
-Current version: `2.0.2`
+Current version: `2.0.3`
 
 ---
 
@@ -87,13 +87,13 @@ pip install -U super-dev
 ### 2. Pin a specific version
 
 ```bash
-pip install super-dev==2.0.2
+pip install super-dev==2.0.3
 ```
 
 ### 3. Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.2
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.3
 ```
 
 ### 4. Source install for development
@@ -108,17 +108,17 @@ pip install -e ".[dev]"
 
 ## Simplest Usage (For End Users)
 
-### CLI Hosts (Claude Code / Codex CLI / Gemini CLI / Kimi CLI / Kiro CLI / Qoder CLI)
+### CLI Hosts (Claude Code / CodeBuddy CLI / Codex CLI / Cursor CLI / Gemini CLI / iFlow CLI / Kimi CLI / Kiro CLI / OpenCode CLI / Qoder CLI)
 
 1. Run `super-dev` in your project root to finish onboarding.  
 2. In the host session, run: `/super-dev your requirement`.
+3. Onboarding now installs both project-level and global `/super-dev` mapping so you can reuse it across directories.
 
-### IDE Host (Qoder)
+### IDE Hosts (CodeBuddy / Cursor / Kiro / Qoder / Trae / Windsurf)
 
 1. Run `super-dev` in your project root to finish onboarding.  
 2. In IDE Agent Chat, try: `/super-dev your requirement`.  
-3. If slash is not supported in the current IDE build, use:
-   `super-dev "your requirement"` (terminal orchestration), then implement in IDE Chat based on `output/*` and `tasks.md`.
+3. IDEs with native slash support get project-level `/super-dev` mapping; Skill-only IDEs skip slash and install rules + skill only.
 
 ---
 
@@ -200,6 +200,9 @@ If host supports slash command mapping:
 /super-dev your requirement
 ```
 
+`/super-dev` enforces this sequence: generate PRD/Architecture/UIUX first -> create Spec/tasks -> then coding.  
+Modern commercial UI/UX constraints are enforced at generation time (no purple/pink gradient-first themes, no emoji icons, no generic template output).
+
 If slash mapping is unavailable, run the terminal entry in the same project root (local Super Dev orchestration only):
 
 ```bash
@@ -269,20 +272,30 @@ super-dev quality --type all
 ### CLI Hosts
 
 - `claude-code`
+- `codebuddy-cli`
 - `codex-cli`
+- `cursor-cli`
 - `gemini-cli`
+- `iflow`
 - `kimi-cli`
 - `kiro-cli`
+- `opencode`
 - `qoder-cli`
 
 ### IDE / Extension Hosts
 
+- `codebuddy`
+- `cursor`
+- `kiro`
 - `qoder`
+- `trae` (Skill-only)
+- `windsurf`
 
 ### Host Adaptation Model (CLI/IDE)
 
 - `CLI hosts`: trigger `/super-dev` inside the host session, and let the host model perform code work
-- `IDE hosts`: trigger `/super-dev` in Agent Chat, then enforce execution through rules + skill constraints
+- `IDE hosts (native slash)`: trigger `/super-dev` in Agent Chat, then enforce execution through rules + skill constraints
+- `IDE hosts (Skill-only)`: trigger `super-dev-core` skill in Agent Chat, then execute by `output/*` and `tasks.md`
 - `Terminal entry`: `super-dev "requirement"` only triggers local orchestration and does not directly call a host model session
 
 Inspect host adaptation matrix (official docs links, adaptation mode, injection paths, detection strategy):

@@ -86,5 +86,46 @@ class TestIntegrationManager:
         assert command_file.resolve() == (temp_project_dir / expected_file).resolve()
         assert command_file.exists()
         content = command_file.read_text(encoding="utf-8")
-        assert "/super-dev" in content
-        assert 'super-dev "<需求描述>"' in content
+        if command_file.suffix == ".toml":
+            assert "{{args}}" in content
+            assert "super-dev create" in content
+        else:
+            assert "/super-dev" in content
+            assert "$ARGUMENTS" in content
+            assert 'super-dev create "$ARGUMENTS"' in content
+
+    def test_setup_global_slash_command(self, temp_project_dir: Path, monkeypatch: pytest.MonkeyPatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+
+        manager = IntegrationManager(temp_project_dir)
+        command_file = manager.setup_global_slash_command(target="claude-code", force=True)
+
+        assert command_file is not None
+        expected = fake_home / ".claude" / "commands" / "super-dev.md"
+        assert command_file.resolve() == expected.resolve()
+        assert expected.exists()
+
+    def test_setup_global_slash_command_opencode_uses_config_dir(
+        self,
+        temp_project_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+
+        manager = IntegrationManager(temp_project_dir)
+        command_file = manager.setup_global_slash_command(target="opencode", force=True)
+
+        assert command_file is not None
+        expected = fake_home / ".config" / "opencode" / "commands" / "super-dev.md"
+        assert command_file.resolve() == expected.resolve()
+        assert expected.exists()
+
+    def test_skill_only_target_skips_slash_mapping(self, temp_project_dir: Path):
+        manager = IntegrationManager(temp_project_dir)
+        assert manager.supports_slash("trae") is False
+        assert manager.setup_slash_command(target="trae", force=True) is None
+        assert manager.setup_global_slash_command(target="trae", force=True) is None

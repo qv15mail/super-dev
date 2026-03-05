@@ -80,12 +80,21 @@ def test_host_tool_catalog_ids_unique():
     assert len(ids) == len(set(ids))
     assert {
         "claude-code",
+        "codebuddy-cli",
+        "codebuddy",
         "codex-cli",
+        "cursor-cli",
+        "windsurf",
         "gemini-cli",
+        "iflow",
         "kimi-cli",
         "kiro-cli",
+        "opencode",
         "qoder-cli",
+        "cursor",
+        "kiro",
         "qoder",
+        "trae",
     }.issubset(set(ids))
 
 

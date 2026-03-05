@@ -48,15 +48,40 @@ class IntegrationManager:
             description="Claude Code CLI 深度集成",
             files=[".claude/CLAUDE.md"],
         ),
+        "codebuddy-cli": IntegrationTarget(
+            name="codebuddy-cli",
+            description="CodeBuddy CLI 项目规则注入",
+            files=[".codebuddy/AGENTS.md"],
+        ),
+        "codebuddy": IntegrationTarget(
+            name="codebuddy",
+            description="CodeBuddy IDE 规则注入",
+            files=[".codebuddy/rules.md"],
+        ),
         "codex-cli": IntegrationTarget(
             name="codex-cli",
             description="Codex CLI 项目上下文注入",
             files=[".codex/AGENTS.md"],
         ),
+        "cursor-cli": IntegrationTarget(
+            name="cursor-cli",
+            description="Cursor CLI 项目规则注入",
+            files=[".cursor/rules/super-dev.mdc"],
+        ),
+        "windsurf": IntegrationTarget(
+            name="windsurf",
+            description="Windsurf IDE 规则注入",
+            files=[".windsurf/rules.md"],
+        ),
         "gemini-cli": IntegrationTarget(
             name="gemini-cli",
             description="Gemini CLI 项目规则注入",
             files=[".gemini/AGENTS.md"],
+        ),
+        "iflow": IntegrationTarget(
+            name="iflow",
+            description="iFlow CLI 项目规则注入",
+            files=[".iflow/AGENTS.md"],
         ),
         "kimi-cli": IntegrationTarget(
             name="kimi-cli",
@@ -73,29 +98,70 @@ class IntegrationManager:
             description="Qoder CLI 项目规则注入",
             files=[".qoder/AGENTS.md"],
         ),
+        "opencode": IntegrationTarget(
+            name="opencode",
+            description="OpenCode CLI 项目规则注入",
+            files=[".opencode/AGENTS.md"],
+        ),
+        "cursor": IntegrationTarget(
+            name="cursor",
+            description="Cursor IDE 规则注入",
+            files=[".cursor/rules/super-dev.mdc"],
+        ),
+        "kiro": IntegrationTarget(
+            name="kiro",
+            description="Kiro IDE 项目规则注入",
+            files=[".kiro/AGENTS.md"],
+        ),
         "qoder": IntegrationTarget(
             name="qoder",
             description="Qoder IDE 规则注入",
             files=[".qoder/rules.md"],
         ),
+        "trae": IntegrationTarget(
+            name="trae",
+            description="Trae IDE 规则注入（Skill-only）",
+            files=[".trae/rules.md"],
+        ),
     }
     SLASH_COMMAND_FILES: dict[str, str] = {
         "claude-code": ".claude/commands/super-dev.md",
+        "codebuddy-cli": ".codebuddy/commands/super-dev.md",
+        "codebuddy": ".codebuddy/commands/super-dev.md",
         "codex-cli": ".codex/commands/super-dev.md",
+        "cursor-cli": ".cursor/commands/super-dev.md",
+        "windsurf": ".windsurf/workflows/super-dev.md",
         "gemini-cli": ".gemini/commands/super-dev.md",
+        "iflow": ".iflow/commands/super-dev.toml",
         "kimi-cli": ".kimi/commands/super-dev.md",
         "kiro-cli": ".kiro/commands/super-dev.md",
+        "opencode": ".opencode/commands/super-dev.md",
         "qoder-cli": ".qoder/commands/super-dev.md",
+        "cursor": ".cursor/commands/super-dev.md",
+        "kiro": ".kiro/steering/super-dev.md",
         "qoder": ".qoder/commands/super-dev.md",
     }
+    GLOBAL_SLASH_COMMAND_FILES: dict[str, str] = {
+        "opencode": ".config/opencode/commands/super-dev.md",
+    }
+    NO_SLASH_TARGETS: set[str] = {"trae"}
     OFFICIAL_DOCS: dict[str, str] = {
         "claude-code": "https://docs.anthropic.com/en/docs/claude-code/slash-commands",
+        "codebuddy-cli": "https://www.codebuddy.ai/docs/cli/slash-commands",
+        "codebuddy": "https://www.codebuddy.ai/docs/cli/ide-integrations",
         "codex-cli": "https://platform.openai.com/docs/codex",
+        "cursor-cli": "https://docs.cursor.com/en/cli/reference/slash-commands",
+        "windsurf": "https://docs.windsurf.com/plugins/cascade/workflows",
         "gemini-cli": "https://google-gemini.github.io/gemini-cli/docs/",
+        "iflow": "https://platform.iflow.cn/en/cli/examples/slash-commands",
         "kimi-cli": "https://kimi.com/code/docs/cli/reference",
         "kiro-cli": "https://kiro.dev/docs/cli/",
+        "opencode": "https://opencode.ai/docs/commands/",
         "qoder-cli": "https://docs.qoder.com/cli/using-cli",
+        "cursor": "https://docs.cursor.com/en/agent/chat/commands",
+        "kiro": "https://kiro.dev/docs/steering/",
         "qoder": "https://docs.qoder.com/user-guide/rules",
+        "trae": "https://www.traeide.com/docs/what-is-trae-rules",
     }
     DOCS_VERIFIED_TARGETS: set[str] = {key for key, value in OFFICIAL_DOCS.items() if bool(value)}
 
@@ -108,14 +174,15 @@ class IntegrationManager:
         declared = set(HOST_TOOL_IDS)
         target_keys = set(cls.TARGETS)
         slash_keys = set(cls.SLASH_COMMAND_FILES)
+        slash_required = declared - cls.NO_SLASH_TARGETS
         docs_keys = set(cls.OFFICIAL_DOCS)
         verified_keys = set(cls.DOCS_VERIFIED_TARGETS)
         declared_with_docs = {item for item, value in cls.OFFICIAL_DOCS.items() if bool(value)}
         return {
             "missing_in_targets": sorted(declared - target_keys),
             "extra_in_targets": sorted(target_keys - declared),
-            "missing_in_slash": sorted(declared - slash_keys),
-            "extra_in_slash": sorted(slash_keys - declared),
+            "missing_in_slash": sorted(slash_required - slash_keys),
+            "extra_in_slash": sorted(slash_keys - slash_required),
             "missing_in_docs_map": sorted(declared - docs_keys),
             "extra_in_docs_map": sorted(docs_keys - declared),
             "missing_official_docs_url": sorted(declared - declared_with_docs),
@@ -134,7 +201,7 @@ class IntegrationManager:
 
         category = HOST_TOOL_CATEGORY_MAP.get(target, "ide")
         integration_files = list(self.TARGETS[target].files)
-        slash_file = self.SLASH_COMMAND_FILES.get(target, "")
+        slash_file = self.SLASH_COMMAND_FILES.get(target, "") if self.supports_slash(target) else ""
         skill_dir = SkillManager.TARGET_PATHS.get(target, "")
         docs_url = self.OFFICIAL_DOCS.get(target, "")
         docs_verified = target in self.DOCS_VERIFIED_TARGETS
@@ -143,9 +210,12 @@ class IntegrationManager:
         if category == "cli":
             primary_entry = '/super-dev "<需求描述>"（在该 CLI 宿主会话内）'
             notes = "CLI 宿主建议直接在当前会话执行 slash 命令。"
-        else:
+        elif self.supports_slash(target):
             primary_entry = '/super-dev "<需求描述>"（在 IDE Agent Chat 内）'
             notes = "IDE 宿主优先通过 Agent Chat 触发，保持上下文连续。"
+        else:
+            primary_entry = '调用 super-dev-core Skill（在 IDE Agent Chat 内）'
+            notes = "该宿主当前走 Skill-only 模式：先触发 Skill，再按 tasks.md 执行。"
 
         return HostAdapterProfile(
             host=target,
@@ -205,15 +275,51 @@ class IntegrationManager:
         return result
 
     def setup_slash_command(self, target: str, force: bool = False) -> Path | None:
-        relative = self.SLASH_COMMAND_FILES.get(target)
-        if relative is None:
-            raise ValueError(f"Unsupported target: {target}")
-        command_file = self.project_dir / relative
+        return self.setup_slash_command_for_scope(target=target, force=force, scope="project")
+
+    def setup_global_slash_command(self, target: str, force: bool = False) -> Path | None:
+        return self.setup_slash_command_for_scope(target=target, force=force, scope="global")
+
+    def setup_slash_command_for_scope(self, target: str, force: bool = False, scope: str = "project") -> Path | None:
+        if not self.supports_slash(target):
+            return None
+        command_file = self.resolve_slash_command_path(
+            target=target,
+            scope=scope,
+            project_dir=self.project_dir,
+        )
         if command_file.exists() and not force:
             return None
         command_file.parent.mkdir(parents=True, exist_ok=True)
         command_file.write_text(self._build_slash_command_content(target), encoding="utf-8")
         return command_file
+
+    @classmethod
+    def resolve_slash_command_path(
+        cls,
+        *,
+        target: str,
+        scope: str,
+        project_dir: Path | None = None,
+    ) -> Path:
+        if not cls.supports_slash(target):
+            raise ValueError(f"Unsupported target: {target}")
+
+        if scope == "project":
+            if project_dir is None:
+                raise ValueError("project_dir is required when scope='project'")
+            relative = cls.SLASH_COMMAND_FILES[target]
+            return Path(project_dir).resolve() / relative
+
+        if scope == "global":
+            relative = cls.GLOBAL_SLASH_COMMAND_FILES.get(target, cls.SLASH_COMMAND_FILES[target])
+            return Path.home() / relative
+
+        raise ValueError(f"Unsupported slash scope: {scope}")
+
+    @classmethod
+    def supports_slash(cls, target: str) -> bool:
+        return target in cls.SLASH_COMMAND_FILES and target not in cls.NO_SLASH_TARGETS
 
     def setup_all_slash_commands(self, force: bool = False) -> dict[str, Path | None]:
         result: dict[str, Path | None] = {}
@@ -247,6 +353,7 @@ class IntegrationManager:
             "roo-code",
             "augment",
             "qoder",
+            "kiro",
             "trae",
             "codebuddy",
             "tongyi-lingma",
@@ -273,22 +380,100 @@ class IntegrationManager:
         return self._generic_cli_rules(target)
 
     def _build_slash_command_content(self, target: str) -> str:
+        if target == "iflow":
+            return (
+                'description = "Super Dev 流水线式开发编排（先文档/Spec，再编码）"\n'
+                "prompt = \"\"\"\n"
+                "你正在执行 /super-dev。\n"
+                "需求描述: {{args}}\n\n"
+                "严格执行顺序（不可跳步）：\n"
+                "1. 先生成 output/*-prd.md、output/*-architecture.md、output/*-uiux.md\n"
+                "2. 再创建 .super-dev/changes/*/proposal.md 与 tasks.md\n"
+                "3. 按 tasks 顺序实现并标记完成\n"
+                "4. 输出质量与交付结果\n\n"
+                "执行命令：\n"
+                "super-dev create \\\"{{args}}\\\"\n"
+                "super-dev spec list\n\n"
+                "UI 强制规则：\n"
+                "- 禁止紫/粉渐变主视觉（除非品牌明确要求）\n"
+                "- 禁止 emoji 充当功能图标\n"
+                "- 禁止模板化、同质化页面直出\n"
+                "\"\"\"\n"
+            )
+
+        if target == "windsurf":
+            return (
+                "---\n"
+                "description: Super Dev 流水线式开发编排（先文档/Spec，再编码）\n"
+                "---\n\n"
+                "# /super-dev (windsurf)\n\n"
+                "在当前项目触发 Super Dev 流水线。\n\n"
+                "## 输入\n"
+                "- 需求描述: `$ARGUMENTS`\n\n"
+                "## 强制执行顺序\n"
+                "1. 先生成 `output/*-prd.md`、`output/*-architecture.md`、`output/*-uiux.md`\n"
+                "2. 再生成 `.super-dev/changes/*/proposal.md` 与 `tasks.md`\n"
+                "3. 按 `tasks.md` 顺序实现并逐项标记\n"
+                "4. 输出质量门禁与交付清单\n\n"
+                "## 执行命令\n"
+                "```bash\n"
+                "super-dev create \"$ARGUMENTS\"\n"
+                "super-dev spec list\n"
+                "```\n"
+            )
+
+        if target == "kiro":
+            return (
+                "---\n"
+                "inclusion: manual\n"
+                "---\n\n"
+                "# super-dev\n\n"
+                "在 Kiro 手动触发 `/super-dev` 时执行以下流程：\n\n"
+                "1. 先生成 `output/*-prd.md`、`output/*-architecture.md`、`output/*-uiux.md`\n"
+                "2. 再创建 `.super-dev/changes/*/proposal.md` 与 `tasks.md`\n"
+                "3. 按 `tasks.md` 顺序逐项实现并标记完成\n"
+                "4. 执行质量门禁并给出交付清单\n\n"
+                "执行命令：\n"
+                "```bash\n"
+                "super-dev create \"$ARGUMENTS\"\n"
+                "super-dev spec list\n"
+                "```\n"
+            )
+
         return (
             f"# /super-dev ({target})\n\n"
-            "在当前项目触发 Super Dev 流水线。\n\n"
-            "## 定位\n"
-            "- Super Dev 本身不提供模型能力，不调用外部模型 API。\n"
-            "- 代码生成/修改能力完全来自当前宿主（Claude/Codex/Gemini/IDE Agent）。\n"
-            "- Super Dev 只负责流程规范、门禁与审计。\n\n"
-            "## 用法\n"
-            "/super-dev <需求描述>\n\n"
-            "## 终端替代入口（仅本地编排）\n"
+            "在当前项目触发 Super Dev 的流水线式开发编排。\n\n"
+            "## 输入\n"
+            "- 需求描述: `$ARGUMENTS`\n"
+            "- 如果未提供参数，先要求用户补全需求后再执行。\n\n"
+            "## 强制执行顺序（不可跳步）\n"
+            "1. 先生成三份核心文档，再进入编码阶段：\n"
+            "   - `output/*-prd.md`\n"
+            "   - `output/*-architecture.md`\n"
+            "   - `output/*-uiux.md`\n"
+            "2. 再创建 Spec 变更与任务清单：\n"
+            "   - `.super-dev/changes/*/proposal.md`\n"
+            "   - `.super-dev/changes/*/tasks.md`\n"
+            "3. 按 `tasks.md` 顺序逐项实现，完成一项标记一项。\n"
+            "4. 完成后执行质量门禁并给出可审计交付清单。\n\n"
+            "## 执行命令（优先）\n"
             "```bash\n"
-            "super-dev \"<需求描述>\"\n"
+            "super-dev create \"$ARGUMENTS\"\n"
+            "super-dev spec list\n"
             "```\n\n"
-            "## 建议\n"
-            "- 宿主会话运行目录应为项目根目录。\n"
-            "- 终端入口不直接调用宿主模型会话，代码生成与修改仍在宿主中完成。\n"
+            "## 实现阶段要求\n"
+            "- 编码前必须先读取 `output/*-prd.md`、`output/*-architecture.md`、`output/*-uiux.md`。\n"
+            "- UI 必须遵循 UI/UX 文档，禁止直接输出模板化、同质化页面。\n"
+            "- 禁止使用“AI 感”设计：紫/粉渐变主视觉、emoji 充当功能图标、默认系统字体直出。\n"
+            "- 页面必须提供可访问交互：可见 `focus` 态、合理 hover/active、兼容 reduced-motion。\n"
+            "- 严禁在三文档与 Spec 缺失时直接宣称“已完成”。\n\n"
+            "## 汇报格式（每次回复都要包含）\n"
+            "- 当前阶段（文档 / Spec / 实现 / 质量 / 交付）\n"
+            "- 本次变更文件路径\n"
+            "- 下一步动作\n\n"
+            "## 说明\n"
+            "- Super Dev 不提供模型能力；编码能力来自当前宿主。\n"
+            "- 在宿主会话中执行本流程，确保上下文连续与结果可审计。\n"
         )
 
     def _generic_cli_rules(self, target: str) -> str:
@@ -330,6 +515,7 @@ class IntegrationManager:
             "- Backend and migration scripts match specs.\n"
             "- Security/performance checks are resolved.\n"
             "- Quality gate threshold is met for the current scenario.\n"
+            "- UI must avoid AI-looking output (purple/pink gradient-first theme, emoji as icons, default-font-only pages).\n"
         )
 
     def _claude_rules(self) -> str:
@@ -349,6 +535,7 @@ class IntegrationManager:
             "## Output Quality\n"
             "- Keep security/performance constraints from red-team report.\n"
             "- Ensure quality gate threshold is met before merge.\n"
+            "- UI must follow output/*-uiux.md and avoid AI-looking templates (purple gradient, emoji icons, default-font-only).\n"
         )
 
     def _antigravity_workflow_rules(self) -> str:

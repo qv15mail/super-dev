@@ -19,7 +19,7 @@
 
 ## 版本
 
-当前版本：`2.0.2`
+当前版本：`2.0.3`
 
 ---
 
@@ -87,13 +87,13 @@ pip install -U super-dev
 ### 2. 指定版本安装
 
 ```bash
-pip install super-dev==2.0.2
+pip install super-dev==2.0.3
 ```
 
 ### 3. GitHub 指定标签安装
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.2
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.3
 ```
 
 ### 4. 源码开发安装
@@ -108,17 +108,17 @@ pip install -e ".[dev]"
 
 ## 最简单使用（给最终用户）
 
-### CLI 宿主（Claude Code / Codex CLI / Gemini CLI / Kimi CLI / Kiro CLI / Qoder CLI）
+### CLI 宿主（Claude Code / CodeBuddy CLI / Codex CLI / Cursor CLI / Gemini CLI / iFlow CLI / Kimi CLI / Kiro CLI / OpenCode CLI / Qoder CLI）
 
 1. 进入项目目录执行 `super-dev` 完成接入。  
 2. 在宿主会话里直接输入：`/super-dev 你的需求`。
+3. 安装时会同时写入“项目级 + 全局级” `/super-dev` 映射，换目录也可继续使用。
 
-### IDE 宿主（Qoder）
+### IDE 宿主（CodeBuddy / Cursor / Kiro / Qoder / Trae / Windsurf）
 
 1. 进入项目目录执行 `super-dev` 完成接入。  
 2. 在 IDE Agent Chat 里先试：`/super-dev 你的需求`。  
-3. 如果该 IDE 当前不支持 slash 命令，改用：
-   `super-dev "你的需求"`（终端编排）+ 在 IDE Chat 按 `output/*` 与 `tasks.md` 执行实现。
+3. 原生支持 slash 的 IDE 会写入项目级 `/super-dev` 映射；Skill-only IDE 会自动跳过 slash，仅安装规则与 Skill。
 
 ---
 
@@ -200,6 +200,9 @@ super-dev pipeline "构建一个企业级 CRM" --platform web --frontend react -
 /super-dev 你的需求
 ```
 
+`/super-dev` 会强制执行：先三文档（PRD/架构/UIUX）-> 再 Spec 与 tasks -> 再编码实现。  
+编码阶段默认遵循商业级 UI/UX 规范，禁止紫/粉渐变主视觉、emoji 功能图标、模板化页面直出。
+
 若宿主不支持 slash 命令映射，可在同一项目根目录执行终端入口（仅触发 Super Dev 本地流水线编排）：
 
 ```bash
@@ -269,20 +272,30 @@ super-dev quality --type all
 ### CLI 宿主
 
 - `claude-code`
+- `codebuddy-cli`
 - `codex-cli`
+- `cursor-cli`
 - `gemini-cli`
+- `iflow`
 - `kimi-cli`
 - `kiro-cli`
+- `opencode`
 - `qoder-cli`
 
 ### IDE / 扩展宿主
 
+- `codebuddy`
+- `cursor`
+- `kiro`
 - `qoder`
+- `trae`（Skill-only）
+- `windsurf`
 
 ### 宿主适配方式（CLI/IDE）
 
 - `CLI 宿主`：在宿主会话内触发 `/super-dev`，由宿主模型执行编码
-- `IDE 宿主`：在 Agent Chat 触发 `/super-dev`，由规则文件与 Skill 约束执行流程
+- `IDE 宿主（原生 slash）`：在 Agent Chat 触发 `/super-dev`，由规则文件与 Skill 约束执行流程
+- `IDE 宿主（Skill-only）`：在 Agent Chat 触发 `super-dev-core` Skill，再按 `output/*` 与 `tasks.md` 执行
 - `终端入口`：`super-dev "需求"` 仅触发本地流水线编排，不直接调用宿主模型会话
 
 查看宿主适配矩阵（官方文档链接、适配模式、注入路径、探测策略）：

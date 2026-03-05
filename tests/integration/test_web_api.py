@@ -650,12 +650,21 @@ class TestWebAPI:
         host_tool_ids = {item["id"] for item in payload["host_tools"]}
         assert {
             "claude-code",
+            "codebuddy-cli",
+            "codebuddy",
             "codex-cli",
+            "cursor-cli",
+            "windsurf",
             "gemini-cli",
+            "iflow",
             "kimi-cli",
             "kiro-cli",
+            "opencode",
             "qoder-cli",
+            "cursor",
+            "kiro",
             "qoder",
+            "trae",
         }.issubset(host_tool_ids)
         claude_host = next(item for item in payload["host_tools"] if item["id"] == "claude-code")
         assert claude_host["category"] == "cli"
@@ -666,7 +675,11 @@ class TestWebAPI:
         language_ids = {item["id"] for item in payload["languages"]}
         assert {"python", "typescript", "rust", "sql", "assembly"}.issubset(language_ids)
 
-    def test_hosts_doctor_endpoint(self, temp_project_dir: Path):
+    def test_hosts_doctor_endpoint(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+
         client = TestClient(web_api.app)
         resp = client.get(
             "/api/hosts/doctor",
@@ -684,6 +697,23 @@ class TestWebAPI:
         host = payload["report"]["hosts"]["claude-code"]
         assert host["ready"] is False
         assert {"integrate", "skill", "slash"}.issubset(set(host["missing"]))
+
+    def test_hosts_doctor_skill_only_host_skips_slash(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+        resp = client.get(
+            "/api/hosts/doctor",
+            params={
+                "project_dir": str(temp_project_dir),
+                "host": "trae",
+            },
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        host = payload["report"]["hosts"]["trae"]
+        assert host["ready"] is False
+        assert "slash" not in host["missing"]
+        assert host["checks"]["slash"]["ok"] is True
+        assert host["checks"]["slash"]["mode"] == "skill-only"
 
     def test_hosts_doctor_endpoint_ready_after_files_present(self, temp_project_dir: Path):
         client = TestClient(web_api.app)

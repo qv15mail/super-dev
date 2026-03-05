@@ -26,12 +26,21 @@ class SkillManager:
 
     TARGET_PATHS = {
         "claude-code": ".claude/skills",
+        "codebuddy-cli": ".codebuddy/skills",
+        "codebuddy": ".codebuddy/skills",
         "codex-cli": ".codex/skills",
+        "cursor-cli": ".cursor/skills",
+        "windsurf": ".windsurf/skills",
         "gemini-cli": ".gemini/skills",
+        "iflow": ".iflow/skills",
         "kimi-cli": ".kimi/skills",
         "kiro-cli": ".kiro/skills",
+        "opencode": ".opencode/skills",
         "qoder-cli": ".qoder/skills",
+        "cursor": ".cursor/skills",
+        "kiro": ".kiro/skills",
         "qoder": ".qoder/skills",
+        "trae": ".trae/skills",
     }
 
     def __init__(self, project_dir: Path):
@@ -199,7 +208,7 @@ class SkillManager:
         target_dir.mkdir(parents=True, exist_ok=True)
         skill_content = f"""# {skill_name} - Super Dev AI Coding Skill
 
-> 版本: 2.0.2 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
+> 版本: 2.0.3 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
 
 ---
 
@@ -264,6 +273,8 @@ class SkillManager:
 
 ### 代码质量规则
 - 禁止使用 emoji 作为图标（用 Lucide/Heroicons/Tabler 等图标库）
+- 禁止将紫色/粉色渐变作为默认主视觉（除非 PRD 与品牌规范明确要求）
+- 禁止直接输出“AI 模板感”页面（同质化区块、默认系统字体直出、无层级信息架构）
 - 所有用户输入必须验证（防 SQL 注入、XSS）
 - 使用参数化查询，禁止字符串拼接 SQL
 - 测试覆盖率目标 ≥ 80%

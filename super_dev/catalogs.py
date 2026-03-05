@@ -127,22 +127,35 @@ CICD_PLATFORM_TARGET_IDS: tuple[str, ...] = tuple(item for item in CICD_PLATFORM
 
 HOST_TOOL_CATALOG: list[dict[str, str]] = [
     {"id": "claude-code", "name": "Claude Code"},
+    {"id": "codebuddy-cli", "name": "CodeBuddy CLI"},
+    {"id": "codebuddy", "name": "CodeBuddy"},
     {"id": "codex-cli", "name": "Codex CLI"},
+    {"id": "cursor-cli", "name": "Cursor CLI"},
+    {"id": "windsurf", "name": "Windsurf"},
     {"id": "gemini-cli", "name": "Gemini CLI"},
+    {"id": "iflow", "name": "iFlow CLI"},
     {"id": "kimi-cli", "name": "Kimi CLI"},
     {"id": "kiro-cli", "name": "Kiro CLI"},
+    {"id": "opencode", "name": "OpenCode CLI"},
     {"id": "qoder-cli", "name": "Qoder CLI"},
+    {"id": "cursor", "name": "Cursor"},
+    {"id": "kiro", "name": "Kiro"},
     {"id": "qoder", "name": "Qoder"},
+    {"id": "trae", "name": "Trae"},
 ]
 
 HOST_TOOL_IDS: tuple[str, ...] = tuple(item["id"] for item in HOST_TOOL_CATALOG)
 
 CLI_HOST_TOOL_IDS: tuple[str, ...] = (
     "claude-code",
+    "codebuddy-cli",
     "codex-cli",
+    "cursor-cli",
     "gemini-cli",
+    "iflow",
     "kimi-cli",
     "kiro-cli",
+    "opencode",
     "qoder-cli",
 )
 
@@ -153,15 +166,29 @@ HOST_TOOL_CATEGORY_MAP: dict[str, str] = {
 
 HOST_COMMAND_CANDIDATES: dict[str, list[str]] = {
     "claude-code": ["claude", "claude-code"],
+    "codebuddy-cli": ["codebuddy", "codebuddy-cli"],
+    "codebuddy": ["codebuddy"],
     "codex-cli": ["codex"],
+    "cursor-cli": ["cursor-agent", "cursor", "cursor-cli"],
+    "windsurf": ["windsurf"],
     "gemini-cli": ["gemini", "gemini-cli"],
+    "iflow": ["iflow"],
     "kimi-cli": ["kimi", "kimi-cli"],
     "kiro-cli": ["kiro"],
+    "opencode": ["opencode"],
     "qoder-cli": ["qoder", "qoder-cli"],
+    "cursor": ["cursor"],
     "qoder": ["qoder"],
+    "trae": ["trae"],
 }
 
 HOST_PATH_PATTERNS: dict[str, list[str]] = {
+    "codebuddy": ["~/Applications/CodeBuddy.app", "/Applications/CodeBuddy.app"],
+    "cursor-cli": ["~/Applications/Cursor.app", "/Applications/Cursor.app"],
+    "cursor": ["~/Applications/Cursor.app", "/Applications/Cursor.app"],
+    "kiro": ["~/Applications/Kiro.app", "/Applications/Kiro.app"],
+    "windsurf": ["~/Applications/Windsurf.app", "/Applications/Windsurf.app"],
     "qoder-cli": ["~/Applications/Qoder.app", "/Applications/Qoder.app"],
     "qoder": ["~/Applications/Qoder.app", "/Applications/Qoder.app"],
+    "trae": ["~/Applications/Trae.app", "/Applications/Trae.app"],
 }

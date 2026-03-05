@@ -415,14 +415,16 @@ def _sanitize_project_name(name: str) -> str:
     return sanitized.lower() or "my-project"
 
 
-def _default_host_commands(host_id: str) -> dict[str, str]:
-    return {
+def _default_host_commands(host_id: str, *, supports_slash: bool) -> dict[str, str]:
+    commands = {
         "setup": f"super-dev setup --host {host_id} --force --yes",
         "onboard": f"super-dev onboard --host {host_id} --force --yes",
         "doctor": f"super-dev doctor --host {host_id} --repair --force",
         "run": 'super-dev "你的需求"',
-        "slash": '/super-dev "你的需求"',
+        "slash": '/super-dev "你的需求"' if supports_slash else "",
     }
+    commands["skill"] = "super-dev-core"
+    return commands
 
 
 def _build_host_tool_catalog_payload() -> list[dict[str, Any]]:
@@ -430,14 +432,16 @@ def _build_host_tool_catalog_payload() -> list[dict[str, Any]]:
     for item in HOST_TOOL_CATALOG:
         host_id = item["id"]
         target = IntegrationManager.TARGETS.get(host_id)
+        supports_slash = IntegrationManager.supports_slash(host_id)
         payload.append(
             {
                 "id": host_id,
                 "name": item["name"],
                 "category": HOST_TOOL_CATEGORY_MAP.get(host_id, "ide"),
                 "integration_files": list(target.files) if target else [],
-                "slash_command_file": IntegrationManager.SLASH_COMMAND_FILES.get(host_id, ""),
-                "commands": _default_host_commands(host_id),
+                "slash_command_file": IntegrationManager.SLASH_COMMAND_FILES.get(host_id, "") if supports_slash else "",
+                "supports_slash": supports_slash,
+                "commands": _default_host_commands(host_id, supports_slash=supports_slash),
             }
         )
     return payload
@@ -475,7 +479,6 @@ def _collect_host_diagnostics(
     check_slash: bool,
 ) -> dict[str, Any]:
     integration_targets = IntegrationManager.TARGETS
-    slash_map = IntegrationManager.SLASH_COMMAND_FILES
     skill_paths = SkillManager.TARGET_PATHS
 
     report: dict[str, Any] = {"hosts": {}, "overall_ready": True}
@@ -516,19 +519,40 @@ def _collect_host_diagnostics(
                 )
 
         if check_slash:
-            slash_relative = slash_map.get(target)
-            slash_file = project_dir / slash_relative if slash_relative else None
-            slash_ok = slash_file.exists() if slash_file else False
-            host_report["checks"]["slash"] = {
-                "ok": slash_ok,
-                "file": str(slash_file) if slash_file else "",
-            }
-            if not slash_ok:
-                host_report["ready"] = False
-                host_report["missing"].append("slash")
-                host_report["suggestions"].append(
-                    f"super-dev onboard --host {target} --skip-integrate --skip-skill --force --yes"
+            if IntegrationManager.supports_slash(target):
+                project_slash_file = IntegrationManager.resolve_slash_command_path(
+                    target=target,
+                    scope="project",
+                    project_dir=project_dir,
                 )
+                global_slash_file = IntegrationManager.resolve_slash_command_path(
+                    target=target,
+                    scope="global",
+                )
+                project_ok = project_slash_file.exists() if project_slash_file else False
+                global_ok = global_slash_file.exists() if global_slash_file else False
+                slash_ok = project_ok or global_ok
+                scope = "project" if project_ok else ("global" if global_ok else "missing")
+                host_report["checks"]["slash"] = {
+                    "ok": slash_ok,
+                    "scope": scope,
+                    "project_file": str(project_slash_file) if project_slash_file else "",
+                    "global_file": str(global_slash_file) if global_slash_file else "",
+                }
+                if not slash_ok:
+                    host_report["ready"] = False
+                    host_report["missing"].append("slash")
+                    host_report["suggestions"].append(
+                        f"super-dev onboard --host {target} --skip-integrate --skip-skill --force --yes"
+                    )
+            else:
+                host_report["checks"]["slash"] = {
+                    "ok": True,
+                    "scope": "n/a",
+                    "project_file": "",
+                    "global_file": "",
+                    "mode": "skill-only",
+                }
 
         report["hosts"][target] = host_report
         if not host_report["ready"]:
@@ -550,7 +574,7 @@ def _build_host_compatibility_summary(
         enabled_checks.append("integrate")
     if check_skill:
         enabled_checks.append("skill")
-    if check_slash:
+    if check_slash and any(IntegrationManager.supports_slash(target) for target in targets):
         enabled_checks.append("slash")
 
     per_host: dict[str, dict[str, Any]] = {}
@@ -640,9 +664,11 @@ def _repair_host_diagnostics(
             host_actions["skill"] = f"failed: {exc}"
 
         try:
-            if check_slash and "slash" in missing:
+            if check_slash and integration_manager.supports_slash(target):
                 integration_manager.setup_slash_command(target=target, force=force)
-                host_actions["slash"] = "fixed"
+                integration_manager.setup_global_slash_command(target=target, force=force)
+                if "slash" in missing:
+                    host_actions["slash"] = "fixed"
         except Exception as exc:
             host_actions["slash"] = f"failed: {exc}"
 
