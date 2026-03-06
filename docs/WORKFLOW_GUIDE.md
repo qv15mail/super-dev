@@ -1,4 +1,7 @@
-# Super Dev 详细使用指南（2.0.2）
+# Super Dev 详细使用指南（2.0.4）
+
+> 宿主详细试用方式、是否支持 `/super-dev`、各宿主正确入口，请优先查看：
+> [HOST_USAGE_GUIDE.md](/Users/weiyou/Documents/kaifa/super-dev/docs/HOST_USAGE_GUIDE.md)
 
 > 本文是项目级操作手册，覆盖：
 > - 指令大全（命令怎么用）
@@ -12,11 +15,19 @@
 
 ### 1.1 推荐入口
 
-默认推荐直接输入需求：
+默认推荐先在宿主内触发 `Super Dev`：
+
+```text
+/super-dev 你的功能需求
+```
+
+如果你不确定当前机器该用哪个宿主，先运行：
 
 ```bash
-super-dev "你的功能需求"
+super-dev start --idea "你的功能需求"
 ```
+
+终端 `super-dev "你的功能需求"` 只建议作为治理产物入口，不应理解为 Super Dev 自己替代宿主编码。
 
 默认启用宿主硬门禁：若没有 `ready` 宿主，流水线会阻断并提示先接入宿主。
 
@@ -26,20 +37,28 @@ super-dev "你的功能需求"
 super-dev "做一个企业级项目管理系统，支持登录、RBAC、项目、任务、报表、审计日志"
 ```
 
-这条命令会自动进入完整流水线（阶段 0 到阶段 11）：
+这条命令会自动进入完整流水线（带确认门）：
 
-1. 需求增强（联网 + 本地知识）
+1. 同类产品研究（优先使用宿主联网能力）
 2. 文档生成（PRD / 架构 / UIUX / 执行计划 / 前端蓝图）
-3. 前端可演示骨架
+3. 文档确认门：先给用户看三文档并等待确认/修改
 4. Spec 规范创建
-5. 实现骨架 + Spec 任务执行收敛
-6. 红队审查（安全/性能/架构）
-7. 质量门禁（80+）
-8. 代码审查指南
-9. AI 提示词
-10. CI/CD（5 平台）
-11. 部署修复模板
-12. 迁移脚本 + 交付包
+5. 前端可演示骨架与运行验证
+6. 后端实现与联调
+7. 红队审查（安全/性能/架构）
+8. 质量门禁（80+）
+9. 代码审查指南
+10. AI 提示词
+11. CI/CD（5 平台）
+12. 部署修复模板 + 迁移脚本 + 交付包
+
+文档确认可以通过 Web 工作台操作，也可以直接在终端执行：
+
+```bash
+super-dev review docs
+super-dev review docs --status revision_requested --comment "补充差异化方案与首页信息架构"
+super-dev review docs --status confirmed --comment "三文档确认，进入 Spec 阶段"
+```
 
 ### 1.2 高级入口（显式参数）
 
@@ -68,7 +87,7 @@ pip install -U super-dev
 指定版本：
 
 ```bash
-pip install super-dev==2.0.2
+pip install super-dev==2.0.4
 ```
 
 ### 2.2 初始化（可选，但团队项目建议）
@@ -103,17 +122,85 @@ host_profile_targets:
 host_profile_enforce_selected: true
 ```
 
+推荐在项目根目录维护 `knowledge/` 目录作为团队知识资产库（已被流水线自动扫描）：
+
+```text
+knowledge/
+  high-quality-engineering-playbook.md
+  official-knowledge-catalog.md
+  security/
+    baseline.yaml
+  operations/
+    runbook.txt
+```
+
+建议把权威链接、业务规则、交付检查清单、故障处理手册都放入 `knowledge/`，让需求增强阶段稳定命中团队经验与官方规范。
+
+建议按全链路结构维护深度知识库：
+
+```text
+knowledge/
+  00-governance/
+  product/
+  design/
+  architecture/
+  development/
+  testing/
+  security/
+  cicd/
+  operations/
+  data/
+  incident/
+  ai/
+```
+
+这套结构可覆盖从需求、设计、研发、测试、安全、发布、运维到复盘的完整环节，让每次需求增强都能命中对应领域知识。
+
+如果你希望“开发类知识库完整内置”，可直接使用：
+
+```text
+knowledge/development/DEVELOPMENT_KB_MASTER_INDEX.md
+```
+
+该索引已内置前端、后端、API、数据库、性能、并发、重构、评审、工程效能、开发安全，以及UI卓越、全场景开发、知识图谱、成熟度治理、端到端开发全流程与全流程模板专题入口。
+
+开发知识库审计可直接运行：
+
+```bash
+python scripts/audit_development_kb.py
+```
+
+```bash
+python scripts/check_knowledge_gates.py --project-dir .
+```
+
+如果你希望“AI开发类知识库完整内置”，可直接使用：
+
+```text
+knowledge/ai/AI_KB_MASTER_INDEX.md
+```
+
+可运行AI知识库审计：
+
+```bash
+python scripts/audit_ai_kb.py
+```
+
 ---
 
 ## 3. 指令大全（命令速查）
 
 ### 3.1 核心流水线
 
+```text
+/super-dev 需求描述                    # 推荐：在宿主会话中触发
+```
+
 ```bash
-super-dev "需求描述"                  # 推荐：需求直达模式
-super-dev 做一个CRM系统               # 无需子命令，直接把文本作为需求
-super-dev pipeline "需求描述" ...      # 高级：显式参数模式
-super-dev create "需求描述"            # 快速生成文档 + Spec
+super-dev start --idea "需求描述"      # 推荐：自动选宿主并给出试用步骤
+super-dev "需求描述"                   # 本地治理流水线入口，不替代宿主编码
+super-dev pipeline "需求描述" ...       # 高级：显式参数模式
+super-dev create "需求描述"             # 快速生成文档 + Spec
 ```
 
 ### 3.2 Spec 与任务闭环
@@ -412,6 +499,7 @@ super-dev "需求"
 ```bash
 super-dev spec list
 super-dev task status <change_id>
+super-dev run --resume
 ```
 
 ### Q3: 质量门禁没过怎么办？

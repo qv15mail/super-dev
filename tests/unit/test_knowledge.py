@@ -28,6 +28,47 @@ class TestKnowledgeAugmenter:
         assert "请结合以下上下文实现" in bundle["enriched_requirement"]
         assert len(bundle["citations"]["local"]) >= 1
 
+    def test_augment_scans_project_knowledge_directory(self, temp_project_dir: Path):
+        knowledge_dir = temp_project_dir / "knowledge"
+        knowledge_dir.mkdir(parents=True, exist_ok=True)
+        (knowledge_dir / "payment.md").write_text(
+            "# 支付风控知识\n\n支付链路必须支持设备指纹、限流策略和二次验证。",
+            encoding="utf-8",
+        )
+
+        augmenter = KnowledgeAugmenter(project_dir=temp_project_dir, web_enabled=False)
+        bundle = augmenter.augment("实现支付风控与限流", domain="payment")
+
+        local_items = bundle.get("local_knowledge", [])
+        assert len(local_items) >= 1
+        assert any(item["source"] == "knowledge/payment.md" for item in local_items)
+        assert "支付风控知识" in bundle["enriched_requirement"]
+        application_plan = bundle.get("knowledge_application_plan", {})
+        assert "stage_guidance" in application_plan
+        assert "prd" in application_plan["stage_guidance"]
+        assert any("payment.md" in item for item in application_plan["stage_guidance"]["prd"])
+
+    def test_augment_scans_knowledge_yaml_and_txt(self, temp_project_dir: Path):
+        knowledge_dir = temp_project_dir / "knowledge" / "security"
+        knowledge_dir.mkdir(parents=True, exist_ok=True)
+        (knowledge_dir / "baseline.yaml").write_text(
+            "title: 安全基线\ncontent: 密码策略应至少包含复杂度、过期与历史限制。",
+            encoding="utf-8",
+        )
+        (knowledge_dir / "ops.txt").write_text(
+            "安全运营建议：关键操作必须保留审计日志，支持追溯。",
+            encoding="utf-8",
+        )
+
+        augmenter = KnowledgeAugmenter(project_dir=temp_project_dir, web_enabled=False)
+        bundle = augmenter.augment("实现审计日志与密码策略", domain="security")
+        sources = {item["source"] for item in bundle.get("local_knowledge", [])}
+
+        assert "knowledge/security/baseline.yaml" in sources
+        assert "knowledge/security/ops.txt" in sources
+        hard_constraints = bundle.get("knowledge_application_plan", {}).get("hard_constraints", [])
+        assert any("baseline.yaml" in item for item in hard_constraints)
+
     def test_render_markdown(self, temp_project_dir: Path):
         augmenter = KnowledgeAugmenter(project_dir=temp_project_dir, web_enabled=False)
         bundle = {
@@ -36,11 +77,30 @@ class TestKnowledgeAugmenter:
             "keywords": ["管理", "后台"],
             "local_knowledge": [],
             "web_knowledge": [],
+            "knowledge_application_plan": {
+                "hard_constraints": ["安全基线必须进入质量门禁"],
+                "stage_guidance": {
+                    "research": ["先研究同类管理后台的信息架构"],
+                    "prd": ["把权限与审计列为核心需求"],
+                },
+            },
+            "research_summary": {
+                "benchmark_products": ["Product A: benchmark"],
+                "feature_patterns": ["Pattern A"],
+                "interaction_patterns": ["Interaction A"],
+                "trust_signals": ["Trust A"],
+                "differentiation_opportunities": ["Differentiation A"],
+                "delivery_recommendations": ["Delivery A"],
+            },
             "enriched_requirement": "构建管理后台。",
         }
         markdown = augmenter.to_markdown(bundle)
         assert "# 需求增强报告" in markdown
         assert "## 提取关键词" in markdown
+        assert "## 本地知识应用计划" in markdown
+        assert "### Research / 同类产品研究" in markdown
+        assert "## 同类产品研究与机会洞察" in markdown
+        assert "### 1. 对标产品" in markdown
 
     def test_web_fallback_when_ddgs_unavailable(self, temp_project_dir: Path, monkeypatch):
         augmenter = KnowledgeAugmenter(project_dir=temp_project_dir, web_enabled=True)
@@ -175,3 +235,9 @@ class TestKnowledgeAugmenter:
         assert len(web_items) == 1
         assert web_items[0]["title"] == "OpenAI API"
         assert web_stats.get("filtered_out_count") == 1
+
+    def test_extract_keywords_handles_mixed_ai_chinese_tokens(self, temp_project_dir: Path):
+        augmenter = KnowledgeAugmenter(project_dir=temp_project_dir, web_enabled=False)
+        keywords = augmenter._extract_keywords("AI应用上线前要检查哪些风险和门禁")
+        assert "ai" in keywords
+        assert any(token in keywords for token in ["应用", "风险", "门禁"])

@@ -1,0 +1,148 @@
+# 开发：Excellent（11964948@qq.com）
+
+catalog_version: "2026.03.4"
+domain: development
+sections:
+  - name: governance
+    path: development/00-governance
+    items:
+      - metadata-schema.yaml
+      - contribution-workflow.md
+      - lifecycle-policy.md
+      - review-rubric.md
+      - quality-scoring-model.md
+      - document-template.md
+      - ownership-matrix.md
+      - retrieval-taxonomy.yaml
+      - query-intent-playbook.md
+      - knowledge-quality-audit-checklist.md
+  - name: standards
+    path: development/01-standards
+    items:
+      - frontend-standard.md
+      - backend-standard.md
+      - api-standard.md
+      - database-standard.md
+      - performance-standard.md
+      - concurrency-standard.md
+      - testing-standard.md
+      - cicd-standard.md
+      - security-standard.md
+      - observability-standard.md
+  - name: playbooks
+    path: development/02-playbooks
+    items:
+      - feature-delivery-playbook.md
+      - performance-optimization-playbook.md
+      - refactor-playbook.md
+      - incident-hotfix-playbook.md
+      - release-playbook.md
+  - name: checklists
+    path: development/03-checklists
+    items:
+      - pr-checklist.md
+      - architecture-review-checklist.md
+      - release-readiness-checklist.md
+      - production-readiness-checklist.md
+      - security-review-checklist.md
+      - data-migration-checklist.md
+      - oncall-handover-checklist.md
+  - name: antipatterns
+    path: development/04-antipatterns
+    items:
+      - frontend-antipatterns.md
+      - backend-antipatterns.md
+      - data-antipatterns.md
+      - api-antipatterns.md
+      - cicd-antipatterns.md
+      - reliability-antipatterns.md
+  - name: cases
+    path: development/05-cases
+    items:
+      - case-api-version-migration.md
+      - case-db-hotspot-optimization.md
+      - case-incident-mttr-reduction.md
+      - case-cache-snowball-protection.md
+      - case-bluegreen-rollback.md
+      - case-authorization-hardening.md
+  - name: glossary
+    path: development/06-glossary
+    items:
+      - development-glossary.md
+  - name: learning_path
+    path: development/07-learning-path
+    items:
+      - developer-learning-path-30-60-90.md
+      - backend-advanced-path.md
+      - platform-engineering-path.md
+  - name: maturity
+    path: development/09-maturity
+    items:
+      - development-kb-maturity-model.md
+      - quarterly-audit-template.md
+  - name: knowledge_graph
+    path: development/10-knowledge-graph
+    items:
+      - topic-asset-map.yaml
+      - gate-mapping.yaml
+  - name: ui_excellence
+    path: development/11-ui-excellence
+    items:
+      - ui-aesthetic-system.md
+      - ui-component-excellence-standard.md
+      - ui-motion-microinteraction-guide.md
+      - ui-theme-token-architecture.md
+      - ui-accessibility-wcag-playbook.md
+      - ui-layout-visual-hierarchy-playbook.md
+      - ui-anti-patterns-complete.md
+      - ui-release-checklist.md
+      - ui-scene-recipes.md
+      - ui-content-copywriting-guide.md
+  - name: scenarios
+    path: development/12-scenarios
+    items:
+      - b2b-development-scenario-pack.md
+      - b2c-growth-scenario-pack.md
+      - multitenant-saas-scenario-pack.md
+      - internationalization-scenario-pack.md
+      - mobile-superapp-scenario-pack.md
+      - ai-application-scenario-pack.md
+      - fintech-regulated-scenario-pack.md
+      - ecommerce-peak-scenario-pack.md
+      - scenario-selection-checklist.md
+  - name: implementation_assets
+    path: development/13-implementation-assets
+    items:
+      - ui-kpi-and-quality-gates.yaml
+      - scenario-coverage-matrix.yaml
+      - knowledge-base-roadmap-180d.md
+      - scene-decision-tree.md
+      - knowledge-gates-execution.md
+  - name: full_lifecycle
+    path: development/14-full-lifecycle
+    items:
+      - lifecycle-end-to-end-map.md
+      - requirement-discovery-playbook.md
+      - product-design-handoff-checklist.md
+      - architecture-decision-gate.md
+      - implementation-execution-playbook.md
+      - testing-verification-gate.md
+      - security-compliance-gate.md
+      - release-change-management-playbook.md
+      - operations-observability-runbook.md
+      - incident-postmortem-learning-loop.md
+      - stage-exit-criteria.yaml
+  - name: lifecycle_templates
+    path: development/15-lifecycle-templates
+    items:
+      - template-catalog.yaml
+      - requirement-template.md
+      - design-handoff-template.md
+      - architecture-adr-template.md
+      - implementation-pr-template.md
+      - testing-report-template.md
+      - security-compliance-template.md
+      - release-change-template.md
+      - operations-runbook-template.md
+      - postmortem-template.md
+      - lifecycle-review-board-template.md

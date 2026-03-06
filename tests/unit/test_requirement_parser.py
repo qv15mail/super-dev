@@ -64,6 +64,44 @@ class TestDocumentGeneratorIntegration:
         assert language_line in generator.generate_architecture()
         assert language_line in generator.generate_uiux()
 
+    def test_document_generator_includes_richer_commercial_sections(self):
+        generator = DocumentGenerator(
+            name="delivery-grade-app",
+            description="构建一个面向企业协作的商业级工作台",
+            frontend="react",
+            backend="python",
+        )
+
+        prd = generator.generate_prd()
+        architecture = generator.generate_architecture()
+        uiux = generator.generate_uiux()
+
+        assert "### 1.4 市场与对标结论" in prd
+        assert "### 2.4 功能优先级与范围边界" in prd
+        assert "### 7.4 业务验收矩阵" in prd
+        assert "### 1.3 需求到架构的落地映射" in architecture
+        assert "### 8.3 容错与降级策略" in architecture
+        assert "### 1.4 商业级体验目标" in uiux
+        assert "### 1.5 设计 Intelligence 结论" in uiux
+        assert "### 2.7 组件生态与实现基线" in uiux
+        assert "### 5.3 组件状态矩阵" in uiux
+        assert "### 5.4 图标、图表与内容模块" in uiux
+        assert "### 7.3 商业化与信任设计" in uiux
+
+    def test_document_generator_embeds_ui_intelligence_stack(self):
+        generator = DocumentGenerator(
+            name="official-site",
+            description="为一个商业级 SaaS 产品生成官方网站和产品页",
+            frontend="react",
+            backend="node",
+        )
+
+        uiux = generator.generate_uiux()
+
+        assert "shadcn/ui + Radix UI + Tailwind CSS" in uiux
+        assert "表单与验证" in uiux
+        assert "图标体系" in uiux
+
 
 class TestFrontendScaffoldBuilder:
     def test_generate_frontend_scaffold(self, temp_project_dir: Path):

@@ -43,6 +43,17 @@ class TestSkillManager:
 
         assert result.path.exists()
         assert (result.path / "SKILL.md").exists()
+        skill_content = (result.path / "SKILL.md").read_text(encoding="utf-8")
+        assert skill_content.startswith("---\nname: super-dev-core\n")
+        assert "当前宿主负责调用模型、工具、终端与实际代码修改" in skill_content
+        assert "Super Dev 不是大模型平台" in skill_content
+        assert "Runtime Contract（强制）" in skill_content
+        assert "首轮响应契约（强制）" in skill_content
+        assert "第一轮回复必须明确说明当前阶段是 `research`" in skill_content
+        assert "三份核心文档完成后会暂停等待用户确认" in skill_content
+        assert "本地知识库契约（强制）" in skill_content
+        assert "output/knowledge-cache/*-knowledge-bundle.json" in skill_content
+        assert "未经用户明确确认，禁止创建 `.super-dev/changes/*`" in skill_content
         assert "super-dev-core" in manager.list_installed(target)
 
         removed = manager.uninstall("super-dev-core", target)

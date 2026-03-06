@@ -84,14 +84,14 @@ class DocumentGenerator:
 
         # 产品类型
         product_type = "general"
-        if any(word in description_lower for word in ["saas", "软件服务", "platform", "平台"]):
+        if any(word in description_lower for word in ["dashboard", "仪表盘", "后台", "admin", "workbench", "workspace", "工作台"]):
+            product_type = "dashboard"
+        elif any(word in description_lower for word in ["landing", "落地页", "营销页", "官网", "官方网站", "official website", "marketing"]):
+            product_type = "landing"
+        elif any(word in description_lower for word in ["saas", "软件服务", "platform", "平台"]):
             product_type = "saas"
         elif any(word in description_lower for word in ["电商", "商城", "shop", "store", "mall"]):
             product_type = "ecommerce"
-        elif any(word in description_lower for word in ["landing", "落地页", "营销页"]):
-            product_type = "landing"
-        elif any(word in description_lower for word in ["admin", "管理", "dashboard", "仪表盘", "后台"]):
-            product_type = "dashboard"
         elif any(word in description_lower for word in ["blog", "博客", "内容", "cms"]):
             product_type = "content"
 
@@ -103,6 +103,12 @@ class DocumentGenerator:
             industry = "fintech"
         elif any(word in description_lower for word in ["教育", "培训", "education", "learning"]):
             industry = "education"
+        elif any(word in description_lower for word in ["法律", "法务", "legal", "律师"]):
+            industry = "legal"
+        elif any(word in description_lower for word in ["政务", "government", "public"]):
+            industry = "government"
+        elif any(word in description_lower for word in ["美容", "美业", "beauty", "spa", "wellness"]):
+            industry = "beauty"
 
         # 风格倾向
         style = "modern"
@@ -189,7 +195,7 @@ class DocumentGenerator:
         return f"""# {self.name} - 产品需求文档 (PRD)
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.0.3
+> **版本**: v2.0.4
 > **状态**: 草稿
 
 ---
@@ -220,6 +226,14 @@ class DocumentGenerator:
 
 {self._generate_value_proposition()}
 
+### 1.4 市场与对标结论
+
+{self._generate_market_context()}
+
+### 1.5 用户分层与使用场景
+
+{self._generate_user_segment_matrix()}
+
 ---
 
 ## 2. 功能需求
@@ -235,6 +249,14 @@ class DocumentGenerator:
 ### 2.3 用户故事
 
 {self._generate_user_stories()}
+
+### 2.4 功能优先级与范围边界
+
+{self._generate_scope_priorities()}
+
+### 2.5 边界场景与异常路径
+
+{self._generate_edge_cases()}
 
 ---
 
@@ -264,6 +286,10 @@ class DocumentGenerator:
 - **浏览器**: Chrome 90+, Firefox 88+, Safari 14+, Edge 90+
 - **移动端**: iOS 14+, Android 10+
 - **分辨率**: 320px - 4K
+
+### 3.5 商业交付要求
+
+{self._generate_delivery_requirements()}
 
 ---
 
@@ -317,6 +343,10 @@ class DocumentGenerator:
 - [ ] 数据加密验证通过
 - [ ] 权限控制验证通过
 
+### 7.4 业务验收矩阵
+
+{self._generate_acceptance_matrix()}
+
 ---
 
 ## 8. 发布计划
@@ -347,6 +377,10 @@ class DocumentGenerator:
 | **满意度** | NPS 50+ | 用户调研 |
 | **性能** | API 响应 < 200ms | APM |
 
+### 9.1 经营与产品指标补充
+
+{self._generate_business_kpis()}
+
 ---
 
 ## 10. 风险与限制
@@ -362,6 +396,10 @@ class DocumentGenerator:
 ### 10.3 依赖限制
 
 {self._generate_dependencies()}
+
+### 10.4 上线前置条件
+
+{self._generate_launch_dependencies()}
 
 ---
 
@@ -379,7 +417,7 @@ class DocumentGenerator:
 
 | 版本 | 日期 | 变更内容 | 作者 |
 |:---|:---|:---|:---|
-| v2.0.3 | {datetime.now().strftime('%Y-%m-%d')} | 初始版本 | Super Dev |
+| v2.0.4 | {datetime.now().strftime('%Y-%m-%d')} | 初始版本 | Super Dev |
 """
 
     def generate_architecture(self) -> str:
@@ -387,7 +425,7 @@ class DocumentGenerator:
         return f"""# {self.name} - 架构设计文档
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.0.3
+> **版本**: v2.0.4
 > **架构师**: Super Dev ARCHITECT 专家
 
 ---
@@ -407,6 +445,10 @@ class DocumentGenerator:
 2. **数据库分离**: 读写分离、缓存层
 3. **异步处理**: 消息队列解耦
 4. **监控运维**: 全链路追踪、实时告警
+
+### 1.3 需求到架构的落地映射
+
+{self._generate_architecture_fit()}
 
 ---
 
@@ -564,6 +606,10 @@ class DocumentGenerator:
 
 {self._generate_business_module_design()}
 
+### 4.4 领域边界与职责拆分
+
+{self._generate_domain_boundaries()}
+
 ---
 
 ## 5. 数据库设计
@@ -618,6 +664,10 @@ DELETE /api/resources/:id      # 删除
 500 Server Error     # 服务器错误
 ```
 
+### 6.4 集成契约与版本策略
+
+{self._generate_integration_contracts()}
+
 ---
 
 ## 7. 安全设计
@@ -670,6 +720,10 @@ DELETE /api/resources/:id      # 删除
 
 {self._generate_performance_optimization()}
 
+### 8.3 容错与降级策略
+
+{self._generate_failure_strategy()}
+
 ---
 
 ## 9. 可观测性
@@ -691,6 +745,10 @@ DELETE /api/resources/:id      # 删除
 - **告警渠道**: 邮件、钉钉、PagerDuty
 - **告警级别**: P0-P4
 - **响应时间**: P0 < 15min, P1 < 30min
+
+### 9.4 审计与可追溯性
+
+{self._generate_audit_strategy()}
 
 ---
 
@@ -742,6 +800,10 @@ jobs:
         run: kubectl apply -f k8s/
 ```
 
+### 10.4 发布与回滚策略
+
+{self._generate_release_strategy()}
+
 ---
 
 ## 附录
@@ -766,6 +828,7 @@ jobs:
         # 获取智能设计推荐
         recommendations = self._get_design_recommendations()
         analysis = self._analyze_project_for_design()
+        ui_intelligence = self._get_ui_intelligence(analysis)
 
         # 构建文档
         doc_parts = []
@@ -774,7 +837,7 @@ jobs:
         doc_parts.append(f"""# {self.name} - UI/UX 设计文档
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.0.3
+> **版本**: v2.0.4
 > **设计师**: Super Dev UI/UX 专家
 
 ---
@@ -813,7 +876,10 @@ AI 基于项目特征，从设计数据库中为您推荐：
             doc_parts.append(f"""**推荐字体**: {', '.join([f.get('Font Pairing Name', 'Professional') for f in recommendations['fonts'][:2]])}
 """)
 
-        doc_parts.append("""
+        doc_parts.append(f"""**推荐组件生态**: {ui_intelligence['primary_library']['name']}
+""")
+
+        doc_parts.append(f"""
 ---
 
 ## 1. 设计概述
@@ -841,6 +907,14 @@ AI 基于项目特征，从设计数据库中为您推荐：
 5. **必须具备可访问交互**：可见 focus 态、可读对比度、键盘可达、并兼容 reduced-motion。
 6. **必须有设计 token**：颜色、间距、圆角、阴影和动效时长需以 token 形式统一管理。
 
+### 1.4 商业级体验目标
+
+{self._generate_ui_strategy(ui_intelligence)}
+
+### 1.5 设计 Intelligence 结论
+
+{self._render_ui_intelligence_summary(ui_intelligence)}
+
 ---
 
 ## 2. 设计系统
@@ -858,12 +932,12 @@ AI 基于项目特征，从设计数据库中为您推荐：
 
 | 颜色 | 用途 | Hex | 备注 |
 |:---|:---|:---|:---|
-| **Primary** | 主要操作、强调 | {color.get('Primary (Hex)', '#2563EB')} | 主色调 |
-| **Secondary** | 次要操作 | {color.get('Secondary (Hex)', '#64748B')} | 辅助色 |
-| **CTA** | 行动号召 | {color.get('CTA (Hex)', '#2563EB')} | 转化按钮 |
-| **Background** | 页面背景 | {color.get('Background (Hex)', '#F9FAFB')} | 背景色 |
-| **Text** | 正文文本 | {color.get('Text (Hex)', '#111827')} | 文本色 |
-| **Border** | 边框线条 | {color.get('Border (Hex)', '#E5E7EB')} | 分割线 |
+| **Primary** | 主要操作、强调 | {color.get('primary', color.get('Primary (Hex)', '#2563EB'))} | 主色调 |
+| **Secondary** | 次要操作 | {color.get('secondary', color.get('Secondary (Hex)', '#64748B'))} | 辅助色 |
+| **CTA** | 行动号召 | {color.get('accent', color.get('CTA (Hex)', '#2563EB'))} | 转化按钮 |
+| **Background** | 页面背景 | {color.get('background', color.get('Background (Hex)', '#F9FAFB'))} | 背景色 |
+| **Text** | 正文文本 | {color.get('text', color.get('Text (Hex)', '#111827'))} | 文本色 |
+| **Border** | 边框线条 | {color.get('border', color.get('Border (Hex)', '#E5E7EB'))} | 分割线 |
 
 **Tailwind 配置**:
 ```javascript
@@ -872,9 +946,9 @@ module.exports = {{
   theme: {{
     extend: {{
       colors: {{
-        primary: '{color.get('Primary (Hex)', '#2563EB')}',
-        secondary: '{color.get('Secondary (Hex)', '#64748B')}',
-        cta: '{color.get('CTA (Hex)', '#2563EB')}',
+        primary: '{color.get('primary', color.get('Primary (Hex)', '#2563EB'))}',
+        secondary: '{color.get('secondary', color.get('Secondary (Hex)', '#64748B'))}',
+        cta: '{color.get('accent', color.get('CTA (Hex)', '#2563EB'))}',
       }}
     }}
   }}
@@ -944,7 +1018,7 @@ font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Segoe UI', san
 """)
 
         # 间距和圆角规范保持不变
-        doc_parts.append("""### 2.3 间距规范
+        doc_parts.append(f"""### 2.3 间距规范
 
 使用 8px 基础单位:
 - **xs**: 4px
@@ -962,6 +1036,18 @@ font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Segoe UI', san
 | **卡片** | 8px |
 | **输入框** | 4px |
 | **弹窗** | 12px |
+
+### 2.5 视觉方向与品牌感
+
+{self._generate_visual_direction()}
+
+### 2.6 布局栅格与密度策略
+
+{self._generate_layout_system(ui_intelligence)}
+
+### 2.7 组件生态与实现基线
+
+{self._render_component_ecosystem(ui_intelligence)}
 
 ---
 
@@ -1029,7 +1115,11 @@ font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Segoe UI', san
 """)
 
         # 添加其他部分（保持原有的内容结构）
-        doc_parts.append(f"""### 3.2 导航结构
+        doc_parts.append(f"""### 3.2 页面骨架优先级
+
+{self._render_page_blueprints(ui_intelligence)}
+
+### 3.3 导航结构
 
 {self._generate_navigation_structure()}
 
@@ -1065,6 +1155,14 @@ font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Segoe UI', san
 
 {self._generate_business_components()}
 
+### 5.3 组件状态矩阵
+
+{self._generate_component_state_matrix()}
+
+### 5.4 图标、图表与内容模块
+
+{self._render_visual_assets_strategy(ui_intelligence)}
+
 ---
 
 ## 6. 交互设计
@@ -1086,6 +1184,10 @@ font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Segoe UI', san
 - **无数据**: 空状态插图 + 引导文案
 - **搜索无结果**: 提示 + 清空按钮
 
+### 6.4 动效与反馈系统
+
+{self._generate_motion_system(ui_intelligence)}
+
 ---
 
 ## 7. 响应式设计
@@ -1105,6 +1207,10 @@ font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Segoe UI', san
 - **流式布局**: Flexbox + Grid
 - **响应式图片**: srcset + sizes
 - **响应式字体**: clamp() 函数
+
+### 7.3 商业化与信任设计
+
+{self._generate_trust_and_conversion_rules(ui_intelligence)}
 
 ---
 
@@ -1154,7 +1260,7 @@ font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Segoe UI', san
 
 ### B. 插件资源
 
-- {self._get_ui_library()} 组件库
+- {ui_intelligence['primary_library']['name']} 组件生态
 - Figma 插件推荐
 
 ### C. 设计参考
@@ -1215,6 +1321,9 @@ font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Segoe UI', san
             'healthcare': '医疗健康行业，需要传递安全、专业感',
             'fintech': '金融科技，需要信任、安全的设计语言',
             'education': '教育行业，需要亲和力、专业性',
+            'legal': '法律服务行业，需要权威、可信和清晰表达',
+            'government': '政务/公共服务，需要高可读性与可访问性',
+            'beauty': '美业/健康服务，需要品牌感、精致感与转化路径',
             'general': '通用行业'
         }
         return descs.get(industry, '常规行业')
@@ -1229,6 +1338,21 @@ font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Segoe UI', san
             'modern': '现代风格，时尚、前沿'
         }
         return descs.get(style, '现代风格')
+
+    def _get_ui_intelligence(self, analysis: dict | None = None) -> dict:
+        """获取结构化 UI Intelligence 推荐"""
+        analysis = analysis or self._analyze_project_for_design()
+        from super_dev.design import UIIntelligenceAdvisor
+
+        advisor = UIIntelligenceAdvisor()
+        return advisor.recommend(
+            description=self.description,
+            frontend=self.frontend,
+            product_type=analysis["product_type"],
+            industry=analysis["industry"],
+            style=analysis["style"],
+            ui_library=self.ui_library,
+        )
     def _get_state_management(self) -> str:
         """获取状态管理方案"""
         mapping = {
@@ -1241,13 +1365,7 @@ font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Segoe UI', san
 
     def _get_ui_library(self) -> str:
         """获取 UI 库"""
-        mapping = {
-            "react": "Ant Design / Chakra UI",
-            "vue": "Element Plus / Naive UI",
-            "angular": "Angular Material",
-            "svelte": "Skeleton UI",
-        }
-        return mapping.get(self.frontend, "Custom")
+        return self._get_ui_intelligence()["primary_library"]["name"]
 
     def _get_build_tool(self) -> str:
         """获取构建工具"""
@@ -2322,6 +2440,93 @@ spec:
 - 加载状态明确
 """
 
+    def _render_ui_intelligence_summary(self, profile: dict) -> str:
+        lines = [
+            f"- **界面定位**: {profile['surface']}",
+            f"- **信息密度**: {profile['information_density']}",
+            f"- **行业语气**: {profile['industry_tone']}",
+            f"- **首选组件生态**: {profile['primary_library']['name']}",
+            f"- **表单基线**: {profile['component_stack']['form']}",
+            f"- **数据展示基线**: {profile['component_stack']['table']} / {profile['component_stack']['chart']}",
+            "",
+            "**优先原则**:",
+        ]
+        lines.extend(f"- {item}" for item in profile["benchmark_principles"])
+        lines.extend(["", "**设计知识库关键词**:"])
+        lines.append("- " + " / ".join(profile["knowledge_keywords"]))
+        return "\n".join(lines)
+
+    def _render_component_ecosystem(self, profile: dict) -> str:
+        primary = profile["primary_library"]
+        lines = [
+            f"#### 首选方案: {primary['name']}",
+            "",
+            f"**适用原因**: {primary['rationale']}",
+            "",
+            "**核心能力**:",
+        ]
+        lines.extend(f"- {item}" for item in primary["strengths"])
+        lines.extend(
+            [
+                "",
+                "**实现注意事项**:",
+            ]
+        )
+        lines.extend(f"- {item}" for item in primary["notes"])
+        lines.extend(
+            [
+                "",
+                "#### 配套技术基线",
+                "",
+                f"- **表单与验证**: {profile['component_stack']['form']}",
+                f"- **图表能力**: {profile['component_stack']['chart']}",
+                f"- **表格/数据工作区**: {profile['component_stack']['table']}",
+                f"- **图标体系**: {profile['component_stack']['icons']}",
+                f"- **动效能力**: {profile['component_stack']['motion']}",
+            ]
+        )
+
+        alternatives = profile.get("alternative_libraries", [])
+        if alternatives:
+            lines.extend(["", "#### 可选备选方案", ""])
+            for item in alternatives:
+                lines.append(f"- **{item['name']}**: {item['rationale']}")
+        return "\n".join(lines)
+
+    def _render_page_blueprints(self, profile: dict) -> str:
+        lines: list[str] = []
+        for blueprint in profile["page_blueprints"]:
+            lines.extend(
+                [
+                    f"#### {blueprint['page']}",
+                    "",
+                    "**推荐模块顺序**:",
+                ]
+            )
+            lines.extend(f"- {section}" for section in blueprint["sections"])
+            lines.extend(
+                [
+                    "",
+                    f"**设计重点**: {blueprint['focus']}",
+                    "",
+                ]
+            )
+        return "\n".join(lines).rstrip()
+
+    def _render_visual_assets_strategy(self, profile: dict) -> str:
+        lines = [
+            f"- **图标库**: {profile['component_stack']['icons']}，禁止 emoji 代替功能图标。",
+            f"- **图表策略**: {profile['component_stack']['chart']}，图表先服务决策，再考虑视觉装饰。",
+            "- **品牌/合作方 Logo**: 统一使用官方 SVG 或可信来源矢量资产，避免猜测版图形。",
+            "- **截图策略**: 对外页面优先使用真实产品截图、流程图或数据示意，而不是空洞插画。",
+            "",
+            "**优先落地的组件模块**:",
+        ]
+        lines.extend(f"- {item}" for item in profile["component_priorities"])
+        lines.extend(["", "**明确禁止**:"])
+        lines.extend(f"- {item}" for item in profile["banned_patterns"][:6])
+        return "\n".join(lines)
+
     def _get_design_recommendations(self) -> dict:
         """获取智能设计推荐"""
         try:
@@ -2539,4 +2744,182 @@ spec:
             ]
         )
 
+        return "\n".join(lines)
+
+    def _generate_market_context(self) -> str:
+        return (
+            f"- 当前需求聚焦于“{self.description}”，在立项阶段必须先完成同类产品研究，避免凭空定义需求。\n"
+            "- 研究输出至少覆盖：目标用户、核心功能组合、关键任务路径、页面层级、商业化表达与差异化方向。\n"
+            "- PRD 不只描述“要做什么”，还需要明确“为什么这样做”以及“相较同类产品借鉴了什么、舍弃了什么”。\n"
+            "- 对标研究更应关注流程、交互密度、信任表达和交付成熟度，而不是只模仿视觉表面。"
+        )
+
+    def _generate_user_segment_matrix(self) -> str:
+        return (
+            "| 用户分层 | 主要目标 | 关键诉求 | 设计重点 |\n"
+            "|:---|:---|:---|:---|\n"
+            "| 核心操作者 | 高效完成主流程 | 速度、稳定性、可追踪 | 缩短操作路径、强化状态反馈 |\n"
+            "| 协作/审批角色 | 快速理解上下文并做决策 | 信息完整、风险可见 | 强化摘要、差异对比、审批反馈 |\n"
+            "| 管理角色 | 掌握全局进度与质量 | 透明度、可审计性 | 仪表盘、过滤、导出、审计记录 |\n"
+            "| 新用户/访客 | 理解产品价值与使用方式 | 上手门槛低、信任感强 | 首屏表达清晰、引导明确、案例可信 |"
+        )
+
+    def _generate_scope_priorities(self) -> str:
+        return (
+            "1. **P0 必做**: 主业务流程、关键页面、权限与状态闭环、错误处理、基础审计与测试。\n"
+            "2. **P1 应做**: 搜索筛选、批量操作、运营/管理视图、埋点、性能优化、可观测性。\n"
+            "3. **P2 可延后**: 高级自动化、复杂可视化、生态集成、个性化配置。\n"
+            "4. **明确不在 MVP**: 任何没有用户价值验证、没有交付必要性的炫技功能不进入第一阶段。"
+        )
+
+    def _generate_edge_cases(self) -> str:
+        return (
+            "- 权限不足时必须提供可读解释与引导动作，而不是静默失败。\n"
+            "- 异步任务、长流程、批量操作必须可见进度、可取消、可重试。\n"
+            "- 网络异常、数据为空、外部依赖不可用时，页面需保留结构稳定和恢复路径。\n"
+            "- 表单提交、发布、删除、审批等高风险动作必须有二次确认、撤回或审计记录。"
+        )
+
+    def _generate_delivery_requirements(self) -> str:
+        return (
+            "- 所有核心页面必须覆盖正常态、加载态、空态、错误态、禁用态和权限态。\n"
+            "- 交付包必须可审计，文档、Spec、任务状态、测试结果与发布配置需要相互对应。\n"
+            "- 前端先行，但不能只做静态壳子，至少要能演示真实任务流和关键反馈。\n"
+            "- UI 必须达到商业产品完成度：有品牌感、信息层级、组件一致性和可访问性。"
+        )
+
+    def _generate_acceptance_matrix(self) -> str:
+        return (
+            "| 验收维度 | 必达标准 | 验证方式 |\n"
+            "|:---|:---|:---|\n"
+            "| 核心业务流程 | 主路径可从开始走到完成，且反馈明确 | 手测 + E2E |\n"
+            "| 权限与审计 | 角色权限生效，关键动作可追踪 | 用例测试 + 日志核验 |\n"
+            "| UI/UX 完成度 | 页面层级清晰、状态齐全、品牌感一致 | 设计走查 |\n"
+            "| 工程质量 | Lint/Test/Build 通过 | CI + 本地验证 |\n"
+            "| 上线准备 | 配置、监控、回滚说明齐备 | 发布检查单 |"
+        )
+
+    def _generate_business_kpis(self) -> str:
+        return (
+            "- **激活指标**: 首次完成核心流程的用户占比。\n"
+            "- **效率指标**: 用户完成关键任务所需时间、步骤数与中断率。\n"
+            "- **质量指标**: 错误率、异常恢复率、关键页面交互成功率。\n"
+            "- **经营指标**: 试用到付费、线索到转化、复购或活跃留存。"
+        )
+
+    def _generate_launch_dependencies(self) -> str:
+        return (
+            "- 研究报告、PRD、架构、UIUX 与 tasks.md 版本一致。\n"
+            "- 测试、质量门禁、发布配置、监控告警和回滚策略已验证。\n"
+            "- 数据结构与迁移脚本已评审，关键风险有兜底方案。\n"
+            "- 核心路径可现场演示，不依赖口头解释才能成立。"
+        )
+
+    def _generate_architecture_fit(self) -> str:
+        return (
+            "- 架构设计必须回到研究报告和 PRD 的关键流程，不能脱离实际需求做空泛微服务模板。\n"
+            "- 技术选型应优先服务于当前阶段交付速度、稳定性、可维护性和团队认知成本。\n"
+            "- 对高频路径优先做低延迟设计，对高风险路径优先做权限、审计、幂等和回滚设计。\n"
+            "- 前后端契约应围绕页面与任务流定义，而不是围绕数据库表结构反推。"
+        )
+
+    def _generate_domain_boundaries(self) -> str:
+        return (
+            "- 认证授权、用户与组织、核心业务流程、通知与异步任务、审计日志应作为明确边界拆分。\n"
+            "- 每个边界需要定义输入输出 DTO、权限要求、状态流转与失败补偿策略。\n"
+            "- 共享能力只沉淀稳定基础设施，不把业务细节塞进“common utils”。\n"
+            "- 高变化模块优先与低变化模块解耦，降低后续迭代成本。"
+        )
+
+    def _generate_integration_contracts(self) -> str:
+        return (
+            "- API 必须有版本策略，避免前端页面被无意破坏。\n"
+            "- 外部依赖需定义超时、重试、降级、熔断与错误映射规则。\n"
+            "- DTO 应稳定、可验证、可测试，避免把数据库内部字段直接暴露给前端。\n"
+            "- Webhook、消息、回调类接口要有幂等键与审计记录。"
+        )
+
+    def _generate_failure_strategy(self) -> str:
+        return (
+            "- 关键写操作采用幂等机制，防止重复提交。\n"
+            "- 第三方依赖异常时优先降级核心功能而不是整体瘫痪。\n"
+            "- 任务流中断后应支持恢复、补偿或人工处理入口。\n"
+            "- 前端异常要给出可执行的下一步，不允许只显示技术报错。"
+        )
+
+    def _generate_audit_strategy(self) -> str:
+        return (
+            "- 对登录、权限变更、关键数据修改、批量操作、发布/审批动作保留审计轨迹。\n"
+            "- 日志结构需支持按用户、资源、请求链路、时间窗口检索。\n"
+            "- 前后端共享 trace/request id，确保问题能跨层定位。\n"
+            "- 质量门禁输出应沉淀为可回溯产物，而不是一次性终端信息。"
+        )
+
+    def _generate_release_strategy(self) -> str:
+        return (
+            "- 使用分环境发布策略，至少区分本地、测试、预发布、生产。\n"
+            "- 高风险变更建议灰度、特性开关或分批发布。\n"
+            "- 发布说明需包含数据库变更、兼容性影响、回滚步骤与监控关注项。\n"
+            "- 回滚方案必须在上线前验证，不接受“出问题再看”。"
+        )
+
+    def _generate_ui_strategy(self, profile: dict | None = None) -> str:
+        profile = profile or self._get_ui_intelligence()
+        return (
+            "- UI 的首要目标不是“好看”，而是让用户快速理解产品价值、任务状态与下一步动作。\n"
+            "- 所有页面都应体现商业级完成度：品牌感、层级感、信息密度、状态完整度与信任表达。\n"
+            f"- 当前项目应以“{profile['surface']}”为第一交付目标，并采用 {profile['information_density']} 密度策略组织信息。\n"
+            "- 先解决页面结构、CTA、数据层级和组件一致性，再打磨视觉细节。\n"
+            "- 对外页面强调品牌、信任与转化，对内页面强调效率、清晰度和低认知负担。"
+        )
+
+    def _generate_visual_direction(self) -> str:
+        return (
+            "- 视觉方向应基于产品定位建立明确气质：可信、克制、现代，而不是依赖泛滥渐变制造“高级感”。\n"
+            "- 优先使用有辨识度的字体组合、清晰的字号节奏、稳定的留白和克制的强调色。\n"
+            "- 图形、图标、插画、卡片阴影和分隔线应来自同一视觉系统，避免拼装感。\n"
+            "- 页面应在首屏就体现主价值、核心证据、下一步 CTA 和品牌记忆点。"
+        )
+
+    def _generate_layout_system(self, profile: dict | None = None) -> str:
+        profile = profile or self._get_ui_intelligence()
+        return (
+            "- 桌面端使用明确的 12 栏或等价栅格系统，控制内容宽度与节奏。\n"
+            f"- 当前项目采用 {profile['information_density']} 信息密度，按页面目标决定视觉节奏与操作密度。\n"
+            "- 控制不同页面的密度等级，避免同一产品里既过空又过挤。\n"
+            "- 侧边栏、头部、主体区、辅助区、底部应有稳定布局规则。"
+        )
+
+    def _generate_component_state_matrix(self) -> str:
+        return (
+            "| 组件类型 | 必备状态 | 说明 |\n"
+            "|:---|:---|:---|\n"
+            "| 按钮 | 默认 / hover / active / disabled / loading | 强调动作反馈与禁用原因 |\n"
+            "| 输入控件 | 默认 / focus / error / success / readonly | 错误文案与引导动作要清晰 |\n"
+            "| 列表与表格 | loading / empty / normal / error / bulk-selected | 支持筛选、排序、批量动作 |\n"
+            "| 卡片与模块 | default / hover / selected / warning / permission-limited | 用于强调优先级、状态变化和权限边界 |\n"
+            "| 弹窗抽屉 | enter / exit / confirm / pending / failure | 需要防误操作和恢复路径 |"
+        )
+
+    def _generate_motion_system(self, profile: dict | None = None) -> str:
+        profile = profile or self._get_ui_intelligence()
+        return (
+            "- 动效只服务于层级切换、状态反馈、焦点引导，不用作廉价装饰。\n"
+            f"- 推荐实现基线: {profile['component_stack']['motion']}。\n"
+            "- 列表进入、面板展开、Toast 反馈、模态切换应采用统一时长与缓动曲线。\n"
+            "- 对关键提交动作提供即时反馈，对长操作提供进度提示。\n"
+            "- 必须兼容 reduced-motion，必要时降级为无动画但保留状态反馈。"
+        )
+
+    def _generate_trust_and_conversion_rules(self, profile: dict | None = None) -> str:
+        profile = profile or self._get_ui_intelligence()
+        lines = [
+            "- 对外页面应优先展示价值主张、能力边界、案例证明、客户证言、数据指标或合规信息。",
+            "- CTA 不应只在 hero 区出现，关键转化节点要有连续但不过度打扰的引导。",
+            "- 对内工作台则应突出当前任务、风险提示、审批状态、待办优先级和最近操作。",
+            "- 所有高价值页面都应体现“用户为什么相信并继续使用这个产品”。",
+            "",
+            "**当前项目必须优先出现的信任/转化模块**:",
+        ]
+        lines.extend(f"- {item}" for item in profile["trust_modules"][:8])
         return "\n".join(lines)

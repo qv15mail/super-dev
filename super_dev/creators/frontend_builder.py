@@ -62,16 +62,72 @@ class FrontendScaffoldBuilder:
   <body>
     <div class="bg-layer"></div>
     <main class="shell">
+      <nav class="topbar">
+        <div class="brand">
+          <span class="brand-mark">SD</span>
+          <span>{self.name}</span>
+        </div>
+        <div class="top-actions">
+          <a href="#trust">客户证明</a>
+          <a href="#workspace">交付路径</a>
+          <a class="primary-link" href="#doc-links">查看文档</a>
+        </div>
+      </nav>
+
       <header class="hero">
-        <p class="eyebrow">Super Dev Frontend First Delivery</p>
-        <h1>{self.name}</h1>
-        <p class="summary">{self.description}</p>
-        <div class="meta">
-          <span>Framework: {self.frontend}</span>
-          <span>Mode: 需求文档驱动</span>
-          <span>Status: Ready</span>
+        <div class="hero-copy">
+          <p class="eyebrow">Super Dev Frontend First Delivery</p>
+          <h1>{self.name}</h1>
+          <p class="summary">{self.description}</p>
+          <div class="meta">
+            <span>Framework: {self.frontend}</span>
+            <span>Mode: 需求文档驱动</span>
+            <span>Status: Ready</span>
+          </div>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#doc-links">打开核心文档</a>
+            <a class="button button-secondary" href="#workspace">查看交付流程</a>
+          </div>
+          <ul class="trust-strip">
+            <li>商业级流程治理</li>
+            <li>研究报告与 UI/UX 规范先行</li>
+            <li>质量门禁与交付审计可追踪</li>
+          </ul>
+        </div>
+        <div class="hero-panel" aria-label="产品演示摘要">
+          <div class="panel-card">
+            <p class="panel-label">Preview Snapshot</p>
+            <h2>从需求到交付的工作台</h2>
+            <p>把 Research、PRD、Architecture、UI/UX、Spec、Quality Gate 放进同一条可审计的交付链。</p>
+            <div class="metric-grid">
+              <div><strong>12</strong><span>阶段治理</span></div>
+              <div><strong>3</strong><span>核心文档</span></div>
+              <div><strong>80+</strong><span>质量门禁</span></div>
+            </div>
+          </div>
         </div>
       </header>
+
+      <section id="trust" class="card trust-band">
+        <div class="section-head">
+          <h2>可信交付信号</h2>
+          <p>不是只生成页面，而是确保需求、规范、状态、质量和上线准备全部可追踪。</p>
+        </div>
+        <div class="trust-grid">
+          <article class="trust-item">
+            <h3>Research First</h3>
+            <p>先研究同类产品、页面结构与商业表达，再写文档和代码。</p>
+          </article>
+          <article class="trust-item">
+            <h3>UI/UX Baseline</h3>
+            <p>先冻结组件生态、设计 token、页面骨架和状态矩阵，再实现页面。</p>
+          </article>
+          <article class="trust-item">
+            <h3>Quality Gate</h3>
+            <p>红队审查、UI 审查、质量门禁和发布演练共同保证可交付性。</p>
+          </article>
+        </div>
+      </section>
 
       <section class="card doc-hub">
         <div class="section-head">
@@ -81,7 +137,7 @@ class FrontendScaffoldBuilder:
         <div id="doc-links" class="doc-grid"></div>
       </section>
 
-      <section class="card split">
+      <section id="workspace" class="card split">
         <div>
           <div class="section-head">
             <h2>需求模块</h2>
@@ -98,6 +154,32 @@ class FrontendScaffoldBuilder:
         </div>
       </section>
 
+      <section class="card split preview-proof">
+        <div>
+          <div class="section-head">
+            <h2>页面骨架</h2>
+            <p>对外页面要有价值表达、信任证明、能力模块和明确 CTA。</p>
+          </div>
+          <ul class="delivery-list">
+            <li>Hero + 价值主张 + CTA</li>
+            <li>真实截图/演示摘要</li>
+            <li>案例 / 安全 / FAQ / 证明</li>
+            <li>功能分区与下一步转化入口</li>
+          </ul>
+        </div>
+        <div>
+          <div class="section-head">
+            <h2>交付证明</h2>
+            <p>适用于官网、产品页、工作台和商业级 MVP 验证。</p>
+          </div>
+          <div class="proof-card">
+            <strong>Case Study Ready</strong>
+            <p>支持把页面、文档、任务状态和质量报告一起用于内部评审或商业验证。</p>
+            <a class="inline-link" href="#faq">查看 FAQ</a>
+          </div>
+        </div>
+      </section>
+
       <section class="card">
         <div class="section-head">
           <h2>交付清单</h2>
@@ -110,6 +192,23 @@ class FrontendScaffoldBuilder:
           <li>阶段 4: 联调、测试、质量门禁</li>
           <li>阶段 5: 发布、监控与迭代</li>
         </ul>
+      </section>
+
+      <section id="faq" class="card">
+        <div class="section-head">
+          <h2>FAQ</h2>
+          <p>快速回答“为什么不是直接写代码”的问题。</p>
+        </div>
+        <div class="faq-list">
+          <article>
+            <h3>为什么先做文档？</h3>
+            <p>因为商业级交付不只是把页面写出来，而是让需求、架构、UI/UX 和质量口径可审计。</p>
+          </article>
+          <article>
+            <h3>为什么要看质量门禁？</h3>
+            <p>为了尽早识别风险、状态缺失、UI 模板化和交付短板，而不是等上线前才返工。</p>
+          </article>
+        </div>
       </section>
     </main>
     <script src="./app.js"></script>
@@ -162,7 +261,53 @@ body {
   z-index: 1;
 }
 
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: #172133;
+  color: #ffffff;
+  font-size: 13px;
+}
+
+.top-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.top-actions a {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.top-actions .primary-link {
+  color: var(--primary);
+}
+
 .hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.9fr);
+  gap: 18px;
   padding: 28px 28px 26px;
   border: 1px solid var(--stroke);
   border-radius: var(--radius);
@@ -191,6 +336,34 @@ body {
   color: var(--muted);
 }
 
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 18px 0 18px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.button-primary {
+  background: var(--text);
+  color: #ffffff;
+}
+
+.button-secondary {
+  background: rgba(15, 124, 250, 0.08);
+  color: #12438a;
+}
+
 .meta {
   display: flex;
   gap: 10px;
@@ -204,6 +377,72 @@ body {
   color: #12438a;
   font-size: 13px;
   font-weight: 700;
+}
+
+.trust-strip {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.trust-strip li {
+  color: var(--muted);
+}
+
+.hero-panel {
+  display: flex;
+}
+
+.panel-card,
+.proof-card {
+  width: 100%;
+  border-radius: 18px;
+  border: 1px solid rgba(23, 33, 51, 0.08);
+  background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(243,247,255,0.92));
+  padding: 20px;
+}
+
+.panel-label {
+  margin: 0 0 8px;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.panel-card h2,
+.proof-card strong {
+  display: block;
+  margin: 0 0 8px;
+  font-family: "Sora", sans-serif;
+}
+
+.metric-grid,
+.trust-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metric-grid div,
+.trust-item {
+  border-radius: 14px;
+  padding: 14px;
+  background: rgba(15, 124, 250, 0.06);
+}
+
+.metric-grid strong {
+  display: block;
+  font-size: 24px;
+  font-family: "Sora", sans-serif;
+}
+
+.metric-grid span {
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .card {
@@ -302,12 +541,56 @@ body {
   gap: 8px;
 }
 
+.inline-link {
+  color: var(--primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.faq-list {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.faq-list article {
+  border-radius: 14px;
+  border: 1px solid rgba(23, 33, 51, 0.08);
+  padding: 16px;
+  background: #ffffff;
+}
+
+.faq-list h3 {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+
+.faq-list p,
+.trust-item p,
+.proof-card p {
+  margin: 0;
+  color: var(--muted);
+}
+
 @media (max-width: 860px) {
+  .topbar,
+  .hero {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .doc-grid {
     grid-template-columns: 1fr;
   }
 
   .split {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-grid,
+  .trust-grid,
+  .faq-list {
     grid-template-columns: 1fr;
   }
 }

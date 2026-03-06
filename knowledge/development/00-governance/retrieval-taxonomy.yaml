@@ -1,0 +1,36 @@
+# 开发：Excellent（11964948@qq.com）
+
+taxonomy_version: "2026.03"
+dimensions:
+  intent:
+    - concept
+    - implement
+    - troubleshoot
+    - compare
+    - checklist
+    - runbook
+  lifecycle:
+    - design
+    - develop
+    - test
+    - release
+    - operate
+    - improve
+  risk_level:
+    - p0
+    - p1
+    - p2
+  asset_type:
+    - standard
+    - playbook
+    - checklist
+    - antipattern
+    - case
+    - glossary
+  role:
+    - frontend
+    - backend
+    - qa
+    - devops
+    - architect
+    - pm

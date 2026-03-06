@@ -1,0 +1,16 @@
+# 开发：Excellent（11964948@qq.com）
+
+ui_quality_gates:
+  token_coverage: ">=95%"
+  component_state_coverage: "100%"
+  accessibility_wcag: "2.2-AA"
+  lighthouse_accessibility: ">=95"
+  lighthouse_performance: ">=85"
+  visual_regression_threshold: "<=0.3%"
+  critical_flow_pass_rate: "100%"
+  blocking_bugs: 0
+ui_kpi:
+  task_success_rate: ">=90%"
+  interaction_error_rate: "<=2%"
+  ui_consistency_score: ">=90"
+  design_review_reopen_rate: "<=10%"

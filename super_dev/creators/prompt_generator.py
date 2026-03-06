@@ -22,25 +22,36 @@ class AIPromptGenerator:
 
     def generate(self) -> str:
         """生成 AI 提示词"""
-        # 读取项目配置
         import yaml  # type: ignore[import-untyped]
+
+        from ..design import UIIntelligenceAdvisor
+
         config_path = self.project_dir / "super-dev.yaml"
         project_config: dict = {}
         if config_path.exists():
-            with open(config_path, encoding='utf-8') as f:
+            with open(config_path, encoding="utf-8") as f:
                 project_config = yaml.safe_load(f)
 
-        # 读取生成的文档
-        prd_content = self._read_document('prd')
-        arch_content = self._read_document('architecture')
-        uiux_content = self._read_document('uiux')
-        plan_content = self._read_document('execution-plan')
-        frontend_blueprint = self._read_document('frontend-blueprint')
+        description = project_config.get("description", "见 PRD 文档")
+        frontend = project_config.get("frontend", "react")
+        advisor = UIIntelligenceAdvisor()
+        ui_profile = advisor.recommend(
+            description=description,
+            frontend=frontend,
+            product_type=self._infer_product_type(description),
+            industry=self._infer_industry(description),
+            style=self._infer_style(description),
+        )
 
-        # 读取 Spec 变更
+        research_content = self._read_document("research")
+        prd_content = self._read_document("prd")
+        arch_content = self._read_document("architecture")
+        uiux_content = self._read_document("uiux")
+        plan_content = self._read_document("execution-plan")
+        frontend_blueprint = self._read_document("frontend-blueprint")
+
         change_content, change_id = self._read_change_spec()
 
-        # 组装提示词
         prompt = f"""# {self.name} - AI 开发提示词
 
 > 由 Super Dev 自动生成
@@ -51,10 +62,10 @@ class AIPromptGenerator:
 ## 项目概述
 
 **项目名称**: {self.name}
-**项目描述**: {project_config.get('description', '见 PRD 文档')}
+**项目描述**: {description}
 **目标平台**: {project_config.get('platform', 'web').upper()}
 **技术栈**:
-- 前端: {project_config.get('frontend', 'react')}
+- 前端: {frontend}
 - 后端: {project_config.get('backend', 'node')}
 
 ---
@@ -64,38 +75,124 @@ class AIPromptGenerator:
 请根据以下规范和文档，实现 {self.name} 的所有功能。
 
 **重要**:
-1. **严格按照任务列表顺序实现**
-2. **每完成一个任务，标记为 [x]**
-3. **遵循规范中的所有要求**
-4. **参考架构文档中的技术选型**
+1. **先研究，再三文档，再等待用户确认，再 Spec，再编码，严禁跳步**
+2. **优先使用宿主原生联网 / browse / search 能力研究同类产品**
+3. **优先读取并继承当前项目 `knowledge/` 与 `output/*-knowledge-bundle.json` 命中的本地知识**
+4. **每完成一个任务，标记为 [x]**
+5. **遵循规范中的所有要求**
+6. **参考架构文档中的技术选型**
 
 ---
 
-## 核心文档
+## 首轮响应契约（首次触发必须执行）
+
+1. 第一轮回复必须明确说明：`Super Dev` 流水线已激活，当前不是普通聊天模式。
+2. 第一轮回复必须明确说明当前阶段是 `research`，会先读取 `knowledge/` 与 `output/knowledge-cache/{self.name}-knowledge-bundle.json`（若存在），再使用宿主原生联网 / browse / search 研究同类产品。
+3. 第一轮回复必须明确说明固定顺序：
+   - research
+   - 三份核心文档
+   - 等待用户确认
+   - Spec / tasks
+   - 前端优先并运行验证
+   - 后端 / 测试 / 交付
+4. 第一轮回复必须明确说明：三份核心文档完成后会暂停等待用户确认；未经确认不会创建 `.super-dev/changes/*`，也不会开始编码。
+
+---
+
+## 强制执行顺序
+
+### 阶段 0. 同类产品研究
+
+1. 如果当前宿主支持联网 / browse / search / web，请先使用宿主原生能力搜索与本需求相近的产品、官网、案例、文档或体验流程。
+2. 同时读取当前项目内的本地知识上下文：
+   - `knowledge/` 目录下与当前需求相关的知识文件
+   - `output/{self.name}-research.md`
+   - `output/knowledge-cache/{self.name}-knowledge-bundle.json`（若存在）
+3. 对于本地知识库中命中的规范、清单、反模式、场景包、质量门禁，默认视为本项目硬约束，而不是可选参考。
+3.1 如果 `output/knowledge-cache/{self.name}-knowledge-bundle.json` 中存在 `knowledge_application_plan`，必须按其中的阶段应用计划使用本地知识：
+   - research 阶段只做对标研究和机会判断
+   - PRD / Architecture / UIUX / Spec / Frontend / Backend / Quality / Delivery 各阶段分别继承对应知识条目
+   - 标记为 hard constraints 的知识必须进入文档、Spec 或验收门禁
+4. 至少总结以下内容后再进入 PRD：
+   - 3 到 5 个同类产品或可借鉴对象
+   - 共性功能模块
+   - 关键用户流程与信息架构
+   - 可借鉴的信任设计、商业化表达、交互模式
+   - 不应照搬的缺点与本项目的差异化方向
+5. 将研究结论写入 `output/{self.name}-research.md`，并在后续 PRD / 架构 / UIUX 中继承这些结论。
+
+### 阶段 1. 冻结核心文档
+
+1. 先完整读取 `output/*-research.md`
+2. 再读取 `output/*-prd.md`
+3. 再读取 `output/*-architecture.md`
+4. 再读取 `output/*-uiux.md`
+5. 再读取 `output/*-execution-plan.md`
+6. 如果三份核心文档缺失，先补齐文档，不得直接创建 Spec 或开始编码。
+7. 如果 `output/*-knowledge-bundle.json` 存在，必须先读取其中命中的 `local_knowledge`、`web_knowledge` 与 `research_summary`，并把这些结论继承到文档和实现中。
+
+### 阶段 1.5. 文档确认门（强制暂停）
+
+1. 完成 `output/*-prd.md`、`output/*-architecture.md`、`output/*-uiux.md` 后，必须先向用户汇报：
+   - 三份文档路径
+   - 每份文档的核心结论
+   - 与 research 的承接关系
+2. 明确要求用户做二选一反馈：
+   - `确认进入 Spec / 开发`
+   - `提出修改意见`
+3. 如果用户提出修改意见，先只修改文档并再次汇报，不得跳过确认门。
+4. **未经用户明确确认，不得创建 `.super-dev/changes/*`、不得开始前端、不得开始后端、不得声称进入实现阶段。**
+
+### 阶段 2. 创建 Spec 与任务
+
+1. 仅在用户明确确认三份文档后，才允许创建 `.super-dev/changes/*/proposal.md` 与 `tasks.md`
+2. Spec 必须完整继承 research、PRD、架构、UIUX 中已经冻结的结论
+3. 创建 Spec 后，向用户说明本次 change id、任务总数、前后端实施顺序
+
+### 阶段 3. 前端优先实现并运行验证
+
+1. 依据 `.super-dev/changes/*/tasks.md` 先实现前端骨架、关键页面和核心交互
+2. 前端必须先达到可运行、可演示、可审查状态，再进入后端主实现
+3. 必须主动运行前端并修复明显错误，再向用户汇报预览方式、页面状态与剩余风险
+
+### 阶段 4. 后端、联调、测试与交付
+
+1. 在前端主流程可运行后，再实现后端 API、数据层、认证与联调
+2. 每完成一项任务立即标记 `[x]`
+3. 完成测试、质量门禁、交付清单后，才可以宣称项目完成
+
+---
+
+## 核心文档摘要
+
+### 0. 研究报告
+
+{self._excerpt(research_content, 1800) if research_content else f'请查看 output/{self.name}-research.md'}
+...
 
 ### 1. PRD (产品需求文档)
 
-{prd_content[:1000] if prd_content else f'请查看 output/{self.name}-prd.md'}
+{self._excerpt(prd_content, 1800) if prd_content else f'请查看 output/{self.name}-prd.md'}
 ...
 
 ### 2. 架构设计文档
 
-{arch_content[:1000] if arch_content else f'请查看 output/{self.name}-architecture.md'}
+{self._excerpt(arch_content, 1800) if arch_content else f'请查看 output/{self.name}-architecture.md'}
 ...
 
 ### 3. UI/UX 设计文档
 
-{uiux_content[:1000] if uiux_content else f'请查看 output/{self.name}-uiux.md'}
+{self._excerpt(uiux_content, 1800) if uiux_content else f'请查看 output/{self.name}-uiux.md'}
 ...
 
 ### 4. 执行路线图
 
-{plan_content[:1000] if plan_content else f'请查看 output/{self.name}-execution-plan.md'}
+{self._excerpt(plan_content, 1400) if plan_content else f'请查看 output/{self.name}-execution-plan.md'}
 ...
 
 ### 5. 前端蓝图
 
-{frontend_blueprint[:1000] if frontend_blueprint else f'请查看 output/{self.name}-frontend-blueprint.md'}
+{self._excerpt(frontend_blueprint, 1400) if frontend_blueprint else f'请查看 output/{self.name}-frontend-blueprint.md'}
 ...
 
 ---
@@ -128,37 +225,50 @@ class AIPromptGenerator:
 ### 图标使用规范
 
 **严格禁止**:
-- ❌ **禁止使用 emoji 表情作为图标**
-  - 不允许使用 emoji 来代替图标（如 💾 保存、🔍 搜索、⚙️ 设置）
-  - emoji 在不同平台显示不一致
-  - 可访问性差（屏幕阅读器支持不佳）
-  - 不够专业
+- 禁止使用 emoji 表情作为功能图标
+- 不允许使用 emoji 来代替图标（如保存、搜索、设置）
+- emoji 在不同平台显示不一致
+- 可访问性差
+- 不够专业
 
 **图标使用标准**（按优先级）:
-1. ✅ **首选**: UI 框架自带图标库
+1. **首选**: UI 框架自带图标库
    - Vue: Element Plus、Naive UI、Vuetify 自带图标
    - React: Ant Design、Material-UI、Chakra UI 图标
    - 其他: 使用项目选择的 UI 库官方图标
 
-2. ✅ **专业图标库**:
+2. **专业图标库**:
    - [Lucide Icons](https://lucide.dev/) - 推荐，轻量且现代
    - [Heroicons](https://heroicons.com/) - Tailwind CSS 官方
    - [Tabler Icons](https://tabler-icons.io/) - 开源免费
    - [Phosphor Icons](https://phosphoricons.com/) - 精美免费
 
-3. ✅ **自定义 SVG**:
+3. **自定义 SVG**:
    - 如果需要自定义图标，使用 SVG 格式
    - 确保遵循无障碍标准（添加 aria-label）
 
 **代码示例**:
 ```typescript
-// ✅ 正确：使用图标库
+// 正确：使用图标库
 import {{ Save, Search, Settings }} from 'lucide-react';
 <button><Save size={{20}} />保存</button>
 
-// ❌ 错误：使用 emoji
+// 错误：使用 emoji
 <button>💾 保存</button>
 ```
+
+### 商业级 UI/UX 强制规则
+
+1. 先定义视觉方向、字体系统、颜色 token、间距 token、栅格系统，再开始页面实现。
+2. 页面必须体现真实商业产品的层级关系、数据密度与任务路径，禁止只会做大色块和浅层卡片。
+3. 禁止紫色/粉色渐变主视觉、禁止 emoji 图标、禁止默认系统字体直出、禁止无品牌感模板页面。
+4. 必须覆盖正常态、加载态、空态、错误态、禁用态、悬停态、聚焦态、成功反馈态。
+5. 关键页面必须优先保证信息架构正确、CTA 清晰、转化路径明确、信任元素完整。
+6. 先完成可用、可信、可演示的界面，再做装饰性视觉。
+
+### 本项目 UI 实现基线
+
+{self._render_ui_profile(ui_profile)}
 
 ### 安全规范
 
@@ -208,32 +318,103 @@ project-root/
 **每完成一个任务**:
 1. 更新 `.super-dev/changes/{change_id}/tasks.md`
 2. 将任务标记为 [x] 完成状态
-3. 提交代码 (可选)
-4. 继续下一个任务
+3. 记录本次涉及的页面、组件、API、测试与风险
+4. 提交代码 (可选)
+5. 继续下一个任务
 
 ---
 
 ## 遇到问题？
 
 如果遇到不清楚的地方：
-1. 优先查看架构文档
-2. 参考 PRD 中的需求说明
-3. 查看 UI/UX 文档中的设计规范
+1. 优先查看研究报告，确认借鉴项与差异化方向
+2. 查看架构文档中的约束、边界和风险处理
+3. 查看 PRD 中的需求说明与验收口径
+4. 查看 UI/UX 文档中的页面结构、状态矩阵和设计 token
 
 ---
 
 ## 完成标准
 
 所有任务完成后：
+- [ ] 同类产品研究结论已落入文档与实现
 - [ ] 所有功能正常运行
 - [ ] 所有测试通过
 - [ ] 代码符合规范
 - [ ] 文档已更新
-
-**祝开发顺利！**
+- [ ] UI 达到商业级完成度而不是模板化页面
 """
 
         return prompt
+
+    def _excerpt(self, content: str | None, limit: int) -> str:
+        if not content:
+            return ""
+        collapsed = "\n".join(line.rstrip() for line in content.strip().splitlines())
+        if len(collapsed) <= limit:
+            return collapsed
+        return collapsed[:limit].rstrip() + "\n[...内容已截断，请继续阅读源文档...]"
+
+    def _infer_product_type(self, description: str) -> str:
+        text = description.lower()
+        if any(word in text for word in ["dashboard", "仪表盘", "后台", "admin", "工作台", "workspace"]):
+            return "dashboard"
+        if any(word in text for word in ["landing", "落地页", "营销页", "官网", "official website"]):
+            return "landing"
+        if any(word in text for word in ["saas", "平台", "platform", "软件服务"]):
+            return "saas"
+        if any(word in text for word in ["商城", "电商", "store", "shop", "checkout"]):
+            return "ecommerce"
+        if any(word in text for word in ["博客", "内容", "blog", "cms", "文档"]):
+            return "content"
+        return "general"
+
+    def _infer_industry(self, description: str) -> str:
+        text = description.lower()
+        if any(word in text for word in ["医疗", "健康", "health", "medical", "care"]):
+            return "healthcare"
+        if any(word in text for word in ["金融", "支付", "bank", "fintech", "结算"]):
+            return "fintech"
+        if any(word in text for word in ["教育", "培训", "education", "learning"]):
+            return "education"
+        if any(word in text for word in ["法律", "法务", "legal", "律师"]):
+            return "legal"
+        if any(word in text for word in ["政务", "government", "public"]):
+            return "government"
+        if any(word in text for word in ["美容", "美业", "wellness", "beauty", "spa"]):
+            return "beauty"
+        return "general"
+
+    def _infer_style(self, description: str) -> str:
+        text = description.lower()
+        if any(word in text for word in ["极简", "minimal", "简约"]):
+            return "minimal"
+        if any(word in text for word in ["专业", "商务", "professional", "business"]):
+            return "professional"
+        if any(word in text for word in ["活泼", "playful", "fun"]):
+            return "playful"
+        if any(word in text for word in ["奢华", "premium", "luxury", "高端"]):
+            return "luxury"
+        return "modern"
+
+    def _render_ui_profile(self, profile: dict) -> str:
+        lines = [
+            f"- **首选组件生态**: {profile['primary_library']['name']}",
+            f"- **表单与验证**: {profile['component_stack']['form']}",
+            f"- **数据展示**: {profile['component_stack']['table']} / {profile['component_stack']['chart']}",
+            f"- **图标体系**: {profile['component_stack']['icons']}",
+            f"- **动效基线**: {profile['component_stack']['motion']}",
+            f"- **页面定位**: {profile['surface']}",
+            f"- **信息密度**: {profile['information_density']}",
+            "",
+            "**必须优先落实的模块**:",
+        ]
+        lines.extend(f"- {item}" for item in profile["component_priorities"])
+        lines.extend(["", "**必须出现的信任/转化模块**:"])
+        lines.extend(f"- {item}" for item in profile["trust_modules"][:8])
+        lines.extend(["", "**明确禁止**:"])
+        lines.extend(f"- {item}" for item in profile["banned_patterns"][:6])
+        return "\n".join(lines)
 
     def _read_document(self, doc_type: str) -> str | None:
         """读取生成的文档"""
@@ -252,38 +433,134 @@ project-root/
         if not changes:
             return "暂无 Spec，请先运行 super-dev spec init", "unknown-change"
 
-        change = changes[0]  # 获取最新的变更
+        change = changes[0]
 
         content = f"""
 ### 变更: {change.id}
 
 **描述**: {change.title}
 
-**状态**: {change.status.value}
+**状态**: {change.status.value if hasattr(change.status, 'value') else change.status}
 
-#### 任务列表
+### 任务
 """
 
-        for task in change.tasks:
-            checkbox = "[x]" if task.status == TaskStatus.COMPLETED else "[ ]"
-            content += f"\n{checkbox} **{task.id}: {task.title}**\n"
-            if task.description:
-                content += f"  - {task.description}\n"
-            if task.spec_refs:
-                content += f"  - 规范引用: {', '.join(task.spec_refs)}\n"
-
-        if change.spec_deltas:
-            content += "\n#### 规范要求\n"
-            for delta in change.spec_deltas:
-                content += f"\n**{delta.spec_name}** ({delta.delta_type.value})\n"
-                for req in delta.requirements:
-                    content += f"- {req.name}: {req.description}\n"
-                    for scenario in req.scenarios:
-                        content += f"  - {scenario.when}: {scenario.then}\n"
+        tasks_path = self.project_dir / ".super-dev" / "changes" / change.id / "tasks.md"
+        if tasks_path.exists():
+            content += tasks_path.read_text(encoding="utf-8")
+        else:
+            content += "\n请查看 tasks.md 文件"
 
         return content, change.id
 
     def _get_timestamp(self) -> str:
-        """获取时间戳"""
+        """获取当前时间戳"""
         from datetime import datetime
-        return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    def generate_task_specific_prompt(self, task_id: str) -> str:
+        """为特定任务生成提示词"""
+        from ..specs import ChangeManager
+
+        change_manager = ChangeManager(self.project_dir)
+        changes = change_manager.list_changes()
+
+        if not changes:
+            return "暂无 Spec，请先运行 super-dev spec init"
+
+        change = changes[0]
+        task = None
+        for t in change.tasks:
+            if t.id == task_id:
+                task = t
+                break
+
+        if not task:
+            return f"任务 {task_id} 不存在"
+
+        return f"""# 任务 {task_id} - AI 开发提示词
+
+## 任务信息
+
+**ID**: {task.id}
+**名称**: {task.title}
+**状态**: {task.status.value if hasattr(task.status, 'value') else task.status}
+
+## 描述
+
+{task.description}
+
+## 要求
+
+1. 实现此任务的所有要求
+2. 遵循项目架构规范
+3. 编写相应的测试
+4. 完成后更新任务状态为 [x]
+
+## 参考文档
+
+- `output/{self.name}-prd.md`
+- `output/{self.name}-architecture.md`
+- `output/{self.name}-uiux.md`
+
+请开始实现。"""
+
+    def generate_review_prompt(self) -> str:
+        """生成代码审查提示词"""
+        return f"""# {self.name} - 代码审查提示词
+
+请对 {self.name} 项目进行全面代码审查。
+
+## 审查重点
+
+1. **功能完整性**
+   - 所有需求是否已实现
+   - 业务逻辑是否正确
+
+2. **代码质量**
+   - 代码结构是否清晰
+   - 是否遵循最佳实践
+   - 是否有重复代码
+
+3. **安全性**
+   - 是否有安全漏洞
+   - 输入验证是否完整
+   - 权限控制是否正确
+
+4. **性能**
+   - 是否有性能瓶颈
+   - 数据库查询是否优化
+   - 前端渲染是否高效
+
+5. **测试覆盖**
+   - 测试是否充分
+   - 边界情况是否覆盖
+
+请输出详细的审查报告。"""
+
+    def get_pending_tasks(self) -> list[dict]:
+        """获取待完成任务"""
+        from ..specs import ChangeManager
+
+        change_manager = ChangeManager(self.project_dir)
+        changes = change_manager.list_changes()
+
+        if not changes:
+            return []
+
+        change = changes[0]
+        pending = []
+
+        for task in change.tasks:
+            if task.status != TaskStatus.COMPLETED:
+                pending.append(
+                    {
+                        "id": task.id,
+                        "title": task.title,
+                        "description": task.description,
+                        "status": task.status.value if hasattr(task.status, "value") else task.status,
+                    }
+                )
+
+        return pending

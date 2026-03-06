@@ -1,8 +1,9 @@
 const express = require('express');
 
 const coreRouter = require('./routes/core.route');
-const experienceRouter = require('./routes/experience.route');
-const operationRouter = require('./routes/operation.route');
+const profileRouter = require('./routes/profile.route');
+const workflowRouter = require('./routes/workflow.route');
+const analyticsRouter = require('./routes/analytics.route');
 
 const app = express();
 app.use(express.json());
@@ -12,8 +13,9 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/api/core', coreRouter);
-app.use('/api/experience', experienceRouter);
-app.use('/api/operation', operationRouter);
+app.use('/api/profile', profileRouter);
+app.use('/api/workflow', workflowRouter);
+app.use('/api/analytics', analyticsRouter);
 
 const port = process.env.PORT || 3001;
 app.listen(port, () => {

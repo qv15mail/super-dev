@@ -1,0 +1,21 @@
+# 开发：Excellent（11964948@qq.com）
+
+stage_exit_criteria:
+  requirement:
+    required_outputs: [scope_doc, acceptance_criteria, risk_register]
+  design:
+    required_outputs: [user_flow, ui_states, tracking_plan]
+  architecture:
+    required_outputs: [adr, scalability_plan, rollback_plan]
+  implementation:
+    required_outputs: [merged_code, test_evidence, pr_review]
+  testing:
+    required_outputs: [regression_report, performance_result, bug_closure]
+  security:
+    required_outputs: [vulnerability_scan, permission_audit, compliance_check]
+  release:
+    required_outputs: [change_ticket, rollout_record, verification_result]
+  operations:
+    required_outputs: [slo_dashboard, alert_policy, runbook]
+  incident_learning:
+    required_outputs: [postmortem, action_items, prevention_updates]

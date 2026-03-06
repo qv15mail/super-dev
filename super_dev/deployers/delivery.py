@@ -26,7 +26,7 @@ class ArtifactSpec:
 class DeliveryPackager:
     """交付包生成器"""
 
-    def __init__(self, project_dir: Path, name: str, version: str = "2.0.3"):
+    def __init__(self, project_dir: Path, name: str, version: str = "2.0.4"):
         self.project_dir = Path(project_dir).resolve()
         self.name = name
         self.version = version
@@ -130,6 +130,9 @@ class DeliveryPackager:
             ArtifactSpec(output_dir / f"{self.name}-code-review.md", True, "缺少代码审查指南"),
             ArtifactSpec(output_dir / f"{self.name}-ai-prompt.md", True, "缺少 AI 提示词"),
             ArtifactSpec(output_dir / f"{self.name}-task-execution.md", True, "缺少 Spec 任务执行报告"),
+            ArtifactSpec(output_dir / f"{self.name}-frontend-runtime.md", True, "缺少前端运行验证报告"),
+            ArtifactSpec(output_dir / f"{self.name}-frontend-runtime.json", True, "缺少前端运行验证数据"),
+            ArtifactSpec(self.project_dir / "preview.html", True, "缺少前端预览页"),
             ArtifactSpec(output_dir / "frontend" / "index.html", True, "缺少前端演示页面"),
             ArtifactSpec(output_dir / "frontend" / "styles.css", True, "缺少前端演示样式"),
             ArtifactSpec(output_dir / "frontend" / "app.js", True, "缺少前端演示脚本"),

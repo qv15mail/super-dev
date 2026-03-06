@@ -74,6 +74,11 @@ def test_adjust_resume_stage_keeps_stage_when_docs_complete(temp_project_dir) ->
     required = cli._stage_one_artifact_paths(output_dir=output_dir, project_name="resume-demo")
     for path in required.values():
         path.write_text("ok", encoding="utf-8")
+    (output_dir / "resume-demo-frontend-runtime.json").write_text('{"passed": true}', encoding="utf-8")
+    change_dir = temp_project_dir / ".super-dev" / "changes" / "resume-change"
+    change_dir.mkdir(parents=True, exist_ok=True)
+    (change_dir / "proposal.md").write_text("# proposal", encoding="utf-8")
+    (change_dir / "tasks.md").write_text("# tasks", encoding="utf-8")
 
     adjusted, reasons = cli._adjust_resume_stage_for_artifacts(
         project_dir=temp_project_dir,

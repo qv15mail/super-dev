@@ -60,6 +60,30 @@ pipeline {
             }
         }
 
+        stage('Knowledge Gates') {
+            steps {
+                sh '''
+                    mkdir -p artifacts
+                    python3 scripts/audit_development_kb.py
+                    python3 scripts/check_knowledge_gates.py --project-dir . --format json --out artifacts/knowledge-gate-report.json
+                    python3 scripts/check_knowledge_gates.py --project-dir . --format md --out artifacts/knowledge-gate-report.md
+                    python3 scripts/check_knowledge_gates.py --project-dir . --format html --out artifacts/knowledge-gate-report.html
+                    python3 scripts/check_knowledge_gates.py --project-dir . --format junit --out artifacts/knowledge-gate-junit.xml
+                '''
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'artifacts/knowledge-gate-*.*', fingerprint: true
+                    publishHTML([
+                        reportDir: 'artifacts',
+                        reportFiles: 'knowledge-gate-report.html',
+                        reportName: 'Knowledge Gate Report'
+                    ])
+                    junit 'artifacts/knowledge-gate-junit.xml'
+                }
+            }
+        }
+
         stage('Security Scan') {
             steps {
                 sh 'trivy fs --format json --output trivy-results.json .'

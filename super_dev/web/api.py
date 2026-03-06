@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Any, Literal, cast
+from urllib.parse import urlencode
 
 import uvicorn
 from fastapi import BackgroundTasks, FastAPI, HTTPException
@@ -55,6 +56,8 @@ from super_dev.experts import (
 from super_dev.integrations.manager import IntegrationManager
 from super_dev.orchestrator import Phase, WorkflowContext, WorkflowEngine
 from super_dev.policy import PipelinePolicy, PipelinePolicyManager
+from super_dev.release_readiness import ReleaseReadinessEvaluator
+from super_dev.review_state import docs_confirmation_file, load_docs_confirmation, save_docs_confirmation
 from super_dev.skills import SkillManager
 
 # ==================== 数据模型 ====================
@@ -119,6 +122,13 @@ class WorkflowRunResponse(BaseModel):
     status: str
     message: str
     run_id: str | None = None
+
+
+class WorkflowDocsConfirmationRequest(BaseModel):
+    """文档确认状态更新请求"""
+    status: Literal["pending_review", "revision_requested", "confirmed"]
+    comment: str = ""
+    actor: str = "user"
 
 
 class ExpertAdviceRequest(BaseModel):
@@ -369,6 +379,265 @@ def _list_persisted_runs(project_dir: Path, limit: int = 20) -> list[dict[str, A
     return runs
 
 
+def _has_any(patterns: list[Path]) -> bool:
+    return any(path.exists() for path in patterns)
+
+
+def _detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = None) -> dict[str, Any]:
+    output_dir = project_dir / "output"
+    changes_dir = project_dir / ".super-dev" / "changes"
+
+    research_done = any(output_dir.glob("*-research.md"))
+    prd_done = any(output_dir.glob("*-prd.md"))
+    architecture_done = any(output_dir.glob("*-architecture.md"))
+    uiux_done = any(output_dir.glob("*-uiux.md"))
+    docs_done = prd_done and architecture_done and uiux_done
+    spec_done = any(changes_dir.glob("*/proposal.md")) and any(changes_dir.glob("*/tasks.md"))
+    frontend_runtime_files = sorted(output_dir.glob("*-frontend-runtime.json"))
+    frontend_runtime_passed = False
+    frontend_runtime_path = ""
+    if frontend_runtime_files:
+        latest_frontend_runtime = max(frontend_runtime_files, key=lambda path: path.stat().st_mtime)
+        frontend_runtime_path = str(latest_frontend_runtime)
+        try:
+            frontend_runtime_payload = json.loads(latest_frontend_runtime.read_text(encoding="utf-8"))
+        except Exception:
+            frontend_runtime_payload = {}
+        if isinstance(frontend_runtime_payload, dict):
+            frontend_runtime_passed = bool(frontend_runtime_payload.get("passed", False))
+    frontend_done = frontend_runtime_passed
+    backend_done = _has_any(
+        [
+            project_dir / "backend" / "src",
+            project_dir / "backend" / "package.json",
+            project_dir / "backend" / "pyproject.toml",
+            project_dir / "backend" / "requirements.txt",
+            project_dir / "backend" / "go.mod",
+        ]
+    )
+    quality_done = any(output_dir.glob("*-quality-gate.md")) or any(output_dir.glob("*-ui-review.md"))
+
+    delivery_manifest_files = sorted((output_dir / "delivery").glob("*-delivery-manifest.json")) if (output_dir / "delivery").exists() else []
+    delivery_manifest_ready = False
+    delivery_manifest_path = ""
+    if delivery_manifest_files:
+        latest_manifest = max(delivery_manifest_files, key=lambda path: path.stat().st_mtime)
+        delivery_manifest_path = str(latest_manifest)
+        try:
+            manifest_payload = json.loads(latest_manifest.read_text(encoding="utf-8"))
+        except Exception:
+            manifest_payload = {}
+        if isinstance(manifest_payload, dict):
+            delivery_manifest_ready = str(manifest_payload.get("status", "")).strip().lower() == "ready"
+
+    rehearsal_report_files = sorted((output_dir / "rehearsal").glob("*-rehearsal-report.json")) if (output_dir / "rehearsal").exists() else []
+    rehearsal_report_passed = False
+    rehearsal_report_path = ""
+    if rehearsal_report_files:
+        latest_rehearsal_report = max(rehearsal_report_files, key=lambda path: path.stat().st_mtime)
+        rehearsal_report_path = str(latest_rehearsal_report)
+        try:
+            rehearsal_payload = json.loads(latest_rehearsal_report.read_text(encoding="utf-8"))
+        except Exception:
+            rehearsal_payload = {}
+        if isinstance(rehearsal_payload, dict):
+            rehearsal_report_passed = bool(rehearsal_payload.get("passed", False))
+
+    delivery_done = delivery_manifest_ready and rehearsal_report_passed
+    knowledge_cache_files = sorted((output_dir / "knowledge-cache").glob("*-knowledge-bundle.json")) if (output_dir / "knowledge-cache").exists() else []
+    knowledge_summary: dict[str, Any] = {
+        "enabled": bool((project_dir / "knowledge").exists()),
+        "cache_exists": False,
+        "cache_path": "",
+        "local_hits": 0,
+        "web_hits": 0,
+        "top_local_sources": [],
+    }
+    if knowledge_cache_files:
+        latest_bundle = max(knowledge_cache_files, key=lambda path: path.stat().st_mtime)
+        knowledge_summary["cache_exists"] = True
+        knowledge_summary["cache_path"] = str(latest_bundle)
+        try:
+            payload = json.loads(latest_bundle.read_text(encoding="utf-8"))
+        except Exception:
+            payload = {}
+        if isinstance(payload, dict):
+            local_knowledge = payload.get("local_knowledge", [])
+            web_knowledge = payload.get("web_knowledge", [])
+            if isinstance(local_knowledge, list):
+                knowledge_summary["local_hits"] = len(local_knowledge)
+                knowledge_summary["top_local_sources"] = [
+                    str(item.get("source", ""))
+                    for item in local_knowledge[:3]
+                    if isinstance(item, dict) and str(item.get("source", "")).strip()
+                ]
+            if isinstance(web_knowledge, list):
+                knowledge_summary["web_hits"] = len(web_knowledge)
+
+    docs_confirmation = load_docs_confirmation(project_dir) or {}
+    docs_confirmation_status = str(docs_confirmation.get("status", "")).strip() or "pending_review"
+    docs_confirmation_comment = str(docs_confirmation.get("comment", "")).strip()
+    docs_confirmation_run_id = str(docs_confirmation.get("run_id", "")).strip()
+    explicit_confirmed = docs_confirmation_status == "confirmed"
+    explicit_revision_requested = docs_confirmation_status == "revision_requested"
+    explicit_waiting_review = docs_confirmation_status == "pending_review"
+
+    run_status = str((run or {}).get("status", "unknown"))
+    run_results = cast(list[dict[str, Any]], (run or {}).get("results") or [])
+    running_phase = None
+    if run_status in {"running", "cancelling"}:
+        completed = set(cast(list[str], (run or {}).get("completed_phases") or []))
+        requested = cast(list[str], (run or {}).get("requested_phases") or [])
+        running_phase = next((phase_id for phase_id in requested if phase_id not in completed), None)
+
+    def _status(done: bool, *, waiting: bool = False, running: bool = False) -> str:
+        if done:
+            return "completed"
+        if running:
+            return "running"
+        if waiting:
+            return "waiting"
+        return "pending"
+
+    confirmation_done = explicit_confirmed or spec_done or frontend_done or backend_done or quality_done or delivery_done
+    confirmation_waiting = docs_done and not confirmation_done
+
+    stages = [
+        {
+            "id": "research",
+            "name": "同类产品研究",
+            "status": _status(research_done, running=running_phase in {"discovery", "intelligence"} and not research_done),
+            "description": "让宿主先联网研究同类产品，并沉淀 research 文档。",
+        },
+        {
+            "id": "core_docs",
+            "name": "三份核心文档",
+            "status": _status(docs_done, running=running_phase == "drafting" and not docs_done),
+            "description": "生成 PRD、架构、UIUX 三份核心文档。",
+        },
+        {
+            "id": "confirmation_gate",
+            "name": "等待用户确认",
+            "status": (
+                "completed"
+                if confirmation_done
+                else ("waiting" if confirmation_waiting or explicit_revision_requested or explicit_waiting_review else "pending")
+            ),
+            "description": "三文档生成后，必须先向用户汇报并等待确认或修改。",
+        },
+        {
+            "id": "spec",
+            "name": "Spec 与任务清单",
+            "status": _status(spec_done, running=running_phase == "drafting" and docs_done and not spec_done),
+            "description": "用户确认后，创建 proposal 与 tasks.md。",
+        },
+        {
+            "id": "frontend",
+            "name": "前端实现与运行验证",
+            "status": _status(frontend_done, running=running_phase == "delivery" and spec_done and not frontend_done),
+            "description": "先实现前端主流程，并运行验证可演示状态。",
+        },
+        {
+            "id": "backend",
+            "name": "后端实现与联调",
+            "status": _status(backend_done, running=running_phase == "delivery" and frontend_done and not backend_done),
+            "description": "在前端可运行后，再进入后端、认证、数据层与联调。",
+        },
+        {
+            "id": "quality",
+            "name": "质量门禁",
+            "status": _status(
+                quality_done,
+                running=running_phase in {"redteam", "qa"} and backend_done and not quality_done,
+            ),
+            "description": "执行红队审查、UI 审查与质量门禁。",
+        },
+        {
+            "id": "delivery",
+            "name": "交付与发布",
+            "status": _status(
+                delivery_done,
+                running=running_phase == "deployment" and quality_done and not delivery_done,
+            ),
+            "description": "生成交付包、部署配置和审计产物。",
+        },
+    ]
+
+    current_stage = next((stage for stage in stages if stage["status"] in {"running", "waiting", "pending"}), stages[-1])
+    if all(stage["status"] == "completed" for stage in stages):
+        current_stage = stages[-1]
+
+    blocker = ""
+    if explicit_revision_requested:
+        blocker = "用户已要求修改三份核心文档，当前应先修正文档并再次提交确认。"
+    elif confirmation_waiting:
+        blocker = "三份核心文档已生成，当前必须等待用户确认或提出修改意见。"
+    elif not research_done:
+        blocker = "当前尚未完成同类产品研究。"
+    elif not docs_done:
+        blocker = "当前尚未完成 PRD、架构、UIUX 三份核心文档。"
+    elif not spec_done:
+        blocker = "当前尚未创建 Spec proposal 与 tasks.md。"
+    elif not frontend_done:
+        blocker = "当前尚未完成前端实现与运行验证。"
+    elif not backend_done:
+        blocker = "当前尚未完成后端实现与联调。"
+    elif not quality_done:
+        blocker = "当前尚未完成红队 / UI / 质量门禁。"
+    elif not delivery_done:
+        if not delivery_manifest_ready:
+            blocker = "当前交付包仍未达到 ready 状态。"
+        elif not rehearsal_report_passed:
+            blocker = "当前尚未通过发布演练验证。"
+        else:
+            blocker = "当前尚未完成交付包与部署产物。"
+
+    completed_count = len([stage for stage in stages if stage["status"] == "completed"])
+    summary = {
+        "current_stage_id": current_stage["id"],
+        "current_stage_name": current_stage["name"],
+        "blocker": blocker,
+        "completed_count": completed_count,
+        "total_count": len(stages),
+        "stages": stages,
+        "artifacts": {
+            "research": research_done,
+            "prd": prd_done,
+            "architecture": architecture_done,
+            "uiux": uiux_done,
+            "spec": spec_done,
+            "frontend": frontend_done,
+            "frontend_runtime_report": frontend_runtime_path,
+            "backend": backend_done,
+            "quality": quality_done,
+            "delivery": delivery_done,
+            "delivery_manifest_ready": delivery_manifest_ready,
+            "delivery_manifest_path": delivery_manifest_path,
+            "rehearsal_report_passed": rehearsal_report_passed,
+            "rehearsal_report_path": rehearsal_report_path,
+        },
+        "knowledge": knowledge_summary,
+        "docs_confirmation": {
+            "status": docs_confirmation_status,
+            "comment": docs_confirmation_comment,
+            "run_id": docs_confirmation_run_id,
+            "updated_at": docs_confirmation.get("updated_at", ""),
+            "actor": docs_confirmation.get("actor", ""),
+            "exists": bool(docs_confirmation),
+        },
+    }
+
+    if run_results:
+        summary["phase_results_count"] = len(run_results)
+    return summary
+
+
+def _with_pipeline_summary(run: dict[str, Any], project_dir: Path) -> dict[str, Any]:
+    enriched = dict(run)
+    enriched["pipeline_summary"] = _detect_pipeline_summary(project_dir, run)
+    return enriched
+
+
 def _is_cancel_requested(run_id: str) -> bool:
     with _RUN_STORE_LOCK:
         run = _RUN_STORE.get(run_id)
@@ -416,14 +685,18 @@ def _sanitize_project_name(name: str) -> str:
 
 
 def _default_host_commands(host_id: str, *, supports_slash: bool) -> dict[str, str]:
+    profile = IntegrationManager(Path.cwd()).get_adapter_profile(host_id)
+    trigger = str(profile.trigger_command).replace("<需求描述>", "你的需求")
     commands = {
         "setup": f"super-dev setup --host {host_id} --force --yes",
         "onboard": f"super-dev onboard --host {host_id} --force --yes",
         "doctor": f"super-dev doctor --host {host_id} --repair --force",
+        "smoke": f"super-dev integrate smoke --target {host_id}",
         "run": 'super-dev "你的需求"',
         "slash": '/super-dev "你的需求"' if supports_slash else "",
+        "trigger": trigger,
     }
-    commands["skill"] = "super-dev-core"
+    commands["skill"] = "super-dev-core" if IntegrationManager.requires_skill(host_id) else ""
     return commands
 
 
@@ -433,14 +706,34 @@ def _build_host_tool_catalog_payload() -> list[dict[str, Any]]:
         host_id = item["id"]
         target = IntegrationManager.TARGETS.get(host_id)
         supports_slash = IntegrationManager.supports_slash(host_id)
+        profile = IntegrationManager(Path.cwd()).get_adapter_profile(host_id)
+        final_trigger = str(profile.trigger_command).replace("<需求描述>", "你的需求")
         payload.append(
             {
                 "id": host_id,
                 "name": item["name"],
                 "category": HOST_TOOL_CATEGORY_MAP.get(host_id, "ide"),
+                "certification_level": profile.certification_level,
+                "certification_label": profile.certification_label,
+                "certification_reason": profile.certification_reason,
+                "certification_evidence": list(profile.certification_evidence),
+                "official_docs_url": profile.official_docs_url,
+                "docs_verified": profile.docs_verified,
                 "integration_files": list(target.files) if target else [],
                 "slash_command_file": IntegrationManager.SLASH_COMMAND_FILES.get(host_id, "") if supports_slash else "",
                 "supports_slash": supports_slash,
+                "usage_mode": profile.usage_mode,
+                "primary_entry": profile.primary_entry,
+                "final_trigger": final_trigger,
+                "trigger_context": profile.trigger_context,
+                "usage_location": profile.usage_location,
+                "requires_restart_after_onboard": profile.requires_restart_after_onboard,
+                "post_onboard_steps": list(profile.post_onboard_steps),
+                "usage_notes": list(profile.usage_notes),
+                "smoke_test_prompt": profile.smoke_test_prompt,
+                "smoke_test_steps": list(profile.smoke_test_steps),
+                "smoke_success_signal": profile.smoke_success_signal,
+                "notes": profile.notes,
                 "commands": _default_host_commands(host_id, supports_slash=supports_slash),
             }
         )
@@ -478,6 +771,7 @@ def _collect_host_diagnostics(
     check_skill: bool,
     check_slash: bool,
 ) -> dict[str, Any]:
+    integration_manager = IntegrationManager(project_dir)
     integration_targets = IntegrationManager.TARGETS
     skill_paths = SkillManager.TARGET_PATHS
 
@@ -505,7 +799,7 @@ def _collect_host_diagnostics(
                     f"super-dev integrate setup --target {target} --force"
                 )
 
-        if check_skill:
+        if check_skill and IntegrationManager.requires_skill(target):
             skill_root = skill_paths.get(target)
             skill_file = project_dir / skill_root / skill_name / "SKILL.md" if skill_root else None
             skill_path = str(skill_file) if skill_file else ""
@@ -551,14 +845,49 @@ def _collect_host_diagnostics(
                     "scope": "n/a",
                     "project_file": "",
                     "global_file": "",
-                    "mode": "skill-only",
+                    "mode": "rules-only",
                 }
 
+        host_report["usage_profile"] = _serialize_host_usage_profile(
+            integration_manager=integration_manager,
+            target=target,
+        )
         report["hosts"][target] = host_report
         if not host_report["ready"]:
             report["overall_ready"] = False
 
     return report
+
+
+def _serialize_host_usage_profile(
+    *,
+    integration_manager: IntegrationManager,
+    target: str,
+) -> dict[str, Any]:
+    profile = integration_manager.get_adapter_profile(target)
+    final_trigger = str(profile.trigger_command).replace("<需求描述>", "你的需求")
+    return {
+        "host": profile.host,
+        "category": profile.category,
+        "certification_level": profile.certification_level,
+        "certification_label": profile.certification_label,
+        "certification_reason": profile.certification_reason,
+        "certification_evidence": list(profile.certification_evidence),
+        "usage_mode": profile.usage_mode,
+        "primary_entry": profile.primary_entry,
+        "trigger_command": profile.trigger_command,
+        "final_trigger": final_trigger,
+        "trigger_context": profile.trigger_context,
+        "usage_location": profile.usage_location,
+        "requires_restart_after_onboard": profile.requires_restart_after_onboard,
+        "restart_required_label": "是" if profile.requires_restart_after_onboard else "否",
+        "post_onboard_steps": list(profile.post_onboard_steps),
+        "usage_notes": list(profile.usage_notes),
+        "smoke_test_prompt": profile.smoke_test_prompt,
+        "smoke_test_steps": list(profile.smoke_test_steps),
+        "smoke_success_signal": profile.smoke_success_signal,
+        "notes": profile.notes,
+    }
 
 
 def _build_host_compatibility_summary(
@@ -572,7 +901,7 @@ def _build_host_compatibility_summary(
     enabled_checks = []
     if check_integrate:
         enabled_checks.append("integrate")
-    if check_skill:
+    if check_skill and any(IntegrationManager.requires_skill(target) for target in targets):
         enabled_checks.append("skill")
     if check_slash and any(IntegrationManager.supports_slash(target) for target in targets):
         enabled_checks.append("slash")
@@ -652,7 +981,7 @@ def _repair_host_diagnostics(
             host_actions["integrate"] = f"failed: {exc}"
 
         try:
-            if check_skill and "skill" in missing:
+            if check_skill and IntegrationManager.requires_skill(target) and "skill" in missing:
                 skill_manager.install(
                     source="super-dev",
                     target=target,
@@ -733,7 +1062,7 @@ def _collect_workflow_artifact_files(project_dir_path: Path) -> list[Path]:
 
     output_dir = project_dir_path / "output"
     if output_dir.exists():
-        for pattern in ("**/*.md", "**/*.json", "**/*.html", "**/*.css", "**/*.js", "**/*.yml", "**/*.yaml"):
+        for pattern in ("**/*.md", "**/*.json", "**/*.html", "**/*.css", "**/*.js", "**/*.yml", "**/*.yaml", "**/*.png"):
             for file_path in output_dir.glob(pattern):
                 _append(file_path)
 
@@ -760,6 +1089,40 @@ def _collect_workflow_artifact_files(project_dir_path: Path) -> list[Path]:
             _append(file_path)
 
     return files
+
+
+def _resolve_run_project_dir(run_id: str, project_dir: str) -> tuple[dict[str, Any], Path]:
+    requested_project_dir = Path(project_dir).resolve()
+    run = _get_run_state(run_id, requested_project_dir)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"运行记录不存在: {run_id}")
+    run_project_dir = Path(run.get("project_dir") or requested_project_dir).resolve()
+    return run, run_project_dir
+
+
+def _load_ui_review_summary(project_dir_path: Path) -> dict[str, Any] | None:
+    output_dir = project_dir_path / "output"
+    json_candidates = sorted(output_dir.glob("*-ui-review.json"))
+    if json_candidates:
+        try:
+            payload = json.loads(json_candidates[-1].read_text(encoding="utf-8"))
+            if isinstance(payload, dict):
+                payload.setdefault("json_path", str(json_candidates[-1]))
+                md_path = json_candidates[-1].with_suffix(".md")
+                if md_path.exists():
+                    payload.setdefault("report_path", str(md_path))
+            return payload
+        except Exception:
+            pass
+    return None
+
+
+def _find_ui_review_screenshot(project_dir_path: Path) -> Path | None:
+    screenshot_dir = project_dir_path / "output" / "ui-review"
+    if not screenshot_dir.exists():
+        return None
+    candidates = sorted(screenshot_dir.glob("*-preview-desktop.png"))
+    return candidates[-1] if candidates else None
 
 
 def _resolve_deploy_platform_guidance(cicd_platform: str) -> list[str]:
@@ -1417,10 +1780,55 @@ async def run_workflow(
 @app.get("/api/workflow/status/{run_id}")
 async def get_workflow_status(run_id: str, project_dir: str = ".") -> dict:
     """获取工作流状态"""
-    run = _get_run_state(run_id, Path(project_dir).resolve())
+    project_dir_path = Path(project_dir).resolve()
+    run = _get_run_state(run_id, project_dir_path)
     if run is None:
         raise HTTPException(status_code=404, detail=f"运行记录不存在: {run_id}")
-    return run
+    enriched = _with_pipeline_summary(run, project_dir_path)
+    _store_run_state(run_id, persist_dir=project_dir_path, pipeline_summary=enriched["pipeline_summary"])
+    return enriched
+
+
+@app.get("/api/workflow/docs-confirmation")
+async def get_workflow_docs_confirmation(project_dir: str = ".") -> dict:
+    """获取三文档确认状态。"""
+    project_dir_path = Path(project_dir).resolve()
+    payload = load_docs_confirmation(project_dir_path) or {}
+    return {
+        "project_dir": str(project_dir_path),
+        "status": str(payload.get("status", "")).strip() or "pending_review",
+        "comment": str(payload.get("comment", "")).strip(),
+        "actor": str(payload.get("actor", "")).strip(),
+        "run_id": str(payload.get("run_id", "")).strip(),
+        "updated_at": str(payload.get("updated_at", "")).strip(),
+        "exists": bool(payload),
+        "file_path": str(docs_confirmation_file(project_dir_path)),
+    }
+
+
+@app.post("/api/workflow/docs-confirmation")
+async def update_workflow_docs_confirmation(
+    request: WorkflowDocsConfirmationRequest,
+    project_dir: str = ".",
+    run_id: str = "",
+) -> dict:
+    """更新三文档确认状态。"""
+    project_dir_path = Path(project_dir).resolve()
+    payload = {
+        "status": request.status,
+        "comment": request.comment.strip(),
+        "actor": request.actor.strip() or "user",
+        "run_id": run_id.strip(),
+    }
+    file_path = save_docs_confirmation(project_dir_path, payload)
+    return {
+        "status": request.status,
+        "comment": payload["comment"],
+        "actor": payload["actor"],
+        "run_id": payload["run_id"],
+        "updated_at": (load_docs_confirmation(project_dir_path) or {}).get("updated_at", ""),
+        "file_path": str(file_path),
+    }
 
 
 @app.post("/api/workflow/cancel/{run_id}")
@@ -1475,19 +1883,14 @@ async def list_workflow_runs(project_dir: str = ".", limit: int = 20) -> dict:
         raise HTTPException(status_code=400, detail="limit 必须大于 0")
 
     project_dir_path = Path(project_dir).resolve()
-    runs = _list_persisted_runs(project_dir_path, limit=limit)
+    runs = [_with_pipeline_summary(run, project_dir_path) for run in _list_persisted_runs(project_dir_path, limit=limit)]
     return {"runs": runs, "count": len(runs)}
 
 
 @app.get("/api/workflow/artifacts/{run_id}")
 async def list_workflow_artifacts(run_id: str, project_dir: str = ".") -> dict:
     """列出某次工作流可下载的交付物文件。"""
-    requested_project_dir = Path(project_dir).resolve()
-    run = _get_run_state(run_id, requested_project_dir)
-    if run is None:
-        raise HTTPException(status_code=404, detail=f"运行记录不存在: {run_id}")
-
-    run_project_dir = Path(run.get("project_dir") or requested_project_dir).resolve()
+    run, run_project_dir = _resolve_run_project_dir(run_id, project_dir)
     artifact_files = _collect_workflow_artifact_files(run_project_dir)
     items = []
     for file_path in artifact_files:
@@ -1515,12 +1918,7 @@ async def list_workflow_artifacts(run_id: str, project_dir: str = ".") -> dict:
 @app.get("/api/workflow/artifacts/{run_id}/archive")
 async def download_workflow_artifacts_archive(run_id: str, project_dir: str = ".") -> FileResponse:
     """下载某次工作流交付物压缩包。"""
-    requested_project_dir = Path(project_dir).resolve()
-    run = _get_run_state(run_id, requested_project_dir)
-    if run is None:
-        raise HTTPException(status_code=404, detail=f"运行记录不存在: {run_id}")
-
-    run_project_dir = Path(run.get("project_dir") or requested_project_dir).resolve()
+    _, run_project_dir = _resolve_run_project_dir(run_id, project_dir)
     artifact_files = _collect_workflow_artifact_files(run_project_dir)
     if not artifact_files:
         raise HTTPException(status_code=404, detail="未找到可下载的交付物文件")
@@ -1542,6 +1940,62 @@ async def download_workflow_artifacts_archive(run_id: str, project_dir: str = ".
         media_type="application/zip",
         filename=archive_path.name,
     )
+
+
+@app.get("/api/workflow/ui-review/{run_id}")
+async def get_workflow_ui_review(run_id: str, project_dir: str = ".") -> dict:
+    """获取某次工作流的 UI 审查摘要。"""
+    run, run_project_dir = _resolve_run_project_dir(run_id, project_dir)
+    summary = _load_ui_review_summary(run_project_dir)
+    screenshot = _find_ui_review_screenshot(run_project_dir)
+
+    qa_result = None
+    if isinstance(run.get("results"), list):
+        qa_result = next((item for item in run["results"] if item.get("phase") == "qa"), None)
+
+    if summary is None and qa_result and isinstance(qa_result.get("output"), dict):
+        nested = qa_result["output"].get("ui_review")
+        if isinstance(nested, dict):
+            summary = nested
+
+    if summary is None and screenshot is None:
+        raise HTTPException(status_code=404, detail="未找到 UI 审查结果")
+
+    screenshot_url = ""
+    screenshot_relative_path = ""
+    if screenshot is not None:
+        screenshot_url = (
+            f"/api/workflow/ui-review/{run_id}/screenshot?"
+            f"{urlencode({'project_dir': str(run_project_dir)})}"
+        )
+        try:
+            screenshot_relative_path = str(screenshot.relative_to(run_project_dir))
+        except ValueError:
+            screenshot_relative_path = screenshot.name
+
+    return {
+        "run_id": run_id,
+        "project_dir": str(run_project_dir),
+        "summary": summary or {},
+        "report_path": summary.get("report_path", "") if isinstance(summary, dict) else "",
+        "json_path": summary.get("json_path", "") if isinstance(summary, dict) else "",
+        "screenshot": {
+            "exists": screenshot is not None,
+            "path": str(screenshot) if screenshot is not None else "",
+            "relative_path": screenshot_relative_path,
+            "url": screenshot_url,
+        },
+    }
+
+
+@app.get("/api/workflow/ui-review/{run_id}/screenshot")
+async def download_workflow_ui_review_screenshot(run_id: str, project_dir: str = ".") -> FileResponse:
+    """获取某次工作流 UI 审查截图。"""
+    _, run_project_dir = _resolve_run_project_dir(run_id, project_dir)
+    screenshot = _find_ui_review_screenshot(run_project_dir)
+    if screenshot is None:
+        raise HTTPException(status_code=404, detail="未找到 UI 审查截图")
+    return FileResponse(path=screenshot, media_type="image/png", filename=screenshot.name)
 
 
 @app.get("/api/experts")
@@ -1648,7 +2102,8 @@ async def doctor_hosts(
 ) -> dict:
     """诊断宿主接入状态，并返回兼容性评分。"""
     project_dir_path = Path(project_dir).resolve()
-    available_targets = [item.name for item in IntegrationManager(project_dir_path).list_targets()]
+    integration_manager = IntegrationManager(project_dir_path)
+    available_targets = [item.name for item in integration_manager.list_targets()]
     detected_targets, detected_meta = _detect_host_targets(available_targets)
 
     if host:
@@ -1718,6 +2173,13 @@ async def doctor_hosts(
         "detection_details": detected_meta,
         "report": report,
         "compatibility": compatibility,
+        "usage_profiles": {
+            target: _serialize_host_usage_profile(
+                integration_manager=integration_manager,
+                target=target,
+            )
+            for target in targets
+        },
         "auto": auto,
         "repair": repair,
     }
@@ -1975,6 +2437,21 @@ async def generate_deploy_configs(
         "generated_files": written_files,
         "skipped_files": skipped_files,
     }
+
+
+@app.get("/api/release/readiness")
+async def get_release_readiness(
+    project_dir: str = ".",
+    verify_tests: bool = False,
+) -> dict[str, Any]:
+    project_dir_path = Path(project_dir).resolve()
+    evaluator = ReleaseReadinessEvaluator(project_dir_path)
+    report = evaluator.evaluate(verify_tests=verify_tests)
+    files = evaluator.write(report)
+    payload = report.to_dict()
+    payload["report_file"] = str(files["markdown"])
+    payload["json_file"] = str(files["json"])
+    return payload
 
 
 def _mount_frontend_if_present() -> None:

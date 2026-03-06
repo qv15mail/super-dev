@@ -1,0 +1,23 @@
+# 开发：Excellent（11964948@qq.com）
+
+template_catalog:
+  requirement:
+    file: requirement-template.md
+  design:
+    file: design-handoff-template.md
+  architecture:
+    file: architecture-adr-template.md
+  implementation:
+    file: implementation-pr-template.md
+  testing:
+    file: testing-report-template.md
+  security:
+    file: security-compliance-template.md
+  release:
+    file: release-change-template.md
+  operations:
+    file: operations-runbook-template.md
+  incident_learning:
+    file: postmortem-template.md
+  governance:
+    file: lifecycle-review-board-template.md

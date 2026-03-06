@@ -2,13 +2,16 @@
 Super Dev Web API 集成测试
 """
 
+import json
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 import super_dev.web.api as web_api
 from super_dev.orchestrator import Phase, PhaseResult
+from super_dev.review_state import save_docs_confirmation
 
 
 @pytest.fixture(autouse=True)
@@ -16,6 +19,32 @@ def clear_run_store():
     web_api._RUN_STORE.clear()
     yield
     web_api._RUN_STORE.clear()
+
+
+def _prepare_release_ready_project(project_dir: Path) -> None:
+    (project_dir / "super_dev").mkdir(parents=True, exist_ok=True)
+    (project_dir / "docs").mkdir(parents=True, exist_ok=True)
+    (project_dir / ".super-dev" / "changes" / "release-hardening-finalization").mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.4"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
+    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.4"\n', encoding="utf-8")
+    (project_dir / "README.md").write_text(
+        "当前版本：`2.0.4`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        encoding="utf-8",
+    )
+    (project_dir / "README_EN.md").write_text(
+        "Current version: `2.0.4`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        encoding="utf-8",
+    )
+    (project_dir / "docs" / "HOST_USAGE_GUIDE.md").write_text("Smoke\n/super-dev\nsuper-dev:\n", encoding="utf-8")
+    (project_dir / "docs" / "HOST_CAPABILITY_AUDIT.md").write_text("官方依据\nsuper-dev integrate smoke\n", encoding="utf-8")
+    (project_dir / "docs" / "WORKFLOW_GUIDE.md").write_text("super-dev review docs\nsuper-dev run --resume\n", encoding="utf-8")
+    (project_dir / "docs" / "WORKFLOW_GUIDE_EN.md").write_text("super-dev review docs\nsuper-dev run --resume\n", encoding="utf-8")
+    (project_dir / "install.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    for name in ("change.yaml", "proposal.md", "tasks.md"):
+        (project_dir / ".super-dev" / "changes" / "release-hardening-finalization" / name).write_text("ok\n", encoding="utf-8")
 
 
 class TestWebAPI:
@@ -189,6 +218,17 @@ class TestWebAPI:
         assert status_payload["run_id"] == run_id
         assert status_payload["status"] in {"completed", "failed", "running", "queued", "cancelling", "cancelled"}
         assert "progress" in status_payload
+        assert "pipeline_summary" in status_payload
+        assert status_payload["pipeline_summary"]["current_stage_id"] in {
+            "research",
+            "core_docs",
+            "confirmation_gate",
+            "spec",
+            "frontend",
+            "backend",
+            "quality",
+            "delivery",
+        }
 
         # 持久化文件存在
         persisted = temp_project_dir / ".super-dev" / "runs" / f"{run_id}.json"
@@ -202,6 +242,233 @@ class TestWebAPI:
         )
         assert status_resp_2.status_code == 200
         assert status_resp_2.json()["run_id"] == run_id
+
+    def test_workflow_status_marks_confirmation_gate_waiting(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-research.md").write_text("# research", encoding="utf-8")
+        (output_dir / "demo-prd.md").write_text("# prd", encoding="utf-8")
+        (output_dir / "demo-architecture.md").write_text("# architecture", encoding="utf-8")
+        (output_dir / "demo-uiux.md").write_text("# uiux", encoding="utf-8")
+
+        web_api._store_run_state(
+            "pipewait01",
+            persist_dir=temp_project_dir,
+            status="running",
+            message="waiting docs confirm",
+            requested_phases=["discovery", "intelligence", "drafting"],
+            completed_phases=["discovery", "intelligence", "drafting"],
+            progress=60,
+            project_dir=str(temp_project_dir),
+            results=[],
+        )
+
+        resp = client.get(
+            "/api/workflow/status/pipewait01",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["pipeline_summary"]["current_stage_id"] == "confirmation_gate"
+        assert "等待用户确认" in payload["pipeline_summary"]["current_stage_name"]
+        assert "等待用户确认" in payload["pipeline_summary"]["blocker"]
+        confirmation_stage = next(
+            item for item in payload["pipeline_summary"]["stages"] if item["id"] == "confirmation_gate"
+        )
+        assert confirmation_stage["status"] == "waiting"
+
+    def test_workflow_status_requires_frontend_runtime_report(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        frontend_dir = output_dir / "frontend"
+        frontend_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-research.md").write_text("# research", encoding="utf-8")
+        (output_dir / "demo-prd.md").write_text("# prd", encoding="utf-8")
+        (output_dir / "demo-architecture.md").write_text("# architecture", encoding="utf-8")
+        (output_dir / "demo-uiux.md").write_text("# uiux", encoding="utf-8")
+        (frontend_dir / "index.html").write_text("<html></html>", encoding="utf-8")
+        (frontend_dir / "styles.css").write_text("body{}", encoding="utf-8")
+        (frontend_dir / "app.js").write_text("console.log('ok')", encoding="utf-8")
+
+        (temp_project_dir / ".super-dev" / "changes" / "demo-change").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / ".super-dev" / "changes" / "demo-change" / "proposal.md").write_text("# proposal", encoding="utf-8")
+        (temp_project_dir / ".super-dev" / "changes" / "demo-change" / "tasks.md").write_text("# tasks", encoding="utf-8")
+
+        save_docs_confirmation(
+            temp_project_dir,
+            {"status": "confirmed", "comment": "ok", "actor": "test", "run_id": "front01"},
+        )
+
+        web_api._store_run_state(
+            "front01",
+            persist_dir=temp_project_dir,
+            status="running",
+            message="frontend pending validation",
+            requested_phases=["delivery"],
+            completed_phases=["discovery", "intelligence", "drafting"],
+            progress=55,
+            project_dir=str(temp_project_dir),
+            results=[],
+        )
+
+        resp = client.get(
+            "/api/workflow/status/front01",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert resp.status_code == 200
+        summary = resp.json()["pipeline_summary"]
+        frontend_stage = next(item for item in summary["stages"] if item["id"] == "frontend")
+        assert frontend_stage["status"] in {"running", "pending"}
+        assert summary["artifacts"]["frontend"] is False
+        assert summary["artifacts"]["frontend_runtime_report"] == ""
+
+    def test_workflow_status_requires_ready_delivery_manifest_and_rehearsal_report(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        rehearsal_dir = output_dir / "rehearsal"
+        rehearsal_dir.mkdir(parents=True, exist_ok=True)
+        delivery_dir = output_dir / "delivery"
+        delivery_dir.mkdir(parents=True, exist_ok=True)
+
+        (output_dir / "demo-research.md").write_text("# research", encoding="utf-8")
+        (output_dir / "demo-prd.md").write_text("# prd", encoding="utf-8")
+        (output_dir / "demo-architecture.md").write_text("# architecture", encoding="utf-8")
+        (output_dir / "demo-uiux.md").write_text("# uiux", encoding="utf-8")
+        (output_dir / "demo-quality-gate.md").write_text("# qa", encoding="utf-8")
+        (output_dir / "demo-frontend-runtime.json").write_text('{"passed": true}', encoding="utf-8")
+        (temp_project_dir / ".super-dev" / "changes" / "demo-change").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / ".super-dev" / "changes" / "demo-change" / "proposal.md").write_text("# proposal", encoding="utf-8")
+        (temp_project_dir / ".super-dev" / "changes" / "demo-change" / "tasks.md").write_text("# tasks", encoding="utf-8")
+        (temp_project_dir / "backend" / "src").mkdir(parents=True, exist_ok=True)
+        (delivery_dir / "demo-delivery-manifest.json").write_text('{"status": "ready"}', encoding="utf-8")
+        (rehearsal_dir / "demo-rehearsal-report.json").write_text('{"passed": false}', encoding="utf-8")
+
+        save_docs_confirmation(
+            temp_project_dir,
+            {"status": "confirmed", "comment": "ok", "actor": "test", "run_id": "delivery01"},
+        )
+
+        web_api._store_run_state(
+            "delivery01",
+            persist_dir=temp_project_dir,
+            status="running",
+            message="delivery pending rehearsal",
+            requested_phases=["deployment"],
+            completed_phases=["discovery", "intelligence", "drafting", "redteam", "qa"],
+            progress=88,
+            project_dir=str(temp_project_dir),
+            results=[],
+        )
+
+        resp = client.get(
+            "/api/workflow/status/delivery01",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert resp.status_code == 200
+        summary = resp.json()["pipeline_summary"]
+        delivery_stage = next(item for item in summary["stages"] if item["id"] == "delivery")
+        assert delivery_stage["status"] in {"running", "pending"}
+        assert summary["artifacts"]["delivery"] is False
+        assert summary["artifacts"]["delivery_manifest_ready"] is True
+        assert summary["artifacts"]["rehearsal_report_passed"] is False
+        assert "发布演练验证" in summary["blocker"]
+
+    def test_workflow_status_includes_knowledge_summary(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+
+        cache_dir = temp_project_dir / "output" / "knowledge-cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        (cache_dir / "demo-knowledge-bundle.json").write_text(
+            json.dumps(
+                {
+                    "local_knowledge": [
+                        {"source": "knowledge/development/frontend-engineering-complete.md", "title": "frontend"},
+                        {"source": "knowledge/design/ux-system-deep-dive.md", "title": "ux"},
+                    ],
+                    "web_knowledge": [
+                        {"source": "web", "title": "example"},
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        web_api._store_run_state(
+            "knowledge01",
+            persist_dir=temp_project_dir,
+            status="running",
+            message="knowledge",
+            requested_phases=["discovery"],
+            completed_phases=[],
+            progress=10,
+            project_dir=str(temp_project_dir),
+            results=[],
+        )
+
+        resp = client.get(
+            "/api/workflow/status/knowledge01",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert resp.status_code == 200
+        payload = resp.json()["pipeline_summary"]["knowledge"]
+        assert payload["cache_exists"] is True
+        assert payload["local_hits"] == 2
+        assert payload["web_hits"] == 1
+        assert payload["top_local_sources"]
+
+    def test_workflow_docs_confirmation_roundtrip(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-prd.md").write_text("# prd", encoding="utf-8")
+        (output_dir / "demo-architecture.md").write_text("# architecture", encoding="utf-8")
+        (output_dir / "demo-uiux.md").write_text("# uiux", encoding="utf-8")
+
+        web_api._store_run_state(
+            "confirm01",
+            persist_dir=temp_project_dir,
+            status="running",
+            message="docs ready",
+            requested_phases=["drafting"],
+            completed_phases=["drafting"],
+            progress=50,
+            project_dir=str(temp_project_dir),
+            results=[],
+        )
+
+        update_resp = client.post(
+            "/api/workflow/docs-confirmation",
+            params={"project_dir": str(temp_project_dir), "run_id": "confirm01"},
+            json={"status": "confirmed", "comment": "文档已确认", "actor": "user"},
+        )
+        assert update_resp.status_code == 200
+        assert update_resp.json()["status"] == "confirmed"
+
+        get_resp = client.get(
+            "/api/workflow/docs-confirmation",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert get_resp.status_code == 200
+        assert get_resp.json()["status"] == "confirmed"
+        assert get_resp.json()["comment"] == "文档已确认"
+
+        status_resp = client.get(
+            "/api/workflow/status/confirm01",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert status_resp.status_code == 200
+        summary = status_resp.json()["pipeline_summary"]
+        assert summary["docs_confirmation"]["status"] == "confirmed"
+        confirmation_stage = next(item for item in summary["stages"] if item["id"] == "confirmation_gate")
+        assert confirmation_stage["status"] == "completed"
 
     def test_workflow_run_passes_request_context(self, temp_project_dir: Path, monkeypatch):
         client = TestClient(web_api.app)
@@ -401,6 +668,7 @@ class TestWebAPI:
         payload = history_resp.json()
         assert payload["count"] >= 1
         assert isinstance(payload["runs"], list)
+        assert "pipeline_summary" in payload["runs"][0]
 
         bad_limit_resp = client.get(
             "/api/workflow/runs",
@@ -466,6 +734,74 @@ class TestWebAPI:
             params={"project_dir": str(temp_project_dir)},
         )
         assert archive_resp.status_code == 404
+
+    def test_workflow_ui_review_summary_and_screenshot(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+        run_id = "uireview01"
+        web_api._store_run_state(
+            run_id,
+            persist_dir=temp_project_dir,
+            status="completed",
+            project_dir=str(temp_project_dir),
+            requested_phases=["qa"],
+            completed_phases=["qa"],
+            progress=100,
+            message="完成",
+            cancel_requested=False,
+            started_at=web_api._utc_now(),
+            finished_at=web_api._utc_now(),
+            results=[],
+        )
+
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-ui-review.json").write_text(
+            json.dumps(
+                {
+                    "project_name": "demo",
+                    "score": 88,
+                    "critical_count": 0,
+                    "high_count": 1,
+                    "medium_count": 2,
+                    "passed": True,
+                    "findings": [
+                        {
+                            "level": "high",
+                            "title": "CTA 层级不足",
+                            "description": "首屏 CTA 不够突出",
+                            "recommendation": "增强 CTA 层级",
+                            "evidence": [],
+                        }
+                    ],
+                    "strengths": ["结构完整"],
+                    "notes": [],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        (output_dir / "demo-ui-review.md").write_text("# ui review", encoding="utf-8")
+        screenshot_dir = output_dir / "ui-review"
+        screenshot_dir.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (40, 30), "#ffffff").save(screenshot_dir / "demo-preview-desktop.png")
+
+        resp = client.get(
+            f"/api/workflow/ui-review/{run_id}",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["run_id"] == run_id
+        assert payload["summary"]["score"] == 88
+        assert payload["screenshot"]["exists"] is True
+        assert payload["report_path"].endswith("demo-ui-review.md")
+
+        screenshot_resp = client.get(
+            f"/api/workflow/ui-review/{run_id}/screenshot",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert screenshot_resp.status_code == 200
+        assert screenshot_resp.headers.get("content-type", "").startswith("image/png")
 
     def test_workflow_cancel_not_found(self):
         client = TestClient(web_api.app)
@@ -670,7 +1006,10 @@ class TestWebAPI:
         assert claude_host["category"] == "cli"
         assert ".claude/CLAUDE.md" in claude_host["integration_files"]
         assert claude_host["slash_command_file"] == ".claude/commands/super-dev.md"
+        assert claude_host["usage_mode"] == "native-slash"
+        assert claude_host["commands"]["trigger"].startswith("/super-dev")
         assert claude_host["commands"]["setup"].startswith("super-dev setup --host claude-code")
+        assert claude_host["commands"]["smoke"] == "super-dev integrate smoke --target claude-code"
 
         language_ids = {item["id"] for item in payload["languages"]}
         assert {"python", "typescript", "rust", "sql", "assembly"}.issubset(language_ids)
@@ -694,9 +1033,17 @@ class TestWebAPI:
         assert payload["selected_targets"] == ["claude-code"]
         assert "report" in payload
         assert "compatibility" in payload
+        assert payload["usage_profiles"]["claude-code"]["usage_mode"] == "native-slash"
+        assert payload["usage_profiles"]["claude-code"]["certification_level"] == "certified"
+        assert payload["usage_profiles"]["claude-code"]["trigger_command"].startswith("/super-dev")
+        assert payload["usage_profiles"]["claude-code"]["final_trigger"] == '/super-dev "你的需求"'
+        assert "SMOKE_OK" in payload["usage_profiles"]["claude-code"]["smoke_test_prompt"]
         host = payload["report"]["hosts"]["claude-code"]
         assert host["ready"] is False
         assert {"integrate", "skill", "slash"}.issubset(set(host["missing"]))
+        assert host["usage_profile"]["usage_mode"] == "native-slash"
+        assert host["usage_profile"]["certification_label"] == "Certified"
+        assert host["usage_profile"]["requires_restart_after_onboard"] is False
 
     def test_hosts_doctor_skill_only_host_skips_slash(self, temp_project_dir: Path):
         client = TestClient(web_api.app)
@@ -713,7 +1060,73 @@ class TestWebAPI:
         assert host["ready"] is False
         assert "slash" not in host["missing"]
         assert host["checks"]["slash"]["ok"] is True
-        assert host["checks"]["slash"]["mode"] == "skill-only"
+        assert host["checks"]["slash"]["mode"] == "rules-only"
+        assert payload["usage_profiles"]["trae"]["usage_mode"] == "rules-only"
+        assert payload["usage_profiles"]["trae"]["certification_level"] == "certified"
+        assert host["usage_profile"]["trigger_command"] == "super-dev: <需求描述>"
+        assert payload["usage_profiles"]["trae"]["usage_location"]
+        assert payload["usage_profiles"]["trae"]["usage_notes"]
+
+    def test_codex_host_catalog_is_skill_only(self):
+        client = TestClient(web_api.app)
+        resp = client.get("/api/catalogs")
+        assert resp.status_code == 200
+        payload = resp.json()
+        codex_host = next(item for item in payload["host_tools"] if item["id"] == "codex-cli")
+        assert codex_host["supports_slash"] is False
+        assert codex_host["slash_command_file"] == ""
+        assert codex_host["certification_level"] == "certified"
+        assert codex_host["certification_label"] == "Certified"
+        assert codex_host["usage_mode"] == "agents-and-skill"
+        assert "super-dev: <需求描述>" in codex_host["primary_entry"]
+        assert codex_host["usage_location"]
+        assert codex_host["usage_notes"]
+        assert codex_host["requires_restart_after_onboard"] is True
+        assert any("重启 codex" in step for step in codex_host["post_onboard_steps"])
+        assert codex_host["commands"]["slash"] == ""
+        assert codex_host["commands"]["skill"] == "super-dev-core"
+        assert codex_host["commands"]["trigger"] == "super-dev: 你的需求"
+        assert codex_host["final_trigger"] == "super-dev: 你的需求"
+        assert "SMOKE_OK" in codex_host["smoke_test_prompt"]
+
+    def test_kimi_host_catalog_is_rules_only(self):
+        client = TestClient(web_api.app)
+        resp = client.get("/api/catalogs")
+        assert resp.status_code == 200
+        payload = resp.json()
+        kimi_host = next(item for item in payload["host_tools"] if item["id"] == "kimi-cli")
+        assert kimi_host["supports_slash"] is False
+        assert kimi_host["slash_command_file"] == ""
+        assert kimi_host["usage_mode"] == "rules-only"
+        assert kimi_host["commands"]["slash"] == ""
+        assert kimi_host["commands"]["skill"] == ""
+        assert kimi_host["commands"]["trigger"] == "super-dev: 你的需求"
+        assert kimi_host["final_trigger"] == "super-dev: 你的需求"
+        assert "SMOKE_OK" in kimi_host["smoke_test_prompt"]
+        assert ".kimi/AGENTS.md" in kimi_host["integration_files"]
+        assert "super-dev: <需求描述>" in kimi_host["primary_entry"]
+
+    @pytest.mark.parametrize(
+        ("host_id", "slash_file"),
+        [
+            ("codebuddy", ".codebuddy/commands/super-dev.md"),
+            ("cursor", ".cursor/commands/super-dev.md"),
+            ("windsurf", ".windsurf/workflows/super-dev.md"),
+            ("gemini-cli", ".gemini/commands/super-dev.md"),
+            ("opencode", ".opencode/commands/super-dev.md"),
+        ],
+    )
+    def test_verified_slash_hosts_catalog_keeps_native_entry(self, host_id: str, slash_file: str):
+        client = TestClient(web_api.app)
+        resp = client.get("/api/catalogs")
+        assert resp.status_code == 200
+        payload = resp.json()
+        host = next(item for item in payload["host_tools"] if item["id"] == host_id)
+        assert host["supports_slash"] is True
+        assert host["usage_mode"] == "native-slash"
+        assert host["slash_command_file"] == slash_file
+        assert host["commands"]["trigger"] == '/super-dev "你的需求"'
+        assert host["final_trigger"] == '/super-dev "你的需求"'
 
     def test_hosts_doctor_endpoint_ready_after_files_present(self, temp_project_dir: Path):
         client = TestClient(web_api.app)
@@ -969,3 +1382,18 @@ class TestWebAPI:
         assert ".gitlab-ci.yml" in payload["skipped_files"]
         assert payload["skipped_count"] == 1
         assert existing.read_text(encoding="utf-8") == "old-content"
+
+    def test_release_readiness_endpoint(self, temp_project_dir: Path):
+        _prepare_release_ready_project(temp_project_dir)
+        client = TestClient(web_api.app)
+
+        resp = client.get(
+            "/api/release/readiness",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["passed"] is True
+        assert payload["score"] == 100
+        assert Path(payload["report_file"]).exists()
+        assert Path(payload["json_file"]).exists()

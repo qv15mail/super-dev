@@ -55,6 +55,60 @@ python3 scripts/check_host_compatibility.py --project-dir .
 python3 scripts/check_host_compatibility.py --project-dir . --min-score 85 --min-ready-hosts 1
 ```
 
+### `audit_development_kb.py`
+
+开发知识库分层覆盖审计脚本（检查分层覆盖与知识库级达标状态）。
+
+```bash
+python3 scripts/audit_development_kb.py
+```
+
+### `audit_ai_kb.py`
+
+AI开发知识库完整性审计脚本（检查AI域关键文档与达标状态）。
+
+```bash
+python3 scripts/audit_ai_kb.py
+```
+
+### `check_knowledge_gates.py`
+
+开发知识门禁脚本（校验UI门禁、场景矩阵、全流程阶段、模板资产、关键资产与文档头规范）。
+
+```bash
+python3 scripts/check_knowledge_gates.py --project-dir .
+```
+
+可输出多格式报告：
+
+```bash
+python3 scripts/check_knowledge_gates.py --project-dir . --format json --out artifacts/knowledge-gate-report.json
+python3 scripts/check_knowledge_gates.py --project-dir . --format md --out artifacts/knowledge-gate-report.md
+python3 scripts/check_knowledge_gates.py --project-dir . --format html --out artifacts/knowledge-gate-report.html
+python3 scripts/check_knowledge_gates.py --project-dir . --format junit --out artifacts/knowledge-gate-junit.xml
+```
+
+可配置文档陈旧阈值：
+
+```bash
+python3 scripts/check_knowledge_gates.py --project-dir . --stale-days 120
+```
+
+### `generate_lifecycle_packet.py`
+
+从全流程模板层自动生成一套可交付阶段包（含manifest）。
+
+```bash
+python3 scripts/generate_lifecycle_packet.py --project-dir . --name order-center-v1
+```
+
+可选参数：
+
+```bash
+python3 scripts/generate_lifecycle_packet.py --project-dir . --name order-center-v1 --stages requirement,design,architecture
+python3 scripts/generate_lifecycle_packet.py --project-dir . --name order-center-v1 --force
+```
+
 ### `publish.sh`
 
 交互式发布脚本（适合手动发布流程）。

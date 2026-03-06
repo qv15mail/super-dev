@@ -9,9 +9,12 @@
 from .code_review import CodeReviewGenerator
 from .quality_gate import QualityGateChecker
 from .redteam import RedTeamReviewer
+from .ui_review import UIReviewReport, UIReviewReviewer
 
 __all__ = [
     "RedTeamReviewer",
     "CodeReviewGenerator",
     "QualityGateChecker",
+    "UIReviewReviewer",
+    "UIReviewReport",
 ]

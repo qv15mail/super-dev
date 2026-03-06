@@ -225,6 +225,7 @@ class QualityGateChecker:
         self.project_dir = Path(project_dir).resolve()
         self.name = name
         self.tech_stack = tech_stack
+        self.latest_ui_review_report = None
         self.threshold_override = threshold_override
         config = ConfigManager(self.project_dir).load()
         self.host_profile_targets = [
@@ -346,6 +347,9 @@ class QualityGateChecker:
 
         # 5. 代码质量检查
         checks.extend(self._check_code_quality())
+
+        # 6. UI 审查
+        checks.append(self._check_ui_review())
 
         # 计算总分和加权分
         total_score = self._calculate_total_score(checks)
@@ -475,6 +479,44 @@ class QualityGateChecker:
             ))
 
         return checks
+
+    def _check_ui_review(self) -> QualityCheck:
+        """检查商业级 UI 基线和实现一致性"""
+        from .ui_review import UIReviewReviewer
+
+        reviewer = UIReviewReviewer(
+            project_dir=self.project_dir,
+            name=self.name,
+            tech_stack=self.tech_stack,
+        )
+        report = reviewer.review()
+        self.latest_ui_review_report = report
+
+        if report.critical_count > 0:
+            status = CheckStatus.FAILED
+        elif report.high_count > 0 or report.score < 80:
+            status = CheckStatus.WARNING
+        else:
+            status = CheckStatus.PASSED
+
+        detail_prefix = (
+            f"score={report.score}, critical={report.critical_count}, "
+            f"high={report.high_count}, medium={report.medium_count}"
+        )
+        if report.findings:
+            details = f"{detail_prefix}; top issue: {report.findings[0].title}"
+        else:
+            details = f"{detail_prefix}; 未发现明显 UI 商业级违例"
+
+        return QualityCheck(
+            name="UI 商业完成度",
+            category="code_quality",
+            description="UI 设计基线、实现一致性与反模式扫描",
+            status=status,
+            score=report.score,
+            weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+            details=details,
+        )
 
     def _check_security(self, redteam_report: RedTeamReport | None) -> list[QualityCheck]:
         """检查安全性"""

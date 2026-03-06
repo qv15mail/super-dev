@@ -420,11 +420,167 @@
             padding-top: 10px;
         }
 
+        .ui-review-panel {
+            margin-top: 12px;
+            border-top: 1px solid #dbeafe;
+            padding-top: 10px;
+        }
+
         .redteam-head {
             margin-bottom: 8px;
             color: #333;
             font-size: 13px;
         }
+
+        .ui-review-grid {
+            display: grid;
+            grid-template-columns: minmax(280px, 1fr) minmax(280px, 1.05fr);
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .ui-review-box {
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 12px;
+            background: #fff;
+        }
+
+        .ui-review-box img {
+            width: 100%;
+            display: block;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            background: #fff;
+        }
+
+        .ui-review-findings {
+            display: grid;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .ui-review-finding {
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 10px;
+            background: #fff;
+        }
+
+        .ui-review-finding h4 {
+            margin: 0 0 6px;
+            font-size: 13px;
+            color: #1f2937;
+        }
+
+        .ui-review-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .ui-review-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 5px 9px;
+            border-radius: 999px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .pipeline-summary {
+            margin-top: 16px;
+            padding: 18px;
+            border: 1px solid #dbe5ef;
+            border-radius: 16px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
+        }
+        .pipeline-summary-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        .pipeline-summary-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .pipeline-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 10px;
+            border-radius: 999px;
+            background: #eef4f8;
+            color: #446072;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .pipeline-blocker {
+            margin-top: 12px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid #fed7aa;
+            background: #fff7ed;
+            color: #9a5a05;
+            font-size: 13px;
+        }
+        .pipeline-confirmation {
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid #dbe5ef;
+            background: #fff;
+        }
+        .pipeline-confirmation textarea {
+            width: 100%;
+            min-height: 72px;
+            margin-top: 10px;
+            border: 1px solid #dbe5ef;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font: inherit;
+            resize: vertical;
+        }
+        .pipeline-stage-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .pipeline-stage-card {
+            border: 1px solid #dce6ef;
+            border-radius: 14px;
+            background: #ffffff;
+            padding: 12px;
+        }
+        .pipeline-stage-card h4 {
+            margin: 0 0 6px;
+            font-size: 14px;
+            color: #1f2937;
+        }
+        .pipeline-stage-card p {
+            margin: 0;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #5c7084;
+        }
+        .pipeline-stage-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 8px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .pipeline-stage-status.completed { color: #0f766e; }
+        .pipeline-stage-status.running { color: #2563eb; }
+        .pipeline-stage-status.waiting { color: #b45309; }
+        .pipeline-stage-status.pending { color: #64748b; }
 
         .redteam-group {
             margin-top: 10px;
@@ -469,6 +625,12 @@
             padding: 5px 8px;
             font-size: 11px;
             white-space: nowrap;
+        }
+
+        @media (max-width: 980px) {
+            .ui-review-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         .severity-badge {
@@ -764,6 +926,17 @@
             word-break: break-all;
         }
 
+        .host-card-summary {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #334e68;
+            line-height: 1.5;
+        }
+
+        .host-card-summary strong {
+            color: #102a43;
+        }
+
         .host-tag {
             display: inline-flex;
             align-items: center;
@@ -781,6 +954,11 @@
         .host-tag-ide {
             background: #ecfdf3;
             color: #14532d;
+        }
+
+        .host-tag-usage {
+            background: #fff7ed;
+            color: #9a3412;
         }
 
         .host-command-panel {
@@ -839,6 +1017,54 @@
             padding: 8px 10px;
             font-size: 12px;
             color: #243b53;
+        }
+
+        .host-detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            margin: 12px 0 2px;
+        }
+
+        .host-detail-card {
+            border: 1px solid #e5e8eb;
+            border-radius: 10px;
+            background: #f8fbfd;
+            padding: 10px 12px;
+        }
+
+        .host-detail-card span {
+            display: block;
+            font-size: 11px;
+            color: #6b7c8d;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 4px;
+            font-weight: 700;
+        }
+
+        .host-detail-card strong {
+            color: #17324d;
+            font-size: 14px;
+            line-height: 1.45;
+        }
+
+        .host-step-list {
+            margin: 8px 0 0 18px;
+            color: #4b6378;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .host-note {
+            margin-top: 10px;
+            border-left: 3px solid #0f766e;
+            background: #f4fbfa;
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: #334e68;
+            font-size: 12px;
+            line-height: 1.6;
         }
 
         .host-doctor-panel {
@@ -919,13 +1145,13 @@
         <div class="container">
             <div class="header">
                 <h1>Super Dev Dashboard</h1>
-                <p>超级开发战队 一个流水线式的AiCoding辅助工具</p>
+                <p>宿主内 AI 开发治理与编排工具，宿主负责编码，Super Dev 负责把事做对</p>
             </div>
 
             <div class="hero-strip">
-                <div class="hero-pill"><span>Product</span>Pipeline-first AI Coding Copilot</div>
-                <div class="hero-pill"><span>Target</span>CLI + IDE hosts / Enterprise delivery</div>
-                <div class="hero-pill"><span>Flow</span>需求 -> 文档 -> Spec -> 开发 -> 红队 -> 门禁 -> 交付</div>
+                <div class="hero-pill"><span>Positioning</span>Host-native governance layer</div>
+                <div class="hero-pill"><span>Responsibility</span>Host writes code / Super Dev governs process and quality</div>
+                <div class="hero-pill"><span>Flow</span>研究 -> 文档 -> Spec -> 宿主开发 -> 红队 -> 门禁 -> 交付</div>
             </div>
 
             <div class="workspace">
@@ -1135,6 +1361,66 @@
                         </div>
                     </div>
                 </div>
+                <div v-if="currentPipelineSummary" class="pipeline-summary">
+                    <div class="pipeline-summary-head">
+                        <div>
+                            <strong>业务流水线状态</strong>
+                            <div style="margin-top:4px;color:#5c7084;font-size:13px;">
+                                当前阶段：{{ currentPipelineSummary.current_stage_name }}
+                            </div>
+                        </div>
+                        <div class="pipeline-summary-meta">
+                            <span class="pipeline-chip">已完成 {{ currentPipelineSummary.completed_count }}/{{ currentPipelineSummary.total_count }}</span>
+                            <span class="pipeline-chip">Run {{ currentRunId || '-' }}</span>
+                        </div>
+                    </div>
+                    <div v-if="currentPipelineSummary.blocker" class="pipeline-blocker">
+                        {{ currentPipelineSummary.blocker }}
+                    </div>
+                    <div class="pipeline-confirmation" v-if="currentPipelineSummary.docs_confirmation">
+                        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+                            <div>
+                                <strong>三文档确认状态</strong>
+                                <div style="margin-top:4px;font-size:13px;color:#5c7084;">
+                                    当前状态：{{ docsConfirmationLabel(currentPipelineSummary.docs_confirmation.status) }}
+                                    <span v-if="currentPipelineSummary.docs_confirmation.updated_at">
+                                        · 更新时间 {{ formatTime(currentPipelineSummary.docs_confirmation.updated_at) }}
+                                    </span>
+                                </div>
+                                <div v-if="currentPipelineSummary.docs_confirmation.comment" style="margin-top:6px;font-size:13px;color:#334155;">
+                                    备注：{{ currentPipelineSummary.docs_confirmation.comment }}
+                                </div>
+                            </div>
+                            <div class="pipeline-summary-meta">
+                                <span class="pipeline-chip" v-if="currentPipelineSummary.docs_confirmation.run_id">
+                                    Run {{ currentPipelineSummary.docs_confirmation.run_id }}
+                                </span>
+                            </div>
+                        </div>
+                        <textarea v-model="docsConfirmationComment" placeholder="可填写确认意见或修改要求"></textarea>
+                        <div class="workflow-actions" style="margin-top:10px;">
+                            <button class="btn btn-primary" :disabled="!currentRunId || loading" @click="updateDocsConfirmation('confirmed')">
+                                确认三文档
+                            </button>
+                            <button class="btn btn-secondary" :disabled="!currentRunId || loading" @click="updateDocsConfirmation('revision_requested')">
+                                要求修改文档
+                            </button>
+                            <button class="btn btn-secondary" :disabled="loading" @click="loadDocsConfirmation()">
+                                刷新确认状态
+                            </button>
+                        </div>
+                    </div>
+                    <div class="pipeline-stage-list">
+                        <div class="pipeline-stage-card" v-for="stage in currentPipelineSummary.stages" :key="'pipeline-stage-' + stage.id">
+                            <div class="pipeline-stage-status" :class="stage.status">
+                                <span>{{ pipelineStageIcon(stage.status) }}</span>
+                                <span>{{ pipelineStageLabel(stage.status) }}</span>
+                            </div>
+                            <h4>{{ stage.name }}</h4>
+                            <p>{{ stage.description }}</p>
+                        </div>
+                    </div>
+                </div>
 
                 <div class="card" style="margin-top: 16px; margin-bottom: 0;">
                     <h2 style="font-size: 1.2rem;">运行历史</h2>
@@ -1225,6 +1511,51 @@
                             </div>
                         </div>
                     </div>
+                    <div class="ui-review-panel" v-if="selectedRunUIReview">
+                        <div class="redteam-head">
+                            <strong>UI 审查总览 (Run {{ selectedRunUIReview.run_id }})</strong>
+                            <div style="margin-top:4px;color:#666;">
+                                评分 {{ selectedRunUIReview.score }} / 100，
+                                Critical {{ selectedRunUIReview.critical_count }}，
+                                High {{ selectedRunUIReview.high_count }}，
+                                Medium {{ selectedRunUIReview.medium_count }}
+                            </div>
+                            <div v-if="selectedRunUIReview.report_path" style="margin-top:4px;color:#666;">
+                                报告: {{ selectedRunUIReview.report_path }}
+                            </div>
+                        </div>
+                        <div class="ui-review-meta">
+                            <span class="ui-review-pill">结论: {{ selectedRunUIReview.passed ? '通过' : '需修正' }}</span>
+                            <span class="ui-review-pill" v-if="selectedRunUIReview.screenshot?.exists">已生成截图</span>
+                            <span class="ui-review-pill" v-if="selectedRunUIReview.summary?.strengths?.length">优势 {{ selectedRunUIReview.summary.strengths.length }}</span>
+                            <span class="ui-review-pill" v-if="selectedRunUIReview.summary?.findings?.length">问题 {{ selectedRunUIReview.summary.findings.length }}</span>
+                        </div>
+                        <div class="ui-review-grid">
+                            <div class="ui-review-box">
+                                <h3 style="margin:0 0 8px;">视觉截图</h3>
+                                <img
+                                    v-if="selectedRunUIReview.screenshot?.exists && selectedRunUIReview.screenshot.url"
+                                    :src="selectedRunUIReview.screenshot.url"
+                                    alt="UI review screenshot"
+                                />
+                                <div v-else style="font-size:12px;color:#666;">当前 Run 未生成截图，可能是环境未启用视觉捕获。</div>
+                                <div v-if="selectedRunUIReview.screenshot?.relative_path" style="margin-top:8px;font-size:12px;color:#666;">
+                                    {{ selectedRunUIReview.screenshot.relative_path }}
+                                </div>
+                            </div>
+                            <div class="ui-review-box">
+                                <h3 style="margin:0 0 8px;">主要问题</h3>
+                                <div class="ui-review-findings" v-if="selectedRunUIReview.summary?.findings?.length">
+                                    <div class="ui-review-finding" v-for="(finding, idx) in selectedRunUIReview.summary.findings.slice(0, 6)" :key="'ui-review-' + idx + '-' + finding.title">
+                                        <h4>[{{ (finding.level || 'low').toUpperCase() }}] {{ finding.title }}</h4>
+                                        <div style="font-size:12px;color:#444;">{{ finding.description }}</div>
+                                        <div style="margin-top:6px;font-size:12px;color:#666;">建议: {{ finding.recommendation }}</div>
+                                    </div>
+                                </div>
+                                <div v-else style="font-size:12px;color:#666;">当前 Run 未发现明显 UI 商业级违例。</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -1232,7 +1563,7 @@
             <div v-if="activeTab === 'hosts'" class="card">
                 <h2>宿主工具生态</h2>
                 <div class="form-hint" style="margin-bottom: 12px;">
-                    使用 `super-dev onboard/doctor/setup` 完成接入；宿主内触发使用 `/super-dev "你的需求"` 或等价终端命令。
+                    安装后优先按宿主真实入口触发。支持 slash 的宿主使用 `/super-dev`；不支持 slash 的宿主统一使用 `super-dev: 你的需求`。例如 Codex CLI 走 `AGENTS.md + Skill`，Trae 走项目级 `.trae/rules.md`。
                 </div>
 
                 <div class="host-overview">
@@ -1290,6 +1621,11 @@
                             <span class="host-tag" :class="'host-tag-' + host.category">{{ hostCategoryLabel(host.category) }}</span>
                         </div>
                         <div class="host-card-id">{{ host.id }}</div>
+                        <div class="host-card-summary">
+                            <div><strong>认证</strong>: {{ host.certification_label || 'Experimental' }}</div>
+                            <div><strong>入口</strong>: {{ host.commands.trigger || host.primary_entry }}</div>
+                            <div><strong>模式</strong>: {{ hostUsageModeLabel(host.usage_mode) }}</div>
+                        </div>
                         <div v-if="host.integration_files && host.integration_files.length" class="host-card-file">
                             规则: {{ host.integration_files[0] }}
                         </div>
@@ -1311,7 +1647,61 @@
                 </div>
 
                 <div class="host-command-panel" v-if="selectedHostTool">
-                    <h3>{{ selectedHostTool.name }} 接入命令</h3>
+                    <div class="host-command-head" style="margin-bottom: 10px;">
+                        <h3 style="margin-bottom: 0;">{{ selectedHostTool.name }} 接入命令</h3>
+                        <div style="display:flex; gap:8px;">
+                            <button class="btn btn-secondary issue-action" @click="copyFinalTrigger()">
+                                复制最终输入
+                            </button>
+                            <button class="btn btn-secondary issue-action" @click="copyHostQuickStart()">
+                                复制完整试用步骤
+                            </button>
+                        </div>
+                    </div>
+                    <div class="host-detail-grid">
+                        <div class="host-detail-card">
+                            <span>认证等级</span>
+                            <strong>{{ selectedHostTool.certification_label || 'Experimental' }}</strong>
+                        </div>
+                        <div class="host-detail-card">
+                            <span>最终输入</span>
+                            <strong>{{ selectedHostTool.final_trigger || (selectedHostTool.commands && selectedHostTool.commands.trigger) || selectedHostTool.primary_entry }}</strong>
+                        </div>
+                        <div class="host-detail-card">
+                            <span>主入口</span>
+                            <strong>{{ selectedHostTool.primary_entry }}</strong>
+                        </div>
+                        <div class="host-detail-card">
+                            <span>触发上下文</span>
+                            <strong>{{ selectedHostTool.trigger_context || '-' }}</strong>
+                        </div>
+                        <div class="host-detail-card">
+                            <span>使用模式</span>
+                            <strong>{{ hostUsageModeLabel(selectedHostTool.usage_mode) }}</strong>
+                        </div>
+                        <div class="host-detail-card">
+                            <span>触发位置</span>
+                            <strong>{{ selectedHostTool.usage_location || selectedHostTool.trigger_context || '-' }}</strong>
+                        </div>
+                        <div class="host-detail-card">
+                            <span>接入后重启</span>
+                            <strong>{{ selectedHostTool.requires_restart_after_onboard ? '需要' : '无需' }}</strong>
+                        </div>
+                    </div>
+                    <div class="artifact-list" style="margin-top: 12px;" v-if="selectedHostTool.certification_reason || selectedHostTool.official_docs_url || (selectedHostTool.certification_evidence && selectedHostTool.certification_evidence.length)">
+                        <div style="font-size:13px;color:#333;"><strong>宿主认证说明</strong></div>
+                        <div v-if="selectedHostTool.certification_reason" style="margin-top:6px;color:#444;">
+                            {{ selectedHostTool.certification_reason }}
+                        </div>
+                        <div v-if="selectedHostTool.official_docs_url" style="margin-top:6px;color:#666;">
+                            官方文档: {{ selectedHostTool.official_docs_url }}
+                        </div>
+                        <ul v-if="selectedHostTool.certification_evidence && selectedHostTool.certification_evidence.length" style="margin-top:8px;">
+                            <li v-for="item in selectedHostTool.certification_evidence" :key="'cert-' + item">
+                                {{ item }}
+                            </li>
+                        </ul>
+                    </div>
                     <div class="host-command-item" v-for="item in hostCommandItems" :key="'cmd-' + item.key">
                         <div class="host-command-head">
                             <strong>{{ item.label }}</strong>
@@ -1330,6 +1720,48 @@
                         <ul style="margin: 6px 0 0 18px; font-size: 12px; color: #4b6378;">
                             <li v-for="file in selectedHostTool.integration_files" :key="'ifile-' + file">{{ file }}</li>
                         </ul>
+                    </div>
+                    <div v-if="selectedHostTool.post_onboard_steps && selectedHostTool.post_onboard_steps.length">
+                        <div class="form-hint" style="margin-top: 10px;"><strong>接入后步骤</strong></div>
+                        <ol class="host-step-list">
+                            <li v-for="step in selectedHostTool.post_onboard_steps" :key="'host-step-' + step">{{ step }}</li>
+                        </ol>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <div class="form-hint"><strong>首轮响应契约</strong></div>
+                        <ol class="host-step-list">
+                            <li>宿主第一次收到 <code>{{ selectedHostTool.final_trigger || (selectedHostTool.commands && selectedHostTool.commands.trigger) || selectedHostTool.primary_entry }}</code> 后，必须先说明已进入 Super Dev 流水线，而不是普通聊天。</li>
+                            <li>第一轮回复必须说明当前阶段是 <code>research</code>，会先读取 <code>knowledge/</code> 与 <code>output/knowledge-cache/*-knowledge-bundle.json</code>，再研究同类产品。</li>
+                            <li>第一轮回复必须说明固定顺序：research → 三份核心文档 → 等待确认 → Spec / tasks → 前端优先并运行验证 → 后端 / 测试 / 交付。</li>
+                            <li>第一轮回复必须说明：三份核心文档完成后会暂停等待用户确认；未经确认不会创建 Spec，也不会开始编码。</li>
+                        </ol>
+                    </div>
+                    <div v-if="selectedHostTool.usage_notes && selectedHostTool.usage_notes.length">
+                        <div class="form-hint" style="margin-top: 10px;"><strong>使用提示</strong></div>
+                        <ol class="host-step-list">
+                            <li v-for="note in selectedHostTool.usage_notes" :key="'host-note-' + note">{{ note }}</li>
+                        </ol>
+                    </div>
+                    <div v-if="selectedHostTool.smoke_test_prompt || (selectedHostTool.smoke_test_steps && selectedHostTool.smoke_test_steps.length)">
+                        <div class="form-hint" style="margin-top: 10px;"><strong>Smoke 验收</strong></div>
+                        <div v-if="selectedHostTool.smoke_test_prompt" class="host-command-item" style="margin-top:8px;">
+                            <div class="host-command-head">
+                                <strong>验收触发语句</strong>
+                                <button class="btn btn-secondary issue-action" @click="copyHostCommand(selectedHostTool.smoke_test_prompt)">
+                                    复制
+                                </button>
+                            </div>
+                            <code>{{ selectedHostTool.smoke_test_prompt }}</code>
+                        </div>
+                        <ol class="host-step-list" v-if="selectedHostTool.smoke_test_steps && selectedHostTool.smoke_test_steps.length">
+                            <li v-for="step in selectedHostTool.smoke_test_steps" :key="'host-smoke-step-' + step">{{ step }}</li>
+                        </ol>
+                        <div class="form-hint" v-if="selectedHostTool.smoke_success_signal">
+                            通过标准: {{ selectedHostTool.smoke_success_signal }}
+                        </div>
+                    </div>
+                    <div class="host-note" v-if="selectedHostTool.notes">
+                        {{ selectedHostTool.notes }}
                     </div>
                 </div>
 
@@ -1677,33 +2109,8 @@
                         { id: 'assembly', name: 'Assembly' },
                     ],
                     hostCategoryFilter: 'all',
-                    selectedHostId: 'claude-code',
-                    hostTools: [
-                        { id: 'claude-code', name: 'Claude Code', category: 'cli', integration_files: ['.claude/CLAUDE.md'], slash_command_file: '.claude/commands/super-dev.md', commands: defaultHostCommands('claude-code') },
-                        { id: 'codex-cli', name: 'Codex CLI', category: 'cli', integration_files: ['.codex/AGENTS.md'], slash_command_file: '.codex/commands/super-dev.md', commands: defaultHostCommands('codex-cli') },
-                        { id: 'opencode', name: 'OpenCode', category: 'cli', integration_files: ['.opencode/AGENTS.md'], slash_command_file: '.opencode/commands/super-dev.md', commands: defaultHostCommands('opencode') },
-                        { id: 'gemini-cli', name: 'Gemini CLI', category: 'cli', integration_files: ['.gemini/AGENTS.md'], slash_command_file: '.gemini/commands/super-dev.md', commands: defaultHostCommands('gemini-cli') },
-                        { id: 'kiro-cli', name: 'Kiro CLI', category: 'cli', integration_files: ['.kiro/AGENTS.md'], slash_command_file: '.kiro/commands/super-dev.md', commands: defaultHostCommands('kiro-cli') },
-                        { id: 'cursor-cli', name: 'Cursor CLI', category: 'cli', integration_files: ['.cursor/AGENTS.md'], slash_command_file: '.cursor/commands/super-dev.md', commands: defaultHostCommands('cursor-cli') },
-                        { id: 'qoder-cli', name: 'Qoder CLI', category: 'cli', integration_files: ['.qoder/AGENTS.md'], slash_command_file: '.qoder/commands/super-dev.md', commands: defaultHostCommands('qoder-cli') },
-                        { id: 'codebuddy-cli', name: 'CodeBuddy CLI', category: 'cli', integration_files: ['.codebuddy/AGENTS.md'], slash_command_file: '.codebuddy/commands/super-dev.md', commands: defaultHostCommands('codebuddy-cli') },
-                        { id: 'iflow', name: 'iFlow', category: 'cli', integration_files: ['.iflow/AGENTS.md'], slash_command_file: '.iflow/commands/super-dev.md', commands: defaultHostCommands('iflow') },
-                        { id: 'aider', name: 'Aider', category: 'cli', integration_files: ['.aider/AGENTS.md'], slash_command_file: '.aider/commands/super-dev.md', commands: defaultHostCommands('aider') },
-                        { id: 'cursor', name: 'Cursor', category: 'ide', integration_files: ['.cursorrules'], slash_command_file: '.cursor/commands/super-dev.md', commands: defaultHostCommands('cursor') },
-                        { id: 'windsurf', name: 'Windsurf', category: 'ide', integration_files: ['.windsurfrules'], slash_command_file: '.windsurf/commands/super-dev.md', commands: defaultHostCommands('windsurf') },
-                        { id: 'cline', name: 'Cline', category: 'ide', integration_files: ['.clinerules'], slash_command_file: '.cline/commands/super-dev.md', commands: defaultHostCommands('cline') },
-                        { id: 'continue', name: 'Continue', category: 'ide', integration_files: ['.continue/rules/super-dev.md'], slash_command_file: '.continue/commands/super-dev.md', commands: defaultHostCommands('continue') },
-                        { id: 'vscode-copilot', name: 'VSCode Copilot', category: 'ide', integration_files: ['.github/copilot-instructions.md'], slash_command_file: '.github/commands/super-dev.md', commands: defaultHostCommands('vscode-copilot') },
-                        { id: 'jetbrains-ai', name: 'JetBrains AI', category: 'ide', integration_files: ['.idea/ai-assistant-rules.md'], slash_command_file: '.idea/commands/super-dev.md', commands: defaultHostCommands('jetbrains-ai') },
-                        { id: 'roo-code', name: 'Roo Code', category: 'ide', integration_files: ['.roo/rules.md'], slash_command_file: '.roo/commands/super-dev.md', commands: defaultHostCommands('roo-code') },
-                        { id: 'augment', name: 'Augment', category: 'ide', integration_files: ['.augment/rules.md'], slash_command_file: '.augment/commands/super-dev.md', commands: defaultHostCommands('augment') },
-                        { id: 'qoder', name: 'Qoder', category: 'ide', integration_files: ['.qoder/rules.md'], slash_command_file: '.qoder/commands/super-dev.md', commands: defaultHostCommands('qoder') },
-                        { id: 'trae', name: 'Trae', category: 'ide', integration_files: ['.trae/rules.md'], slash_command_file: '.trae/commands/super-dev.md', commands: defaultHostCommands('trae') },
-                        { id: 'codebuddy', name: 'CodeBuddy', category: 'ide', integration_files: ['.codebuddy/rules.md'], slash_command_file: '.codebuddy/commands/super-dev.md', commands: defaultHostCommands('codebuddy') },
-                        { id: 'antigravity', name: 'Antigravity', category: 'ide', integration_files: ['.agents/workflows/super-dev.md'], slash_command_file: '.agents/commands/super-dev.md', commands: defaultHostCommands('antigravity') },
-                        { id: 'tongyi-lingma', name: 'Tongyi Lingma', category: 'ide', integration_files: ['.lingma/rules.md'], slash_command_file: '.lingma/commands/super-dev.md', commands: defaultHostCommands('tongyi-lingma') },
-                        { id: 'codegeex', name: 'CodeGeeX', category: 'ide', integration_files: ['.codegeex/rules.md'], slash_command_file: '.codegeex/commands/super-dev.md', commands: defaultHostCommands('codegeex') },
-                    ],
+                    selectedHostId: '',
+                    hostTools: [],
                     hostDoctorAuto: false,
                     hostDoctorResult: null,
                     phases: [],
@@ -1715,10 +2122,13 @@
                     projectDir: '.',
                     currentRunId: null,
                     currentRunStatus: null,
+                    currentPipelineSummary: null,
+                    docsConfirmationComment: '',
                     pollTimer: null,
                     runsHistory: [],
                     selectedRunArtifacts: [],
                     selectedRunRedteam: null,
+                    selectedRunUIReview: null,
                     deployPlatforms: [
                         { id: 'all', name: '全部平台' },
                         { id: 'github', name: 'GitHub Actions' },
@@ -1786,12 +2196,26 @@
                 },
                 hostCommandItems() {
                     if (!this.selectedHostTool || !this.selectedHostTool.commands) return [];
+                    const host = this.selectedHostTool;
                     return [
                         { key: 'setup', label: '一步接入', description: '执行 onboard + doctor，适合首次安装', command: this.selectedHostTool.commands.setup || '' },
-                        { key: 'onboard', label: '安装集成', description: '写入宿主规则和 slash 命令文件', command: this.selectedHostTool.commands.onboard || '' },
+                        { key: 'onboard', label: '安装集成', description: '写入宿主规则、Skill 与可用触发入口', command: this.selectedHostTool.commands.onboard || '' },
                         { key: 'doctor', label: '修复诊断', description: '检查接入状态并自动修复常见问题', command: this.selectedHostTool.commands.doctor || '' },
-                        { key: 'run', label: '终端运行', description: '直接启动 Super Dev 流水线', command: this.selectedHostTool.commands.run || '' },
-                        { key: 'slash', label: '宿主会话命令', description: '在宿主对话输入该命令触发流水线', command: this.selectedHostTool.commands.slash || '' },
+                        { key: 'smoke', label: 'Smoke 验收', description: '输出该宿主的标准验收语句与通过标准', command: this.selectedHostTool.commands.smoke || '' },
+                        { key: 'trigger', label: '宿主主入口', description: host.trigger_context || '在宿主当前上下文触发', command: host.commands.trigger || '' },
+                        {
+                            key: 'slash',
+                            label: 'Slash 命令',
+                            description: '仅适用于原生支持 slash 的宿主',
+                            command: host.supports_slash ? (host.commands.slash || '') : ''
+                        },
+                        {
+                            key: 'skill',
+                            label: 'Skill 名称',
+                            description: '适用于需要 AGENTS/Skill 协同的非 slash 宿主',
+                            command: ['skill-only', 'agents-and-skill'].includes(host.usage_mode) ? (host.commands.skill || '') : ''
+                        },
+                        { key: 'run', label: '终端兜底', description: '仅触发本地编排，不替代宿主模型会话', command: this.selectedHostTool.commands.run || '' },
                     ].filter((item) => typeof item.command === 'string' && item.command.trim());
                 }
             },
@@ -1800,12 +2224,14 @@
                     try {
                         const response = await axios.get('/api/catalogs');
                         const payload = response.data || {};
-                        const defaultHostCommands = (hostId) => ({
+                        const defaultHostCommands = (hostId, supportsSlash, triggerCommand) => ({
                             setup: `super-dev setup --host ${hostId} --force --yes`,
                             onboard: `super-dev onboard --host ${hostId} --force --yes`,
                             doctor: `super-dev doctor --host ${hostId} --repair --force`,
                             run: 'super-dev "你的需求"',
-                            slash: '/super-dev "你的需求"',
+                            slash: supportsSlash ? '/super-dev "你的需求"' : '',
+                            trigger: triggerCommand || (supportsSlash ? '/super-dev "你的需求"' : 'super-dev: 你的需求'),
+                            skill: 'super-dev-core',
                         });
                         const normalizeCatalog = (items) => (
                             items
@@ -1818,20 +2244,55 @@
                                 .map((item) => {
                                     const hostId = item.id;
                                     const commands = item && typeof item.commands === 'object' ? item.commands : {};
+                                    const supportsSlash = Boolean(item.supports_slash);
+                                    const fallbackCommands = defaultHostCommands(
+                                        hostId,
+                                        supportsSlash,
+                                        typeof commands.trigger === 'string' ? commands.trigger : ''
+                                    );
                                     return {
                                         id: hostId,
                                         name: item.name,
                                         category: item.category === 'cli' ? 'cli' : 'ide',
+                                        certification_level: typeof item.certification_level === 'string' ? item.certification_level : 'experimental',
+                                        certification_label: typeof item.certification_label === 'string' ? item.certification_label : 'Experimental',
+                                        certification_reason: typeof item.certification_reason === 'string' ? item.certification_reason : '',
+                                        certification_evidence: Array.isArray(item.certification_evidence)
+                                            ? item.certification_evidence.filter((v) => typeof v === 'string' && v.trim())
+                                            : [],
+                                        official_docs_url: typeof item.official_docs_url === 'string' ? item.official_docs_url : '',
+                                        docs_verified: Boolean(item.docs_verified),
+                                        supports_slash: supportsSlash,
+                                        usage_mode: typeof item.usage_mode === 'string' ? item.usage_mode : 'rules-only',
+                                        primary_entry: typeof item.primary_entry === 'string' ? item.primary_entry : '',
+                                        final_trigger: typeof item.final_trigger === 'string' ? item.final_trigger : '',
+                                        trigger_context: typeof item.trigger_context === 'string' ? item.trigger_context : '',
+                                        usage_location: typeof item.usage_location === 'string' ? item.usage_location : '',
+                                        requires_restart_after_onboard: Boolean(item.requires_restart_after_onboard),
+                                        post_onboard_steps: Array.isArray(item.post_onboard_steps)
+                                            ? item.post_onboard_steps.filter((v) => typeof v === 'string' && v.trim())
+                                            : [],
+                                        usage_notes: Array.isArray(item.usage_notes)
+                                            ? item.usage_notes.filter((v) => typeof v === 'string' && v.trim())
+                                            : [],
+                                        smoke_test_prompt: typeof item.smoke_test_prompt === 'string' ? item.smoke_test_prompt : '',
+                                        smoke_test_steps: Array.isArray(item.smoke_test_steps)
+                                            ? item.smoke_test_steps.filter((v) => typeof v === 'string' && v.trim())
+                                            : [],
+                                        smoke_success_signal: typeof item.smoke_success_signal === 'string' ? item.smoke_success_signal : '',
+                                        notes: typeof item.notes === 'string' ? item.notes : '',
                                         integration_files: Array.isArray(item.integration_files)
                                             ? item.integration_files.filter((v) => typeof v === 'string' && v.trim())
                                             : [],
                                         slash_command_file: typeof item.slash_command_file === 'string' ? item.slash_command_file : '',
                                         commands: {
-                                            setup: typeof commands.setup === 'string' && commands.setup.trim() ? commands.setup : defaultHostCommands(hostId).setup,
-                                            onboard: typeof commands.onboard === 'string' && commands.onboard.trim() ? commands.onboard : defaultHostCommands(hostId).onboard,
-                                            doctor: typeof commands.doctor === 'string' && commands.doctor.trim() ? commands.doctor : defaultHostCommands(hostId).doctor,
-                                            run: typeof commands.run === 'string' && commands.run.trim() ? commands.run : defaultHostCommands(hostId).run,
-                                            slash: typeof commands.slash === 'string' && commands.slash.trim() ? commands.slash : defaultHostCommands(hostId).slash,
+                                            setup: typeof commands.setup === 'string' && commands.setup.trim() ? commands.setup : fallbackCommands.setup,
+                                            onboard: typeof commands.onboard === 'string' && commands.onboard.trim() ? commands.onboard : fallbackCommands.onboard,
+                                            doctor: typeof commands.doctor === 'string' && commands.doctor.trim() ? commands.doctor : fallbackCommands.doctor,
+                                            run: typeof commands.run === 'string' && commands.run.trim() ? commands.run : fallbackCommands.run,
+                                            slash: typeof commands.slash === 'string' && commands.slash.trim() ? commands.slash : fallbackCommands.slash,
+                                            trigger: typeof commands.trigger === 'string' && commands.trigger.trim() ? commands.trigger : fallbackCommands.trigger,
+                                            skill: typeof commands.skill === 'string' && commands.skill.trim() ? commands.skill : fallbackCommands.skill,
                                         },
                                     };
                                 })
@@ -2185,7 +2646,14 @@
                         this.currentRunStatus = run.status;
                         this.workflowProgress = run.progress || 0;
                         this.phaseStatus = this.buildPhaseStatusMap(run);
+                        this.currentPipelineSummary = run.pipeline_summary || null;
+                        if (this.currentPipelineSummary?.docs_confirmation?.comment) {
+                            this.docsConfirmationComment = this.currentPipelineSummary.docs_confirmation.comment;
+                        }
                         this.syncRedteamView(run);
+                        if (['completed', 'failed', 'cancelled'].includes(run.status)) {
+                            await this.loadRunUIReview(this.currentRunId);
+                        }
 
                         if (['completed', 'failed', 'cancelled'].includes(run.status)) {
                             this.workflowRunning = false;
@@ -2260,7 +2728,13 @@
                         this.runsHistory = response.data.runs || [];
                         if (this.currentRunId) {
                             const current = this.runsHistory.find((item) => item.run_id === this.currentRunId);
-                            if (current) this.syncRedteamView(current);
+                            if (current) {
+                                this.syncRedteamView(current);
+                                this.currentPipelineSummary = current.pipeline_summary || this.currentPipelineSummary;
+                                if (this.currentPipelineSummary?.docs_confirmation?.comment) {
+                                    this.docsConfirmationComment = this.currentPipelineSummary.docs_confirmation.comment;
+                                }
+                            }
                         }
                     } catch (error) {
                         this.runsHistory = [];
@@ -2270,16 +2744,22 @@
                 async focusRun(runId) {
                     const run = this.runsHistory.find((item) => item.run_id === runId);
                     this.selectedRunRedteam = null;
+                    this.selectedRunUIReview = null;
                     if (run && run.project_dir) {
                         this.projectDir = run.project_dir;
                     }
                     if (run) {
                         this.syncRedteamView(run);
+                        this.currentPipelineSummary = run.pipeline_summary || null;
+                        if (this.currentPipelineSummary?.docs_confirmation?.comment) {
+                            this.docsConfirmationComment = this.currentPipelineSummary.docs_confirmation.comment;
+                        }
                     }
                     this.currentRunId = runId;
                     this.workflowRunning = true;
                     await this.refreshCurrentRunStatus();
                     await this.loadRunArtifacts(runId);
+                    await this.loadRunUIReview(runId);
                     if (['queued', 'running', 'cancelling'].includes(this.currentRunStatus)) {
                         this.startPolling();
                     }
@@ -2293,6 +2773,27 @@
                         this.selectedRunArtifacts = response.data.items || [];
                     } catch (error) {
                         this.selectedRunArtifacts = [];
+                    }
+                },
+
+                async loadRunUIReview(runId) {
+                    try {
+                        const response = await axios.get(`/api/workflow/ui-review/${runId}`, {
+                            params: { project_dir: this.projectDir || '.' }
+                        });
+                        this.selectedRunUIReview = {
+                            run_id: runId,
+                            score: response.data.summary?.score ?? 0,
+                            critical_count: response.data.summary?.critical_count ?? 0,
+                            high_count: response.data.summary?.high_count ?? 0,
+                            medium_count: response.data.summary?.medium_count ?? 0,
+                            passed: Boolean(response.data.summary?.passed),
+                            report_path: response.data.summary?.report_path || response.data.report_path || '',
+                            summary: response.data.summary || {},
+                            screenshot: response.data.screenshot || null,
+                        };
+                    } catch (error) {
+                        this.selectedRunUIReview = null;
                     }
                 },
 
@@ -2341,6 +2842,19 @@
                     return category === 'cli' ? 'CLI' : 'IDE';
                 },
 
+                hostUsageModeLabel(mode) {
+                    switch (mode) {
+                        case 'native-slash':
+                            return '原生 Slash';
+                        case 'agents-and-skill':
+                            return 'AGENTS + Skill';
+                        case 'skill-only':
+                            return 'Skill Only';
+                        default:
+                            return 'Rules Only';
+                    }
+                },
+
                 selectHost(hostId) {
                     this.selectedHostId = hostId;
                 },
@@ -2362,6 +2876,98 @@
                         this.message = { type: 'success', text: '已复制命令，可在宿主或终端执行' };
                     } catch (error) {
                         this.message = { type: 'error', text: '复制失败，请手动复制命令' };
+                    }
+                },
+
+                async copyFinalTrigger() {
+                    if (!this.selectedHostTool) return;
+                    const command = this.selectedHostTool.final_trigger
+                        || (this.selectedHostTool.commands && this.selectedHostTool.commands.trigger)
+                        || '';
+                    if (!command) return;
+                    try {
+                        await navigator.clipboard.writeText(command);
+                        this.message = { type: 'success', text: '已复制最终输入，可直接粘贴到宿主会话' };
+                    } catch (error) {
+                        this.message = { type: 'error', text: '复制失败，请手动复制最终输入' };
+                    }
+                },
+
+                buildHostQuickStart(host) {
+                    if (!host || typeof host !== 'object') return '';
+                    const finalTrigger = host.final_trigger || (host.commands && host.commands.trigger) || host.primary_entry || '直接在宿主会话中输入需求';
+                    const lines = [
+                        `${host.name} 试用步骤`,
+                        '',
+                        `最终输入: ${finalTrigger}`,
+                        `认证等级: ${host.certification_label || 'Experimental'} (${host.certification_level || 'experimental'})`,
+                        host.certification_reason || '当前宿主已接入，但应按认证等级理解适配深度。',
+                        '',
+                        '1. 在项目根目录完成接入',
+                        `${host.commands?.setup || `super-dev setup --host ${host.id} --force --yes`}`,
+                    ];
+
+                    if (host.requires_restart_after_onboard) {
+                        lines.push('', '2. 重启宿主');
+                        lines.push(`重启 ${host.name}，确保新写入的规则与 Skill 生效。`);
+                    }
+
+                    lines.push('', `${host.requires_restart_after_onboard ? '3' : '2'}. 在宿主里触发`);
+                    lines.push(host.primary_entry || finalTrigger);
+
+                    if (host.usage_location) {
+                        lines.push(`触发位置: ${host.usage_location}`);
+                    }
+
+                    lines.push(`推荐触发命令: ${finalTrigger}`);
+
+                    lines.push('', '首轮响应契约');
+                    lines.push('1. 宿主第一次回复必须先说明：已进入 Super Dev 流水线，而不是普通聊天。');
+                    lines.push('2. 宿主第一次回复必须先说明：当前阶段是 research，会先读取 knowledge/ 与 output/knowledge-cache/*-knowledge-bundle.json，再联网研究同类产品。');
+                    lines.push('3. 宿主第一次回复必须先说明：会先写 research、PRD、Architecture、UIUX，并在三文档完成后暂停等待确认。');
+                    lines.push('4. 宿主第一次回复必须先说明：未经确认不会创建 Spec，也不会开始编码。');
+
+                    if (Array.isArray(host.usage_notes) && host.usage_notes.length) {
+                        lines.push('', '使用提示');
+                        host.usage_notes.forEach((note, index) => {
+                            lines.push(`${index + 1}. ${note}`);
+                        });
+                    }
+
+                    if (host.notes) {
+                        lines.push('', '补充说明');
+                        lines.push(host.notes);
+                    }
+
+                    if (host.official_docs_url) {
+                        lines.push('', '官方文档');
+                        lines.push(host.official_docs_url);
+                    }
+
+                    if (Array.isArray(host.post_onboard_steps) && host.post_onboard_steps.length) {
+                        lines.push('', '接入后步骤');
+                        host.post_onboard_steps.forEach((step, index) => {
+                            lines.push(`${index + 1}. ${step}`);
+                        });
+                    }
+
+                    if (host.commands?.run) {
+                        lines.push('', '终端兜底入口');
+                        lines.push(`${host.commands.run}`);
+                        lines.push('注意：终端入口只触发 Super Dev 本地编排，不替代宿主模型会话。');
+                    }
+
+                    return lines.join('\n');
+                },
+
+                async copyHostQuickStart() {
+                    const content = this.buildHostQuickStart(this.selectedHostTool);
+                    if (!content) return;
+                    try {
+                        await navigator.clipboard.writeText(content);
+                        this.message = { type: 'success', text: '已复制该宿主的完整试用步骤' };
+                    } catch (error) {
+                        this.message = { type: 'error', text: '复制失败，请手动复制页面中的步骤' };
                     }
                 },
 
@@ -2451,6 +3057,79 @@
                         case 'cancelled': return '■';
                         case 'error': return '✗';
                         default: return '○';
+                    }
+                },
+
+                pipelineStageLabel(status) {
+                    switch (status) {
+                        case 'completed': return '已完成';
+                        case 'running': return '进行中';
+                        case 'waiting': return '等待确认';
+                        default: return '待开始';
+                    }
+                },
+
+                pipelineStageIcon(status) {
+                    switch (status) {
+                        case 'completed': return '✓';
+                        case 'running': return '⟳';
+                        case 'waiting': return '!';
+                        default: return '○';
+                    }
+                },
+
+                docsConfirmationLabel(status) {
+                    switch (status) {
+                        case 'confirmed': return '已确认';
+                        case 'revision_requested': return '需修改';
+                        default: return '待确认';
+                    }
+                },
+
+                async loadDocsConfirmation() {
+                    try {
+                        const response = await axios.get('/api/workflow/docs-confirmation', {
+                            params: { project_dir: this.projectDir || '.' }
+                        });
+                        if (!this.currentPipelineSummary) return;
+                        this.currentPipelineSummary.docs_confirmation = {
+                            status: response.data.status,
+                            comment: response.data.comment,
+                            actor: response.data.actor,
+                            run_id: response.data.run_id,
+                            updated_at: response.data.updated_at,
+                            exists: response.data.exists,
+                        };
+                        this.docsConfirmationComment = response.data.comment || '';
+                    } catch (error) {
+                        this.message = { type: 'error', text: error.response?.data?.detail || '读取文档确认状态失败' };
+                    }
+                },
+
+                async updateDocsConfirmation(status) {
+                    if (!this.currentRunId) return;
+                    this.loading = true;
+                    try {
+                        await axios.post('/api/workflow/docs-confirmation', {
+                            status,
+                            comment: this.docsConfirmationComment || '',
+                            actor: 'user',
+                        }, {
+                            params: {
+                                project_dir: this.projectDir || '.',
+                                run_id: this.currentRunId,
+                            }
+                        });
+                        await this.refreshCurrentRunStatus();
+                        await this.loadRunsHistory();
+                        this.message = {
+                            type: 'success',
+                            text: status === 'confirmed' ? '已记录三文档确认状态' : '已记录文档修改请求'
+                        };
+                    } catch (error) {
+                        this.message = { type: 'error', text: error.response?.data?.detail || '更新文档确认状态失败' };
+                    } finally {
+                        this.loading = false;
                     }
                 },
 

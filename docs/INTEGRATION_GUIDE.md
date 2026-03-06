@@ -1,11 +1,20 @@
-# Super Dev 集成指南（2.0.2）
+# Super Dev 集成指南（2.0.4）
+
+> 宿主详细试用方式、是否支持 `/super-dev`、各宿主的正确入口，请优先查看：
+> [HOST_USAGE_GUIDE.md](/Users/weiyou/Documents/kaifa/super-dev/docs/HOST_USAGE_GUIDE.md)
 
 ## 目标
 
-把 `Super Dev` 安装到常见 AI Coding 工具中，让用户直接用统一入口：
+把 `Super Dev` 安装到常见 AI Coding 工具中，让用户在宿主里使用统一入口：
+
+```text
+/super-dev 你的功能需求
+```
+
+如果用户不清楚该选哪个宿主，可先运行：
 
 ```bash
-super-dev "你的功能需求"
+super-dev start --idea "你的功能需求"
 ```
 
 注意：默认启用宿主硬门禁。若没有 `ready` 宿主，流水线会阻断并提示先完成接入。
@@ -82,7 +91,7 @@ Skill 安装目录（按 target）由 `super-dev skill` 自动处理。
 
 ## 统一使用方式（新标准）
 
-### 1. 直接输入需求
+### 1. 终端编排入口
 
 ```bash
 super-dev "做一个企业级任务管理系统，包含登录、RBAC、项目、任务、报表"

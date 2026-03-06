@@ -23,10 +23,13 @@ def _seed_required_files(temp_project_dir: Path, name: str) -> None:
     _write(output_dir / f"{name}-code-review.md")
     _write(output_dir / f"{name}-ai-prompt.md")
     _write(output_dir / f"{name}-task-execution.md")
+    _write(output_dir / f"{name}-frontend-runtime.md")
+    _write(output_dir / f"{name}-frontend-runtime.json", '{"passed": true}')
 
     _write(output_dir / "frontend" / "index.html")
     _write(output_dir / "frontend" / "styles.css")
     _write(output_dir / "frontend" / "app.js")
+    _write(temp_project_dir / "preview.html")
 
     _write(temp_project_dir / "backend" / "API_CONTRACT.md")
     _write(temp_project_dir / ".env.deploy.example")
@@ -50,7 +53,7 @@ def test_delivery_packager_ready(temp_project_dir: Path) -> None:
     name = "demo"
     _seed_required_files(temp_project_dir, name)
 
-    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.3")
+    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.4")
     result = packager.package(cicd_platform="all")
 
     assert result["status"] == "ready"
@@ -84,7 +87,7 @@ def test_delivery_packager_incomplete_without_migrations(temp_project_dir: Path)
         if file_path.is_file():
             file_path.unlink()
 
-    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.3")
+    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.4")
     result = packager.package(cicd_platform="all")
 
     assert result["status"] == "incomplete"
@@ -104,7 +107,7 @@ def test_delivery_packager_incomplete_with_pending_spec_tasks(temp_project_dir: 
         encoding="utf-8",
     )
 
-    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.3")
+    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.4")
     result = packager.package(cicd_platform="all")
 
     assert result["status"] == "incomplete"
@@ -112,3 +115,20 @@ def test_delivery_packager_incomplete_with_pending_spec_tasks(temp_project_dir: 
     assert isinstance(missing_items, list)
     reasons = {item["path"] for item in missing_items if isinstance(item, dict)}
     assert ".super-dev/changes/*/tasks.md" in reasons
+
+
+def test_delivery_packager_incomplete_without_frontend_runtime_report(temp_project_dir: Path) -> None:
+    name = "demo"
+    _seed_required_files(temp_project_dir, name)
+    (temp_project_dir / "output" / f"{name}-frontend-runtime.md").unlink()
+    (temp_project_dir / "output" / f"{name}-frontend-runtime.json").unlink()
+
+    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.4")
+    result = packager.package(cicd_platform="all")
+
+    assert result["status"] == "incomplete"
+    missing_items = result["missing_required"]
+    assert isinstance(missing_items, list)
+    reasons = {item["path"] for item in missing_items if isinstance(item, dict)}
+    assert f"output/{name}-frontend-runtime.md" in reasons
+    assert f"output/{name}-frontend-runtime.json" in reasons

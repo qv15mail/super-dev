@@ -22,10 +22,24 @@ pip install -U super-dev
 ### 方式 B：安装指定版本（复现/回滚）
 
 ```bash
-pip install super-dev==2.0.2
+pip install super-dev==2.0.4
 ```
 
-## 3. 需求直达（推荐）
+## 3. 启动方式（推荐）
+
+优先在宿主会话内使用：
+
+```text
+/super-dev 构建一个电商后台，包含登录、订单、支付
+```
+
+如果你不确定当前机器该用哪个宿主，先运行：
+
+```bash
+super-dev start --idea "构建一个电商后台，包含登录、订单、支付"
+```
+
+终端直达只负责本地治理产物编排，不替代宿主编码：
 
 ```bash
 super-dev "构建一个电商后台，包含登录、订单、支付"
@@ -44,7 +58,7 @@ super-dev pipeline "构建一个电商后台，包含登录、订单、支付" -
 
 ```bash
 super-dev --help
-super-dev "用户认证系统"
+super-dev start --idea "用户认证系统"
 super-dev spec init
 super-dev spec list
 super-dev quality --type all

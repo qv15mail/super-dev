@@ -77,6 +77,41 @@ join_targets_csv() {
   printf '%s' "$out"
 }
 
+print_host_usage_summary() {
+  local target="$1"
+  python3 - "$target" <<'PY'
+import sys
+from pathlib import Path
+
+from super_dev.integrations.manager import IntegrationManager
+
+target = sys.argv[1]
+profile = IntegrationManager(Path.cwd()).get_adapter_profile(target)
+
+print(f"  认证等级: {profile.certification_label} ({profile.certification_level})")
+print(f"  最终输入: {profile.trigger_command}")
+print(f"  触发方式: {profile.primary_entry}")
+print(f"  使用模式: {profile.usage_mode}")
+print(f"  触发上下文: {profile.trigger_context}")
+print(f"  触发位置: {profile.usage_location}")
+print(f"  接入后重启: {'是' if profile.requires_restart_after_onboard else '否'}")
+print("  治理边界: 宿主负责模型调用、工具使用与代码产出；Super Dev 负责流程、质量与交付标准。")
+print("  首轮响应契约:")
+print("    1. 宿主第一轮回复必须说明：已进入 Super Dev 流水线，当前不是普通聊天。")
+print("    2. 宿主第一轮回复必须说明：当前阶段是 research，会先读取 knowledge/ 与 knowledge bundle，再联网研究同类产品。")
+print("    3. 宿主第一轮回复必须说明：会先写 research、PRD、Architecture、UIUX，并在三文档后暂停等待确认。")
+print("    4. 宿主第一轮回复必须说明：未经确认不会创建 Spec，也不会开始编码。")
+if profile.post_onboard_steps:
+    print("  接入后步骤:")
+    for step in profile.post_onboard_steps:
+        print(f"    - {step}")
+if profile.usage_notes:
+    print("  使用提示:")
+    for note in profile.usage_notes:
+        print(f"    - {note}")
+PY
+}
+
 parse_targets_csv() {
   local raw="$1"
   local normalized
@@ -158,6 +193,7 @@ run_guided_selector() {
   echo ""
   echo -e "${GREEN}Super Dev 安装向导${NC}"
   echo "=================================="
+  echo "定位：宿主负责编码，Super Dev 负责治理、规范、门禁与交付标准"
   echo "请选择要接入的宿主工具（支持多选）"
   echo ""
   echo "CLI 宿主:"
@@ -278,7 +314,9 @@ done
 
 if ! command -v super-dev >/dev/null 2>&1; then
   error "未检测到 super-dev 命令。请先安装 super-dev 后再运行本脚本。"
-  error "示例: pip install -e ."
+  error "示例: uv tool install super-dev"
+  error "或开发模式: uv sync && uv run super-dev"
+  error "或使用 pip: pip install -e ."
   exit 1
 fi
 
@@ -329,7 +367,7 @@ for target in "${target_list[@]}"; do
     doctor_cmd+=(--skip-skill)
   fi
 
-  if "${onboard_cmd[@]}" >/dev/null; then
+  if "${onboard_cmd[@]}"; then
     success "接入完成: $target"
   else
     warning "接入失败: $target"
@@ -341,6 +379,8 @@ for target in "${target_list[@]}"; do
   else
     warning "诊断未通过: $target（可手动执行: super-dev doctor --host $target）"
   fi
+
+  print_host_usage_summary "$target"
 done
 
 echo ""
@@ -348,7 +388,12 @@ echo -e "${GREEN}=================================="
 echo " 安装完成"
 echo "==================================${NC}"
 echo ""
+echo "已接入宿主:"
+for target in "${SELECTED_TARGETS[@]}"; do
+  echo "  - $target"
+done
+echo ""
 echo "下一步:"
 echo "  1. super-dev detect --auto --save-profile"
 echo "  2. super-dev policy init --preset enterprise --force"
-echo "  3. 在宿主中执行 /super-dev <你的需求>（或终端 super-dev \"<你的需求>\"）"
+echo "  3. 按上面的宿主触发方式进入对应宿主会话，不要默认假设所有宿主都支持 /super-dev"

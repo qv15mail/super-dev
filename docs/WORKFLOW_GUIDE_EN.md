@@ -1,4 +1,4 @@
-# Super Dev Workflow Guide (2.0.2)
+# Super Dev Workflow Guide (2.0.4)
 
 This is the practical handbook for running Super Dev in real projects. It covers:
 
@@ -13,15 +13,38 @@ This is the practical handbook for running Super Dev in real projects. It covers
 
 ### Recommended entrypoint
 
-Use natural language as the default interface:
+The preferred path is to trigger Super Dev inside the host session:
+
+```text
+/super-dev Build an enterprise project management platform with auth, RBAC, projects, tasks, and analytics
+```
+
+If you are unsure which host to use on the current machine, run:
 
 ```bash
-super-dev "Build an enterprise project management platform with auth, RBAC, projects, tasks, and analytics"
+super-dev start --idea "Build an enterprise project management platform with auth, RBAC, projects, tasks, and analytics"
 ```
+
+The terminal form `super-dev "<requirement>"` should be treated as a local governance-orchestration entry, not as Super Dev replacing host-side coding.
 
 Host hard gate is enabled by default. If no `ready` host is available, pipeline execution is blocked until onboarding is complete.
 
-That single command triggers the full pipeline end to end.
+That single command triggers the full pipeline end to end:
+
+1. Similar-product research using the host's native web/search capability
+2. Three core documents: PRD, architecture, UI/UX
+3. Confirmation gate: stop and wait for the user to confirm or revise the three documents
+4. Spec/tasks creation
+5. Frontend-first implementation and runtime validation
+6. Backend integration, testing, gates, and delivery
+
+The document confirmation gate can be handled in the Web console or directly from the terminal:
+
+```bash
+super-dev review docs
+super-dev review docs --status revision_requested --comment "Add differentiation and improve hero information architecture"
+super-dev review docs --status confirmed --comment "Core documents approved, proceed to Spec"
+```
 
 ### Advanced entrypoint
 
@@ -62,11 +85,15 @@ host_profile_enforce_selected: true
 
 ### Core orchestration
 
+```text
+/super-dev <requirement>             # recommended inside the host session
+```
+
 ```bash
-super-dev "<requirement>"            # recommended default
-super-dev Build-an-enterprise-CRM    # direct text mode without subcommand
-super-dev pipeline "<requirement>"   # advanced explicit mode
-super-dev create "<requirement>"     # docs + spec focused path
+super-dev start --idea "<requirement>"  # recommended machine-side bootstrap
+super-dev "<requirement>"               # local governance entry, not host replacement
+super-dev pipeline "<requirement>"      # advanced explicit mode
+super-dev create "<requirement>"        # docs + spec focused path
 ```
 
 ### Spec and task execution loop
@@ -286,6 +313,7 @@ super-dev quality --type all
 ```bash
 super-dev spec list
 super-dev task status <change_id>
+super-dev run --resume
 ```
 
 ---

@@ -60,6 +60,33 @@ class KnowledgeAugmenter:
         "一个",
         "需求",
     }
+    _STAGE_ORDER = [
+        "research",
+        "prd",
+        "architecture",
+        "uiux",
+        "spec",
+        "frontend",
+        "backend",
+        "quality",
+        "delivery",
+    ]
+    _DOMAIN_STAGE_MAP = {
+        "product": ["research", "prd", "spec"],
+        "design": ["research", "uiux", "frontend"],
+        "architecture": ["architecture", "spec", "backend"],
+        "development": ["architecture", "spec", "frontend", "backend"],
+        "testing": ["quality"],
+        "security": ["architecture", "backend", "quality"],
+        "cicd": ["quality", "delivery"],
+        "operations": ["quality", "delivery"],
+        "data": ["architecture", "backend", "quality"],
+        "incident": ["quality", "delivery"],
+        "ai": ["research", "architecture", "quality", "delivery"],
+        "00-governance": ["research", "prd", "architecture", "uiux", "spec", "quality", "delivery"],
+        "docs": ["research", "prd", "architecture", "uiux"],
+        "specs": ["spec"],
+    }
 
     def __init__(
         self,
@@ -71,6 +98,7 @@ class KnowledgeAugmenter:
         self.project_dir = Path(project_dir).resolve()
         self.web_enabled = web_enabled
         self.docs_dir = self.project_dir / "docs"
+        self.knowledge_dir = self.project_dir / "knowledge"
         self.specs_dir = self.project_dir / ".super-dev" / "specs"
         self.data_dir = self.project_dir / "super_dev" / "data"
         self.builtin_data_dir = Path(__file__).resolve().parents[1] / "data"
@@ -116,6 +144,14 @@ class KnowledgeAugmenter:
             local_items=local_items,
             web_items=web_items,
         )
+        research_summary = self._build_research_summary(
+            requirement=requirement,
+            domain=domain,
+            keywords=keywords,
+            local_items=local_items,
+            web_items=web_items,
+        )
+        knowledge_application_plan = self._build_knowledge_application_plan(local_items)
 
         return {
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -133,6 +169,8 @@ class KnowledgeAugmenter:
                 "allowed_web_domains": self.allowed_web_domains,
                 "web_stats": self._last_web_stats,
             },
+            "research_summary": research_summary,
+            "knowledge_application_plan": knowledge_application_plan,
             "enriched_requirement": enriched_requirement,
         }
 
@@ -162,6 +200,25 @@ class KnowledgeAugmenter:
                 lines.append(f"- **{title}** ({item.get('source', 'local')}): {snippet}")
         lines.append("")
 
+        lines.extend(["## 本地知识应用计划", ""])
+        plan = bundle.get("knowledge_application_plan", {}) or {}
+        stage_guidance = plan.get("stage_guidance", {}) if isinstance(plan, dict) else {}
+        hard_constraints = plan.get("hard_constraints", []) if isinstance(plan, dict) else []
+        if isinstance(hard_constraints, list) and hard_constraints:
+            lines.append("### 硬约束")
+            lines.append("")
+            for item in hard_constraints:
+                if isinstance(item, str):
+                    lines.append(f"- {item}")
+            lines.append("")
+        if isinstance(stage_guidance, dict) and stage_guidance:
+            for stage in self._STAGE_ORDER:
+                entries = stage_guidance.get(stage, [])
+                lines.extend(self._render_summary_section(f"### {self._stage_label(stage)}", entries if isinstance(entries, list) else []))
+        else:
+            lines.append("- 当前未生成阶段化知识应用计划。")
+            lines.append("")
+
         lines.extend(["## 联网检索结果", ""])
         web_items = bundle.get("web_knowledge", [])
         if not web_items:
@@ -173,6 +230,16 @@ class KnowledgeAugmenter:
                 link = item.get("link", "")
                 link_text = f" [{link}]({link})" if link else ""
                 lines.append(f"- **{title}**: {snippet}{link_text}")
+        lines.append("")
+
+        research_summary = bundle.get("research_summary", {}) or {}
+        lines.extend(["## 同类产品研究与机会洞察", ""])
+        lines.extend(self._render_summary_section("### 1. 对标产品", research_summary.get("benchmark_products", [])))
+        lines.extend(self._render_summary_section("### 2. 共性功能模式", research_summary.get("feature_patterns", [])))
+        lines.extend(self._render_summary_section("### 3. 交互与体验模式", research_summary.get("interaction_patterns", [])))
+        lines.extend(self._render_summary_section("### 4. 信任与商业化信号", research_summary.get("trust_signals", [])))
+        lines.extend(self._render_summary_section("### 5. 差异化机会", research_summary.get("differentiation_opportunities", [])))
+        lines.extend(self._render_summary_section("### 6. 交付建议", research_summary.get("delivery_recommendations", [])))
         lines.append("")
 
         lines.extend(
@@ -245,14 +312,19 @@ class KnowledgeAugmenter:
         return payload
 
     def _extract_keywords(self, text: str) -> list[str]:
-        tokens = re.findall(r"[A-Za-z0-9_\u4e00-\u9fff]{2,}", text.lower())
+        lowered = text.lower()
+        mixed_tokens = re.findall(r"[A-Za-z0-9_\u4e00-\u9fff]{2,}", lowered)
         expanded: list[str] = []
-        for token in tokens:
+        for token in mixed_tokens:
             expanded.append(token)
-            # 对纯中文短句追加 2 字滑窗关键词，提升匹配率
-            if re.fullmatch(r"[\u4e00-\u9fff]{3,}", token):
-                for i in range(len(token) - 1):
-                    expanded.append(token[i : i + 2])
+            ascii_parts = re.findall(r"[a-z0-9_]{2,}", token)
+            zh_parts = re.findall(r"[\u4e00-\u9fff]{2,}", token)
+            expanded.extend(ascii_parts)
+            expanded.extend(zh_parts)
+            for zh in zh_parts:
+                if len(zh) >= 3:
+                    for i in range(len(zh) - 1):
+                        expanded.append(zh[i : i + 2])
 
         unique: list[str] = []
         for token in expanded:
@@ -266,6 +338,11 @@ class KnowledgeAugmenter:
         files: list[Path] = []
         if self.docs_dir.exists():
             files.extend(self.docs_dir.rglob("*.md"))
+        if self.knowledge_dir.exists():
+            files.extend(self.knowledge_dir.rglob("*.md"))
+            files.extend(self.knowledge_dir.rglob("*.txt"))
+            files.extend(self.knowledge_dir.rglob("*.yml"))
+            files.extend(self.knowledge_dir.rglob("*.yaml"))
         if self.specs_dir.exists():
             files.extend(self.specs_dir.rglob("*.md"))
         if self.data_dir.exists():
@@ -334,9 +411,13 @@ class KnowledgeAugmenter:
         }
 
     def _build_web_query(self, requirement: str, domain: str) -> str:
+        benchmark_terms = (
+            "similar products competitor analysis benchmark feature patterns "
+            "user flow information architecture interaction design ui ux best practices"
+        )
         if domain:
-            return f"{requirement} {domain} best practices architecture ui ux"
-        return f"{requirement} best practices architecture ui ux"
+            return f"{requirement} {domain} {benchmark_terms}"
+        return f"{requirement} {benchmark_terms}"
 
     def _collect_web_items(self, query: str, max_results: int) -> list[KnowledgeItem]:
         if not self.web_enabled:
@@ -483,6 +564,170 @@ class KnowledgeAugmenter:
 
         joined = "；".join(notes)
         return f"{requirement}。请结合以下上下文实现：{joined}"
+
+    def _build_research_summary(
+        self,
+        requirement: str,
+        domain: str,
+        keywords: list[str],
+        local_items: list[KnowledgeItem],
+        web_items: list[KnowledgeItem],
+    ) -> dict[str, list[str]]:
+        benchmark_products = [
+            self._format_research_item(item, include_link=True)
+            for item in web_items[:5]
+        ]
+
+        feature_patterns = self._unique_preserve_order(
+            [
+                f"围绕“{keyword}”建立清晰功能分区、任务入口与状态反馈。"
+                for keyword in keywords[:4]
+            ]
+            + [self._format_research_item(item) for item in web_items[:3]]
+            + [self._format_research_item(item) for item in local_items[:2]]
+        )
+
+        interaction_patterns = self._unique_preserve_order(
+            [
+                "关键任务链路必须具备明确的下一步、完成反馈与可回退路径。",
+                "复杂页面应先给信息架构和优先级，再给具体视觉样式，避免一屏堆满功能。",
+                "列表、详情、编辑、确认四类页面应形成统一的交互骨架，降低学习成本。",
+            ]
+            + [self._interaction_pattern_from_item(item) for item in web_items[:3]]
+        )
+
+        trust_signals = self._unique_preserve_order(
+            [
+                "首页或主工作台优先展示价值主张、能力边界、成功案例或关键数据，避免空泛口号。",
+                "涉及数据录入、协作、交易、发布的流程必须提供校验、草稿、撤销或审计提示。",
+                "商业产品页面必须体现加载态、空态、错误态和权限态，而不是只做正常态截图。",
+            ]
+        )
+
+        domain_label = domain or "当前业务领域"
+        differentiation_opportunities = self._unique_preserve_order(
+            [
+                f"把 {domain_label} 场景下最关键的任务路径压缩到更少步骤，并用清晰状态机承载流程进度。",
+                "将研究结论沉淀到 PRD / 架构 / UIUX / Spec，确保不是只参考外部产品外观，而是参考其流程与交付标准。",
+                "优先做能体现商业级完成度的能力：权限、审计、异常处理、批量操作、搜索筛选、可观测性。",
+            ]
+        )
+
+        delivery_recommendations = self._unique_preserve_order(
+            [
+                "在生成 PRD 前先冻结同类产品研究结论，明确借鉴项、禁用项与差异化方向。",
+                "UI 产出必须先确定设计方向、字体系统、栅格、组件状态矩阵，再开始页面实现。",
+                "实现阶段应先完成信息架构正确的页面框架，再补视觉细节、动效和性能优化。",
+            ]
+        )
+
+        if not benchmark_products:
+            benchmark_products.append("未获取到可靠联网结果时，应由宿主继续使用原生联网能力补充同类产品研究。")
+
+        return {
+            "benchmark_products": benchmark_products,
+            "feature_patterns": feature_patterns[:6],
+            "interaction_patterns": interaction_patterns[:6],
+            "trust_signals": trust_signals[:5],
+            "differentiation_opportunities": differentiation_opportunities[:5],
+            "delivery_recommendations": delivery_recommendations[:5],
+        }
+
+    def _format_research_item(self, item: KnowledgeItem, include_link: bool = False) -> str:
+        snippet = item.snippet.strip().replace("\n", " ")
+        snippet = snippet[:140] if snippet else "提供了可参考的行业实践。"
+        if include_link and item.link:
+            return f"{item.title}: {snippet} [{item.link}]({item.link})"
+        return f"{item.title}: {snippet}"
+
+    def _interaction_pattern_from_item(self, item: KnowledgeItem) -> str:
+        if not item.snippet:
+            return f"参考 {item.title} 的功能组织方式，提炼关键流程和页面层级。"
+        return f"参考 {item.title} 的页面与流程组织方式：{item.snippet[:120]}"
+
+    def _render_summary_section(self, title: str, items: list[str]) -> list[str]:
+        lines = [title, ""]
+        if not items:
+            lines.append("- 暂无结论，需要继续补充研究。")
+            lines.append("")
+            return lines
+        for item in items:
+            lines.append(f"- {item}")
+        lines.append("")
+        return lines
+
+    def _unique_preserve_order(self, items: list[str]) -> list[str]:
+        result: list[str] = []
+        for item in items:
+            normalized = item.strip()
+            if not normalized or normalized in result:
+                continue
+            result.append(normalized)
+        return result
+
+    def _source_domain(self, item: KnowledgeItem) -> str:
+        source = item.source.strip()
+        if source.startswith("knowledge/"):
+            parts = source.split("/")
+            if len(parts) >= 2:
+                return parts[1]
+        if source.startswith("docs/"):
+            return "docs"
+        if source.startswith(".super-dev/specs/"):
+            return "specs"
+        return "general"
+
+    def _constraint_type(self, item: KnowledgeItem) -> str:
+        lowered = f"{item.source} {item.title}".lower()
+        if any(token in lowered for token in ["checklist", "baseline", "gate", "criteria"]):
+            return "hard-gate"
+        if any(token in lowered for token in ["template", "catalog", "index", "taxonomy", "map"]):
+            return "reference"
+        if any(token in lowered for token in ["runbook", "playbook", "policy", "guide"]):
+            return "operating-guidance"
+        return "knowledge"
+
+    def _build_knowledge_application_plan(self, local_items: list[KnowledgeItem]) -> dict[str, Any]:
+        stage_guidance: dict[str, list[str]] = {stage: [] for stage in self._STAGE_ORDER}
+        hard_constraints: list[str] = []
+
+        for item in local_items:
+            domain = self._source_domain(item)
+            stages = self._DOMAIN_STAGE_MAP.get(domain, ["research", "prd", "architecture", "spec"])
+            snippet = item.snippet.strip() or "将该知识作为当前阶段的约束输入。"
+            entry = f"{item.title}（{item.source}）: {snippet[:140]}"
+            for stage in stages:
+                stage_guidance.setdefault(stage, [])
+                if entry not in stage_guidance[stage]:
+                    stage_guidance[stage].append(entry)
+            if self._constraint_type(item) == "hard-gate":
+                hard_rule = f"{item.title}（{item.source}）属于硬门禁/基线，命中后必须进入对应阶段的文档、Spec 或验收。"
+                if hard_rule not in hard_constraints:
+                    hard_constraints.append(hard_rule)
+
+        normalized_stage_guidance = {
+            stage: entries[:5]
+            for stage, entries in stage_guidance.items()
+            if entries
+        }
+        return {
+            "hard_constraints": hard_constraints[:8],
+            "stage_guidance": normalized_stage_guidance,
+        }
+
+    def _stage_label(self, stage: str) -> str:
+        labels = {
+            "research": "Research / 同类产品研究",
+            "prd": "PRD / 产品需求文档",
+            "architecture": "Architecture / 架构设计",
+            "uiux": "UIUX / 交互与视觉规范",
+            "spec": "Spec / 变更规范与任务拆解",
+            "frontend": "Frontend / 前端实现与运行验证",
+            "backend": "Backend / 后端与联调",
+            "quality": "Quality / 测试、安全与质量门禁",
+            "delivery": "Delivery / 交付、部署与发布",
+        }
+        return labels.get(stage, stage)
 
     def _bundle_signature(self, requirement: str, domain: str) -> str:
         normalized_requirement = requirement.strip().lower()

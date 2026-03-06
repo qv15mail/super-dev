@@ -10,6 +10,7 @@ SKIP_BENCHMARK=0
 SKIP_PACKAGE=0
 SKIP_DELIVERY_SMOKE=0
 SKIP_HOST_COMPAT_GATE=0
+USE_UV=0
 
 for arg in "$@"; do
     case "$arg" in
@@ -28,9 +29,12 @@ for arg in "$@"; do
         --skip-host-compat-gate)
             SKIP_HOST_COMPAT_GATE=1
             ;;
+        --uv)
+            USE_UV=1
+            ;;
         *)
             echo "Unknown argument: $arg"
-            echo "Usage: ./scripts/preflight.sh [--allow-dirty] [--skip-benchmark] [--skip-package] [--skip-delivery-smoke] [--skip-host-compat-gate]"
+            echo "Usage: ./scripts/preflight.sh [--allow-dirty] [--skip-benchmark] [--skip-package] [--skip-delivery-smoke] [--skip-host-compat-gate] [--uv]"
             exit 2
             ;;
     esac
@@ -45,6 +49,10 @@ else
     exit 1
 fi
 
+if [[ "$USE_UV" -ne 1 ]] && command -v uv >/dev/null 2>&1 && [[ -f "$ROOT_DIR/uv.lock" ]]; then
+    USE_UV=1
+fi
+
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 REPORT_DIR="output/release/preflight-$TIMESTAMP"
 mkdir -p "$REPORT_DIR"
@@ -55,6 +63,11 @@ touch "$SUMMARY_FILE"
 echo "[INFO] Preflight started at $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$SUMMARY_FILE"
 echo "[INFO] Project root: $ROOT_DIR" | tee -a "$SUMMARY_FILE"
 echo "[INFO] Python: $PYTHON_BIN" | tee -a "$SUMMARY_FILE"
+if [[ "$USE_UV" -eq 1 ]]; then
+    echo "[INFO] Package manager: uv" | tee -a "$SUMMARY_FILE"
+else
+    echo "[INFO] Package manager: pip/python" | tee -a "$SUMMARY_FILE"
+fi
 
 if [[ "$ALLOW_DIRTY" -ne 1 ]]; then
     if [[ -n "$(git status --porcelain)" ]]; then
@@ -85,51 +98,71 @@ run_check() {
     fi
 }
 
-require_python_module() {
-    local module="$1"
-    "$PYTHON_BIN" -c "import $module" >/dev/null 2>&1
+project_run() {
+    local cmd="$1"
+    if [[ "$USE_UV" -eq 1 ]]; then
+        printf 'uv run %s' "$cmd"
+    else
+        printf '%s' "$cmd"
+    fi
 }
 
-run_check "ruff" "ruff check super_dev tests --output-format concise"
-run_check "mypy" "mypy super_dev"
-run_check "pytest" "pytest -q"
+require_python_module() {
+    local module="$1"
+    if [[ "$USE_UV" -eq 1 ]]; then
+        uv run "$PYTHON_BIN" -c "import $module" >/dev/null 2>&1
+    else
+        "$PYTHON_BIN" -c "import $module" >/dev/null 2>&1
+    fi
+}
+
+run_check "ruff" "$(project_run "ruff check super_dev tests --output-format concise")"
+run_check "mypy" "$(project_run "mypy super_dev")"
+run_check "pytest" "$(project_run "pytest -q")"
+run_check "knowledge-audit" "$(project_run "$PYTHON_BIN scripts/audit_development_kb.py")"
+run_check "knowledge-gates" "$(project_run "$PYTHON_BIN scripts/check_knowledge_gates.py --project-dir \"$ROOT_DIR\"")"
 
 if [[ "$SKIP_DELIVERY_SMOKE" -ne 1 ]]; then
-    run_check "delivery-smoke" "$PYTHON_BIN scripts/check_delivery_ready.py --smoke --project-dir \"$ROOT_DIR\""
+    run_check "delivery-smoke" "$(project_run "$PYTHON_BIN scripts/check_delivery_ready.py --smoke --project-dir \"$ROOT_DIR\"")"
 else
     echo "[WARN] delivery smoke skipped by --skip-delivery-smoke" | tee -a "$SUMMARY_FILE"
 fi
 
 if [[ "$SKIP_HOST_COMPAT_GATE" -ne 1 ]]; then
-    run_check "host-compat-detect" "$PYTHON_BIN -m super_dev.cli detect --auto --json >/dev/null"
-    run_check "host-compat-gate" "$PYTHON_BIN scripts/check_host_compatibility.py --project-dir \"$ROOT_DIR\" --min-score 80 --min-ready-hosts 1"
+    run_check "host-compat-detect" "$(project_run "$PYTHON_BIN -m super_dev.cli detect --auto --json >/dev/null")"
+    run_check "host-compat-gate" "$(project_run "$PYTHON_BIN scripts/check_host_compatibility.py --project-dir \"$ROOT_DIR\" --min-score 80 --min-ready-hosts 1")"
 else
     echo "[WARN] host compatibility gate skipped by --skip-host-compat-gate" | tee -a "$SUMMARY_FILE"
 fi
 
 if require_python_module "bandit"; then
-    run_check "bandit" "$PYTHON_BIN -m bandit -ll -r super_dev -f json -o $REPORT_DIR/bandit.json"
+    run_check "bandit" "$(project_run "$PYTHON_BIN -m bandit -ll -r super_dev -f json -o $REPORT_DIR/bandit.json")"
 else
     echo "[FAIL] bandit module not installed (pip install bandit)" | tee -a "$SUMMARY_FILE"
     FAILED=1
 fi
 
 if require_python_module "pip_audit"; then
-    run_check "pip-audit" "$PYTHON_BIN -m pip_audit . -f json -o $REPORT_DIR/pip-audit.json"
+    run_check "pip-audit" "$(project_run "$PYTHON_BIN -m pip_audit . -f json -o $REPORT_DIR/pip-audit.json")"
 else
     echo "[FAIL] pip_audit module not installed (pip install pip-audit)" | tee -a "$SUMMARY_FILE"
     FAILED=1
 fi
 
 if [[ "$SKIP_BENCHMARK" -ne 1 ]]; then
-    run_check "benchmark" "$PYTHON_BIN tests/benchmark.py"
+    run_check "benchmark" "$(project_run "$PYTHON_BIN tests/benchmark.py")"
 else
     echo "[WARN] benchmark skipped by --skip-benchmark" | tee -a "$SUMMARY_FILE"
 fi
 
 if [[ "$SKIP_PACKAGE" -ne 1 ]]; then
-    run_check "build" "rm -rf dist/ build/ *.egg-info && $PYTHON_BIN -m build"
-    run_check "twine-check" "twine check dist/*"
+    if [[ "$USE_UV" -eq 1 ]]; then
+        run_check "build" "uv build"
+        run_check "twine-check" "uvx twine check dist/*"
+    else
+        run_check "build" "rm -rf dist/ build/ *.egg-info && $PYTHON_BIN -m build"
+        run_check "twine-check" "twine check dist/*"
+    fi
 else
     echo "[WARN] package checks skipped by --skip-package" | tee -a "$SUMMARY_FILE"
 fi

@@ -11,6 +11,7 @@ import glob
 import json
 import os
 import shutil
+import subprocess
 import sys
 import time
 import traceback
@@ -20,6 +21,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 try:
+    import requests
     from rich.console import Console
     from rich.panel import Panel
     from rich.text import Text
@@ -42,6 +44,8 @@ from .catalogs import (
 from .config import ConfigManager, ProjectConfig, get_config_manager
 from .exceptions import SuperDevError
 from .orchestrator import Phase, WorkflowContext, WorkflowEngine
+from .release_readiness import ReleaseReadinessEvaluator
+from .review_state import docs_confirmation_file, load_docs_confirmation, save_docs_confirmation
 from .utils import get_logger
 
 CICDPlatform = Literal["github", "gitlab", "jenkins", "azure", "bitbucket", "all"]
@@ -262,7 +266,7 @@ class SuperDevCLI:
         )
         quality_parser.add_argument(
             "-t", "--type",
-            choices=["prd", "architecture", "ui", "ux", "code", "all"],
+            choices=["prd", "architecture", "ui", "ux", "ui-review", "code", "all"],
             default="all",
             help="检查类型"
         )
@@ -390,7 +394,7 @@ class SuperDevCLI:
         )
         integrate_parser.add_argument(
             "action",
-            choices=["list", "setup", "matrix"],
+            choices=["list", "setup", "matrix", "smoke"],
             help="操作类型"
         )
         integrate_parser.add_argument(
@@ -637,6 +641,41 @@ class SuperDevCLI:
             help="非交互模式（未指定 --host 时默认等价 --all）"
         )
 
+        start_parser = subparsers.add_parser(
+            "start",
+            help="非技术用户起步入口",
+            description="自动选择合适宿主、完成接入，并输出可直接复制的试用步骤"
+        )
+        start_parser.add_argument(
+            "--idea",
+            help="你的需求描述（可选，提供后会生成宿主内可直接使用的触发语句）"
+        )
+        start_parser.add_argument(
+            "--host",
+            choices=SUPPORTED_HOST_TOOLS,
+            help="指定宿主；默认自动检测并选择最合适的宿主"
+        )
+        start_parser.add_argument(
+            "--skip-onboard",
+            action="store_true",
+            help="只输出起步步骤，不自动写入规则、Skill 与命令映射"
+        )
+        start_parser.add_argument(
+            "--no-save-profile",
+            action="store_true",
+            help="不写入 super-dev.yaml 的宿主画像"
+        )
+        start_parser.add_argument(
+            "--force",
+            action="store_true",
+            help="覆盖已存在的规则、Skill 或命令映射"
+        )
+        start_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 输出起步说明"
+        )
+
         # detect 命令 - 宿主自动探测与兼容性报告
         detect_parser = subparsers.add_parser(
             "detect",
@@ -692,6 +731,82 @@ class SuperDevCLI:
             "--save-profile",
             action="store_true",
             help="将本次 selected_targets 保存到 super-dev.yaml 的 host_profile_targets，并启用 host_profile_enforce_selected"
+        )
+
+        update_parser = subparsers.add_parser(
+            "update",
+            help="升级到最新版本",
+            description="检查 PyPI 最新版本并使用 pip 或 uv 升级当前 super-dev"
+        )
+        update_parser.add_argument(
+            "--check",
+            action="store_true",
+            help="只检查最新版本，不执行升级"
+        )
+        update_parser.add_argument(
+            "--method",
+            choices=["auto", "pip", "uv"],
+            default="auto",
+            help="升级方式（默认: auto）"
+        )
+
+        review_parser = subparsers.add_parser(
+            "review",
+            help="管理文档确认等评审状态",
+            description="记录或查看三文档确认状态"
+        )
+        review_subparsers = review_parser.add_subparsers(dest="review_command")
+
+        review_docs_parser = review_subparsers.add_parser(
+            "docs",
+            help="查看或更新三文档确认状态"
+        )
+        review_docs_parser.add_argument(
+            "--status",
+            choices=["pending_review", "revision_requested", "confirmed"],
+            help="要写入的三文档确认状态；不传则仅查看当前状态"
+        )
+        review_docs_parser.add_argument(
+            "--comment",
+            default="",
+            help="确认意见或修改要求"
+        )
+        review_docs_parser.add_argument(
+            "--run-id",
+            default="",
+            help="关联的运行 ID（可选）"
+        )
+        review_docs_parser.add_argument(
+            "--actor",
+            default="user",
+            help="记录操作者（默认: user）"
+        )
+        review_docs_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 格式输出"
+        )
+
+        release_parser = subparsers.add_parser(
+            "release",
+            help="发布收尾与就绪度检查",
+            description="检查当前仓库距离对外发布还剩哪些关键缺口"
+        )
+        release_subparsers = release_parser.add_subparsers(dest="release_command")
+
+        release_readiness_parser = release_subparsers.add_parser(
+            "readiness",
+            help="发布就绪度评估"
+        )
+        release_readiness_parser.add_argument(
+            "--verify-tests",
+            action="store_true",
+            help="执行 pytest -q，并把测试结果纳入发布就绪度评分"
+        )
+        release_readiness_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 输出结果"
         )
 
         # create 命令 - 一键创建项目
@@ -1635,6 +1750,94 @@ class SuperDevCLI:
 
         return 0 if all_success else 1
 
+    def _cmd_review(self, args) -> int:
+        """查看或更新评审状态"""
+        if args.review_command != "docs":
+            self.console.print("[yellow]请指定 review 子命令，例如 `super-dev review docs`[/yellow]")
+            return 1
+
+        project_dir = Path.cwd()
+        current = load_docs_confirmation(project_dir) or {}
+
+        if not args.status:
+            payload = {
+                "status": str(current.get("status", "")).strip() or "pending_review",
+                "comment": str(current.get("comment", "")).strip(),
+                "actor": str(current.get("actor", "")).strip(),
+                "run_id": str(current.get("run_id", "")).strip(),
+                "updated_at": str(current.get("updated_at", "")).strip(),
+                "exists": bool(current),
+                "file_path": str(docs_confirmation_file(project_dir)),
+            }
+            if args.json:
+                self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                self.console.print("[cyan]三文档确认状态[/cyan]")
+                self.console.print(f"  状态: {self._docs_confirmation_label(payload['status'])}")
+                self.console.print(f"  备注: {payload['comment'] or '-'}")
+                self.console.print(f"  操作者: {payload['actor'] or '-'}")
+                self.console.print(f"  关联 Run: {payload['run_id'] or '-'}")
+                self.console.print(f"  更新时间: {payload['updated_at'] or '-'}")
+                self.console.print(f"  文件: {payload['file_path']}")
+            return 0
+
+        file_path = save_docs_confirmation(
+            project_dir,
+            {
+                "status": args.status,
+                "comment": args.comment.strip(),
+                "actor": args.actor.strip() or "user",
+                "run_id": args.run_id.strip(),
+            },
+        )
+        payload = load_docs_confirmation(project_dir) or {}
+        if args.json:
+            self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            action = "已确认三文档" if args.status == "confirmed" else (
+                "已记录文档修改要求" if args.status == "revision_requested" else "已重置为待确认"
+            )
+            self.console.print(f"[green]✓[/green] {action}")
+            self.console.print(f"  状态: {self._docs_confirmation_label(args.status)}")
+            self.console.print(f"  备注: {payload.get('comment', '') or '-'}")
+            self.console.print(f"  操作者: {payload.get('actor', '') or '-'}")
+            self.console.print(f"  关联 Run: {payload.get('run_id', '') or '-'}")
+            self.console.print(f"  文件: {file_path}")
+        return 0
+
+    def _cmd_release(self, args) -> int:
+        """发布就绪度检查"""
+        if args.release_command != "readiness":
+            self.console.print("[yellow]请指定 release 子命令，例如 `super-dev release readiness`[/yellow]")
+            return 1
+
+        project_dir = Path.cwd()
+        evaluator = ReleaseReadinessEvaluator(project_dir)
+        report = evaluator.evaluate(verify_tests=bool(args.verify_tests))
+        files = evaluator.write(report)
+        payload = report.to_dict()
+        payload["report_file"] = str(files["markdown"])
+        payload["json_file"] = str(files["json"])
+
+        if args.json:
+            self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return 0 if report.passed else 1
+
+        status = "[green]通过[/green]" if report.passed else "[yellow]未完成[/yellow]"
+        self.console.print(f"[cyan]发布就绪度[/cyan] {status} 分数: {report.score}/100")
+        self.console.print(f"  [green]✓[/green] Markdown: {files['markdown']}")
+        self.console.print(f"  [green]✓[/green] JSON: {files['json']}")
+
+        if report.failed_checks:
+            self.console.print("  [yellow]待收尾项:[/yellow]")
+            for check in report.failed_checks[:8]:
+                recommendation = f" | 建议: {check.recommendation}" if check.recommendation else ""
+                self.console.print(f"    - {check.name}: {check.detail}{recommendation}")
+        else:
+            self.console.print("  [green]所有关键发布项均已满足。[/green]")
+
+        return 0 if report.passed else 1
+
     def _cmd_studio(self, args) -> int:
         """启动交互工作台 API"""
         try:
@@ -1687,7 +1890,7 @@ class SuperDevCLI:
 
     def _cmd_quality(self, args) -> int:
         """质量检查"""
-        from .reviewers import QualityGateChecker
+        from .reviewers import QualityGateChecker, UIReviewReviewer
 
         project_dir = Path.cwd()
         output_dir = project_dir / "output"
@@ -1705,6 +1908,30 @@ class SuperDevCLI:
         }
 
         self.console.print(f"[cyan]运行质量检查: {args.type}[/cyan]")
+
+        if args.type == "ui-review":
+            reviewer = UIReviewReviewer(
+                project_dir=project_dir,
+                name=project_name,
+                tech_stack=tech_stack,
+            )
+            report = reviewer.review()
+            review_file = output_dir / f"{project_name}-ui-review.md"
+            review_json_file = output_dir / f"{project_name}-ui-review.json"
+            review_file.write_text(report.to_markdown(), encoding="utf-8")
+            review_json_file.write_text(
+                json.dumps(report.to_dict(), ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            status = "[green]通过[/green]" if report.passed else "[yellow]需修正[/yellow]"
+            self.console.print(f"  {status} 总分: {report.score}/100")
+            self.console.print(f"  [green]✓[/green] 报告: {review_file}")
+            self.console.print(f"  [green]✓[/green] JSON: {review_json_file}")
+            if report.findings:
+                self.console.print("[yellow]主要问题:[/yellow]")
+                for finding in report.findings[:5]:
+                    self.console.print(f"  - [{finding.level}] {finding.title}")
+            return 0 if report.passed else 1
 
         # 轻量文档检查
         if args.type in {"prd", "architecture", "ui", "ux"}:
@@ -1737,6 +1964,21 @@ class SuperDevCLI:
 
         gate_file = output_dir / f"{project_name}-quality-gate.md"
         gate_file.write_text(gate_result.to_markdown(), encoding="utf-8")
+        if gate_checker.latest_ui_review_report is not None:
+            ui_review_file = output_dir / f"{project_name}-ui-review.md"
+            ui_review_json_file = output_dir / f"{project_name}-ui-review.json"
+            ui_review_file.write_text(
+                gate_checker.latest_ui_review_report.to_markdown(),
+                encoding="utf-8",
+            )
+            ui_review_json_file.write_text(
+                json.dumps(
+                    gate_checker.latest_ui_review_report.to_dict(),
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
 
         scenario_label = "0-1 新建项目" if gate_result.scenario == "0-1" else "1-N+1 增量开发"
         status = "[green]通过[/green]" if gate_result.passed else "[red]未通过[/red]"
@@ -1744,6 +1986,13 @@ class SuperDevCLI:
         self.console.print(f"  [dim]场景: {scenario_label}[/dim]")
         self.console.print(f"  {status} 总分: {gate_result.total_score}/100")
         self.console.print(f"  [green]✓[/green] 报告: {gate_file}")
+        if gate_checker.latest_ui_review_report is not None:
+            self.console.print(
+                f"  [green]✓[/green] UI 审查: {output_dir / f'{project_name}-ui-review.md'}"
+            )
+            self.console.print(
+                f"  [green]✓[/green] UI 审查 JSON: {output_dir / f'{project_name}-ui-review.json'}"
+            )
 
         if not gate_result.passed and gate_result.critical_failures:
             self.console.print("[yellow]关键失败项:[/yellow]")
@@ -1868,7 +2117,12 @@ class SuperDevCLI:
         if status == "success":
             self.console.print("[yellow]最近一次 pipeline 已成功完成，无需恢复[/yellow]")
             return 1
-        if status not in {"failed", "running"}:
+        if status == "waiting_confirmation":
+            if not self._docs_confirmation_is_confirmed(project_dir):
+                self.console.print("[yellow]最近一次 pipeline 已停在文档确认门，请先确认三文档后再恢复[/yellow]")
+                self.console.print("[dim]可执行: super-dev review docs --status confirmed --comment \"三文档已确认\"[/dim]")
+                return 1
+        elif status not in {"failed", "running"}:
             self.console.print("[yellow]最近一次 pipeline 状态不支持恢复[/yellow]")
             return 1
 
@@ -1936,29 +2190,13 @@ class SuperDevCLI:
 
     def _cmd_preview(self, args) -> int:
         """生成原型"""
-        import shutil
-
         output_path = Path(args.output).expanduser()
         if not output_path.is_absolute():
             output_path = Path.cwd() / output_path
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         self.console.print(f"[cyan]生成原型: {output_path}[/cyan]")
-
-        frontend_dir = Path.cwd() / "output" / "frontend"
-        index_file = frontend_dir / "index.html"
-        css_file = frontend_dir / "styles.css"
-        js_file = frontend_dir / "app.js"
-
-        if index_file.exists():
-            html = index_file.read_text(encoding="utf-8")
-            output_path.write_text(html, encoding="utf-8")
-
-            if css_file.exists():
-                shutil.copyfile(css_file, output_path.parent / "styles.css")
-            if js_file.exists():
-                shutil.copyfile(js_file, output_path.parent / "app.js")
-
+        if self._export_preview_from_output_frontend(output_path):
             self.console.print("[green]✓[/green] 已基于 output/frontend 生成可预览页面")
             return 0
 
@@ -1968,7 +2206,7 @@ class SuperDevCLI:
         rows = "\n".join(
             f"<li><a href=\"{doc.name}\" target=\"_blank\">{doc.name}</a></li>"
             for doc in docs[:20]
-        ) or "<li>未找到可预览文档，请先运行 super-dev \"你的需求\" 或 super-dev create。</li>"
+        ) or "<li>未找到可预览文档，请先在宿主会话触发 /super-dev，或运行 super-dev start / super-dev create 生成治理产物。</li>"
 
         fallback_html = f"""<!doctype html>
 <html lang="zh-CN">
@@ -1985,7 +2223,7 @@ class SuperDevCLI:
 </head>
 <body>
   <h1>Super Dev 预览页</h1>
-  <p class="hint">未检测到 output/frontend 前端骨架，以下为当前 output 文档列表：</p>
+  <p class="hint">未检测到宿主已实现的 output/frontend 前端骨架，以下为当前治理产物文档列表：</p>
   <ul>{rows}</ul>
 </body>
 </html>
@@ -1993,6 +2231,91 @@ class SuperDevCLI:
         output_path.write_text(fallback_html, encoding="utf-8")
         self.console.print("[yellow]未检测到 output/frontend，已生成文档概览预览页[/yellow]")
         return 0
+
+    def _export_preview_from_output_frontend(self, output_path: Path) -> bool:
+        import shutil
+
+        frontend_dir = Path.cwd() / "output" / "frontend"
+        index_file = frontend_dir / "index.html"
+        css_file = frontend_dir / "styles.css"
+        js_file = frontend_dir / "app.js"
+
+        if not index_file.exists():
+            return False
+
+        html = index_file.read_text(encoding="utf-8")
+        output_path.write_text(html, encoding="utf-8")
+
+        if css_file.exists():
+            shutil.copyfile(css_file, output_path.parent / "styles.css")
+        if js_file.exists():
+            shutil.copyfile(js_file, output_path.parent / "app.js")
+        return True
+
+    def _frontend_runtime_report_paths(self, output_dir: Path, project_name: str) -> dict[str, Path]:
+        return {
+            "markdown": output_dir / f"{project_name}-frontend-runtime.md",
+            "json": output_dir / f"{project_name}-frontend-runtime.json",
+        }
+
+    def _load_frontend_runtime_validation(self, *, output_dir: Path, project_name: str) -> dict[str, Any]:
+        report_file = self._frontend_runtime_report_paths(output_dir=output_dir, project_name=project_name)["json"]
+        if not report_file.exists():
+            return {"passed": False, "checks": {}, "preview_file": "", "report_file": str(report_file)}
+        try:
+            payload = json.loads(report_file.read_text(encoding="utf-8"))
+        except Exception:
+            return {"passed": False, "checks": {}, "preview_file": "", "report_file": str(report_file)}
+        if not isinstance(payload, dict):
+            return {"passed": False, "checks": {}, "preview_file": "", "report_file": str(report_file)}
+        payload["report_file"] = str(report_file)
+        return payload
+
+    def _write_frontend_runtime_validation(
+        self,
+        *,
+        project_dir: Path,
+        output_dir: Path,
+        project_name: str,
+    ) -> dict[str, Any]:
+        frontend_dir = output_dir / "frontend"
+        index_file = frontend_dir / "index.html"
+        css_file = frontend_dir / "styles.css"
+        js_file = frontend_dir / "app.js"
+        preview_file = project_dir / "preview.html"
+
+        exported_preview = self._export_preview_from_output_frontend(preview_file) if index_file.exists() else False
+        checks = {
+            "output_frontend_index": index_file.exists(),
+            "output_frontend_styles": css_file.exists(),
+            "output_frontend_script": js_file.exists(),
+            "preview_html": preview_file.exists(),
+        }
+        passed = all(checks.values())
+        report = {
+            "project_name": project_name,
+            "passed": passed,
+            "checks": checks,
+            "preview_file": str(preview_file) if preview_file.exists() else "",
+            "generated_from_output_frontend": exported_preview,
+        }
+        report_paths = self._frontend_runtime_report_paths(output_dir=output_dir, project_name=project_name)
+        report_paths["json"].write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        lines = [
+            "# Frontend Runtime Validation",
+            "",
+            f"- Passed: {'yes' if passed else 'no'}",
+            f"- Preview file: `{preview_file}`" if preview_file.exists() else "- Preview file: missing",
+            "",
+            "## Checks",
+            "",
+        ]
+        for key, value in checks.items():
+            lines.append(f"- {key}: {'ok' if value else 'missing'}")
+        report_paths["markdown"].write_text("\n".join(lines) + "\n", encoding="utf-8")
+        report["report_files"] = {name: str(path) for name, path in report_paths.items()}
+        return report
 
     def _cmd_deploy(self, args) -> int:
         """生成部署配置"""
@@ -2193,6 +2516,9 @@ class SuperDevCLI:
         from .creators import ProjectCreator
 
         self.console.print("[cyan]Super Dev 项目创建器[/cyan]")
+        self._print_governance_boundary_notice(
+            "当前命令生成治理产物与执行提示，不替代宿主 AI 的实际编码。"
+        )
         self.console.print(f"[dim]描述: {args.description}[/dim]")
         self.console.print(f"[dim]平台: {args.platform} | 前端: {args.frontend} | 后端: {args.backend}[/dim]")
         self.console.print("")
@@ -2265,8 +2591,8 @@ class SuperDevCLI:
             self.console.print(f"     - 执行路线图: output/{project_name}-execution-plan.md")
             self.console.print(f"     - 前端蓝图: output/{project_name}-frontend-blueprint.md")
             self.console.print(f"  2. 查看规范: super-dev spec show {change_id}")
-            self.console.print(f"  3. 复制 AI 提示词: cat {prompt_file}")
-            self.console.print("  4. 开始开发: 按 tasks 顺序实现并持续更新规范")
+            self.console.print(f"  3. 复制治理提示词并交给宿主会话: cat {prompt_file}")
+            self.console.print("  4. 在宿主会话中按 tasks 顺序开发并持续更新规范")
 
         except Exception as e:
             self.console.print(f"[red]创建失败: {e}[/red]")
@@ -2888,6 +3214,9 @@ class SuperDevCLI:
 
     def _cmd_pipeline(self, args) -> int:
         """运行完整流水线 - 从想法到部署"""
+        self._print_governance_boundary_notice(
+            "流水线负责生成研究、文档、门禁与交付产物；实际编码能力仍由宿主 AI 提供。"
+        )
         # 确定项目名称
         project_name = args.name
         if not project_name:
@@ -3090,42 +3419,62 @@ class SuperDevCLI:
         try:
             _persist_run_state("running")
             if resume_requested:
-                failed_stage = None
-                if isinstance(run_state, dict):
-                    failed_stage = self._coerce_stage_number(run_state.get("failed_stage"))
-                if failed_stage is None:
-                    failed_stage = self._detect_failed_stage_from_metrics_payload(metrics_payload)
-                if failed_stage is None:
-                    failed_stage = self._detect_failed_stage(output_dir=output_dir, project_name=project_name)
-
-                resume_from_stage = self._resolve_resume_start_stage(
-                    failed_stage=failed_stage,
-                    skip_redteam=bool(args.skip_redteam),
+                run_status = (
+                    str((run_state or {}).get("status", "")).strip().lower()
+                    if isinstance(run_state, dict)
+                    else ""
                 )
-                initial_resume_stage = resume_from_stage
-                adjusted_resume_stage, fallback_reasons = self._adjust_resume_stage_for_artifacts(
-                    project_dir=project_dir,
-                    output_dir=output_dir,
-                    project_name=project_name,
-                    resume_from_stage=resume_from_stage,
-                )
-                if adjusted_resume_stage != resume_from_stage and adjusted_resume_stage is not None:
-                    for reason in fallback_reasons:
-                        self.console.print(f"[yellow]恢复校验: {reason}[/yellow]")
+                fallback_reasons: list[str] = []
+                if run_status == "waiting_confirmation":
+                    failed_stage = None
+                    resume_from_stage = None
+                    if isinstance(run_state, dict):
+                        resume_from_stage = self._coerce_stage_number(run_state.get("resume_from_stage"))
+                        if resume_from_stage is None:
+                            resume_from_stage = self._coerce_stage_number(run_state.get("next_stage"))
+                    if resume_from_stage is None:
+                        resume_from_stage = 2
+                    initial_resume_stage = resume_from_stage
                     self.console.print(
-                        f"[yellow]恢复起点已自动下调到第 {adjusted_resume_stage} 阶段[/yellow]"
-                    )
-                resume_from_stage = adjusted_resume_stage
-                if failed_stage is None:
-                    self.console.print("[yellow]未检测到可恢复的失败记录，将执行完整流水线[/yellow]")
-                elif resume_from_stage is not None:
-                    self.console.print(
-                        f"[cyan]恢复模式：检测到上次失败阶段 {failed_stage}，将从第 {resume_from_stage} 阶段继续[/cyan]"
+                        f"[cyan]恢复模式：文档确认已完成，将从第 {resume_from_stage} 阶段继续[/cyan]"
                     )
                 else:
-                    self.console.print(
-                        f"[yellow]上次失败发生在第 {failed_stage} 阶段，当前将执行完整流水线以确保一致性[/yellow]"
+                    failed_stage = None
+                    if isinstance(run_state, dict):
+                        failed_stage = self._coerce_stage_number(run_state.get("failed_stage"))
+                    if failed_stage is None:
+                        failed_stage = self._detect_failed_stage_from_metrics_payload(metrics_payload)
+                    if failed_stage is None:
+                        failed_stage = self._detect_failed_stage(output_dir=output_dir, project_name=project_name)
+
+                    resume_from_stage = self._resolve_resume_start_stage(
+                        failed_stage=failed_stage,
+                        skip_redteam=bool(args.skip_redteam),
                     )
+                    initial_resume_stage = resume_from_stage
+                    adjusted_resume_stage, fallback_reasons = self._adjust_resume_stage_for_artifacts(
+                        project_dir=project_dir,
+                        output_dir=output_dir,
+                        project_name=project_name,
+                        resume_from_stage=resume_from_stage,
+                    )
+                    if adjusted_resume_stage != resume_from_stage and adjusted_resume_stage is not None:
+                        for reason in fallback_reasons:
+                            self.console.print(f"[yellow]恢复校验: {reason}[/yellow]")
+                        self.console.print(
+                            f"[yellow]恢复起点已自动下调到第 {adjusted_resume_stage} 阶段[/yellow]"
+                        )
+                    resume_from_stage = adjusted_resume_stage
+                    if failed_stage is None:
+                        self.console.print("[yellow]未检测到可恢复的失败记录，将执行完整流水线[/yellow]")
+                    elif resume_from_stage is not None:
+                        self.console.print(
+                            f"[cyan]恢复模式：检测到上次失败阶段 {failed_stage}，将从第 {resume_from_stage} 阶段继续[/cyan]"
+                        )
+                    else:
+                        self.console.print(
+                            f"[yellow]上次失败发生在第 {failed_stage} 阶段，当前将执行完整流水线以确保一致性[/yellow]"
+                        )
                 _update_run_context(
                     resume_detected_failed_stage=failed_stage,
                     resume_from_stage=resume_from_stage,
@@ -3246,8 +3595,6 @@ class SuperDevCLI:
                 self.console.print("[cyan]第 1 阶段: 生成专业文档...[/cyan]")
                 from .creators import (
                     DocumentGenerator,
-                    FrontendScaffoldBuilder,
-                    ImplementationScaffoldBuilder,
                     RequirementParser,
                 )
 
@@ -3314,14 +3661,81 @@ class SuperDevCLI:
                     requirements=requirements,
                 )
 
-            # ========== 第 2 阶段: 生成前端可演示骨架 ==========
-            _start_stage("2", "前端可演示骨架")
+            docs_confirmation = self._get_docs_confirmation_state(project_dir)
+            _update_run_context(docs_confirmation=docs_confirmation)
+            if not self._docs_confirmation_is_confirmed(project_dir):
+                waiting_reason = (
+                    "revision_requested"
+                    if docs_confirmation["status"] == "revision_requested"
+                    else "pending_review"
+                )
+                self.console.print("[yellow]已完成 research 与三文档，当前进入文档确认门[/yellow]")
+                self.console.print(f"  [dim]研究报告: {research_file}[/dim]")
+                self.console.print(f"  [dim]PRD: {prd_file}[/dim]")
+                self.console.print(f"  [dim]架构: {arch_file}[/dim]")
+                self.console.print(f"  [dim]UI/UX: {uiux_file}[/dim]")
+                if docs_confirmation["status"] == "revision_requested":
+                    self.console.print("[yellow]当前状态: 用户已要求修改文档，请先修正文档并再次确认。[/yellow]")
+                else:
+                    self.console.print("[yellow]当前状态: 待用户确认三文档，确认前不会创建 Spec 或开始编码。[/yellow]")
+                self.console.print("[cyan]继续方式:[/cyan]")
+                self.console.print("  1. 在宿主中查看并修订 output/*-prd.md / *-architecture.md / *-uiux.md")
+                self.console.print('  2. 终端执行: super-dev review docs --status confirmed --comment "三文档已确认"')
+                self.console.print("  3. 然后执行: super-dev run --resume")
+                metric_files = _finalize_metrics(success=False, reason="waiting_confirmation")
+                contract_files = _finalize_contract(success=False, reason="waiting_confirmation")
+                _persist_run_state(
+                    "waiting_confirmation",
+                    {
+                        "failure_reason": waiting_reason,
+                        "failed_stage": "2",
+                        "next_stage": "2",
+                        "resume_from_stage": "2",
+                        "metrics_file": str(metric_files["json"]),
+                        "contract_file": str(contract_files["json"]),
+                    },
+                )
+                _flush_resume_audit(status="waiting_confirmation", failure_reason=waiting_reason)
+                self.console.print(f"[dim]指标报告: {metric_files['json']}[/dim]")
+                self.console.print(f"[dim]契约审计: {contract_files['markdown']}[/dim]")
+                if resume_audit_files:
+                    self.console.print(f"[dim]恢复审计: {resume_audit_files['markdown']}[/dim]")
+                return 0
+
+            # ========== 第 2 阶段: 创建 Spec ==========
+            _start_stage("2", "Spec 创建")
             if _should_skip_for_resume(2):
-                self.console.print("[yellow]第 2 阶段: 生成前端可演示骨架 (resume 跳过)[/yellow]")
+                self.console.print("[yellow]第 2 阶段: 创建 Spec 规范 (resume 跳过)[/yellow]")
                 self.console.print("")
                 _record_stage(True, details={"skipped": True, "reason": "resume"})
             else:
-                self.console.print("[cyan]第 2 阶段: 生成前端可演示骨架...[/cyan]")
+                self.console.print("[cyan]第 2 阶段: 创建 Spec 规范...[/cyan]")
+                from .creators import SpecBuilder
+
+                spec_builder = SpecBuilder(
+                    project_dir=project_dir,
+                    name=project_name,
+                    description=args.description
+                )
+
+                change_id = spec_builder.create_change(requirements, tech_stack, scenario=scenario)
+
+                self.console.print(f"  [green]✓[/green] 变更 ID: {change_id}")
+                self.console.print(f"  [green]✓[/green] Spec: .super-dev/changes/{change_id}/")
+                self.console.print("")
+                _record_stage(True, details={"change_id": change_id})
+                _update_run_context(change_id=change_id)
+
+            # ========== 第 3 阶段: 生成前端可演示骨架 ==========
+            _start_stage("3", "前端可演示骨架")
+            if _should_skip_for_resume(3):
+                self.console.print("[yellow]第 3 阶段: 生成前端可演示骨架 (resume 跳过)[/yellow]")
+                self.console.print("")
+                _record_stage(True, details={"skipped": True, "reason": "resume"})
+            else:
+                self.console.print("[cyan]第 3 阶段: 生成前端可演示骨架...[/cyan]")
+                from .creators import FrontendScaffoldBuilder
+
                 frontend_builder = FrontendScaffoldBuilder(
                     project_dir=project_dir,
                     name=project_name,
@@ -3342,32 +3756,27 @@ class SuperDevCLI:
                 self.console.print(f"  [green]✓[/green] 页面: {frontend_files['html']}")
                 self.console.print(f"  [green]✓[/green] 样式: {frontend_files['css']}")
                 self.console.print(f"  [green]✓[/green] 脚本: {frontend_files['js']}")
-                self.console.print("")
-                _record_stage(True, details={"files": frontend_files})
-
-            # ========== 第 3 阶段: 创建 Spec ==========
-            _start_stage("3", "Spec 创建")
-            if _should_skip_for_resume(3):
-                self.console.print("[yellow]第 3 阶段: 创建 Spec 规范 (resume 跳过)[/yellow]")
-                self.console.print("")
-                _record_stage(True, details={"skipped": True, "reason": "resume"})
-            else:
-                self.console.print("[cyan]第 3 阶段: 创建 Spec 规范...[/cyan]")
-                from .creators import SpecBuilder
-
-                spec_builder = SpecBuilder(
+                frontend_runtime = self._write_frontend_runtime_validation(
                     project_dir=project_dir,
-                    name=project_name,
-                    description=args.description
+                    output_dir=output_dir,
+                    project_name=project_name,
                 )
-
-                change_id = spec_builder.create_change(requirements, tech_stack, scenario=scenario)
-
-                self.console.print(f"  [green]✓[/green] 变更 ID: {change_id}")
-                self.console.print(f"  [green]✓[/green] Spec: .super-dev/changes/{change_id}/")
+                self.console.print(
+                    f"  [green]✓[/green] 前端运行验证: {frontend_runtime['report_files']['markdown']}"
+                )
+                if frontend_runtime["preview_file"]:
+                    self.console.print(f"  [green]✓[/green] 预览页: {frontend_runtime['preview_file']}")
+                if not frontend_runtime["passed"]:
+                    raise RuntimeError("前端运行验证未通过，当前不得进入后端与交付阶段")
                 self.console.print("")
-                _record_stage(True, details={"change_id": change_id})
-                _update_run_context(change_id=change_id)
+                _record_stage(
+                    True,
+                    details={
+                        "files": frontend_files,
+                        "frontend_runtime_report": frontend_runtime["report_files"]["json"],
+                        "preview_file": frontend_runtime["preview_file"],
+                    },
+                )
 
             # ========== 第 4 阶段: 生成实现骨架 ==========
             _start_stage("4", "实现骨架与任务执行")
@@ -3378,6 +3787,15 @@ class SuperDevCLI:
             else:
                 if not args.skip_scaffold:
                     self.console.print("[cyan]第 4 阶段: 生成前后端实现骨架...[/cyan]")
+                    from .creators import ImplementationScaffoldBuilder, SpecTaskExecutor
+
+                    frontend_runtime = self._load_frontend_runtime_validation(
+                        output_dir=output_dir,
+                        project_name=project_name,
+                    )
+                    if not frontend_runtime.get("passed", False):
+                        raise RuntimeError("前端运行验证未通过，禁止进入实现骨架与后端阶段")
+
                     implementation_builder = ImplementationScaffoldBuilder(
                         project_dir=project_dir,
                         name=project_name,
@@ -3391,8 +3809,6 @@ class SuperDevCLI:
                     self.console.print(
                         f"  [green]✓[/green] 后端骨架文件: {len(scaffold_result['backend_files'])} 个"
                     )
-                    from .creators import SpecTaskExecutor
-
                     task_executor = SpecTaskExecutor(project_dir=project_dir, project_name=project_name)
                     task_execution_summary = task_executor.execute(
                         change_id=change_id,
@@ -3419,6 +3835,9 @@ class SuperDevCLI:
                         details={
                             "frontend_files": len(scaffold_result["frontend_files"]),
                             "backend_files": len(scaffold_result["backend_files"]),
+                            "frontend_runtime_report": str(
+                                self._frontend_runtime_report_paths(output_dir=output_dir, project_name=project_name)["json"]
+                            ),
                             "task_completed": (
                                 f"{task_execution_summary.completed_tasks}/{task_execution_summary.total_tasks}"
                                 if task_execution_summary is not None
@@ -3542,10 +3961,28 @@ class SuperDevCLI:
                 gate_file = project_dir / "output" / f"{project_name}-quality-gate.md"
                 gate_file.parent.mkdir(parents=True, exist_ok=True)
                 gate_file.write_text(gate_result.to_markdown(), encoding="utf-8")
+                if gate_checker.latest_ui_review_report is not None:
+                    ui_review_file = project_dir / "output" / f"{project_name}-ui-review.md"
+                    ui_review_json_file = project_dir / "output" / f"{project_name}-ui-review.json"
+                    ui_review_file.write_text(
+                        gate_checker.latest_ui_review_report.to_markdown(),
+                        encoding="utf-8",
+                    )
+                    ui_review_json_file.write_text(
+                        json.dumps(
+                            gate_checker.latest_ui_review_report.to_dict(),
+                            ensure_ascii=False,
+                            indent=2,
+                        ),
+                        encoding="utf-8",
+                    )
 
                 status = "[green]通过[/green]" if gate_result.passed else "[red]未通过[/red]"
                 self.console.print(f"  {status} 总分: {gate_result.total_score}/100")
                 self.console.print(f"  [green]✓[/green] 报告: {gate_file}")
+                if gate_checker.latest_ui_review_report is not None:
+                    self.console.print(f"  [green]✓[/green] UI 审查: {ui_review_file}")
+                    self.console.print(f"  [green]✓[/green] UI 审查 JSON: {ui_review_json_file}")
                 self.console.print("")
 
                 # 质量门禁未通过，停止流水线
@@ -3735,7 +4172,32 @@ class SuperDevCLI:
                     f"  [dim]状态: {delivery_outputs['status']} | 缺失必需项: {missing_required_count}[/dim]"
                 )
                 if missing_required_count > 0:
-                    self.console.print("[yellow]  交付包标记为 incomplete，请补齐缺失项后重新打包[/yellow]")
+                    self.console.print("[red]  交付包标记为 incomplete，当前不得进入发布演练验证[/red]")
+                    _record_stage(
+                        False,
+                        details={
+                            "migration_files": len(migration_files),
+                            "delivery_status": delivery_outputs["status"],
+                            "delivery_missing_required_count": missing_required_count,
+                        },
+                    )
+                    metric_files = _finalize_metrics(success=False, reason="delivery_packaging_incomplete")
+                    contract_files = _finalize_contract(success=False, reason="delivery_packaging_incomplete")
+                    _persist_run_state(
+                        "failed",
+                        {
+                            "failure_reason": "delivery_packaging_incomplete",
+                            "failed_stage": "11",
+                            "metrics_file": str(metric_files["json"]),
+                            "contract_file": str(contract_files["json"]),
+                        },
+                    )
+                    _flush_resume_audit(status="failed", failure_reason="delivery_packaging_incomplete")
+                    self.console.print(f"[dim]指标报告: {metric_files['json']}[/dim]")
+                    self.console.print(f"[dim]契约审计: {contract_files['markdown']}[/dim]")
+                    if resume_audit_files:
+                        self.console.print(f"[dim]恢复审计: {resume_audit_files['markdown']}[/dim]")
+                    return 1
                 self.console.print("")
                 _record_stage(
                     True,
@@ -4142,13 +4604,20 @@ class SuperDevCLI:
             for profile in profiles:
                 self.console.print(f"[cyan]- {profile.host} ({profile.category})[/cyan]")
                 self.console.print(f"  适配模式: {profile.adapter_mode}")
+                self.console.print(f"  使用模式: {profile.usage_mode}")
                 self.console.print(f"  模型提供方: {profile.host_model_provider}")
                 docs_badge = "verified" if profile.docs_verified else "pending"
                 docs_url = profile.official_docs_url or "-"
                 self.console.print(f"  官方文档: {docs_url} ({docs_badge})")
                 self.console.print(f"  主入口: {profile.primary_entry}")
+                self.console.print(f"  触发命令: {profile.trigger_command}")
+                self.console.print(f"  触发上下文: {profile.trigger_context}")
+                self.console.print(f"  触发位置: {profile.usage_location}")
                 self.console.print(f"  终端入口: {profile.terminal_entry}")
                 self.console.print(f"  终端范围: {profile.terminal_entry_scope}")
+                self.console.print(
+                    f"  接入后重启: {'是' if profile.requires_restart_after_onboard else '否'}"
+                )
                 self.console.print(f"  规则文件: {', '.join(profile.integration_files)}")
                 self.console.print(f"  Slash 文件: {profile.slash_command_file}")
                 self.console.print(f"  Skill 目录: {profile.skill_dir}")
@@ -4156,7 +4625,47 @@ class SuperDevCLI:
                 paths = ", ".join(profile.detection_paths) if profile.detection_paths else "-"
                 self.console.print(f"  探测命令: {commands}")
                 self.console.print(f"  探测路径: {paths}")
+                if profile.post_onboard_steps:
+                    self.console.print("  接入后步骤:")
+                    for step in profile.post_onboard_steps:
+                        self.console.print(f"    - {step}")
+                if profile.usage_notes:
+                    self.console.print("  使用提示:")
+                    for note in profile.usage_notes:
+                        self.console.print(f"    - {note}")
+                self.console.print(f"  Smoke Prompt: {profile.smoke_test_prompt}")
+                self.console.print(f"  Smoke Signal: {profile.smoke_success_signal}")
                 self.console.print(f"  备注: {profile.notes}")
+            return 0
+
+        if args.action == "smoke":
+            targets: list[str] = [args.target] if args.target else [item.name for item in manager.list_targets()]
+            profiles = manager.list_adapter_profiles(targets=targets)
+            if args.json:
+                payload = [
+                    {
+                        "host": profile.host,
+                        "final_trigger": str(profile.trigger_command).replace("<需求描述>", "你的需求"),
+                        "smoke_test_prompt": profile.smoke_test_prompt,
+                        "smoke_test_steps": list(profile.smoke_test_steps),
+                        "smoke_success_signal": profile.smoke_success_signal,
+                    }
+                    for profile in profiles
+                ]
+                sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+                return 0
+
+            self.console.print("[cyan]Super Dev 宿主 Smoke 验收[/cyan]")
+            for profile in profiles:
+                self.console.print(f"[cyan]- {profile.host}[/cyan]")
+                self.console.print(
+                    f"  最终输入: {str(profile.trigger_command).replace('<需求描述>', '你的需求')}"
+                )
+                self.console.print(f"  验收语句: {profile.smoke_test_prompt}")
+                self.console.print("  验收步骤:")
+                for step in profile.smoke_test_steps:
+                    self.console.print(f"    - {step}")
+                self.console.print(f"  通过标准: {profile.smoke_success_signal}")
             return 0
 
         self.console.print("[yellow]未知 integrate 操作[/yellow]")
@@ -4361,6 +4870,7 @@ class SuperDevCLI:
         from .integrations import IntegrationManager
         from .skills import SkillManager
 
+        integration_manager = IntegrationManager(project_dir)
         integration_targets = IntegrationManager.TARGETS
         skill_paths = SkillManager.TARGET_PATHS
 
@@ -4387,7 +4897,7 @@ class SuperDevCLI:
                         f"super-dev integrate setup --target {target} --force"
                     )
 
-            if check_skill:
+            if check_skill and IntegrationManager.requires_skill(target):
                 skill_file = project_dir / skill_paths[target] / skill_name / "SKILL.md"
                 skill_ok = skill_file.exists()
                 host_report["checks"]["skill"] = {"ok": skill_ok, "file": str(skill_file)}
@@ -4431,9 +4941,13 @@ class SuperDevCLI:
                         "scope": "n/a",
                         "project_file": "",
                         "global_file": "",
-                        "mode": "skill-only",
+                        "mode": "rules-only",
                     }
 
+            host_report["usage_profile"] = self._build_host_usage_profile(
+                integration_manager=integration_manager,
+                target=target,
+            )
             report["hosts"][target] = host_report
             if not host_report["ready"]:
                 report["overall_ready"] = False
@@ -4454,7 +4968,7 @@ class SuperDevCLI:
         enabled_checks = []
         if check_integrate:
             enabled_checks.append("integrate")
-        if check_skill:
+        if check_skill and any(IntegrationManager.requires_skill(target) for target in targets):
             enabled_checks.append("skill")
         if check_slash and any(IntegrationManager.supports_slash(target) for target in targets):
             enabled_checks.append("slash")
@@ -4537,7 +5051,7 @@ class SuperDevCLI:
                 host_actions["integrate"] = f"failed: {exc}"
 
             try:
-                if check_skill and "skill" in missing:
+                if check_skill and IntegrationManager.requires_skill(target) and "skill" in missing:
                     skill_manager.install(
                         source="super-dev",
                         target=target,
@@ -4615,6 +5129,7 @@ class SuperDevCLI:
         has_error = False
         for target in targets:
             self.console.print(f"[cyan]- {target}[/cyan]")
+            profile = integration_manager.get_adapter_profile(target)
 
             if not args.skip_integrate:
                 try:
@@ -4628,7 +5143,7 @@ class SuperDevCLI:
                     has_error = True
                     self.console.print(f"  [red]✗[/red] 集成失败: {exc}")
 
-            if not args.skip_skill:
+            if not args.skip_skill and IntegrationManager.requires_skill(target):
                 try:
                     installed = set(skill_manager.list_installed(target))
                     if args.skill_name in installed and not args.force:
@@ -4646,6 +5161,8 @@ class SuperDevCLI:
                 except Exception as exc:
                     has_error = True
                     self.console.print(f"  [red]✗[/red] Skill 安装失败: {exc}")
+            elif not args.skip_skill:
+                self.console.print("  [dim]- 该宿主默认按项目规则运行，已跳过 Skill 安装[/dim]")
 
             if not args.skip_slash:
                 try:
@@ -4667,10 +5184,16 @@ class SuperDevCLI:
                         elif slash_file is None or global_slash_file.resolve() != slash_file.resolve():
                             self.console.print(f"  [green]✓[/green] 全局 /super-dev 映射: {global_slash_file}")
                     else:
-                        self.console.print("  [dim]- 该宿主为 Skill-only 模式，已跳过 /super-dev 映射[/dim]")
+                        self.console.print("  [dim]- 该宿主不支持 /super-dev，已跳过 slash 映射[/dim]")
                 except Exception as exc:
                     has_error = True
                     self.console.print(f"  [red]✗[/red] /super-dev 映射失败: {exc}")
+
+            self.console.print(f"  [cyan]主入口[/cyan]: {profile.primary_entry}")
+            if profile.requires_restart_after_onboard:
+                self.console.print("  [yellow]注意[/yellow]: 接入完成后需要重启宿主")
+            for step in profile.post_onboard_steps:
+                self.console.print(f"  [dim]- {step}[/dim]")
 
         self.console.print("")
         if has_error:
@@ -4678,9 +5201,9 @@ class SuperDevCLI:
             return 1
 
         self.console.print("[green]✓ Onboard 完成[/green]")
-        self.console.print("[cyan]在宿主工具里触发方式:[/cyan]")
-        self.console.print('  - 原生 slash 宿主: /super-dev "你的需求"')
-        self.console.print('  - Skill-only 宿主: 调用 super-dev-core Skill，再按 output/* 与 tasks.md 执行')
+        self.console.print("[cyan]接下来这样用:[/cyan]")
+        for line in self._build_onboard_next_steps(targets=targets):
+            self.console.print(f"  - {line}")
         self.console.print("[dim]终端 super-dev \"你的需求\" 仅触发本地编排，不替代宿主会话编码[/dim]")
         return 0
 
@@ -4692,7 +5215,8 @@ class SuperDevCLI:
             return 1
 
         project_dir = Path.cwd()
-        available_targets = [item.name for item in IntegrationManager(project_dir).list_targets()]
+        integration_manager = IntegrationManager(project_dir)
+        available_targets = [item.name for item in integration_manager.list_targets()]
         targets: list[str]
         if args.host:
             targets = [args.host]
@@ -4782,12 +5306,17 @@ class SuperDevCLI:
             host = report["hosts"][target]
             if host["ready"]:
                 self.console.print(f"[green]✓ {target}[/green] ready")
-                continue
-            self.console.print(f"[yellow]! {target}[/yellow] not ready")
-            for check_name in host.get("missing", []):
-                self.console.print(f"  [yellow]- 缺失: {check_name}[/yellow]")
-            for suggestion in host.get("suggestions", []):
-                self.console.print(f"  [dim]建议: {suggestion}[/dim]")
+            else:
+                self.console.print(f"[yellow]! {target}[/yellow] not ready")
+                for check_name in host.get("missing", []):
+                    self.console.print(f"  [yellow]- 缺失: {check_name}[/yellow]")
+                for suggestion in host.get("suggestions", []):
+                    self.console.print(f"  [dim]建议: {suggestion}[/dim]")
+            self._print_host_usage_guidance(
+                integration_manager=integration_manager,
+                target=target,
+                indent="  ",
+            )
 
         self.console.print("")
         if bool(report.get("overall_ready", False)):
@@ -4868,6 +5397,127 @@ class SuperDevCLI:
         )
         return self._cmd_setup(setup_args)
 
+    def _cmd_start(self, args) -> int:
+        """面向非技术用户的起步入口：自动选宿主、接入并输出最短试用路径。"""
+        from .integrations import IntegrationManager
+
+        if not self._ensure_host_support_matrix():
+            return 1
+
+        project_dir = Path.cwd()
+        integration_manager = IntegrationManager(project_dir)
+        available_targets = [item.name for item in integration_manager.list_targets()]
+        detected_targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
+
+        target = args.host
+        selection_reason = "manual"
+        if not target:
+            if detected_targets:
+                target = self._select_best_start_host(
+                    integration_manager=integration_manager,
+                    targets=detected_targets,
+                )
+                selection_reason = "auto-detected"
+            else:
+                payload = {
+                    "status": "error",
+                    "reason": "no-host-detected",
+                    "message": "未检测到可用宿主，请先安装受支持宿主后重试。",
+                    "recommended_hosts": self._recommended_start_hosts(
+                        integration_manager=integration_manager
+                    ),
+                }
+                if args.json:
+                    sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+                else:
+                    self.console.print("[red]未检测到可用宿主[/red]")
+                    self.console.print("[dim]请先安装至少一个受支持宿主，再执行 super-dev start[/dim]")
+                    self.console.print("[cyan]优先建议安装这些宿主:[/cyan]")
+                    for host in payload["recommended_hosts"]:
+                        self.console.print(
+                            f"  - {host['name']} ({host['id']}) [{host['certification_label']}]"
+                        )
+                return 1
+
+        usage = self._build_host_usage_profile(
+            integration_manager=integration_manager,
+            target=target,
+        )
+
+        onboard_performed = False
+        if not bool(args.skip_onboard):
+            onboard_args = argparse.Namespace(
+                host=target,
+                all=False,
+                auto=False,
+                skill_name="super-dev-core",
+                skip_integrate=False,
+                skip_skill=False,
+                skip_slash=False,
+                yes=True,
+                force=bool(args.force),
+            )
+            onboard_result = self._cmd_onboard(onboard_args)
+            onboard_performed = True
+            if onboard_result != 0:
+                return onboard_result
+
+        profile_saved = False
+        profile_save_error = ""
+        if not bool(args.no_save_profile):
+            try:
+                ConfigManager(project_dir).update(
+                    host_profile_targets=[target],
+                    host_profile_enforce_selected=True,
+                )
+                profile_saved = True
+            except Exception as exc:
+                profile_save_error = str(exc)
+
+        quick_start = self._build_host_quick_start_text(
+            host_profile=usage,
+            host_id=target,
+            host_name=integration_manager.TARGETS[target].description,
+            idea=args.idea,
+        )
+        payload = {
+            "status": "success",
+            "project_dir": str(project_dir),
+            "selected_host": target,
+            "selection_reason": selection_reason,
+            "detected_hosts": detected_targets,
+            "detection_details": detected_meta,
+            "onboard_performed": onboard_performed,
+            "profile_saved": profile_saved,
+            "profile_save_error": profile_save_error,
+            "usage_profile": usage,
+            "recommended_trigger": self._build_host_trigger_example(target=target, idea=args.idea),
+            "quick_start": quick_start,
+        }
+
+        if args.json:
+            sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+            return 0
+
+        profile = integration_manager.get_adapter_profile(target)
+        self.console.print("[cyan]Super Dev Start[/cyan]")
+        self.console.print(f"[cyan]已选择宿主[/cyan]: {target}")
+        self.console.print(
+            f"[cyan]认证等级[/cyan]: {profile.certification_label} ({profile.certification_level})"
+        )
+        if selection_reason == "auto-detected":
+            reasons = ", ".join(detected_meta.get(target, []))
+            if reasons:
+                self.console.print(f"[dim]自动选择依据: {reasons}[/dim]")
+        self.console.print(f"[dim]{profile.certification_reason}[/dim]")
+        if profile_saved:
+            self.console.print("[green]✓[/green] 已写入宿主画像到 super-dev.yaml")
+        elif profile_save_error:
+            self.console.print(f"[yellow]宿主画像写入失败: {profile_save_error}[/yellow]")
+        self.console.print("")
+        self.console.print(quick_start)
+        return 0
+
     def _cmd_detect(self, args) -> int:
         """宿主探测 + 接入兼容性评分"""
         from .integrations import IntegrationManager
@@ -4876,7 +5526,8 @@ class SuperDevCLI:
             return 1
 
         project_dir = Path.cwd()
-        available_targets = [item.name for item in IntegrationManager(project_dir).list_targets()]
+        integration_manager = IntegrationManager(project_dir)
+        available_targets = [item.name for item in integration_manager.list_targets()]
         detected_targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
 
         if args.host:
@@ -4909,6 +5560,13 @@ class SuperDevCLI:
             "selected_targets": targets,
             "report": report,
             "compatibility": compatibility,
+            "usage_profiles": {
+                target: self._build_host_usage_profile(
+                    integration_manager=integration_manager,
+                    target=target,
+                )
+                for target in targets
+            },
         }
         if not bool(args.no_save):
             report_files = self._write_host_compatibility_report(project_dir=project_dir, payload=payload)
@@ -4954,6 +5612,11 @@ class SuperDevCLI:
             ready = bool(host_compat.get("ready", False))
             badge = "[green]ready[/green]" if ready else "[yellow]not-ready[/yellow]"
             self.console.print(f"  - {target}: {score:.2f}/100 {badge}")
+            self._print_host_usage_guidance(
+                integration_manager=integration_manager,
+                target=target,
+                indent="    ",
+            )
         if not bool(args.no_save):
             saved_report_files = payload.get("report_files", {})
             if isinstance(saved_report_files, dict):
@@ -4970,6 +5633,268 @@ class SuperDevCLI:
                 self.console.print(f"[yellow]宿主画像更新失败: {err}[/yellow]")
 
         return 0
+
+    def _cmd_update(self, args) -> int:
+        latest_version = self._fetch_latest_pypi_version()
+        if latest_version is None:
+            self.console.print("[red]无法获取 PyPI 最新版本信息，请检查网络后重试[/red]")
+            return 1
+
+        current_version = __version__
+        self.console.print(f"[cyan]当前版本[/cyan]: {current_version}")
+        self.console.print(f"[cyan]PyPI 最新版本[/cyan]: {latest_version}")
+
+        method = self._resolve_update_method(args.method)
+        if args.check:
+            if self._is_version_newer(latest_version, current_version):
+                self.console.print("[yellow]发现新版本，可执行 `super-dev update` 完成升级[/yellow]")
+            elif self._version_key(current_version) > self._version_key(latest_version):
+                self.console.print("[yellow]当前本地版本高于 PyPI 最新版本，可能是尚未发布的开发版本[/yellow]")
+            else:
+                self.console.print("[green]✓ 当前已是最新版本[/green]")
+            return 0
+
+        if self._version_key(current_version) > self._version_key(latest_version):
+            self.console.print("[yellow]当前本地版本高于 PyPI 最新版本，将继续执行升级命令以刷新当前安装[/yellow]")
+        elif not self._is_version_newer(latest_version, current_version):
+            self.console.print("[green]当前版本已与 PyPI 一致，将继续执行升级命令以确保安装状态最新[/green]")
+
+        self.console.print(f"[cyan]升级方式[/cyan]: {method}")
+        command = self._build_update_command(method=method)
+        self.console.print(f"[dim]执行命令: {' '.join(command)}[/dim]")
+        try:
+            completed = subprocess.run(command, check=False)
+        except FileNotFoundError:
+            self.console.print(f"[red]未找到升级工具: {method}[/red]")
+            return 1
+
+        if completed.returncode != 0:
+            self.console.print("[red]升级失败，请根据上面的命令手动执行[/red]")
+            return completed.returncode
+
+        self.console.print("[green]✓ 升级命令已执行完成[/green]")
+        self.console.print("[dim]请重新打开终端或重新进入宿主会话，再执行 super-dev --version 验证版本[/dim]")
+        return 0
+
+    def _fetch_latest_pypi_version(self) -> str | None:
+        try:
+            response = requests.get("https://pypi.org/pypi/super-dev/json", timeout=10)
+            response.raise_for_status()
+            payload = response.json()
+        except Exception:
+            return None
+        info = payload.get("info", {})
+        version = info.get("version")
+        return version if isinstance(version, str) and version.strip() else None
+
+    def _resolve_update_method(self, preferred: str) -> str:
+        if preferred in {"pip", "uv"}:
+            return preferred
+        uv_binary = shutil.which("uv")
+        runtime_markers = [
+            sys.executable,
+            shutil.which("super-dev") or "",
+            os.environ.get("UV_TOOL_BIN_DIR", ""),
+            os.environ.get("PATH", ""),
+        ]
+        if uv_binary and any(".local/share/uv" in marker or "/uv/tools/" in marker for marker in runtime_markers):
+            return "uv"
+        return "uv" if uv_binary and "uv" in sys.executable.lower() else "pip"
+
+    def _build_update_command(self, *, method: str) -> list[str]:
+        if method == "uv":
+            return ["uv", "tool", "upgrade", "super-dev"]
+        return [sys.executable, "-m", "pip", "install", "-U", "super-dev"]
+
+    def _is_version_newer(self, latest: str, current: str) -> bool:
+        return self._version_key(latest) > self._version_key(current)
+
+    def _version_key(self, version: str) -> tuple[int, ...]:
+        parts = []
+        for part in version.replace("-", ".").split("."):
+            digits = "".join(ch for ch in part if ch.isdigit())
+            parts.append(int(digits or 0))
+        return tuple(parts)
+
+    def _print_host_usage_guidance(
+        self,
+        *,
+        integration_manager,
+        target: str,
+        indent: str = "",
+    ) -> None:
+        usage = self._build_host_usage_profile(
+            integration_manager=integration_manager,
+            target=target,
+        )
+        self.console.print(f"{indent}[cyan]主入口[/cyan]: {usage['primary_entry']}")
+        self.console.print(
+            f"{indent}认证等级: {usage['certification_label']} ({usage['certification_level']})"
+        )
+        self.console.print(f"{indent}使用模式: {usage['usage_mode']}")
+        self.console.print(f"{indent}触发命令: {usage['trigger_command']}")
+        self.console.print(f"{indent}触发上下文: {usage['trigger_context']}")
+        self.console.print(f"{indent}触发位置: {usage['usage_location']}")
+        self.console.print(f"{indent}接入后重启: {usage['restart_required_label']}")
+        if usage.get("certification_reason"):
+            self.console.print(f"{indent}认证说明: {usage['certification_reason']}")
+        steps = usage.get("post_onboard_steps", [])
+        if isinstance(steps, list) and steps:
+            self.console.print(f"{indent}接入后步骤:")
+            for step in steps:
+                self.console.print(f"{indent}  - {step}")
+        notes = usage.get("usage_notes", [])
+        if isinstance(notes, list) and notes:
+            self.console.print(f"{indent}使用提示:")
+            for note in notes:
+                self.console.print(f"{indent}  - {note}")
+        smoke_prompt = usage.get("smoke_test_prompt", "")
+        if isinstance(smoke_prompt, str) and smoke_prompt:
+            self.console.print(f"{indent}Smoke 验收语句: {smoke_prompt}")
+        smoke_steps = usage.get("smoke_test_steps", [])
+        if isinstance(smoke_steps, list) and smoke_steps:
+            self.console.print(f"{indent}Smoke 验收步骤:")
+            for step in smoke_steps:
+                self.console.print(f"{indent}  - {step}")
+        smoke_signal = usage.get("smoke_success_signal", "")
+        if isinstance(smoke_signal, str) and smoke_signal:
+            self.console.print(f"{indent}Smoke 通过标准: {smoke_signal}")
+
+    def _host_certification_rank(self, level: str) -> int:
+        order = {"certified": 0, "compatible": 1, "experimental": 2}
+        return order.get(level, 3)
+
+    def _select_best_start_host(self, *, integration_manager, targets: list[str]) -> str:
+        scored: list[tuple[int, int, int, str]] = []
+        for target in targets:
+            profile = integration_manager.get_adapter_profile(target)
+            scored.append(
+                (
+                    self._host_certification_rank(profile.certification_level),
+                    0 if integration_manager.supports_slash(target) else 1,
+                    0 if profile.category == "cli" else 1,
+                    target,
+                )
+            )
+        scored.sort()
+        return scored[0][3]
+
+    def _recommended_start_hosts(self, *, integration_manager) -> list[dict[str, str]]:
+        from .integrations import IntegrationManager
+
+        items: list[dict[str, str]] = []
+        for target in sorted(IntegrationManager.TARGETS):
+            profile = integration_manager.get_adapter_profile(target)
+            if profile.certification_level != "certified":
+                continue
+            items.append(
+                {
+                    "id": target,
+                    "name": IntegrationManager.TARGETS[target].description,
+                    "certification_label": profile.certification_label,
+                }
+            )
+        return items
+
+    def _build_host_trigger_example(self, *, target: str, idea: str | None) -> str:
+        from .integrations import IntegrationManager
+
+        if not idea:
+            return ""
+        escaped = idea.replace('"', '\\"')
+        if target == "codex-cli":
+            return f"{IntegrationManager.TEXT_TRIGGER_PREFIX} {idea}"
+        if target == "trae":
+            return f"{IntegrationManager.TEXT_TRIGGER_PREFIX} {idea}"
+        if IntegrationManager.supports_slash(target):
+            return f'/super-dev "{escaped}"'
+        return f"{IntegrationManager.TEXT_TRIGGER_PREFIX} {idea}"
+
+    def _build_onboard_next_steps(self, *, targets: list[str]) -> list[str]:
+        from .integrations import IntegrationManager
+
+        project_dir = Path.cwd()
+        integration_manager = IntegrationManager(project_dir)
+        lines: list[str] = []
+        for target in targets:
+            profile = integration_manager.get_adapter_profile(target)
+            trigger = str(profile.trigger_command).replace("<需求描述>", "你的需求")
+            line = f"{target}: 打开宿主后输入 {trigger}"
+            if profile.requires_restart_after_onboard:
+                line += "（先重启宿主）"
+            lines.append(line)
+        return lines
+
+    def _build_host_quick_start_text(
+        self,
+        *,
+        host_profile: dict[str, Any],
+        host_id: str,
+        host_name: str,
+        idea: str | None,
+    ) -> str:
+        lines = [
+            f"{host_name} 起步步骤",
+            "",
+            f"1. 认证等级：{host_profile.get('certification_label', '-')}"
+            f" ({host_profile.get('certification_level', '-')})",
+            f"2. 主入口：{host_profile.get('primary_entry', '-')}",
+            f"3. 使用模式：{host_profile.get('usage_mode', '-')}",
+            f"4. 触发上下文：{host_profile.get('trigger_context', '-')}",
+            f"5. 接入后重启：{host_profile.get('restart_required_label', '-')}",
+        ]
+        reason = host_profile.get("certification_reason", "")
+        if isinstance(reason, str) and reason.strip():
+            lines.extend(["", "认证说明", reason])
+        steps = host_profile.get("post_onboard_steps", [])
+        if isinstance(steps, list) and steps:
+            lines.extend(["", "接入后步骤"])
+            for index, step in enumerate(steps, start=1):
+                lines.append(f"{index}. {step}")
+        if idea:
+            lines.extend([
+                "",
+                "把这句放进宿主会话",
+                self._build_host_trigger_example(target=host_id, idea=idea),
+            ])
+        lines.extend([
+            "",
+            "如果要重新接入或修复",
+            f"super-dev setup --host {host_id} --force --yes",
+            f"super-dev doctor --host {host_id} --repair --force",
+        ])
+        return "\n".join(lines)
+
+    def _build_host_usage_profile(
+        self,
+        *,
+        integration_manager,
+        target: str,
+    ) -> dict[str, Any]:
+        profile = integration_manager.get_adapter_profile(target)
+        final_trigger = str(profile.trigger_command).replace("<需求描述>", "你的需求")
+        return {
+            "host": profile.host,
+            "category": profile.category,
+            "certification_level": profile.certification_level,
+            "certification_label": profile.certification_label,
+            "certification_reason": profile.certification_reason,
+            "certification_evidence": list(profile.certification_evidence),
+            "usage_mode": profile.usage_mode,
+            "primary_entry": profile.primary_entry,
+            "trigger_command": profile.trigger_command,
+            "final_trigger": final_trigger,
+            "trigger_context": profile.trigger_context,
+            "usage_location": profile.usage_location,
+            "requires_restart_after_onboard": profile.requires_restart_after_onboard,
+            "restart_required_label": "是" if profile.requires_restart_after_onboard else "否",
+            "post_onboard_steps": list(profile.post_onboard_steps),
+            "usage_notes": list(profile.usage_notes),
+            "smoke_test_prompt": profile.smoke_test_prompt,
+            "smoke_test_steps": list(profile.smoke_test_steps),
+            "smoke_success_signal": profile.smoke_success_signal,
+            "notes": profile.notes,
+        }
 
     def _resolve_report_project_name(self, project_dir: Path) -> str:
         try:
@@ -5008,8 +5933,8 @@ class SuperDevCLI:
             "",
             "## Per-Host Scores",
             "",
-            "| Host | Score | Ready | Passed/Total |",
-            "|---|---:|---|---:|",
+            "| Host | Certification | Score | Ready | Passed/Total |",
+            "|---|---|---:|---|---:|",
         ]
 
         host_scores = compatibility.get("hosts", {})
@@ -5018,13 +5943,53 @@ class SuperDevCLI:
                 info = host_scores.get(target, {}) if isinstance(target, str) else {}
                 if not isinstance(info, dict):
                     info = {}
+                usage_profiles = payload.get("usage_profiles", {})
+                certification = "-"
+                if isinstance(usage_profiles, dict):
+                    usage = usage_profiles.get(target, {})
+                    if isinstance(usage, dict):
+                        certification = str(usage.get("certification_label", "-"))
                 score = info.get("score", 0)
                 ready = "yes" if bool(info.get("ready", False)) else "no"
                 passed = int(info.get("passed", 0))
                 possible = int(info.get("possible", 0))
-                lines.append(f"| {target} | {score} | {ready} | {passed}/{possible} |")
+                lines.append(f"| {target} | {certification} | {score} | {ready} | {passed}/{possible} |")
 
-        lines.extend(["", "## Missing Items", ""])
+        lines.extend(["", "## Usage Guidance", ""])
+        usage_profiles = payload.get("usage_profiles", {})
+        if isinstance(usage_profiles, dict):
+            for target in selected_targets:
+                usage = usage_profiles.get(target, {}) if isinstance(target, str) else {}
+                if not isinstance(usage, dict):
+                    usage = {}
+                lines.append(f"### {target}")
+                lines.append(
+                    f"- Certification: {usage.get('certification_label', '-')} ({usage.get('certification_level', '-')})"
+                )
+                reason = usage.get("certification_reason", "")
+                if isinstance(reason, str) and reason.strip():
+                    lines.append(f"- Certification Reason: {reason}")
+                evidence = usage.get("certification_evidence", [])
+                if isinstance(evidence, list) and evidence:
+                    lines.append("- Certification Evidence:")
+                    for item in evidence:
+                        lines.append(f"  - {item}")
+                lines.append(f"- Primary Entry: {usage.get('primary_entry', '-')}")
+                lines.append(f"- Usage Mode: {usage.get('usage_mode', '-')}")
+                lines.append(f"- Trigger Command: {usage.get('trigger_command', '-')}")
+                lines.append(f"- Trigger Context: {usage.get('trigger_context', '-')}")
+                lines.append(f"- Restart Required: {usage.get('restart_required_label', '-')}")
+                steps = usage.get("post_onboard_steps", [])
+                if isinstance(steps, list) and steps:
+                    lines.append("- Post Onboard Steps:")
+                    for step in steps:
+                        lines.append(f"  - {step}")
+                note = usage.get("notes", "")
+                if isinstance(note, str) and note.strip():
+                    lines.append(f"- Notes: {note}")
+                lines.append("")
+
+        lines.extend(["## Missing Items", ""])
         hosts = report.get("hosts", {})
         if isinstance(hosts, dict):
             for target in selected_targets:
@@ -5162,6 +6127,8 @@ class SuperDevCLI:
                     self.console.print(f"  - {delta.spec_name} ({delta.delta_type.value})")
 
         elif args.spec_action == "propose":
+            if not self._ensure_docs_confirmation_for_execution(project_dir, action_label="创建 Spec 变更"):
+                return 1
             # 创建变更提案
             generator = SpecGenerator(project_dir)
             change = generator.create_change(
@@ -5349,7 +6316,7 @@ class SuperDevCLI:
         known_commands = {
             "init", "analyze", "workflow", "studio", "expert", "quality", "metrics", "preview",
             "deploy", "create", "wizard", "design", "spec", "task", "pipeline", "run", "config", "skill", "integrate",
-            "onboard", "doctor", "setup", "install", "detect", "policy",
+            "onboard", "doctor", "setup", "install", "start", "detect", "policy", "update", "review", "release",
         }
         return first not in known_commands
 
@@ -5415,6 +6382,53 @@ class SuperDevCLI:
             raise ValueError("请提供需求描述")
         return description, overrides
 
+    def _docs_confirmation_label(self, status: str) -> str:
+        if status == "confirmed":
+            return "已确认"
+        if status == "revision_requested":
+            return "需修改"
+        return "待确认"
+
+    def _get_docs_confirmation_state(self, project_dir: Path) -> dict[str, Any]:
+        payload = load_docs_confirmation(project_dir) or {}
+        return {
+            "status": str(payload.get("status", "")).strip() or "pending_review",
+            "comment": str(payload.get("comment", "")).strip(),
+            "actor": str(payload.get("actor", "")).strip(),
+            "run_id": str(payload.get("run_id", "")).strip(),
+            "updated_at": str(payload.get("updated_at", "")).strip(),
+            "exists": bool(payload),
+            "file_path": str(docs_confirmation_file(project_dir)),
+        }
+
+    def _docs_confirmation_is_confirmed(self, project_dir: Path) -> bool:
+        return self._get_docs_confirmation_state(project_dir)["status"] == "confirmed"
+
+    def _has_core_docs(self, project_dir: Path) -> bool:
+        output_dir = project_dir / "output"
+        if not output_dir.exists():
+            return False
+        return (
+            any(output_dir.glob("*-prd.md"))
+            and any(output_dir.glob("*-architecture.md"))
+            and any(output_dir.glob("*-uiux.md"))
+        )
+
+    def _ensure_docs_confirmation_for_execution(self, project_dir: Path, *, action_label: str) -> bool:
+        if not self._has_core_docs(project_dir):
+            return True
+        if self._docs_confirmation_is_confirmed(project_dir):
+            return True
+
+        current = self._get_docs_confirmation_state(project_dir)
+        self.console.print(f"[red]{action_label}前，必须先完成三文档确认[/red]")
+        self.console.print(f"[dim]当前状态: {self._docs_confirmation_label(current['status'])}[/dim]")
+        if current["comment"]:
+            self.console.print(f"[dim]备注: {current['comment']}[/dim]")
+        self.console.print("[dim]先查看 output/*-prd.md、*-architecture.md、*-uiux.md[/dim]")
+        self.console.print('[dim]然后执行: super-dev review docs --status confirmed --comment "三文档已确认"[/dim]')
+        return False
+
     def _cmd_task(self, args) -> int:
         """Spec 任务执行与状态查看"""
         from .creators import SpecTaskExecutor
@@ -5476,6 +6490,9 @@ class SuperDevCLI:
             args.project_name
             or (config.name if config_exists and config.name else args.change_id)
         )
+
+        if not self._ensure_docs_confirmation_for_execution(project_dir, action_label="执行 Spec 任务"):
+            return 1
 
         executor = SpecTaskExecutor(project_dir=project_dir, project_name=project_name)
         summary = executor.execute(
@@ -5761,10 +6778,15 @@ class SuperDevCLI:
                 adjusted = 1
                 reasons.append(f"缺少前置文档产物: {', '.join(missing_docs)}")
 
-        # 若未来允许从第 4 阶段恢复，需要确保 Spec 变更存在。
-        if adjusted == 4 and not self._detect_latest_change_id(project_dir):
-            adjusted = 3
+        if adjusted in {4, 5, 6, 7, 8} and not self._detect_latest_change_id(project_dir):
+            adjusted = 2
             reasons.append("未检测到可用 Spec 变更目录")
+
+        if adjusted in {4, 5, 6, 7, 8}:
+            frontend_runtime_report = output_dir / f"{project_name}-frontend-runtime.json"
+            if not frontend_runtime_report.exists():
+                adjusted = 3
+                reasons.append("缺少前端运行验证报告")
 
         return adjusted, reasons
 
@@ -5978,7 +7000,10 @@ class SuperDevCLI:
             resume=False,
         )
 
-        self.console.print("[cyan]需求直达模式：自动执行完整流水线[/cyan]")
+        self.console.print("[cyan]需求直达模式：自动执行治理流水线[/cyan]")
+        self._print_governance_boundary_notice(
+            "该入口只负责生成治理产物与流程约束，实际编码应在宿主会话内完成。"
+        )
         return self._cmd_pipeline(args)
 
     def _save_tech_stack_to_config(self, project_dir: Path, tech_stack: dict, description: str) -> None:
@@ -6222,12 +7247,20 @@ class SuperDevCLI:
             banner.append("Super Dev ", style="bold cyan")
             banner.append(f"v{__version__}\n", style="dim")
             banner.append(__description__, style="white")
+            banner.append("\n宿主负责编码，Super Dev 负责治理与交付标准", style="dim")
 
             self.console.print(Panel.fit(
                 banner,
                 title="Super Dev",
                 border_style="cyan"
             ))
+
+    def _print_governance_boundary_notice(self, message: str) -> None:
+        if not self.console:
+            return
+        self.console.print(
+            f"[dim]治理边界: {message} 宿主负责模型调用、工具使用与代码产出。[/dim]"
+        )
 
 
 def main() -> int:

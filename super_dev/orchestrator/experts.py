@@ -219,6 +219,11 @@ class ExpertDispatcher:
                 "passed": result.passed,
                 "scenario": result.scenario,
                 "weighted_score": result.weighted_score,
+                "ui_review": (
+                    checker.latest_ui_review_report.to_dict()
+                    if checker.latest_ui_review_report is not None
+                    else None
+                ),
             },
         )
 

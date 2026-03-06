@@ -538,6 +538,23 @@ class WorkflowEngine:
         output_dir.mkdir(exist_ok=True)
         qg_path = output_dir / f"{name}-quality-gate.md"
         qg_path.write_text(expert_output.content, encoding="utf-8")
+        ui_review_payload = expert_output.metadata.get("ui_review")
+        if isinstance(ui_review_payload, dict):
+            ui_review_md_path = output_dir / f"{name}-ui-review.md"
+            ui_review_json_path = output_dir / f"{name}-ui-review.json"
+            ui_review_json_path.write_text(
+                json.dumps(ui_review_payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            if not ui_review_md_path.exists():
+                lines = [
+                    f"# {name} - UI 审查报告",
+                    "",
+                    f"- **总分**: {ui_review_payload.get('score', 0)}/100",
+                    f"- **结论**: {'通过' if ui_review_payload.get('passed') else '需继续修正'}",
+                    "",
+                ]
+                ui_review_md_path.write_text("\n".join(lines), encoding="utf-8")
 
         passed = expert_output.metadata.get("passed", False)
         if not passed:
@@ -557,6 +574,9 @@ class WorkflowEngine:
             "score": expert_output.quality_score,
             "scenario": expert_output.metadata.get("scenario"),
             "report_path": str(qg_path),
+            "ui_review_path": str(output_dir / f"{name}-ui-review.md") if isinstance(ui_review_payload, dict) else "",
+            "ui_review_json_path": str(output_dir / f"{name}-ui-review.json") if isinstance(ui_review_payload, dict) else "",
+            "ui_review": ui_review_payload if isinstance(ui_review_payload, dict) else None,
         }
 
     async def _phase_delivery(self, context: WorkflowContext) -> Any:

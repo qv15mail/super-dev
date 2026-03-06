@@ -1,0 +1,32 @@
+# 开发：Excellent（11964948@qq.com）
+
+schema_version: "2026.03"
+required:
+  - id
+  - title
+  - domain
+  - topic
+  - asset_type
+  - owner
+  - reviewers
+  - status
+  - version
+  - created_at
+  - updated_at
+  - tags
+  - summary
+optional:
+  - related_assets
+  - audience
+  - confidentiality
+  - expiry_date
+  - quality_score
+  - usage_count
+value_constraints:
+  status: [draft, review, active, deprecated, archived]
+  asset_type: [standard, guide, playbook, checklist, antipattern, case, glossary, template, policy]
+  confidentiality: [public, internal, restricted]
+quality_gate:
+  min_summary_length: 20
+  max_stale_days: 180
+  min_reviewers: 1
