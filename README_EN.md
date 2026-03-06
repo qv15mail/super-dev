@@ -25,16 +25,19 @@ Current version: `2.0.6`
 
 ## Project Introduction
 
-`Super Dev` is an AI delivery orchestration tool built for commercial-grade outcomes. Its core goal is to help teams turn project intent into executable engineering assets:
+`Super Dev` is an AI delivery orchestration tool for commercial-grade execution. It turns host-side model capability into a governed engineering pipeline with clear artifacts, review gates, and delivery standards.
 
-- It does not provide its own model layer and does not replace the host's coding ability
-- The host is responsible for model execution, tools, and actual code generation
-- `Super Dev` is responsible for workflow governance, design constraints, quality gates, audit artifacts, and delivery standards
+Product role:
 
-- Convert requirements into production artifacts: PRD, architecture, UI/UX, spec, task plans, and delivery manifests
-- Run development through a standardized pipeline: traceable, resumable, auditable, and reviewable
-- Enforce quality at every stage: policy governance, red-team checks, quality gates, and release rehearsals
-- Unify collaboration across CLI and IDE hosts under one delivery standard
+- the host handles model execution, browsing, coding, terminal actions, and file edits
+- `Super Dev` handles workflow governance, design constraints, quality gates, audit artifacts, and delivery standards
+
+It is built to solve delivery-process problems:
+
+- convert requirements into production artifacts: PRD, architecture, UI/UX, spec, task plans, and delivery manifests
+- run development through a standardized pipeline: traceable, resumable, auditable, and reviewable
+- enforce quality at every stage: policy governance, red-team checks, quality gates, and release rehearsals
+- unify collaboration across CLI and IDE hosts under one delivery standard
 
 ---
 
@@ -83,8 +86,8 @@ Current version: `2.0.6`
 
 - Built-in UI/UX knowledge base for product type, industry tone, trust modules, page skeletons, anti-patterns, and information density
 - Built-in mainstream component ecosystem recommendations across React/Next, Vue, Angular, and Svelte
-- The generated UI/UX document now outputs component, form, table, chart, motion, and icon baselines instead of generic style-only guidance
-- Host prompts and skills inherit the same rules so the host generates modern commercial interfaces instead of generic AI-looking pages
+- The generated UI/UX document now outputs component, form, table, chart, motion, and icon baselines that directly constrain implementation
+- Host prompts and skills inherit the same rules so the host produces interfaces closer to modern commercial products
 - `super-dev quality --type ui-review` now performs structure-level visual review against `preview.html` / `output/frontend/index.html`
 
 ---
@@ -182,7 +185,7 @@ In short:
 
 ## How The System Works
 
-`Super Dev` does not work by calling its own model to write code. Instead:
+`Super Dev` runs through a fixed operating path:
 
 1. the user runs `super-dev` inside the project
 2. onboarding connects Super Dev to the chosen host
@@ -191,7 +194,7 @@ In short:
 5. the host handles browsing, reasoning, coding, execution, and file edits
 6. Super Dev governs the workflow, documents, gates, audit artifacts, and delivery standards
 
-Core principle:
+Operating principle:
 
 - the host is responsible for "writing code"
 - `Super Dev` is responsible for "making the delivery process correct, complete, and auditable"
@@ -230,7 +233,7 @@ This view shows the main source directories under `super_dev` and their dependen
 - `Super Dev` is the local Python CLI in the project plus the host-side rules, skills, and slash mappings.
 - The host is responsible for model inference, web research, coding, terminal execution, and file edits.
 - `Super Dev` is responsible for the fixed delivery protocol: research, three core docs, confirmation gate, spec, frontend-first execution, backend integration, quality gates, and delivery audit.
-- When the user types `/super-dev ...` or `super-dev: ...`, the host should treat it as “enter the Super Dev pipeline,” not as ordinary chat.
+- When the user types `/super-dev ...` or `super-dev: ...`, the host should switch into Super Dev pipeline mode.
 - When documents, spec artifacts, quality reports, or delivery outputs need to be generated or refreshed, the host should call the local `super-dev` CLI.
 - If the project contains a `knowledge/` directory, the host must read the relevant local knowledge files before drafting documents.
 - If `output/knowledge-cache/*-knowledge-bundle.json` exists, the host must inherit its matched local knowledge, research summary, and scenario constraints into the documents, spec, and implementation.
@@ -240,7 +243,7 @@ This view shows the main source directories under `super_dev` and their dependen
 1. Run `super-dev` in your project root to finish onboarding.  
 2. Open the IDE Agent Chat and trigger according to the real host entry.  
 3. IDEs with slash support use `/super-dev your requirement`; non-slash IDEs use `super-dev: your requirement`.
-4. Non-slash hosts still follow the same research-first pipeline through project rules, AGENTS, or skills instead of bypassing the workflow.
+4. Non-slash hosts follow the same research-first pipeline through project rules, AGENTS, or skills.
 
 ### Host Trigger Matrix
 
@@ -500,7 +503,7 @@ super-dev: your requirement
 Restart required after onboard: No
 
 Notes:
-1. Kiro IDE currently prefers steering/rules mode instead of `/super-dev`.
+1. Kiro IDE currently uses steering/rules mode with `super-dev: your requirement`.
 2. If steering or rules did not load, reopen the project window.
 
 #### 11. OpenCode
@@ -563,7 +566,7 @@ super-dev: your requirement
 Restart required after onboard: No
 
 Notes:
-1. Qoder IDE currently prefers project rules mode instead of `/super-dev`.
+1. Qoder IDE currently uses project rules mode with `super-dev: your requirement`.
 2. If rules are missing, reopen the project or start a new chat thread.
 
 #### 14. Windsurf
@@ -605,7 +608,7 @@ super-dev: your requirement
 Restart required after onboard: Yes
 
 Notes:
-1. Do not type `/super-dev`; Codex does not use a custom slash entry here.
+1. Codex CLI currently uses `super-dev: your requirement` as the primary trigger.
 2. Execution relies on `.codex/AGENTS.md` and `.codex/skills/super-dev-core/SKILL.md`.
 3. If the old session did not reload the Skill, restart `codex` and retry.
 
@@ -627,7 +630,7 @@ super-dev: your requirement
 Restart required after onboard: No
 
 Notes:
-1. Do not type `/super-dev`.
+1. Trae currently uses `super-dev: your requirement` as the primary trigger.
 2. Trae is currently rules-first: just open Trae Agent Chat in the project and use the trigger phrase.
 3. Then continue delivery from `output/*` and `.super-dev/changes/*/tasks.md`.
 
@@ -749,7 +752,7 @@ If host supports slash command mapping:
 `/super-dev` enforces this sequence: research first -> generate PRD/Architecture/UIUX -> wait for document approval -> create Spec/tasks -> then coding.  
 Modern commercial UI/UX constraints are enforced at generation time: no purple/pink gradient-first themes, no emoji icons, no generic template output, and typography/tokens/grid/state matrices must be defined before page implementation.
 
-Codex CLI currently does not use `/super-dev`; it relies on `.codex/AGENTS.md` and the loaded `super-dev-core` Skill. Use `super-dev: your requirement` as the text trigger.
+Codex CLI currently runs through `.codex/AGENTS.md` and the loaded `super-dev-core` Skill. Use `super-dev: your requirement` as the trigger.
 
 If slash mapping is unavailable, run the terminal entry in the same project root (local Super Dev orchestration only):
 

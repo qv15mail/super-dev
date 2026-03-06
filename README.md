@@ -25,11 +25,14 @@
 
 ## 项目介绍
 
-`Super Dev` 是一个面向商业级交付的 AI 开发编排工具，核心目标是辅助用户将项目落地成可执行工程资产：
+`Super Dev` 是一个面向商业级交付的 AI 开发编排工具，用于把宿主里的模型能力组织成一套稳定、清晰、可审计的工程流水线。
 
-- 它不提供自己的大模型能力，也不替代宿主的编码能力
-- 宿主负责调用模型、工具与实际编码
+产品定位：
+
+- 宿主负责模型调用、联网搜索、代码产出、终端执行与文件修改
 - `Super Dev` 负责流程治理、设计约束、质量门禁、审计产物与交付标准
+
+它解决的是交付过程问题：
 
 - 将需求沉淀为可落地工件：PRD、架构、UI/UX、Spec、任务清单与交付清单
 - 将开发过程组织为标准化流水线：可追踪、可恢复、可审计、可复盘
@@ -83,8 +86,8 @@
 
 - 内置 UI/UX 知识库：产品类型、行业语气、信任模块、页面骨架、反模式、信息密度
 - 内置主流组件生态推荐：React/Next、Vue、Angular、Svelte 等按宿主和场景输出首选与备选方案
-- UI/UX 文档会自动给出组件生态、表单/表格/图表/动效/图标基线，而不是只写风格描述
-- 宿主提示词与 Skill 会继承这些规则，优先生成现代商业产品界面而不是 AI 模板页面
+- UI/UX 文档会自动给出组件生态、表单/表格/图表/动效/图标基线，直接约束实现阶段
+- 宿主提示词与 Skill 会继承这些规则，输出更接近现代商业产品的界面结果
 - 新增 `super-dev quality --type ui-review`，可对 `preview.html` / `output/frontend/index.html` 做结构级视觉审查
 
 ---
@@ -182,7 +185,7 @@ uv tool install super-dev
 
 ## 整个系统如何工作
 
-`Super Dev` 的工作方式不是“自己调用模型写代码”，而是：
+`Super Dev` 的运行方式可以概括为一条固定链路：
 
 1. 用户在项目目录执行 `super-dev`
 2. 安装引导把 Super Dev 接入到目标宿主
@@ -191,7 +194,7 @@ uv tool install super-dev
 5. 宿主负责联网、推理、编码、运行与修改文件
 6. Super Dev 负责流程、文档、门禁、审计和交付标准
 
-核心原则：
+执行原则：
 
 - 宿主负责“写代码”
 - `Super Dev` 负责“把开发过程做对、做全、可审计”
@@ -230,7 +233,7 @@ uv tool install super-dev
 - `Super Dev` 是当前项目里的本地 Python CLI 工具，加上宿主里的规则文件 / Skill / slash 映射。
 - 宿主负责模型推理、联网搜索、编码、运行终端与修改文件。
 - `Super Dev` 负责把宿主拉进固定流水线：research、三文档、确认门、Spec、前端优先、后端联调、质量门禁、交付审计。
-- 当用户输入 `/super-dev 需求` 或 `super-dev: 需求` 时，宿主要把它视为“进入 Super Dev 流水线”，而不是普通聊天。
+- 当用户输入 `/super-dev 需求` 或 `super-dev: 需求` 时，宿主要切换到 Super Dev 流水线执行模式。
 - 需要生成或刷新文档、Spec、质量报告、交付产物时，宿主应优先调用本地 `super-dev` CLI。
 - 如果项目根目录存在 `knowledge/`，宿主必须优先读取与当前需求相关的知识文件。
 - 如果已生成 `output/knowledge-cache/*-knowledge-bundle.json`，宿主必须把其中命中的本地知识、研究摘要和场景约束继承到三文档、Spec 和实现阶段。
@@ -240,7 +243,7 @@ uv tool install super-dev
 1. 进入项目目录执行 `super-dev` 完成接入。  
 2. 打开 IDE 的 Agent Chat 后，按宿主真实入口触发。  
 3. 支持 slash 的 IDE 使用 `/super-dev 你的需求`；不支持 slash 的 IDE 使用 `super-dev: 你的需求`。
-4. 非 slash 宿主仍会通过项目规则、AGENTS 或 Skill 进入同样的 research-first 流程，而不是绕开流水线。
+4. 非 slash 宿主会通过项目规则、AGENTS 或 Skill 进入同样的 research-first 流程。
 
 ### 每个宿主如何使用
 
@@ -409,7 +412,7 @@ super-dev: 你的需求
 接入后是否需要重启：否
 
 补充说明：
-1. 不要输入 `/super-dev`，Kimi CLI 当前优先按 `.kimi/AGENTS.md + 文本触发` 工作。
+1. Kimi CLI 当前使用 `super-dev: 你的需求`，由 `.kimi/AGENTS.md` 驱动流程。
 2. 建议先用 `super-dev doctor --host kimi-cli` 做一次确认。
 3. 尽量保持同一会话完成完整开发流程。
 
@@ -452,7 +455,7 @@ super-dev: 你的需求
 接入后是否需要重启：否
 
 补充说明：
-1. Kiro IDE 当前优先按 steering/rules 模式触发，不走 `/super-dev`。
+1. Kiro IDE 当前使用 steering/rules 模式，触发词为 `super-dev: 你的需求`。
 2. 如果 steering/rules 未加载，先重开项目窗口。
 
 #### 11. OpenCode
@@ -515,7 +518,7 @@ super-dev: 你的需求
 接入后是否需要重启：否
 
 补充说明：
-1. Qoder IDE 当前优先按 project rules 模式触发，不走 `/super-dev`。
+1. Qoder IDE 当前使用 project rules 模式，触发词为 `super-dev: 你的需求`。
 2. 若规则未生效，重新打开项目或重新创建聊天。
 
 #### 14. Windsurf
@@ -557,7 +560,7 @@ super-dev: 你的需求
 接入后是否需要重启：是
 
 补充说明：
-1. 不要输入 `/super-dev`，Codex 当前不走自定义 slash。
+1. Codex CLI 当前使用 `super-dev: 你的需求` 作为主触发方式。
 2. 实际依赖 `.codex/AGENTS.md` 和 `.codex/skills/super-dev-core/SKILL.md`。
 3. 如果旧会话没加载新 Skill，重启 `codex` 再试。
 
@@ -579,7 +582,7 @@ super-dev: 你的需求
 接入后是否需要重启：否
 
 补充说明：
-1. 不要输入 `/super-dev`。
+1. Trae 当前使用 `super-dev: 你的需求` 作为主触发方式。
 2. Trae 当前默认按项目 rules 模式工作，无需手动开启 Skill。
 3. 随后按 `output/*` 与 `.super-dev/changes/*/tasks.md` 推进开发。
 
@@ -749,7 +752,7 @@ super-dev review docs --status confirmed --comment "三文档已确认，进入 
 `/super-dev` 会强制执行：先 research -> 再三文档（PRD/架构/UIUX）-> 等待用户确认 -> 再 Spec 与 tasks -> 再编码实现。  
 编码阶段默认遵循商业级 UI/UX 规范，禁止紫/粉渐变主视觉、emoji 功能图标、模板化页面直出，并要求先定义字体系统、token、栅格和组件状态矩阵。
 
-Codex CLI 当前不使用 `/super-dev`，而是依赖 `.codex/AGENTS.md` + `super-dev-core` Skill。在 Codex 会话中输入 `super-dev: 你的需求` 即可。
+Codex CLI 当前通过 `.codex/AGENTS.md` + `super-dev-core` Skill 工作，在 Codex 会话中输入 `super-dev: 你的需求` 即可。
 
 若宿主不支持 slash 命令映射，可在同一项目根目录执行终端入口（仅触发 Super Dev 本地流水线编排）：
 
