@@ -1,4 +1,4 @@
-# Super Dev 宿主使用指南（2.0.7）
+# Super Dev 宿主使用指南（2.0.8）
 
 ## 目标
 
@@ -20,9 +20,10 @@
 
 | 宿主 | 类型 | 认证等级 | 是否支持 `/super-dev` | 正确触发方式 | 接入后是否需要重启 |
 | --- | --- | --- | --- | --- | --- |
+| Antigravity | IDE | Experimental | 支持 | 在 Antigravity Agent Chat 中输入 `/super-dev 你的需求`（由 `GEMINI.md` + `.gemini/commands/` + `.agent/workflows/` + `~/.gemini/skills/` 生效） | 是 |
 | Claude Code | CLI | Certified | 支持 | 在 Claude Code 会话中输入 `/super-dev 你的需求` | 否 |
 | CodeBuddy CLI | CLI | Compatible | 支持 | 在 CodeBuddy CLI 会话中输入 `/super-dev 你的需求`（由 `.codebuddy/commands/super-dev.md` + `.codebuddy/skills/` / `~/.codebuddy/skills/` 生效） | 否 |
-| CodeBuddy IDE | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求`（由 `.codebuddy/commands/super-dev.md` + `.codebuddy/skills/` / `~/.codebuddy/skills/` 生效） | 否 |
+| CodeBuddy IDE | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求`（由 `.codebuddy/commands/` + `.codebuddy/agents/` + `.codebuddy/skills/` / `~/.codebuddy/agents/` + `~/.codebuddy/skills/` 生效） | 否 |
 | Cursor CLI | CLI | Compatible | 支持 | 在 Cursor CLI 会话中输入 `/super-dev 你的需求` | 否 |
 | Cursor IDE | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求` | 否 |
 | Gemini CLI | CLI | Compatible | 支持 | 在 Gemini CLI 会话中输入 `/super-dev 你的需求` | 否 |
@@ -35,7 +36,7 @@
 | Qoder IDE | IDE | Experimental | 支持 | 在 Qoder IDE Agent Chat 中输入 `/super-dev 你的需求`（由 `.qoder/commands/super-dev.md` + `.qoder/rules.md` + `.qoder/skills/` / `~/.qoderwork/skills/` 生效） | 否 |
 | Windsurf | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求`（由 `.windsurf/workflows/super-dev.md` + `.windsurf/skills/` / `~/.codeium/windsurf/skills/` 生效） | 否 |
 | Codex CLI | CLI | Certified | 不支持 | 重启 Codex 后输入 `super-dev: 你的需求`，由 `.codex/AGENTS.md` + 兼容 Skill 生效 | 是 |
-| Trae | IDE | Compatible | 不支持 | 在 Trae Agent Chat 中输入 `super-dev: 你的需求`（由 `.trae/rules.md` 生效；若检测到兼容 Skill `~/.trae/skills/super-dev-core/SKILL.md` 会额外增强） | 是 |
+| Trae | IDE | Compatible | 不支持 | 在 Trae Agent Chat 中输入 `super-dev: 你的需求`（由 `.trae/project_rules.md` + `~/.trae/user_rules.md` 生效；同时兼容写入 `.trae/rules.md` + `~/.trae/rules.md`，若检测到兼容 Skill `~/.trae/skills/super-dev-core/SKILL.md` 会额外增强） | 是 |
 
 ### 最简判断
 
@@ -176,8 +177,10 @@ super-dev onboard --host codebuddy --force --yes
 补充说明：
 1. 建议在项目级 Agent Chat 中使用，不要脱离项目上下文。
 2. 先让宿主完成 research，再继续文档和编码。
+3. 当前按 `.codebuddy/commands/` + `.codebuddy/agents/` + `.codebuddy/skills/` 接入。
 
-#### 4. Cursor CLI
+
+#### 5. Cursor CLI
 
 安装：
 ```bash
@@ -198,7 +201,7 @@ super-dev onboard --host cursor-cli --force --yes
 1. 适合终端内连续执行研究、文档和编码。
 2. 若命令列表未刷新，可重开一次 Cursor CLI 会话。
 
-#### 5. Cursor IDE
+#### 6. Cursor IDE
 
 安装：
 ```bash
@@ -219,7 +222,30 @@ super-dev onboard --host cursor --force --yes
 1. 建议固定在同一个 Agent Chat 会话里完成整条流水线。
 2. 如果项目规则没加载，先重新打开工作区或重新发起聊天。
 
-#### 6. Gemini CLI
+#### 7. Antigravity
+
+安装：
+```bash
+super-dev onboard --host antigravity --force --yes
+```
+
+触发位置：
+打开 Antigravity 的 Agent Chat / Prompt 面板，并确保当前工作区就是目标项目。
+
+触发命令：
+```text
+/super-dev 你的需求
+```
+
+接入后是否需要重启：是
+
+补充说明：
+1. Antigravity 当前按 `GEMINI.md + .agent/workflows + /super-dev` 模式接入。
+2. 接入会写入项目级 `GEMINI.md`、`.gemini/commands/super-dev.md`、`.agent/workflows/super-dev.md`。
+3. 同时会写入用户级 `~/.gemini/GEMINI.md`、`~/.gemini/commands/super-dev.md` 与 `~/.gemini/skills/super-dev-core/SKILL.md`。
+4. 完成接入后请重开 Antigravity 或至少新开一个 Agent Chat，再输入 `/super-dev 你的需求`。
+
+#### 8. Gemini CLI
 
 安装：
 ```bash
@@ -240,7 +266,7 @@ super-dev onboard --host gemini-cli --force --yes
 1. 优先在同一会话中完成 research -> 三文档 -> 用户确认 -> Spec -> 前端运行验证 -> 后端/交付。
 2. 若宿主支持联网，先让它完成同类产品研究。
 
-#### 7. iFlow CLI
+#### 9. iFlow CLI
 
 安装：
 ```bash
@@ -261,7 +287,7 @@ super-dev onboard --host iflow --force --yes
 1. 当前按 slash 宿主适配。
 2. 如果 slash 未出现，先检查项目级命令文件是否已写入。
 
-#### 8. Kimi CLI
+#### 10. Kimi CLI
 
 安装：
 ```bash
@@ -283,7 +309,7 @@ super-dev: 你的需求
 2. 建议先用 `super-dev doctor --host kimi-cli` 做一次确认。
 3. 尽量保持同一会话完成完整开发流程。
 
-#### 9. Kiro CLI
+#### 11. Kiro CLI
 
 安装：
 ```bash
@@ -304,7 +330,7 @@ super-dev onboard --host kiro-cli --force --yes
 1. CLI 模式下直接使用 slash。
 2. 如果项目规则未刷新，重新进入项目目录再启动 Kiro CLI。
 
-#### 10. Kiro IDE
+#### 12. Kiro IDE
 
 安装：
 ```bash
@@ -326,7 +352,7 @@ super-dev: 你的需求
 2. 接入会写入项目级 `.kiro/steering/super-dev.md`，并补充官方全局 steering `~/.kiro/steering/AGENTS.md`。
 3. 如果 steering/rules 未加载，先重开项目窗口。
 
-#### 11. OpenCode
+#### 13. OpenCode
 
 安装：
 ```bash
@@ -347,7 +373,7 @@ super-dev onboard --host opencode --force --yes
 1. 按 CLI slash 模式使用。
 2. 若你使用全局命令目录，也建议保留项目级接入文件。
 
-#### 12. Qoder CLI
+#### 14. Qoder CLI
 
 安装：
 ```bash
@@ -369,7 +395,7 @@ super-dev onboard --host qoder-cli --force --yes
 2. 若 slash 未生效，先确认 `.qoder/commands/super-dev.md` 已生成。
 3. 官方文档已公开 `.qoder/skills/` 与 `~/.qoder/skills/`，Super Dev 会同时安装命令与 Skill。
 
-#### 13. Qoder IDE
+#### 15. Qoder IDE
 
 安装：
 ```bash
@@ -391,7 +417,7 @@ super-dev onboard --host qoder --force --yes
 2. 若新增命令未出现，先确认 `.qoder/commands/super-dev.md` 已生成，再重新打开项目或新开一个 Agent Chat。
 3. 官方文档已公开 `.qoder/skills/` 与 `~/.qoderwork/skills/`，Super Dev 会同步安装 `super-dev-core`。
 
-#### 14. Windsurf
+#### 16. Windsurf
 
 安装：
 ```bash
@@ -413,7 +439,7 @@ super-dev onboard --host windsurf --force --yes
 2. 更适合在同一个 Workflow 里连续完成研究、文档、Spec 和编码。
 3. 官方文档已公开 `.windsurf/skills/` 与 `~/.codeium/windsurf/skills/`。
 
-#### 15. Codex CLI
+#### 17. Codex CLI
 
 安装：
 ```bash
@@ -435,7 +461,7 @@ super-dev: 你的需求
 2. 实际依赖 `.codex/AGENTS.md` 和 `.codex/skills/super-dev-core/SKILL.md`。
 3. 如果旧会话没加载新 Skill，重启 `codex` 再试。
 
-#### 16. Trae
+#### 18. Trae
 
 安装：
 ```bash
@@ -454,54 +480,8 @@ super-dev: 你的需求
 
 补充说明：
 1. 不要输入 `/super-dev`。
-2. 接入一定会写入项目级 `.trae/rules.md`；如果检测到兼容技能目录，也会增强安装 `~/.trae/skills/super-dev-core/SKILL.md`。
+2. 接入一定会写入项目级 `.trae/project_rules.md`、`.trae/rules.md` 和用户级 `~/.trae/user_rules.md`、`~/.trae/rules.md`；如果检测到兼容技能目录，也会增强安装 `~/.trae/skills/super-dev-core/SKILL.md`。
 3. 完成接入后建议重开 Trae 或至少新开一个 Agent Chat，使规则生效；如果兼容 Skill 已安装，也会一起生效。
 4. 随后按 `output/*` 与 `.super-dev/changes/*/tasks.md` 推进开发。
 
-## 推荐给最终用户的最简说法
 
-### 原生 slash 宿主
-
-直接说：
-
-```text
-/super-dev 你的需求
-```
-
-### Codex CLI
-
-直接说：
-
-```text
-重启 codex，然后输入 `super-dev: 你的需求`，不要输入 /super-dev
-```
-
-### Trae
-
-直接说：
-
-```text
-在 Trae Agent Chat 中直接输入 `super-dev: 你的需求`
-```
-
----
-
-## 为什么要区分这些宿主
-
-因为 Super Dev 不是模型平台，而是宿主内治理层。
-
-也就是说：
-
-- 宿主负责“会写代码”
-- Super Dev 负责“按商业级流程把事情做对、做全、可审计”
-
-所以不同宿主的入口可以不同，但执行标准必须一致。
-
----
-
-## 相关文档
-
-- [README](/Users/weiyou/Documents/kaifa/super-dev/README.md)
-- [README_EN](/Users/weiyou/Documents/kaifa/super-dev/README_EN.md)
-- [INSTALL_OPTIONS](/Users/weiyou/Documents/kaifa/super-dev/docs/INSTALL_OPTIONS.md)
-- [INTEGRATION_GUIDE](/Users/weiyou/Documents/kaifa/super-dev/docs/INTEGRATION_GUIDE.md)

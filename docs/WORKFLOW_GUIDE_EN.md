@@ -1,4 +1,4 @@
-# Super Dev Workflow Guide (2.0.7)
+# Super Dev Workflow Guide (2.0.8)
 
 This is the practical handbook for running Super Dev in real projects. It covers:
 

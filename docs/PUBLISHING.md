@@ -1,4 +1,4 @@
-# 发布指南（2.0.7）
+# 发布指南（2.0.8）
 
 > 面向 Super Dev 2.x 的标准发布流程。
 
@@ -52,8 +52,8 @@ export PYPI_API_TOKEN="<your-token>"
 ## 3. Git Tag 与 Release
 
 ```bash
-git tag v2.0.7
-git push origin v2.0.7
+git tag v2.0.8
+git push origin v2.0.8
 ```
 
 然后在 GitHub 创建 Release，关联本次变更说明。
@@ -63,11 +63,11 @@ git push origin v2.0.7
 ## 4. 发布后验证
 
 ```bash
-uv tool install super-dev==2.0.7
+uv tool install super-dev==2.0.8
 super-dev --help
 
 # 或 pip
-pip install --no-cache-dir super-dev==2.0.7
+pip install --no-cache-dir super-dev==2.0.8
 super-dev --help
 super-dev "构建一个包含登录和订单的系统"
 ```
@@ -77,7 +77,7 @@ super-dev "构建一个包含登录和订单的系统"
 PyPI 不支持删除已发布版本，建议：
 
 1. 对有问题版本执行 `yank`。
-2. 发布补丁版本（如 `2.0.7` 的后续补丁）。
+2. 发布补丁版本（如 `2.0.8` 的后续补丁）。
 3. 在 `CHANGELOG.md` 和 GitHub Release 明确影响范围与修复建议。
 
 参考：[`docs/RELEASE_RUNBOOK.md`](./RELEASE_RUNBOOK.md)

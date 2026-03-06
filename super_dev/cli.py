@@ -23,6 +23,8 @@ from typing import Any, Literal, cast
 try:
     import requests
     from rich.console import Console
+    from rich.console import Group
+    from rich.live import Live
     from rich.table import Table
     from rich.panel import Panel
     from rich.text import Text
@@ -4779,17 +4781,18 @@ class SuperDevCLI:
         detected_targets, _ = self._detect_host_targets(available_targets=available_targets)
         selected: set[str] = set(detected_targets)
         cursor = 0
+        status_message = ""
 
-        def render() -> None:
-            self.console.clear()
+        def renderable() -> Group:
             subtitle = (
                 "Space 勾选，Enter 安装，↑/↓ 移动，A 全选，C 仅 CLI，I 仅 IDE，R 清空，Esc 取消\n"
+                "[●] 当前光标  [✓] 已选中  [○] 未选中\n"
                 "slash 宿主用 /super-dev；非 slash 宿主用 super-dev:"
             )
-            self.console.print(Panel(f"{self._super_dev_ascii_banner()}\n\n{subtitle}", title="Super Dev"))
+            header = Panel(f"{self._super_dev_ascii_banner()}\n\n{subtitle}", title="Super Dev")
 
             table = Table(title="选择宿主工具", show_header=True, header_style="bold cyan")
-            table.add_column("", width=3)
+            table.add_column("当前", width=6)
             table.add_column("#", width=4, style="cyan")
             table.add_column("宿主", style="bold")
             table.add_column("认证", width=12)
@@ -4799,69 +4802,85 @@ class SuperDevCLI:
 
             for idx, target in enumerate(available_targets, 1):
                 profile = integration_manager.get_adapter_profile(target)
-                selected_mark = "[x]" if target in selected else "[ ]"
-                pointer = ">" if idx - 1 == cursor else " "
+                selected_mark = "[✓]" if target in selected else "[○]"
+                pointer = "[●]" if idx - 1 == cursor else "   "
                 trigger = "/super-dev" if integration_manager.supports_slash(target) else "super-dev:"
                 detected = "已检测" if target in detected_targets else ""
+                host_label = Text()
+                host_label.append(f"{selected_mark} ", style="green" if target in selected else "dim")
+                host_label.append(target, style="bold white" if idx - 1 == cursor else "bold")
                 table.add_row(
                     pointer,
                     str(idx),
-                    f"{selected_mark} {target}",
+                    host_label,
                     profile.certification_label,
                     trigger,
                     profile.host_protocol_summary or profile.host_protocol_mode,
                     detected,
                 )
 
-            self.console.print(table)
             selected_text = ", ".join(sorted(selected)) if selected else "未选择"
-            self.console.print(f"[cyan]当前选择[/cyan]: {selected_text}")
+            footer = Text()
+            footer.append("当前选择: ", style="cyan")
+            footer.append(selected_text, style="bold white")
 
-        while True:
-            render()
-            key = self._read_single_key()
-            if key == "UP":
-                cursor = (cursor - 1) % len(available_targets)
-                continue
-            if key == "DOWN":
-                cursor = (cursor + 1) % len(available_targets)
-                continue
-            if key == "SPACE":
-                target = available_targets[cursor]
-                if target in selected:
-                    selected.remove(target)
-                else:
-                    selected.add(target)
-                continue
-            if key in ("a", "A"):
-                selected = set(available_targets)
-                continue
-            if key in ("c", "C"):
-                selected = {
-                    target for target in available_targets
-                    if target in {"claude-code", "codebuddy-cli", "codex-cli", "cursor-cli", "gemini-cli", "iflow", "kimi-cli", "kiro-cli", "opencode", "qoder-cli"}
-                }
-                continue
-            if key in ("i", "I"):
-                selected = {
-                    target for target in available_targets
-                    if target in {"codebuddy", "cursor", "kiro", "qoder", "trae", "windsurf"}
-                }
-                continue
-            if key in ("r", "R"):
-                selected.clear()
-                continue
-            if key == "ENTER":
-                chosen = [target for target in available_targets if target in selected]
-                if chosen:
-                    self.console.clear()
-                    return chosen
-                self.console.print("[yellow]请至少选择一个宿主[/yellow]")
-                time.sleep(0.8)
-                continue
-            if key == "ESC":
-                self.console.clear()
-                raise ValueError("已取消宿主选择")
+            parts: list[object] = [header, table, footer]
+            if status_message:
+                parts.append(Text(status_message, style="yellow"))
+            return Group(*parts)
+
+        with Live(renderable(), console=self.console, refresh_per_second=8, transient=True, auto_refresh=False) as live:
+            while True:
+                key = self._read_single_key()
+                status_message = ""
+                if key == "UP":
+                    cursor = (cursor - 1) % len(available_targets)
+                    live.update(renderable(), refresh=True)
+                    continue
+                if key == "DOWN":
+                    cursor = (cursor + 1) % len(available_targets)
+                    live.update(renderable(), refresh=True)
+                    continue
+                if key == "SPACE":
+                    target = available_targets[cursor]
+                    if target in selected:
+                        selected.remove(target)
+                    else:
+                        selected.add(target)
+                    live.update(renderable(), refresh=True)
+                    continue
+                if key in ("a", "A"):
+                    selected = set(available_targets)
+                    live.update(renderable(), refresh=True)
+                    continue
+                if key in ("c", "C"):
+                    selected = {
+                        target for target in available_targets
+                        if target in {"claude-code", "codebuddy-cli", "codex-cli", "cursor-cli", "gemini-cli", "iflow", "kimi-cli", "kiro-cli", "opencode", "qoder-cli"}
+                    }
+                    live.update(renderable(), refresh=True)
+                    continue
+                if key in ("i", "I"):
+                    selected = {
+                        target for target in available_targets
+                        if target in {"antigravity", "codebuddy", "cursor", "kiro", "qoder", "trae", "windsurf"}
+                    }
+                    live.update(renderable(), refresh=True)
+                    continue
+                if key in ("r", "R"):
+                    selected.clear()
+                    live.update(renderable(), refresh=True)
+                    continue
+                if key == "ENTER":
+                    chosen = [target for target in available_targets if target in selected]
+                    if chosen:
+                        return chosen
+                    status_message = "请至少选择一个宿主"
+                    live.update(renderable(), refresh=True)
+                    continue
+                if key == "ESC":
+                    raise ValueError("已取消宿主选择")
+                live.update(renderable(), refresh=True)
 
     def _build_install_summary(self, *, available_targets: list[str]) -> str:
         from .integrations import IntegrationManager

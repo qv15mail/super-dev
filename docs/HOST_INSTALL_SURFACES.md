@@ -34,7 +34,7 @@ Super Dev 的宿主接入由三层组成：
 - 例如 `.qoder/rules.md`
 - 例如 `.qoder/commands/super-dev.md`
 - 例如 `.codex/AGENTS.md`
-- 例如 `.trae/rules.md`
+- 例如 `.trae/project_rules.md`
 
 2. 宿主级接入面
 - 例如 `~/.codex/skills/super-dev-core/SKILL.md`
@@ -71,12 +71,26 @@ Super Dev 的宿主接入由三层组成：
 
 ## 6. 当前重点宿主
 
+### Antigravity
+- 触发：`/super-dev 你的需求`
+- 项目级：`GEMINI.md` + `.gemini/commands/super-dev.md` + `.agent/workflows/super-dev.md`
+- 用户级：`~/.gemini/GEMINI.md` + `~/.gemini/commands/super-dev.md`
+- 用户级 Skill：`~/.gemini/skills/super-dev-core/SKILL.md`
+- 说明：当前按 Gemini 上下文面 + Antigravity workflow 面建模。slash 负责触发，宿主级 Skill 负责让宿主理解 Super Dev 流水线协议。
+
 ### CodeBuddy
 - 触发：`/super-dev 你的需求`
-- 项目级：`.codebuddy/rules.md` 或 `.codebuddy/AGENTS.md` + `.codebuddy/commands/super-dev.md`
+- 项目级：`.codebuddy/rules.md` 或 `.codebuddy/AGENTS.md` + `.codebuddy/commands/super-dev.md` + `.codebuddy/agents/super-dev-core.md`
 - 项目级 Skill：`.codebuddy/skills/super-dev-core/SKILL.md`
+- 用户级：`~/.codebuddy/commands/super-dev.md` + `~/.codebuddy/agents/super-dev-core.md`
 - 用户级 Skill：`~/.codebuddy/skills/super-dev-core/SKILL.md`
-- 说明：官方文档已公开项目级与用户级 Skills，slash/command 负责触发，Skill 负责让宿主理解 Super Dev 流水线。
+- 说明：官方文档已公开项目级 commands、subagents、skills 与用户级 agents/skills，slash/command 负责触发，agent/skill 负责让宿主理解 Super Dev 流水线。
+
+- 触发：`/super-dev 你的需求`
+- 项目级：`.codebuddy/rules.md` + `.codebuddy/commands/super-dev.md` + `.codebuddy/agents/super-dev-core.md`
+- 项目级 Skill：`.codebuddy/skills/super-dev-core/SKILL.md`
+- 用户级：`~/.codebuddy/commands/super-dev.md` + `~/.codebuddy/agents/super-dev-core.md`
+- 用户级 Skill：`~/.codebuddy/skills/super-dev-core/SKILL.md`
 
 ### Claude Code
 - 触发：`/super-dev 你的需求`
@@ -124,9 +138,15 @@ Super Dev 的宿主接入由三层组成：
 
 ### Trae
 - 触发：`super-dev: 你的需求`
-- 项目级：`.trae/rules.md`
-- 兼容增强：`~/.trae/skills/super-dev-core/SKILL.md`
-- 说明：目前公开文档能确认的是 rules；`~/.trae/skills` 仅作为本机兼容增强路径，不能冒充官方固定路径。
+- 项目级：`.trae/project_rules.md`
+- 用户级：`~/.trae/user_rules.md`
+- 兼容增强：`.trae/rules.md`、`~/.trae/rules.md`、`~/.trae/skills/super-dev-core/SKILL.md`
+- 说明：目前公开文档能确认的是 project rules / user rules；同时本机已观测到 `rules.md` 规则面可协同生效，`~/.trae/skills` 仍只作为兼容增强路径。
+
+- 触发：`super-dev: 你的需求`
+- 项目级：`.trae/project_rules.md`
+- 用户级：`~/.trae/user_rules.md`
+- 兼容增强：`.trae/rules.md`、`~/.trae/rules.md`、`~/.trae/skills/super-dev-core/SKILL.md`
 
 ### Gemini CLI
 - 触发：`/super-dev 你的需求`

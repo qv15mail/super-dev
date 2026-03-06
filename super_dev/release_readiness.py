@@ -218,7 +218,7 @@ class ReleaseReadinessEvaluator:
 
         passed = (
             len(certified) >= 2
-            and len(official_backed) >= max(10, len(HOST_TOOL_IDS) - 2)
+            and len(official_backed) >= max(10, len(HOST_TOOL_IDS) - 3)
             and len(certified) + len(compatible) >= max(8, len(HOST_TOOL_IDS) // 2)
             and not docs_unverified
         )

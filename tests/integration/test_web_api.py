@@ -28,14 +28,14 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         parents=True,
         exist_ok=True,
     )
-    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.7"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
-    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.7"\n', encoding="utf-8")
+    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.8"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
+    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.8"\n', encoding="utf-8")
     (project_dir / "README.md").write_text(
-        "当前版本：`2.0.7`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "当前版本：`2.0.8`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "README_EN.md").write_text(
-        "Current version: `2.0.7`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "Current version: `2.0.8`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "docs" / "HOST_USAGE_GUIDE.md").write_text("Smoke\n/super-dev\nsuper-dev:\n", encoding="utf-8")
@@ -985,6 +985,7 @@ class TestWebAPI:
 
         host_tool_ids = {item["id"] for item in payload["host_tools"]}
         assert {
+            "antigravity",
             "claude-code",
             "codebuddy-cli",
             "codebuddy",
@@ -1002,6 +1003,14 @@ class TestWebAPI:
             "qoder",
             "trae",
         }.issubset(host_tool_ids)
+        antigravity_host = next(item for item in payload["host_tools"] if item["id"] == "antigravity")
+        assert antigravity_host["category"] == "ide"
+        assert "GEMINI.md" in antigravity_host["integration_files"]
+        assert ".agent/workflows/super-dev.md" in antigravity_host["integration_files"]
+        assert antigravity_host["slash_command_file"] == ".gemini/commands/super-dev.md"
+        assert antigravity_host["usage_mode"] == "native-slash"
+        assert antigravity_host["host_protocol_mode"] == "official-workflow"
+        assert antigravity_host["commands"]["trigger"].startswith("/super-dev")
         claude_host = next(item for item in payload["host_tools"] if item["id"] == "claude-code")
         assert claude_host["category"] == "cli"
         assert ".claude/CLAUDE.md" in claude_host["integration_files"]
@@ -1060,6 +1069,12 @@ class TestWebAPI:
         fake_home = temp_project_dir / "fake-home"
         fake_home.mkdir(parents=True, exist_ok=True)
         (fake_home / ".trae").mkdir(parents=True, exist_ok=True)
+        (fake_home / ".trae" / "skills").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / ".trae").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / ".trae" / "project_rules.md").write_text("rules", encoding="utf-8")
+        (temp_project_dir / ".trae" / "rules.md").write_text("rules", encoding="utf-8")
+        (fake_home / ".trae" / "user_rules.md").write_text("rules", encoding="utf-8")
+        (fake_home / ".trae" / "rules.md").write_text("rules", encoding="utf-8")
         monkeypatch.setenv("HOME", str(fake_home))
         client = TestClient(web_api.app)
         resp = client.get(
@@ -1081,12 +1096,20 @@ class TestWebAPI:
         assert payload["usage_profiles"]["trae"]["certification_level"] == "compatible"
         assert host["usage_profile"]["trigger_command"] == "super-dev: <需求描述>"
         assert str(fake_home / ".trae" / "skills") in host["checks"]["skill"]["file"]
+        assert str((temp_project_dir / ".trae" / "project_rules.md").resolve()) in host["checks"]["integrate"]["files"]
+        assert str((temp_project_dir / ".trae" / "rules.md").resolve()) in host["checks"]["integrate"]["files"]
         assert payload["usage_profiles"]["trae"]["usage_location"]
         assert payload["usage_profiles"]["trae"]["usage_notes"]
 
     def test_hosts_doctor_trae_skips_missing_compat_surface(self, temp_project_dir: Path, monkeypatch):
         fake_home = temp_project_dir / "fake-home"
         fake_home.mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / ".trae").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / ".trae" / "project_rules.md").write_text("rules", encoding="utf-8")
+        (temp_project_dir / ".trae" / "rules.md").write_text("rules", encoding="utf-8")
+        (fake_home / ".trae").mkdir(parents=True, exist_ok=True)
+        (fake_home / ".trae" / "user_rules.md").write_text("rules", encoding="utf-8")
+        (fake_home / ".trae" / "rules.md").write_text("rules", encoding="utf-8")
         monkeypatch.setenv("HOME", str(fake_home))
         client = TestClient(web_api.app)
         resp = client.get(
@@ -1179,6 +1202,24 @@ class TestWebAPI:
         assert ".qoder/skills/super-dev-core/SKILL.md" in qoder_host["official_project_surfaces"]
         assert "~/.qoderwork/skills/super-dev-core/SKILL.md" in qoder_host["official_user_surfaces"]
 
+    def test_antigravity_host_catalog_uses_gemini_and_workflow_surfaces(self):
+        client = TestClient(web_api.app)
+        resp = client.get("/api/catalogs")
+        assert resp.status_code == 200
+        payload = resp.json()
+        host = next(item for item in payload["host_tools"] if item["id"] == "antigravity")
+        assert host["supports_slash"] is True
+        assert host["usage_mode"] == "native-slash"
+        assert host["host_protocol_mode"] == "official-workflow"
+        assert host["host_protocol_summary"] == "GEMINI.md + commands + workflows + skills"
+        assert "GEMINI.md" in host["official_project_surfaces"]
+        assert ".agent/workflows/super-dev.md" in host["official_project_surfaces"]
+        assert "~/.gemini/GEMINI.md" in host["official_user_surfaces"]
+        assert "~/.gemini/skills/super-dev-core/SKILL.md" in host["official_user_surfaces"]
+        assert host["commands"]["trigger"] == '/super-dev "你的需求"'
+        assert host["final_trigger"] == '/super-dev "你的需求"'
+        assert host["requires_restart_after_onboard"] is True
+
     def test_kiro_host_catalog_uses_global_steering_surface(self):
         client = TestClient(web_api.app)
         resp = client.get("/api/catalogs")
@@ -1193,6 +1234,7 @@ class TestWebAPI:
     @pytest.mark.parametrize(
         ("host_id", "slash_file"),
         [
+            ("antigravity", ".gemini/commands/super-dev.md"),
             ("codebuddy", ".codebuddy/commands/super-dev.md"),
             ("cursor", ".cursor/commands/super-dev.md"),
             ("windsurf", ".windsurf/workflows/super-dev.md"),

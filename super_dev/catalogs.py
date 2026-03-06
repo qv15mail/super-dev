@@ -129,6 +129,7 @@ CICD_PLATFORM_IDS: tuple[str, ...] = tuple(item["id"] for item in CICD_PLATFORM_
 CICD_PLATFORM_TARGET_IDS: tuple[str, ...] = tuple(item for item in CICD_PLATFORM_IDS if item != "all")
 
 HOST_TOOL_CATALOG: list[dict[str, str]] = [
+    {"id": "antigravity", "name": "Antigravity"},
     {"id": "claude-code", "name": "Claude Code"},
     {"id": "codebuddy-cli", "name": "CodeBuddy CLI"},
     {"id": "codebuddy", "name": "CodeBuddy"},
@@ -168,6 +169,7 @@ HOST_TOOL_CATEGORY_MAP: dict[str, str] = {
 }
 
 HOST_COMMAND_CANDIDATES: dict[str, list[str]] = {
+    "antigravity": ["antigravity"],
     "claude-code": ["claude", "claude-code"],
     "codebuddy-cli": ["codebuddy", "codebuddy-cli"],
     "codebuddy": ["codebuddy"],
@@ -186,6 +188,16 @@ HOST_COMMAND_CANDIDATES: dict[str, list[str]] = {
 }
 
 HOST_PATH_PATTERNS: dict[str, list[str]] = {
+    "antigravity": [
+        "~/Applications/Antigravity.app",
+        "/Applications/Antigravity.app",
+        "%LOCALAPPDATA%/Programs/Google/Antigravity/Antigravity.exe",
+        "%PROGRAMFILES%/Google/Antigravity/Antigravity.exe",
+        "%PROGRAMFILES(X86)%/Google/Antigravity/Antigravity.exe",
+        "%LOCALAPPDATA%/Programs/Antigravity/Antigravity.exe",
+        "%PROGRAMFILES%/Antigravity/Antigravity.exe",
+        "%PROGRAMFILES(X86)%/Antigravity/Antigravity.exe",
+    ],
     "codebuddy": [
         "~/Applications/CodeBuddy.app",
         "/Applications/CodeBuddy.app",

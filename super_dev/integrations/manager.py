@@ -64,6 +64,7 @@ class IntegrationManager:
     TEXT_TRIGGER_PREFIX = "super-dev:"
     NO_SKILL_TARGETS: set[str] = {"claude-code", "kiro"}
     HOST_USAGE_LOCATIONS: dict[str, str] = {
+        "antigravity": "打开 Antigravity 的 Agent Chat / Prompt 面板，并确保当前工作区就是目标项目。",
         "claude-code": "在项目目录启动 Claude Code 当前会话后，直接在同一会话里触发。",
         "codebuddy-cli": "在项目目录启动 CodeBuddy CLI 会话后触发。",
         "codebuddy": "打开 CodeBuddy IDE 的 Agent Chat，在项目上下文内触发。",
@@ -82,6 +83,12 @@ class IntegrationManager:
         "trae": "打开 Trae Agent Chat，在当前项目上下文内直接触发。",
     }
     HOST_USAGE_NOTES: dict[str, list[str]] = {
+        "antigravity": [
+            "Antigravity 当前优先按 `GEMINI.md + .agent/workflows + /super-dev` 模式接入。",
+            "项目内会写入 `GEMINI.md`、`.gemini/commands/super-dev.md` 与 `.agent/workflows/super-dev.md`。",
+            "用户级会补充 `~/.gemini/GEMINI.md`、`~/.gemini/commands/super-dev.md` 与 `~/.gemini/skills/super-dev-core/SKILL.md`。",
+            "接入后建议新开一个 Antigravity Chat，使 GEMINI 上下文、slash 与 Skill 一起生效。",
+        ],
         "claude-code": [
             "推荐作为首选 CLI 宿主。",
             "接入后可先执行 super-dev doctor --host claude-code 确认 slash 已生效。",
@@ -95,7 +102,7 @@ class IntegrationManager:
         "codebuddy": [
             "建议在项目级 Agent Chat 中使用，不要脱离项目上下文。",
             "先让宿主完成 research，再继续文档和编码。",
-            "官方文档已公开 .codebuddy/skills 与 ~/.codebuddy/skills。",
+            "官方文档已公开 `.codebuddy/commands/`、`.codebuddy/agents/`、`.codebuddy/skills/` 与 `~/.codebuddy/agents/`、`~/.codebuddy/skills/`。",
         ],
         "codex-cli": [
             "不要输入 /super-dev，Codex 当前不走自定义 slash。",
@@ -154,13 +161,19 @@ class IntegrationManager:
         ],
         "trae": [
             "不要输入 /super-dev。",
-            "Trae 始终依赖项目级 .trae/rules.md；若检测到宿主级 ~/.trae/skills/super-dev-core/SKILL.md，则会额外增强。",
+            "Trae 优先依赖项目级 `.trae/project_rules.md` 与用户级 `~/.trae/user_rules.md`；同时会兼容写入 `.trae/rules.md` 与 `~/.trae/rules.md`，用于命中当前已观测到的规则加载面。",
+            "若检测到宿主级 ~/.trae/skills/super-dev-core/SKILL.md，则会额外增强。",
             "安装后建议新开一个 Trae Agent Chat，让新的规则与 Skill 一起生效。",
             "随后按 output/* 与 .super-dev/changes/*/tasks.md 推进开发。",
         ],
     }
 
     TARGETS: dict[str, IntegrationTarget] = {
+        "antigravity": IntegrationTarget(
+            name="antigravity",
+            description="Antigravity IDE 工作流 + Gemini 上下文注入",
+            files=["GEMINI.md", ".agent/workflows/super-dev.md"],
+        ),
         "claude-code": IntegrationTarget(
             name="claude-code",
             description="Claude Code CLI 深度集成",
@@ -173,8 +186,12 @@ class IntegrationManager:
         ),
         "codebuddy": IntegrationTarget(
             name="codebuddy",
-            description="CodeBuddy IDE 规则注入",
-            files=[".codebuddy/rules.md"],
+            description="CodeBuddy IDE rules + agent protocol 注入",
+            files=[
+                ".codebuddy/rules.md",
+                ".codebuddy/agents/super-dev-core.md",
+                ".codebuddy/skills/super-dev-core/SKILL.md",
+            ],
         ),
         "codex-cli": IntegrationTarget(
             name="codex-cli",
@@ -239,10 +256,11 @@ class IntegrationManager:
         "trae": IntegrationTarget(
             name="trae",
             description="Trae IDE 项目规则 + 宿主 Skill 注入",
-            files=[".trae/rules.md"],
+            files=[".trae/project_rules.md", ".trae/rules.md"],
         ),
     }
     SLASH_COMMAND_FILES: dict[str, str] = {
+        "antigravity": ".gemini/commands/super-dev.md",
         "claude-code": ".claude/commands/super-dev.md",
         "codebuddy-cli": ".codebuddy/commands/super-dev.md",
         "codebuddy": ".codebuddy/commands/super-dev.md",
@@ -257,10 +275,12 @@ class IntegrationManager:
         "cursor": ".cursor/commands/super-dev.md",
     }
     GLOBAL_SLASH_COMMAND_FILES: dict[str, str] = {
+        "antigravity": ".gemini/commands/super-dev.md",
         "opencode": ".config/opencode/commands/super-dev.md",
     }
     NO_SLASH_TARGETS: set[str] = {"codex-cli", "kimi-cli", "kiro", "trae"}
     OFFICIAL_DOCS: dict[str, str] = {
+        "antigravity": "https://antigravity.im/documentation",
         "claude-code": "https://docs.anthropic.com/en/docs/claude-code/slash-commands",
         "codebuddy-cli": "https://www.codebuddy.ai/docs/cli/slash-commands",
         "codebuddy": "https://www.codebuddy.ai/docs/cli/ide-integrations",
@@ -280,6 +300,15 @@ class IntegrationManager:
     }
     DOCS_VERIFIED_TARGETS: set[str] = {key for key, value in OFFICIAL_DOCS.items() if bool(value)}
     HOST_CERTIFICATIONS: dict[str, dict[str, object]] = {
+        "antigravity": {
+            "level": "experimental",
+            "reason": "Antigravity 当前按 GEMINI 上下文、项目 workflows 与 slash 组合面接入，本机已验证安装面，但还缺更完整的官方定制文档证据。",
+            "evidence": [
+                "本机已存在 ~/.gemini/GEMINI.md、~/.gemini/commands、~/.gemini/skills 与 Antigravity 独立应用目录",
+                "项目历史与本机会话中已出现 .agent/workflows 作为 Antigravity 工作流面",
+                "Super Dev 已按项目 GEMINI.md + .agent/workflows + 用户级 ~/.gemini 面完成接入",
+            ],
+        },
         "claude-code": {
             "level": "certified",
             "reason": "原生 slash 命令、宿主文档明确、项目规则与 slash 安装路径已做运行级适配。",
@@ -300,11 +329,12 @@ class IntegrationManager:
         },
         "trae": {
             "level": "compatible",
-            "reason": "Trae 官方公开面目前可确认的是项目 rules；宿主级 skills 仍按兼容增强处理，因此当前保持稳定兼容而非认证级。",
+            "reason": "Trae 官方公开面当前可确认的是项目 rules 与用户 rules；同时本机已观测到 `.trae/rules.md` / `~/.trae/rules.md` 的兼容规则面，skills 仍按增强处理，因此当前保持稳定兼容而非认证级。",
             "evidence": [
-                "公开文档确认 Trae rules 机制",
+                "公开文档确认 Trae project rules 与 user rules 机制",
+                "本机已存在 ~/.trae/rules.md，可作为兼容规则面协同生效",
                 "本机若存在 ~/.trae/skills，可作为兼容增强路径协同生效",
-                "Super Dev 已同时建模项目 rules 与可选宿主级 Skill 增强",
+                "Super Dev 已同时建模项目 rules、用户 rules、兼容 rules 面与可选宿主级 Skill 增强",
             ],
         },
         "codebuddy-cli": {
@@ -349,10 +379,11 @@ class IntegrationManager:
         },
         "codebuddy": {
             "level": "experimental",
-            "reason": "IDE 侧能力存在，但对 Agent Chat slash 的项目级行为仍缺少持续真机验证。",
+            "reason": "IDE 侧 commands + agents + skills 接入完整，但对 Agent Chat slash 的项目级行为仍缺少持续真机验证。",
             "evidence": [
                 "官方文档公开 IDE integrations",
-                "Super Dev 已写入规则、Skill 与命令映射",
+                "官方文档公开 Subagents 与 Skills",
+                "Super Dev 已写入 rules、commands、agents 与 skills 接入面",
             ],
         },
         "cursor": {
@@ -573,22 +604,40 @@ class IntegrationManager:
                 "usage_notes": usage_notes,
                 "notes": "该 CLI 宿主当前不走自定义 slash，使用项目级 .codex/AGENTS.md 作为核心约束，并通过官方用户级 Skills 目录 ~/.codex/skills 安装 super-dev-core。",
             }
-        if target == "trae":
+        if target == "antigravity":
             return {
-                "usage_mode": "rules-and-skill",
-                "primary_entry": '在 Trae Agent Chat 输入 `super-dev: <需求描述>`（由 .trae/rules.md + 兼容 Skill〔若检测到〕生效）',
-                "trigger_command": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
-                "trigger_context": "Trae IDE Agent Chat",
+                "usage_mode": "native-slash",
+                "primary_entry": '在 Antigravity Agent Chat 输入 `/super-dev "<需求描述>"`（由 GEMINI.md + .agent/workflows + ~/.gemini skills 生效）',
+                "trigger_command": '/super-dev "<需求描述>"',
+                "trigger_context": "Antigravity IDE Agent Chat",
                 "usage_location": usage_location,
                 "requires_restart_after_onboard": True,
                 "post_onboard_steps": [
-                    "完成接入后重新打开 Trae，或至少新开一个 Trae Agent Chat，使新的规则与兼容 Skill（若已安装）一起生效。",
+                    "完成接入后重新打开 Antigravity，或至少新开一个 Agent Chat。",
+                    "确认项目内已生成 `GEMINI.md`、`.gemini/commands/super-dev.md` 与 `.agent/workflows/super-dev.md`。",
+                    "确认用户目录已生成 `~/.gemini/GEMINI.md`、`~/.gemini/commands/super-dev.md` 与 `~/.gemini/skills/super-dev-core/SKILL.md`。",
+                    '在 Antigravity Agent Chat 输入 `/super-dev "<需求描述>"` 触发完整流程。',
+                ],
+                "usage_notes": usage_notes,
+                "notes": "Antigravity 当前按 Gemini 上下文面 + 项目 workflow 面接入；slash 负责触发，宿主级 Skill 负责让宿主理解 Super Dev 流水线。",
+            }
+        if target == "trae":
+            return {
+                "usage_mode": "rules-and-skill",
+                "primary_entry": '在 Trae Agent Chat 输入 `super-dev: <需求描述>`（由 .trae/project_rules.md + ~/.trae/user_rules.md + .trae/rules.md / ~/.trae/rules.md〔兼容规则面〕 + 兼容 Skill〔若检测到〕生效）',
+                "trigger_command": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
+                "trigger_context": "Trae Agent Chat",
+                "usage_location": usage_location,
+                "requires_restart_after_onboard": True,
+                "post_onboard_steps": [
+                    "完成接入后重新打开 Trae，或至少新开一个 Agent Chat，使新的规则与兼容 Skill（若已安装）一起生效。",
+                    "确认项目内已生成 `.trae/project_rules.md` 与 `.trae/rules.md`，用户目录已生成 `~/.trae/user_rules.md` 与 `~/.trae/rules.md`。",
                     "确保当前项目就是已接入 Super Dev 的工作区。",
                     "输入 `super-dev: <需求描述>` 触发完整流程。",
                     "按 output/* 与 .super-dev/changes/*/tasks.md 执行开发。",
                 ],
                 "usage_notes": usage_notes,
-                "notes": "该宿主当前以项目级 .trae/rules.md 为核心接入面；若检测到 ~/.trae/skills，则会增强安装 super-dev-core，但这条路径仍只视为兼容增强。",
+                "notes": "该宿主当前以项目级 `.trae/project_rules.md` 与用户级 `~/.trae/user_rules.md` 为官方核心接入面；同时会兼容写入 `.trae/rules.md` 与 `~/.trae/rules.md`，若检测到 ~/.trae/skills，则会增强安装 super-dev-core。",
             }
         if target == "kimi-cli":
             return {
@@ -705,13 +754,17 @@ class IntegrationManager:
                 "mode": "official-subagent",
                 "summary": "官方 commands + subagents",
             },
+            "antigravity": {
+                "mode": "official-workflow",
+                "summary": "GEMINI.md + commands + workflows + skills",
+            },
             "codebuddy-cli": {
                 "mode": "official-skill",
                 "summary": "官方 commands + skills",
             },
             "codebuddy": {
-                "mode": "official-skill",
-                "summary": "官方 commands + skills",
+                "mode": "official-subagent",
+                "summary": "官方 commands + agents + skills",
             },
             "qoder-cli": {
                 "mode": "official-skill",
@@ -779,22 +832,43 @@ class IntegrationManager:
                 "official_user_surfaces": ["~/.claude/agents/super-dev-core.md"],
                 "observed_compatibility_surfaces": [],
             },
+            "antigravity": {
+                "official_project_surfaces": [
+                    "GEMINI.md",
+                    ".gemini/commands/super-dev.md",
+                    ".agent/workflows/super-dev.md",
+                ],
+                "official_user_surfaces": [
+                    "~/.gemini/GEMINI.md",
+                    "~/.gemini/commands/super-dev.md",
+                    "~/.gemini/skills/super-dev-core/SKILL.md",
+                ],
+                "observed_compatibility_surfaces": [],
+            },
             "codebuddy-cli": {
                 "official_project_surfaces": [
                     ".codebuddy/AGENTS.md",
                     ".codebuddy/commands/super-dev.md",
                     ".codebuddy/skills/super-dev-core/SKILL.md",
                 ],
-                "official_user_surfaces": ["~/.codebuddy/skills/super-dev-core/SKILL.md"],
+                "official_user_surfaces": [
+                    "~/.codebuddy/commands/super-dev.md",
+                    "~/.codebuddy/skills/super-dev-core/SKILL.md",
+                ],
                 "observed_compatibility_surfaces": [],
             },
             "codebuddy": {
                 "official_project_surfaces": [
                     ".codebuddy/rules.md",
                     ".codebuddy/commands/super-dev.md",
+                    ".codebuddy/agents/super-dev-core.md",
                     ".codebuddy/skills/super-dev-core/SKILL.md",
                 ],
-                "official_user_surfaces": ["~/.codebuddy/skills/super-dev-core/SKILL.md"],
+                "official_user_surfaces": [
+                    "~/.codebuddy/commands/super-dev.md",
+                    "~/.codebuddy/agents/super-dev-core.md",
+                    "~/.codebuddy/skills/super-dev-core/SKILL.md",
+                ],
                 "observed_compatibility_surfaces": [],
             },
             "codex-cli": {
@@ -887,9 +961,13 @@ class IntegrationManager:
                 "observed_compatibility_surfaces": [],
             },
             "trae": {
-                "official_project_surfaces": [".trae/rules.md"],
-                "official_user_surfaces": [],
-                "observed_compatibility_surfaces": ["~/.trae/skills/super-dev-core/SKILL.md"],
+                "official_project_surfaces": [".trae/project_rules.md"],
+                "official_user_surfaces": ["~/.trae/user_rules.md"],
+                "observed_compatibility_surfaces": [
+                    ".trae/rules.md",
+                    "~/.trae/rules.md",
+                    "~/.trae/skills/super-dev-core/SKILL.md",
+                ],
             },
         }
         return by_target.get(
@@ -927,6 +1005,14 @@ class IntegrationManager:
             protocol_file.write_text(self._build_claude_agent_content(), encoding="utf-8")
             return protocol_file
 
+        if target == "codebuddy":
+            protocol_file = Path.home() / ".codebuddy" / "agents" / "super-dev-core.md"
+            if protocol_file.exists() and not force:
+                return None
+            protocol_file.parent.mkdir(parents=True, exist_ok=True)
+            protocol_file.write_text(self._build_codebuddy_agent_content(), encoding="utf-8")
+            return protocol_file
+
         if target == "kiro":
             protocol_file = Path.home() / ".kiro" / "steering" / "AGENTS.md"
             if protocol_file.exists() and not force:
@@ -941,6 +1027,29 @@ class IntegrationManager:
                 return None
             protocol_file.parent.mkdir(parents=True, exist_ok=True)
             protocol_file.write_text(self._build_content(target), encoding="utf-8")
+            return protocol_file
+
+        if target == "antigravity":
+            protocol_file = Path.home() / ".gemini" / "GEMINI.md"
+            if protocol_file.exists() and not force:
+                return None
+            protocol_file.parent.mkdir(parents=True, exist_ok=True)
+            protocol_file.write_text(self._build_antigravity_context_content(), encoding="utf-8")
+            return protocol_file
+
+        if target == "trae":
+            protocol_file = Path.home() / ".trae" / "user_rules.md"
+            compatibility_file = Path.home() / ".trae" / "rules.md"
+            content = self._build_content(target)
+            if protocol_file.exists() and not force:
+                if not compatibility_file.exists():
+                    compatibility_file.parent.mkdir(parents=True, exist_ok=True)
+                    compatibility_file.write_text(content, encoding="utf-8")
+                return None
+            protocol_file.parent.mkdir(parents=True, exist_ok=True)
+            protocol_file.write_text(content, encoding="utf-8")
+            compatibility_file.parent.mkdir(parents=True, exist_ok=True)
+            compatibility_file.write_text(content, encoding="utf-8")
             return protocol_file
 
         return None
@@ -1033,6 +1142,15 @@ class IntegrationManager:
         if target == "claude-code" and relative.endswith(".claude/agents/super-dev-core.md"):
             return self._build_claude_agent_content()
 
+        if target == "codebuddy" and relative.endswith(".codebuddy/agents/super-dev-core.md"):
+            return self._build_codebuddy_agent_content()
+
+        if target == "trae":
+            return self._generic_ide_rules("trae")
+
+        if relative.endswith("/skills/super-dev-core/SKILL.md"):
+            return self._build_embedded_skill_content()
+
         if target == "cursor":
             cursor_template = self.templates_dir / ".cursorrules.template"
             if cursor_template.exists():
@@ -1046,7 +1164,9 @@ class IntegrationManager:
                 )
 
         if target == "antigravity":
-            return self._antigravity_workflow_rules()
+            if relative.endswith(".agent/workflows/super-dev.md"):
+                return self._antigravity_workflow_rules()
+            return self._build_antigravity_context_content()
 
         if target in {
             "cursor",
@@ -1106,6 +1226,50 @@ class IntegrationManager:
             "- Claude Code remains the execution host.\n"
             "- Super Dev is the governance layer, not a separate model platform.\n"
             "- Prefer repository-local rules and commands as the source of project-specific context.\n"
+        )
+
+    def _build_codebuddy_agent_content(self) -> str:
+        return (
+            "---\n"
+            "name: super-dev-core\n"
+            "description: CodeBuddy subagent that activates the Super Dev pipeline for research-first, commercial-grade delivery.\n"
+            "---\n"
+            "# Super Dev Core Agent\n\n"
+            "You are the CodeBuddy agent that activates Super Dev governance mode.\n\n"
+            "## Purpose\n"
+            "- Treat `/super-dev ...` as the entry point into the Super Dev pipeline.\n"
+            "- Enforce the sequence: research -> three core docs -> wait for confirmation -> Spec/tasks -> frontend runtime verification -> backend/tests/delivery.\n"
+            "- Use the local Python `super-dev` CLI for governance artifacts, checks, and delivery reports.\n"
+            "- Use CodeBuddy native tools for browsing, coding, terminal execution, and debugging.\n\n"
+            "## First Response Contract\n"
+            "- On the first reply after `/super-dev ...`, explicitly say Super Dev pipeline mode is active.\n"
+            "- Explicitly say the current phase is `research`.\n"
+            "- Explicitly state that you will read `knowledge/` and `output/knowledge-cache/*-knowledge-bundle.json` first when present.\n"
+            "- Explicitly promise that you will stop after PRD, architecture, and UIUX for user confirmation before creating Spec or writing code.\n\n"
+            "## Boundary\n"
+            "- CodeBuddy remains the execution host.\n"
+            "- Super Dev is the governance layer, not a separate model platform.\n"
+            "- Prefer repository-local rules, commands, and this agent file as the source of project-specific context.\n"
+        )
+
+    def _build_embedded_skill_content(self) -> str:
+        return (
+            "---\n"
+            "name: super-dev-core\n"
+            "description: Super Dev pipeline governance for research-first, commercial-grade AI coding delivery\n"
+            "---\n"
+            "# super-dev-core - Super Dev AI Coding Skill\n\n"
+            "## 定位边界（强制）\n"
+            "- 当前宿主负责调用模型、工具、终端与实际代码修改。\n"
+            "- Super Dev 不是大模型平台，也不提供自己的代码生成 API。\n"
+            "- 你的职责是利用宿主现有能力，严格执行 Super Dev 的流程规范、设计约束、质量门禁与交付标准。\n\n"
+            "## 首轮响应契约（强制）\n"
+            "- 第一轮回复必须明确说明当前阶段是 `research`。\n"
+            "- 第一轮回复必须说明会先读取 `knowledge/` 与 `output/knowledge-cache/*-knowledge-bundle.json`。\n"
+            "- 三份核心文档完成后会暂停等待用户确认；未经确认不得创建 `.super-dev/changes/*` 或开始编码。\n\n"
+            "## 本地知识库契约（强制）\n"
+            "- 先读 `knowledge/`。\n"
+            "- 若存在 `output/knowledge-cache/*-knowledge-bundle.json`，必须先读取并把命中的本地知识带入三文档、Spec 与实现。\n"
         )
 
     def _build_slash_command_content(self, target: str) -> str:
@@ -1374,7 +1538,7 @@ class IntegrationManager:
     def _antigravity_workflow_rules(self) -> str:
         """
         生成 Antigravity IDE 专属工作流配置。
-        文件写入 .agents/workflows/super-dev.md，
+        文件写入 .agent/workflows/super-dev.md，
         格式遵循 Antigravity Skill YAML frontmatter + markdown 规范。
         """
         return """\
@@ -1472,3 +1636,26 @@ super-dev expert SECURITY "需求"  # 单专家调用
 super-dev skill install super-dev --target antigravity  # 安装 Skill
 ```
 """
+
+    def _build_antigravity_context_content(self) -> str:
+        return (
+            "# Super Dev Antigravity Context\n\n"
+            "Antigravity remains the execution host for model reasoning, browsing, terminal work, and code changes.\n"
+            "Super Dev is the governance layer and local Python toolchain.\n\n"
+            "## Trigger\n"
+            "- Preferred: `/super-dev \"<需求描述>\"`\n"
+            "- Fallback in local terminal only: `super-dev \"<需求描述>\"`\n"
+            "- The terminal fallback does not replace the Antigravity host session.\n\n"
+            "## Required First Response Contract\n"
+            f"{self._first_response_contract_en()}"
+            "## Local Knowledge Contract\n"
+            "- Read `knowledge/` first when relevant.\n"
+            "- If `output/knowledge-cache/*-knowledge-bundle.json` exists, inherit its local knowledge hits into research, PRD, architecture, UIUX, Spec, and implementation.\n\n"
+            "## Required Execution Order\n"
+            "1. Research similar products first using host-native browse/search and write `output/*-research.md`\n"
+            "2. Generate PRD, architecture, and UIUX\n"
+            "3. Stop and wait for explicit user confirmation before Spec or coding\n"
+            "4. Create Spec/tasks only after confirmation\n"
+            "5. Implement and run the frontend first\n"
+            "6. Continue with backend, tests, quality gate, and delivery\n"
+        )

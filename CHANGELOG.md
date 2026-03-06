@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added dedicated CI `Platform Compatibility` job for multi-target integration visibility.
 - Tag-based CD publishing now hard-fails when `PYPI_API_TOKEN` is missing (no silent skip).
 
-## [2.0.7] - 2026-03-07
+## [2.0.8] - 2026-03-07
 
 ### Added
 
@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Unified the active project version to `2.0.7` across package metadata, runtime metadata, docs, examples, release scripts, and tests.
+- Unified the active project version to `2.0.8` across package metadata, runtime metadata, docs, examples, release scripts, and tests.
 - Refined repository tracking boundaries so project integration assets are versioned while local runtime artifacts remain ignored.
 - Updated README and README_EN with clearer dependency-install behavior, system workflow explanation, and architecture visuals.
 

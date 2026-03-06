@@ -26,6 +26,7 @@ class SkillManager:
 
     # Official user-level skill paths confirmed by vendor docs.
     OFFICIAL_TARGET_PATHS = {
+        "antigravity": "~/.gemini/skills",
         "codebuddy-cli": "~/.codebuddy/skills",
         "codebuddy": "~/.codebuddy/skills",
         "codex-cli": "~/.codex/skills",
@@ -83,7 +84,7 @@ class SkillManager:
         if kind == "official-user-surface":
             return True
         if kind == "observed-compatibility-surface":
-            return target_dir.exists() or target_dir.parent.exists()
+            return target_dir.exists()
         return False
 
     def list_installed(self, target: str) -> list[str]:
@@ -243,7 +244,7 @@ description: Super Dev pipeline governance for research-first, commercial-grade 
 ---
 # {skill_name} - Super Dev AI Coding Skill
 
-> 版本: 2.0.7 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
+> 版本: 2.0.8 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
 
 ---
 

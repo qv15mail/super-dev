@@ -53,6 +53,19 @@ class TestIntegrationManager:
         by_host = {item.host: item for item in profiles}
         assert set(by_host.keys()) == set(IntegrationManager.TARGETS.keys())
 
+        antigravity = by_host["antigravity"]
+        assert antigravity.category == "ide"
+        assert antigravity.usage_mode == "native-slash"
+        assert antigravity.trigger_command == '/super-dev "<需求描述>"'
+        assert antigravity.host_protocol_mode == "official-workflow"
+        assert antigravity.host_protocol_summary == "GEMINI.md + commands + workflows + skills"
+        assert "GEMINI.md" in antigravity.integration_files
+        assert ".agent/workflows/super-dev.md" in antigravity.integration_files
+        assert ".gemini/commands/super-dev.md" in antigravity.official_project_surfaces
+        assert "~/.gemini/GEMINI.md" in antigravity.official_user_surfaces
+        assert "~/.gemini/skills/super-dev-core/SKILL.md" in antigravity.official_user_surfaces
+        assert antigravity.requires_restart_after_onboard is True
+
         codex = by_host["codex-cli"]
         assert codex.category == "cli"
         assert codex.adapter_mode == "native-cli-session"
@@ -86,6 +99,14 @@ class TestIntegrationManager:
         assert "~/.qoder/commands/super-dev.md" in qoder.official_user_surfaces
         assert "~/.qoderwork/skills/super-dev-core/SKILL.md" in qoder.official_user_surfaces
         assert ".qoder/skills/super-dev-core/SKILL.md" in qoder.official_project_surfaces
+
+        codebuddy = by_host["codebuddy"]
+        assert codebuddy.host_protocol_mode == "official-subagent"
+        assert codebuddy.host_protocol_summary == "官方 commands + agents + skills"
+        assert ".codebuddy/agents/super-dev-core.md" in codebuddy.integration_files
+        assert ".codebuddy/agents/super-dev-core.md" in codebuddy.official_project_surfaces
+        assert "~/.codebuddy/agents/super-dev-core.md" in codebuddy.official_user_surfaces
+        assert "~/.codebuddy/skills/super-dev-core/SKILL.md" in codebuddy.official_user_surfaces
 
         claude = by_host["claude-code"]
         assert claude.host_protocol_mode == "official-subagent"
@@ -236,15 +257,19 @@ class TestIntegrationManager:
         assert manager.supports_slash("kiro") is False
         assert manager.supports_slash("qoder") is True
         assert manager.supports_slash("trae") is False
+        assert manager.supports_slash("antigravity") is True
         assert manager.requires_skill("kimi-cli") is True
+        assert manager.requires_skill("codebuddy") is True
         assert manager.setup_slash_command(target="kiro", force=True) is None
         assert manager.setup_slash_command(target="qoder", force=True) is not None
+        assert manager.setup_slash_command(target="antigravity", force=True) is not None
         assert manager.setup_slash_command(target="trae", force=True) is None
         assert manager.setup_global_slash_command(target="trae", force=True) is None
 
     @pytest.mark.parametrize(
         ("target", "command_file"),
         [
+            ("antigravity", ".gemini/commands/super-dev.md"),
             ("codebuddy", ".codebuddy/commands/super-dev.md"),
             ("cursor", ".cursor/commands/super-dev.md"),
             ("windsurf", ".windsurf/workflows/super-dev.md"),

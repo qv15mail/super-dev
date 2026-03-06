@@ -19,7 +19,7 @@
 
 ## Version
 
-Current version: `2.0.7`
+Current version: `2.0.8`
 
 ---
 
@@ -104,12 +104,14 @@ Upgrade:
 
 ```bash
 uv tool upgrade super-dev
+super-dev update
 ```
 
 ### 2. PyPI
 
 ```bash
 pip install -U super-dev
+super-dev update
 ```
 
 After installation, run:
@@ -137,13 +139,13 @@ After onboarding, the terminal prints the final trigger for each selected host:
 ### 3. Pin a specific version
 
 ```bash
-pip install super-dev==2.0.7
+pip install super-dev==2.0.8
 ```
 
 ### 4. Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.7
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.8
 ```
 
 ### 5. Source install for development
@@ -260,7 +262,7 @@ This view shows the main source directories under `super_dev` and their dependen
 - If the project contains a `knowledge/` directory, the host must read the relevant local knowledge files before drafting documents.
 - If `output/knowledge-cache/*-knowledge-bundle.json` exists, the host must inherit its matched local knowledge, research summary, and scenario constraints into the documents, spec, and implementation.
 
-### IDE Hosts (CodeBuddy / Cursor / Kiro / Qoder / Trae / Windsurf)
+### IDE Hosts (Antigravity / CodeBuddy / Cursor / Kiro / Qoder / Trae / Windsurf)
 
 1. Run `super-dev` in your project root to finish onboarding.  
 2. Open the IDE Agent Chat and trigger according to the real host entry.  
@@ -277,9 +279,10 @@ Certification levels:
 
 | Host | Type | Certification | Supports `/super-dev` | Correct Trigger | Restart Required After Onboard |
 | --- | --- | --- | --- | --- | --- |
+| Antigravity | IDE | Experimental | Yes | Run `/super-dev your requirement` in Antigravity Agent Chat (governed by `GEMINI.md` + `.gemini/commands/` + `.agent/workflows/` + `~/.gemini/skills/`) | Yes |
 | Claude Code | CLI | Certified | Yes | Run `/super-dev your requirement` inside the Claude Code session (governed by `.claude/commands/` + `.claude/agents/` / `~/.claude/agents/`) | No |
-| CodeBuddy CLI | CLI | Compatible | Yes | Run `/super-dev your requirement` inside the CodeBuddy CLI session (governed by `.codebuddy/commands/` + `.codebuddy/skills/` / `~/.codebuddy/skills/`) | No |
-| CodeBuddy IDE | IDE | Experimental | Yes | Run `/super-dev your requirement` in Agent Chat (governed by `.codebuddy/commands/` + `.codebuddy/skills/` / `~/.codebuddy/skills/`) | No |
+| CodeBuddy CLI | CLI | Compatible | Yes | Run `/super-dev your requirement` inside the CodeBuddy CLI session (governed by `.codebuddy/commands/` + `.codebuddy/agents/` + `.codebuddy/skills/` / `~/.codebuddy/agents/` + `~/.codebuddy/skills/`) | No |
+| CodeBuddy IDE | IDE | Experimental | Yes | Run `/super-dev your requirement` in Agent Chat (governed by `.codebuddy/commands/` + `.codebuddy/agents/` + `.codebuddy/skills/` / `~/.codebuddy/agents/` + `~/.codebuddy/skills/`) | No |
 | Cursor CLI | CLI | Compatible | Yes | Run `/super-dev your requirement` inside the Cursor CLI session | No |
 | Cursor IDE | IDE | Experimental | Yes | Run `/super-dev your requirement` in Agent Chat | No |
 | Gemini CLI | CLI | Compatible | Yes | Run `/super-dev your requirement` inside the Gemini CLI session | No |
@@ -292,7 +295,7 @@ Certification levels:
 | Qoder IDE | IDE | Experimental | Yes | Type `/super-dev your requirement` inside Qoder IDE Agent Chat (governed by `.qoder/commands/super-dev.md` + `.qoder/rules.md` + `.qoder/skills/` / `~/.qoderwork/skills/`) | No |
 | Windsurf | IDE | Experimental | Yes | Run `/super-dev your requirement` in Agent Chat (governed by `.windsurf/workflows/` + `.windsurf/skills/` / `~/.codeium/windsurf/skills/`) | No |
 | Codex CLI | CLI | Certified | No | Restart Codex, then type `super-dev: your requirement`; `.codex/AGENTS.md` + the compatibility skill will govern execution | Yes |
-| Trae | IDE | Compatible | No | Type `super-dev: your requirement` inside Trae Agent Chat (governed by `.trae/rules.md`; if `~/.trae/skills/super-dev-core/SKILL.md` exists it will add compatibility enhancement) | Yes |
+| Trae | IDE | Compatible | No | Type `super-dev: your requirement` inside Trae Agent Chat (governed by `.trae/project_rules.md` + `~/.trae/user_rules.md`; it also writes `.trae/rules.md` + `~/.trae/rules.md` as compatibility rule surfaces, and `~/.trae/skills/super-dev-core/SKILL.md` adds extra enhancement when available) | Yes |
 
 If you do not want to reason about host differences yourself, run:
 
@@ -380,8 +383,10 @@ Restart required after onboard: No
 Notes:
 1. Use the project-scoped Agent Chat, not a detached generic chat.
 2. Let the host finish research before docs and coding.
+3. The current integration model is `.codebuddy/commands/` + `.codebuddy/agents/` + `.codebuddy/skills/`.
 
-#### 4. Cursor CLI
+
+#### 5. Cursor CLI
 
 Install:
 ```bash
@@ -402,7 +407,7 @@ Notes:
 1. Good fit for running research, docs, and coding in one terminal session.
 2. If the command list is stale, reopen the Cursor CLI session.
 
-#### 5. Cursor IDE
+#### 6. Cursor IDE
 
 Install:
 ```bash
@@ -423,7 +428,30 @@ Notes:
 1. Keep the full pipeline inside one chat when possible.
 2. If rules were not loaded, reopen the workspace or start a new chat.
 
-#### 6. Gemini CLI
+#### 7. Antigravity
+
+Install:
+```bash
+super-dev onboard --host antigravity --force --yes
+```
+
+Where to trigger:
+Open Antigravity Agent Chat / Prompt panel and make sure the current workspace is the target project.
+
+Trigger command:
+```text
+/super-dev your requirement
+```
+
+Restart required after onboard: Yes
+
+Notes:
+1. Antigravity currently integrates through `GEMINI.md + .agent/workflows + /super-dev`.
+2. Onboarding writes project-level `GEMINI.md`, `.gemini/commands/super-dev.md`, and `.agent/workflows/super-dev.md`.
+3. It also writes user-level `~/.gemini/GEMINI.md`, `~/.gemini/commands/super-dev.md`, and `~/.gemini/skills/super-dev-core/SKILL.md`.
+4. Restart Antigravity or open a fresh Agent Chat before typing `/super-dev your requirement`.
+
+#### 8. Gemini CLI
 
 Install:
 ```bash
@@ -444,7 +472,7 @@ Notes:
 1. Prefer to keep research -> three core docs -> user confirmation -> spec -> frontend runtime validation -> backend/delivery in one continuous session.
 2. If the host supports browsing, let it perform competitor research first.
 
-#### 7. iFlow CLI
+#### 9. iFlow CLI
 
 Install:
 ```bash
@@ -465,7 +493,7 @@ Notes:
 1. Currently adapted as a slash-capable CLI host.
 2. If slash does not appear, verify that the project command file was written.
 
-#### 8. Kimi CLI
+#### 10. Kimi CLI
 
 Install:
 ```bash
@@ -487,7 +515,7 @@ Notes:
 2. Running `super-dev doctor --host kimi-cli` once is recommended.
 3. Keep the whole workflow in the same session when possible.
 
-#### 9. Kiro CLI
+#### 11. Kiro CLI
 
 Install:
 ```bash
@@ -508,7 +536,7 @@ Notes:
 1. Use slash directly in CLI mode.
 2. If project rules are stale, reopen Kiro CLI from the project root.
 
-#### 10. Kiro IDE
+#### 12. Kiro IDE
 
 Install:
 ```bash
@@ -530,7 +558,7 @@ Notes:
 2. Onboarding writes project-level `.kiro/steering/super-dev.md` and also installs the official global steering file at `~/.kiro/steering/AGENTS.md`.
 3. If steering or rules did not load, reopen the project window.
 
-#### 11. OpenCode
+#### 13. OpenCode
 
 Install:
 ```bash
@@ -551,7 +579,7 @@ Notes:
 1. Uses the CLI slash path.
 2. Even if you also use a global command directory, keep the project-level integration files.
 
-#### 12. Qoder CLI
+#### 14. Qoder CLI
 
 Install:
 ```bash
@@ -572,7 +600,7 @@ Notes:
 1. Suitable for terminal-first pipeline execution.
 2. If slash does not work, verify that `.qoder/commands/super-dev.md` exists.
 
-#### 13. Qoder IDE
+#### 15. Qoder IDE
 
 Install:
 ```bash
@@ -593,7 +621,7 @@ Notes:
 1. Qoder IDE now uses project-level commands + rules, so trigger `/super-dev your requirement` in Agent Chat.
 2. If the command does not appear, verify that `.qoder/commands/super-dev.md` exists, then reopen the project or start a fresh chat.
 
-#### 14. Windsurf
+#### 16. Windsurf
 
 Install:
 ```bash
@@ -614,7 +642,7 @@ Notes:
 1. Currently adapted through the IDE slash/workflow path.
 2. Best used when research, docs, spec, and coding stay in one workflow.
 
-#### 15. Codex CLI
+#### 17. Codex CLI
 
 Install:
 ```bash
@@ -636,7 +664,7 @@ Notes:
 2. Execution relies on `.codex/AGENTS.md` plus the official user-level skill at `~/.codex/skills/super-dev-core/SKILL.md`.
 3. If the old session did not reload the Skill, restart `codex` and retry.
 
-#### 16. Trae
+#### 18. Trae
 
 Install:
 ```bash
@@ -655,323 +683,7 @@ Restart required after onboard: Yes
 
 Notes:
 1. Trae currently uses `super-dev: your requirement` as the primary trigger.
-2. Onboarding always writes project-level `.trae/rules.md`; if a compatible host skill directory is detected, it also enhances `~/.trae/skills/super-dev-core/SKILL.md`.
+2. Onboarding always writes project-level `.trae/project_rules.md` + `.trae/rules.md` and user-level `~/.trae/user_rules.md` + `~/.trae/rules.md`; if a compatible host skill directory is detected, it also enhances `~/.trae/skills/super-dev-core/SKILL.md`.
 3. After onboarding, restart Trae or at least open a fresh Agent Chat so the rule file loads; if the compatibility skill exists it will load together.
 4. Then continue delivery from `output/*` and `.super-dev/changes/*/tasks.md`.
 
-## Quick Start (Detailed)
-
-For the host-by-host usage matrix and exact trigger method, see:
-
-- [docs/HOST_USAGE_GUIDE.md](/Users/weiyou/Documents/kaifa/super-dev/docs/HOST_USAGE_GUIDE.md)
-- [docs/HOST_CAPABILITY_AUDIT.md](/Users/weiyou/Documents/kaifa/super-dev/docs/HOST_CAPABILITY_AUDIT.md)
-
-### 1. Enter onboarding guide right after install
-
-```bash
-super-dev
-```
-
-Running `super-dev` without arguments opens the interactive installer guide with multi-select hosts.
-
-If you installed with `uv tool install`, you can also run:
-
-```bash
-uv tool run super-dev
-```
-
-### 2. One-command non-interactive install
-
-Auto-detect and onboard installed hosts:
-
-```bash
-super-dev install --auto --force --yes
-```
-
-Onboard all hosts:
-
-```bash
-super-dev install --all --force --yes
-```
-
-Check or upgrade to the latest version:
-
-```bash
-super-dev update --check
-super-dev update
-```
-
-### 3. Build host profile
-
-```bash
-super-dev detect --auto --save-profile
-```
-
-This generates compatibility artifacts and updates `super-dev.yaml`:
-
-- `host_profile_targets`
-- `host_profile_enforce_selected=true`
-
-### 4. Initialize enterprise policy
-
-```bash
-super-dev policy init --preset enterprise --force
-super-dev policy show
-```
-
-### 5. Start pipeline delivery
-
-```bash
-super-dev "Build an enterprise CRM with auth, RBAC, accounts, opportunities, and reporting"
-```
-
-Or explicit mode:
-
-```bash
-super-dev pipeline "Build an enterprise CRM" --platform web --frontend react --backend python --cicd github
-```
-
-Host hard gate is enabled by default: pipeline execution is blocked when no `ready` host is available.
-
-Default execution order:
-
-1. Host researches similar products and writes `output/*-research.md`
-2. Generate `output/*-prd.md`
-3. Generate `output/*-architecture.md`
-4. Generate `output/*-uiux.md`
-5. Stop at the document confirmation gate and wait for user approval or revision requests
-6. Only after approval, generate spec and `tasks.md`
-7. Implement frontend first with runtime validation, then proceed to backend, testing, gates, and delivery
-
-You can also manage document approval from the terminal:
-
-```bash
-super-dev review docs
-super-dev review docs --status revision_requested --comment "Add clearer differentiation and improve hero information architecture"
-super-dev review docs --status confirmed --comment "Core documents approved, proceed to Spec"
-```
-
-### 6. Review key artifacts
-
-Check `output/` after each run:
-
-- `*-research.md`
-- `*-prd.md`
-- `*-architecture.md`
-- `*-uiux.md`
-- `*-redteam.md`
-- `*-quality-gate.md`
-- `*-pipeline-metrics.json`
-- `*-pipeline-contract.json`
-- `delivery/*-delivery-manifest.json`
-- `rehearsal/*-rehearsal-report.md`
-
-### 7. Trigger from host sessions
-
-If host supports slash command mapping:
-
-```text
-/super-dev your requirement
-```
-
-`/super-dev` enforces this sequence: research first -> generate PRD/Architecture/UIUX -> wait for document approval -> create Spec/tasks -> then coding.  
-Modern commercial UI/UX constraints are enforced at generation time: no purple/pink gradient-first themes, no emoji icons, no generic template output, and typography/tokens/grid/state matrices must be defined before page implementation.
-
-Codex CLI currently runs through `.codex/AGENTS.md` and the loaded `super-dev-core` Skill. Use `super-dev: your requirement` as the trigger.
-
-If slash mapping is unavailable, run the terminal entry in the same project root (local Super Dev orchestration only):
-
-```bash
-super-dev "your requirement"
-```
-
-Notes:
-
-1. The terminal entry does not replace host model capability.
-2. Actual coding should still happen inside an onboarded host session.
-3. If the host supports web/browse/search, Super Dev requires similar-product research first.
-
-- The terminal entry does not directly talk to the host model session
-- Code generation and code edits must still happen inside the onboarded host tool
-
----
-
-## Usage Scenarios
-
-## 1. 0-to-1 (Greenfield)
-
-Use when you only have requirements and no production repository.
-
-### Recommended flow
-
-1. Create workspace and onboard hosts
-2. Run `detect --save-profile`
-3. Initialize `enterprise` policy
-4. Execute requirement-driven pipeline
-5. Implement and iterate against `tasks.md`
-6. Pass red-team, quality gate, and release rehearsal
-
-### Example
-
-```bash
-mkdir crm-project && cd crm-project
-pip install -U super-dev
-super-dev
-super-dev detect --auto --save-profile
-super-dev policy init --preset enterprise --force
-super-dev "Build an enterprise CRM with multi-tenant support, RBAC, leads, accounts, opportunities, and reporting"
-```
-
----
-
-## 2. 1-N+1 (Iterative Delivery on Existing System)
-
-Use when you already have a product and need incremental capability rollout.
-
-### Recommended flow
-
-1. Analyze current repository
-2. Create spec change
-3. Execute tasks incrementally
-4. Pass red-team and quality gate for each change
-5. Merge and release in small batches
-
-### Example
-
-```bash
-cd existing-project
-super-dev analyze .
-super-dev spec init
-super-dev spec propose add-billing --title "Add Billing Center" --description "plans, subscriptions, invoices, payment callbacks"
-super-dev task run add-billing
-super-dev quality --type all
-```
-
----
-
-## Supported Hosts
-
-### CLI Hosts
-
-- `claude-code`
-- `codebuddy-cli`
-- `codex-cli`
-- `cursor-cli`
-- `gemini-cli`
-- `iflow`
-- `kimi-cli`
-- `kiro-cli`
-- `opencode`
-- `qoder-cli`
-
-### IDE / Extension Hosts
-
-- `codebuddy`
-- `cursor`
-- `kiro`
-- `trae` (Rules-first)
-- `windsurf`
-
-### Host Adaptation Model (CLI/IDE)
-
-- `CLI hosts (native slash)`: trigger `/super-dev` inside the host session, and let the host model perform code work
-- `CLI hosts (non-slash)`: type `super-dev: your requirement` inside the host session and let AGENTS / rules drive execution
-- `IDE hosts (native slash)`: trigger `/super-dev` in Agent Chat, then enforce execution through rules + skill constraints
-- `IDE hosts (non-slash)`: type `super-dev: your requirement` in Agent Chat and let project rules or host skills drive execution
-- `Terminal entry`: `super-dev "requirement"` only triggers local orchestration and does not directly call a host model session
-
-Inspect host adaptation matrix (official docs links, adaptation mode, injection paths, detection strategy):
-
-```bash
-super-dev integrate matrix
-super-dev integrate matrix --json
-```
-
----
-
-## Command Quick Reference
-
-```bash
-# uv
-uv tool install super-dev
-uv tool upgrade super-dev
-uv sync
-uv run super-dev --version
-
-# onboarding
-super-dev
-super-dev install --auto --force --yes
-super-dev detect --auto --save-profile
-super-dev doctor --auto --repair --force
-super-dev integrate matrix --target codex-cli
-
-# pipeline delivery
-super-dev "your requirement"
-super-dev pipeline "your requirement" --platform web --frontend react --backend python --cicd github
-super-dev run --resume
-
-# policy governance
-super-dev policy presets
-super-dev policy init --preset enterprise --force
-super-dev policy show
-
-# spec and task flow
-super-dev spec init
-super-dev spec list
-super-dev task run <change_id>
-
-# quality and release
-super-dev quality --type all
-super-dev metrics --history --limit 20
-super-dev release readiness
-super-dev deploy --cicd all --rehearsal --rehearsal-verify
-```
-
----
-
-## Development And Release With uv
-
-```bash
-# sync dependencies
-uv sync
-
-# local checks
-uv run pytest -q
-uv run ruff check super_dev tests
-uv run mypy super_dev
-
-# build
-uv build
-
-# publish
-UV_PUBLISH_TOKEN="<your-token>" uv publish
-```
-
----
-
-## Pre-release Check
-
-```bash
-./scripts/preflight.sh
-```
-
----
-
-## Related Docs
-
-- [Workflow Guide](docs/WORKFLOW_GUIDE_EN.md)
-- [Quick Start](docs/QUICKSTART.md)
-- [Publishing Guide](docs/PUBLISHING.md)
-- [Install Options](docs/INSTALL_OPTIONS.md)
-
----
-
-## WeChat Official Account
-
-![Super Dev WeChat Official Account](wechat.png)
-
----
-
-## License
-
-MIT

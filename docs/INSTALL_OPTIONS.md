@@ -1,4 +1,4 @@
-# Super Dev 安装方式（2.0.7）
+# Super Dev 安装方式（2.0.8）
 
 宿主详细试用方式请看：
 
@@ -51,7 +51,7 @@ super-dev
 ## 方式 3：安装指定版本（复现/回滚）
 
 ```bash
-pip install super-dev==2.0.7
+pip install super-dev==2.0.8
 ```
 
 适用：需要稳定复现、灰度回滚。
@@ -59,7 +59,7 @@ pip install super-dev==2.0.7
 ## 方式 4：GitHub 直装（Tag）
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.7
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.8
 ```
 
 适用：希望直接基于 GitHub Tag 安装。
@@ -98,7 +98,7 @@ super-dev
 2. 非 slash CLI 宿主（如 Codex CLI、Kimi CLI）：在会话内输入 `super-dev: 你的需求`
 3. IDE 宿主：在 Agent Chat 中执行 `/super-dev 你的需求`
 4. 非 slash 宿主：输入 `super-dev: 你的需求`
-5. 如果宿主是 Trae，接入会写入项目规则 `.trae/rules.md`，并在检测到兼容技能目录时增强安装 `~/.trae/skills/super-dev-core/SKILL.md`
+5. 如果宿主是 Trae，接入会写入项目规则 `.trae/project_rules.md`、`.trae/rules.md`，以及用户规则 `~/.trae/user_rules.md`、`~/.trae/rules.md`，并在检测到兼容技能目录时增强安装 `~/.trae/skills/super-dev-core/SKILL.md`
 
 默认流程不是直接编码，而是：
 
@@ -116,15 +116,15 @@ super-dev integrate smoke --target <host_id>
 
 它会输出该宿主的验收语句、验收步骤和通过标准。
 
-## 升级到 2.0.7
+## 升级到 2.0.8
 
 ```bash
 # uv 方式
 uv tool upgrade super-dev
 
 # GitHub 方式
-pip install --upgrade "git+https://github.com/shangyankeji/super-dev.git@v2.0.7"
+pip install --upgrade "git+https://github.com/shangyankeji/super-dev.git@v2.0.8"
 
 # PyPI 方式
-pip install --upgrade "super-dev==2.0.7"
+pip install --upgrade "super-dev==2.0.8"
 ```

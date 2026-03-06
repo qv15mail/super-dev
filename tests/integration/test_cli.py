@@ -36,14 +36,14 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         parents=True,
         exist_ok=True,
     )
-    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.7"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
-    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.7"\n', encoding="utf-8")
+    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.8"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
+    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.8"\n', encoding="utf-8")
     (project_dir / "README.md").write_text(
-        "当前版本：`2.0.7`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "当前版本：`2.0.8`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "README_EN.md").write_text(
-        "Current version: `2.0.7`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "Current version: `2.0.8`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "docs" / "HOST_USAGE_GUIDE.md").write_text("Smoke\n/super-dev\nsuper-dev:\n", encoding="utf-8")
@@ -515,6 +515,18 @@ class TestCLISkillAndIntegrate:
         finally:
             os.chdir(original_cwd)
 
+    def test_integrate_setup_antigravity(self, temp_project_dir: Path):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["integrate", "setup", "--target", "antigravity", "--force"])
+            assert result == 0
+            assert (temp_project_dir / "GEMINI.md").exists()
+            assert (temp_project_dir / ".agent" / "workflows" / "super-dev.md").exists()
+        finally:
+            os.chdir(original_cwd)
+
     def test_integrate_matrix_text(self, temp_project_dir: Path, capsys):
         original_cwd = os.getcwd()
         os.chdir(temp_project_dir)
@@ -605,10 +617,30 @@ class TestCLISkillAndIntegrate:
         finally:
             os.chdir(original_cwd)
 
+    def test_onboard_antigravity_installs_project_global_and_skill(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["onboard", "--host", "antigravity", "--force", "--yes"])
+            assert result == 0
+            assert (temp_project_dir / "GEMINI.md").exists()
+            assert (temp_project_dir / ".agent" / "workflows" / "super-dev.md").exists()
+            assert (temp_project_dir / ".gemini" / "commands" / "super-dev.md").exists()
+            assert (fake_home / ".gemini" / "GEMINI.md").exists()
+            assert (fake_home / ".gemini" / "commands" / "super-dev.md").exists()
+            assert (fake_home / ".gemini" / "skills" / "super-dev-core" / "SKILL.md").exists()
+        finally:
+            os.chdir(original_cwd)
+
     def test_onboard_trae_installs_project_rules_and_host_skill(self, temp_project_dir: Path, monkeypatch):
         fake_home = temp_project_dir / "fake-home"
         fake_home.mkdir(parents=True, exist_ok=True)
         (fake_home / ".trae").mkdir(parents=True, exist_ok=True)
+        (fake_home / ".trae" / "skills").mkdir(parents=True, exist_ok=True)
         monkeypatch.setenv("HOME", str(fake_home))
         original_cwd = os.getcwd()
         os.chdir(temp_project_dir)
@@ -616,7 +648,10 @@ class TestCLISkillAndIntegrate:
             cli = SuperDevCLI()
             result = cli.run(["onboard", "--host", "trae", "--force", "--yes"])
             assert result == 0
+            assert (temp_project_dir / ".trae" / "project_rules.md").exists()
             assert (temp_project_dir / ".trae" / "rules.md").exists()
+            assert (fake_home / ".trae" / "user_rules.md").exists()
+            assert (fake_home / ".trae" / "rules.md").exists()
             assert (fake_home / ".trae" / "skills" / "super-dev-core" / "SKILL.md").exists()
             assert not (temp_project_dir / ".trae" / "commands" / "super-dev.md").exists()
         finally:
@@ -632,7 +667,10 @@ class TestCLISkillAndIntegrate:
             cli = SuperDevCLI()
             result = cli.run(["onboard", "--host", "trae", "--force", "--yes"])
             assert result == 0
+            assert (temp_project_dir / ".trae" / "project_rules.md").exists()
             assert (temp_project_dir / ".trae" / "rules.md").exists()
+            assert (fake_home / ".trae" / "user_rules.md").exists()
+            assert (fake_home / ".trae" / "rules.md").exists()
             assert not (fake_home / ".trae" / "skills" / "super-dev-core" / "SKILL.md").exists()
             output = capsys.readouterr().out
             assert "未检测到官方或兼容 Skill 目录" in output
@@ -692,6 +730,9 @@ class TestCLISkillAndIntegrate:
             cli = SuperDevCLI()
             result = cli.run(["onboard", "--yes", "--force", "--skip-skill"])
             assert result == 0
+            assert (temp_project_dir / "GEMINI.md").exists()
+            assert (temp_project_dir / ".agent" / "workflows" / "super-dev.md").exists()
+            assert (temp_project_dir / ".gemini" / "commands" / "super-dev.md").exists()
             assert (temp_project_dir / ".claude" / "CLAUDE.md").exists()
             assert (temp_project_dir / ".codex" / "AGENTS.md").exists()
             assert (temp_project_dir / ".kimi" / "AGENTS.md").exists()
@@ -1040,7 +1081,7 @@ class TestCLISkillAndIntegrate:
                 return None
 
             def json(self):
-                return {"info": {"version": "2.0.7"}}
+                return {"info": {"version": "2.0.8"}}
 
         monkeypatch.setattr("super_dev.cli.requests.get", lambda *args, **kwargs: DummyResponse())
 
@@ -1049,7 +1090,7 @@ class TestCLISkillAndIntegrate:
         output = capsys.readouterr().out
         assert "当前版本" in output
         assert "PyPI 最新版本" in output
-        assert "2.0.7" in output
+        assert "2.0.8" in output
 
     def test_update_uses_uv_when_requested(self, capsys, monkeypatch):
         cli = SuperDevCLI()
@@ -1060,7 +1101,7 @@ class TestCLISkillAndIntegrate:
                 return None
 
             def json(self):
-                return {"info": {"version": "2.0.7"}}
+                return {"info": {"version": "2.0.8"}}
 
         monkeypatch.setattr("super_dev.cli.requests.get", lambda *args, **kwargs: DummyResponse())
 
@@ -1086,7 +1127,7 @@ class TestCLISkillAndIntegrate:
                 return None
 
             def json(self):
-                return {"info": {"version": "2.0.7"}}
+                return {"info": {"version": "2.0.8"}}
 
         monkeypatch.setattr("super_dev.cli.requests.get", lambda *args, **kwargs: DummyResponse())
 

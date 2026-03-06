@@ -16,8 +16,10 @@ class TestSkillManager:
         assert gaps["extra_in_skill_targets"] == []
 
     def test_target_path_kind_distinguishes_official_and_observed(self):
+        assert SkillManager.target_path_kind("antigravity") == "official-user-surface"
         assert SkillManager.target_path_kind("qoder-cli") == "official-user-surface"
         assert SkillManager.target_path_kind("trae") == "observed-compatibility-surface"
+        assert SkillManager.TARGET_PATHS["antigravity"] == "~/.gemini/skills"
         assert SkillManager.TARGET_PATHS["qoder"] == "~/.qoderwork/skills"
         assert SkillManager.TARGET_PATHS["windsurf"] == "~/.codeium/windsurf/skills"
         assert SkillManager.TARGET_PATHS["opencode"] == "~/.config/opencode/skills"
