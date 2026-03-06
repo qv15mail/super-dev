@@ -37,6 +37,8 @@ env/
 *.swp
 *.swo
 *~
+.codex/config.toml
+.codex/commands/
 
 # OS
 .DS_Store
@@ -47,7 +49,12 @@ Thumbs.db
 .coverage
 htmlcov/
 
+# Node
+**/node_modules/
+
 # 输出文件
 output/
 *.docx
 *.pdf
+artifacts/
+.super-dev/runs/

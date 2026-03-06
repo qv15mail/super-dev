@@ -1,4 +1,4 @@
-# Super Dev 详细使用指南（2.0.4）
+# Super Dev 详细使用指南（2.0.5）
 
 > 宿主详细试用方式、是否支持 `/super-dev`、各宿主正确入口，请优先查看：
 > [HOST_USAGE_GUIDE.md](/Users/weiyou/Documents/kaifa/super-dev/docs/HOST_USAGE_GUIDE.md)
@@ -87,7 +87,7 @@ pip install -U super-dev
 指定版本：
 
 ```bash
-pip install super-dev==2.0.4
+pip install super-dev==2.0.5
 ```
 
 ### 2.2 初始化（可选，但团队项目建议）

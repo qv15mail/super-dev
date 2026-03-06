@@ -19,7 +19,7 @@
 
 ## Version
 
-Current version: `2.0.4`
+Current version: `2.0.5`
 
 ---
 
@@ -112,13 +112,13 @@ pip install -U super-dev
 ### 3. Pin a specific version
 
 ```bash
-pip install super-dev==2.0.4
+pip install super-dev==2.0.5
 ```
 
 ### 4. Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.4
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.5
 ```
 
 ### 5. Source install for development

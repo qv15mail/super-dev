@@ -1,4 +1,4 @@
-# Super Dev 集成指南（2.0.4）
+# Super Dev 集成指南（2.0.5）
 
 > 宿主详细试用方式、是否支持 `/super-dev`、各宿主的正确入口，请优先查看：
 > [HOST_USAGE_GUIDE.md](/Users/weiyou/Documents/kaifa/super-dev/docs/HOST_USAGE_GUIDE.md)

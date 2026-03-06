@@ -22,7 +22,7 @@ pip install -U super-dev
 ### 方式 B：安装指定版本（复现/回滚）
 
 ```bash
-pip install super-dev==2.0.4
+pip install super-dev==2.0.5
 ```
 
 ## 3. 启动方式（推荐）
