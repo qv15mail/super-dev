@@ -48,6 +48,11 @@ class HostAdapterProfile:
     smoke_test_prompt: str
     smoke_test_steps: list[str]
     smoke_success_signal: str
+    host_protocol_mode: str
+    host_protocol_summary: str
+    official_project_surfaces: list[str]
+    official_user_surfaces: list[str]
+    observed_compatibility_surfaces: list[str]
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -57,7 +62,7 @@ class IntegrationManager:
     """为不同 AI Coding 平台生成集成配置"""
 
     TEXT_TRIGGER_PREFIX = "super-dev:"
-    NO_SKILL_TARGETS: set[str] = {"kimi-cli", "kiro", "qoder", "trae"}
+    NO_SKILL_TARGETS: set[str] = {"claude-code", "kiro"}
     HOST_USAGE_LOCATIONS: dict[str, str] = {
         "claude-code": "在项目目录启动 Claude Code 当前会话后，直接在同一会话里触发。",
         "codebuddy-cli": "在项目目录启动 CodeBuddy CLI 会话后触发。",
@@ -80,14 +85,17 @@ class IntegrationManager:
         "claude-code": [
             "推荐作为首选 CLI 宿主。",
             "接入后可先执行 super-dev doctor --host claude-code 确认 slash 已生效。",
+            "Claude Code 官方已公开 `.claude/agents/` 与 `~/.claude/agents/`，Super Dev 会生成 subagent 协议文件。",
         ],
         "codebuddy-cli": [
             "在当前 CLI 会话中直接输入即可。",
             "如果会话早于接入动作启动，建议重开会话后再试。",
+            "官方文档已公开 ~/.codebuddy/skills 与 .codebuddy/skills，可与 slash 一起增强宿主对 Super Dev 流水线的理解。",
         ],
         "codebuddy": [
             "建议在项目级 Agent Chat 中使用，不要脱离项目上下文。",
             "先让宿主完成 research，再继续文档和编码。",
+            "官方文档已公开 .codebuddy/skills 与 ~/.codebuddy/skills。",
         ],
         "codex-cli": [
             "不要输入 /super-dev，Codex 当前不走自定义 slash。",
@@ -105,6 +113,7 @@ class IntegrationManager:
         "windsurf": [
             "当前按 IDE slash/workflow 模式适配。",
             "更适合在同一个 Workflow 里连续完成研究、三文档、确认门、Spec 与编码。",
+            "官方文档已公开 .windsurf/skills 与 ~/.codeium/windsurf/skills。",
         ],
         "gemini-cli": [
             "优先在同一会话中完成 research -> 三文档 -> 用户确认 -> Spec -> 前端运行验证 -> 后端/交付。",
@@ -113,9 +122,10 @@ class IntegrationManager:
         "iflow": [
             "当前按 slash 宿主适配。",
             "如果 slash 未出现，先检查项目级命令文件是否已写入。",
+            "官方文档已公开 .iflow/skills 与 ~/.iflow/skills。",
         ],
         "kimi-cli": [
-            "Kimi CLI 当前优先按 AGENTS.md / 自然语言触发，不走 `/super-dev`。",
+            "Kimi CLI 当前优先按 AGENTS.md + 宿主级 Skill / 自然语言触发，不走 `/super-dev`。",
             "建议先用 super-dev doctor --host kimi-cli 做一次确认。",
         ],
         "kiro-cli": [
@@ -125,22 +135,27 @@ class IntegrationManager:
         "opencode": [
             "按 CLI slash 模式使用。",
             "即使你也使用全局命令目录，仍建议保留项目级接入文件。",
+            "官方文档已公开 .opencode/skills 与 ~/.config/opencode/skills。",
         ],
         "qoder-cli": [
             "适合命令行流水线开发。",
             "若 slash 未生效，先确认 .qoder/commands/super-dev.md 已生成。",
+            "官方文档已公开 .qoder/skills 与 ~/.qoder/skills。",
         ],
         "kiro": [
-            "Kiro IDE 当前优先按 steering/rules 模式触发，不走 /super-dev。",
-            "如果 steering 或 rules 未加载，先重开项目窗口。",
+            "Kiro IDE 当前优先按 steering/rules + 宿主级 Skill 模式触发，不走 /super-dev。",
+            "如果 steering、rules 或 Skill 未加载，先重开项目窗口或新开一个 Agent Chat。",
+            "Kiro 官方已公开全局 steering 目录 `~/.kiro/steering/`，Super Dev 会优先写入全局 AGENTS.md。",
         ],
         "qoder": [
-            "Qoder IDE 当前优先按 project rules 模式触发，不走 /super-dev。",
-            "若规则未生效，重新打开项目或重新创建聊天。",
+            "Qoder IDE 当前优先按项目级 commands + rules + 宿主级 Skill 模式触发，可直接使用 /super-dev。",
+            "若新增命令未出现，重新打开项目或新开一个 Agent Chat。",
+            "官方文档已公开 .qoder/skills 与 ~/.qoderwork/skills。",
         ],
         "trae": [
             "不要输入 /super-dev。",
-            "Trae 当前默认按项目 rules 模式工作，无需手动开启 Skill。",
+            "Trae 始终依赖项目级 .trae/rules.md；若检测到宿主级 ~/.trae/skills/super-dev-core/SKILL.md，则会额外增强。",
+            "安装后建议新开一个 Trae Agent Chat，让新的规则与 Skill 一起生效。",
             "随后按 output/* 与 .super-dev/changes/*/tasks.md 推进开发。",
         ],
     }
@@ -149,7 +164,7 @@ class IntegrationManager:
         "claude-code": IntegrationTarget(
             name="claude-code",
             description="Claude Code CLI 深度集成",
-            files=[".claude/CLAUDE.md"],
+            files=[".claude/CLAUDE.md", ".claude/agents/super-dev-core.md"],
         ),
         "codebuddy-cli": IntegrationTarget(
             name="codebuddy-cli",
@@ -179,7 +194,7 @@ class IntegrationManager:
         "gemini-cli": IntegrationTarget(
             name="gemini-cli",
             description="Gemini CLI 项目规则注入",
-            files=[".gemini/AGENTS.md"],
+            files=["GEMINI.md"],
         ),
         "iflow": IntegrationTarget(
             name="iflow",
@@ -218,12 +233,12 @@ class IntegrationManager:
         ),
         "qoder": IntegrationTarget(
             name="qoder",
-            description="Qoder IDE 规则注入",
+            description="Qoder IDE 规则 + 命令注入",
             files=[".qoder/rules.md"],
         ),
         "trae": IntegrationTarget(
             name="trae",
-            description="Trae IDE 规则注入（Rules-first）",
+            description="Trae IDE 项目规则 + 宿主 Skill 注入",
             files=[".trae/rules.md"],
         ),
     }
@@ -238,12 +253,13 @@ class IntegrationManager:
         "kiro-cli": ".kiro/commands/super-dev.md",
         "opencode": ".opencode/commands/super-dev.md",
         "qoder-cli": ".qoder/commands/super-dev.md",
+        "qoder": ".qoder/commands/super-dev.md",
         "cursor": ".cursor/commands/super-dev.md",
     }
     GLOBAL_SLASH_COMMAND_FILES: dict[str, str] = {
         "opencode": ".config/opencode/commands/super-dev.md",
     }
-    NO_SLASH_TARGETS: set[str] = {"codex-cli", "kimi-cli", "kiro", "qoder", "trae"}
+    NO_SLASH_TARGETS: set[str] = {"codex-cli", "kimi-cli", "kiro", "trae"}
     OFFICIAL_DOCS: dict[str, str] = {
         "claude-code": "https://docs.anthropic.com/en/docs/claude-code/slash-commands",
         "codebuddy-cli": "https://www.codebuddy.ai/docs/cli/slash-commands",
@@ -259,7 +275,7 @@ class IntegrationManager:
         "qoder-cli": "https://docs.qoder.com/cli/using-cli",
         "cursor": "https://docs.cursor.com/en/agent/chat/commands",
         "kiro": "https://kiro.dev/docs/steering/",
-        "qoder": "https://docs.qoder.com/user-guide/rules",
+        "qoder": "https://docs.qoder.com/user-guide/commands",
         "trae": "https://www.traeide.com/docs/what-is-trae-rules",
     }
     DOCS_VERIFIED_TARGETS: set[str] = {key for key, value in OFFICIAL_DOCS.items() if bool(value)}
@@ -277,18 +293,18 @@ class IntegrationManager:
             "level": "certified",
             "reason": "已按 Codex 的真实能力改成 AGENTS.md + Skill 模式，不再误判为 slash 宿主。",
             "evidence": [
-                "官方文档提供 Codex 能力边界与会话式使用模型",
-                "Super Dev 已为 Codex 修正成 AGENTS + Skill 接入路径",
+                "官方运行时明确 $CODEX_HOME/skills（默认 ~/.codex/skills）",
+                "Super Dev 已为 Codex 修正成 AGENTS.md + 官方 Skills 接入路径",
                 "接入后需要重启的行为已被显式建模与测试覆盖",
             ],
         },
         "trae": {
-            "level": "certified",
-            "reason": "Trae 当前按项目 rules 模式适配，接入模型与公开能力边界一致，无需手动激活 Skill。",
+            "level": "compatible",
+            "reason": "Trae 官方公开面目前可确认的是项目 rules；宿主级 skills 仍按兼容增强处理，因此当前保持稳定兼容而非认证级。",
             "evidence": [
-                "公开资料说明 Trae 支持项目级 .rules 配置",
-                "Super Dev 已按 rules-first 模式跳过 slash 依赖",
-                "doctor/detect/onboard 已针对非 slash 规则模式做兼容处理",
+                "公开文档确认 Trae rules 机制",
+                "本机若存在 ~/.trae/skills，可作为兼容增强路径协同生效",
+                "Super Dev 已同时建模项目 rules 与可选宿主级 Skill 增强",
             ],
         },
         "codebuddy-cli": {
@@ -311,8 +327,8 @@ class IntegrationManager:
             "level": "compatible",
             "reason": "CLI 规则与 slash 接入完整，文档可验证，但还未提升到认证级真机矩阵。",
             "evidence": [
-                "官方文档公开 CLI 用法",
-                "Super Dev 已提供规则、Skill 与 slash 安装路径",
+                "官方文档公开 commands 与 GEMINI.md 上下文文件",
+                "Super Dev 已提供项目级 GEMINI.md、命令映射与兼容 Skill 增强",
             ],
         },
         "kiro-cli": {
@@ -369,7 +385,7 @@ class IntegrationManager:
             "evidence": [
                 "官方文档公开了内置 slash 与自然语言交互方式",
                 "官方文档公开了 /init 生成 AGENTS.md 的路径",
-                "Super Dev 当前按 AGENTS.md 驱动方式接入",
+                "Super Dev 当前按 AGENTS.md + 文本触发方式接入",
             ],
         },
         "opencode": {
@@ -390,10 +406,10 @@ class IntegrationManager:
         },
         "qoder": {
             "level": "experimental",
-            "reason": "IDE 规则模式已支持，但 Agent Chat 命令行为仍需要更多样本验证。",
+            "reason": "官方文档明确支持项目级 commands，当前已按 Agent Chat slash + project rules 建模，但仍需要更多真机样本。",
             "evidence": [
-                "官方文档公开 user rules",
-                "Super Dev 已写入规则、Skill 与命令文件",
+                "官方文档公开 Commands 且支持项目级 .qoder/commands/",
+                "Super Dev 已同时写入 .qoder/rules.md 与 .qoder/commands/super-dev.md",
             ],
         },
     }
@@ -449,7 +465,7 @@ class IntegrationManager:
         return list(self.TARGETS.values())
 
     def get_adapter_profile(self, target: str) -> HostAdapterProfile:
-        from ..catalogs import HOST_COMMAND_CANDIDATES, HOST_PATH_PATTERNS
+        from ..catalogs import HOST_COMMAND_CANDIDATES, host_path_candidates
         from ..skills import SkillManager
 
         if target not in self.TARGETS:
@@ -465,6 +481,8 @@ class IntegrationManager:
         usage = self._usage_profile(target=target, category=category)
         certification = self._certification_profile(target)
         smoke = self._smoke_profile(target=target, category=category)
+        surfaces = self._install_surfaces(target=target)
+        protocol = self._protocol_profile(target=target)
 
         return HostAdapterProfile(
             host=target,
@@ -484,7 +502,7 @@ class IntegrationManager:
             slash_command_file=slash_file,
             skill_dir=skill_dir,
             detection_commands=list(HOST_COMMAND_CANDIDATES.get(target, [])),
-            detection_paths=list(HOST_PATH_PATTERNS.get(target, [])),
+            detection_paths=list(host_path_candidates(target)),
             notes=usage["notes"],
             usage_mode=usage["usage_mode"],
             trigger_command=usage["trigger_command"],
@@ -496,6 +514,11 @@ class IntegrationManager:
             smoke_test_prompt=str(smoke["smoke_test_prompt"]),
             smoke_test_steps=list(smoke["smoke_test_steps"]),
             smoke_success_signal=str(smoke["smoke_success_signal"]),
+            host_protocol_mode=str(protocol["mode"]),
+            host_protocol_summary=str(protocol["summary"]),
+            official_project_surfaces=list(surfaces["official_project_surfaces"]),
+            official_user_surfaces=list(surfaces["official_user_surfaces"]),
+            observed_compatibility_surfaces=list(surfaces["observed_compatibility_surfaces"]),
         )
 
     def _certification_profile(self, target: str) -> dict[str, object]:
@@ -538,38 +561,39 @@ class IntegrationManager:
         if target == "codex-cli":
             return {
                 "usage_mode": "agents-and-skill",
-                "primary_entry": '在 Codex CLI 会话输入 `super-dev: <需求描述>`（由 AGENTS.md + super-dev-core Skill 生效）',
+                "primary_entry": '在 Codex CLI 会话输入 `super-dev: <需求描述>`（由 .codex/AGENTS.md + ~/.codex/skills/super-dev-core/SKILL.md 生效）',
                 "trigger_command": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
                 "trigger_context": "Codex CLI 当前会话",
                 "usage_location": usage_location,
                 "requires_restart_after_onboard": True,
                 "post_onboard_steps": [
-                    "完成接入后重启 codex，使新安装的 Skill 与 AGENTS.md 生效。",
+                    "完成接入后重启 codex，使 AGENTS.md 与 ~/.codex/skills/super-dev-core/SKILL.md 生效。",
                     "不要输入 /super-dev，在 Codex 会话里输入 `super-dev: <需求描述>`。",
                 ],
                 "usage_notes": usage_notes,
-                "notes": "该 CLI 宿主当前不走自定义 slash，使用项目规则与 Skill 约束开发流程。",
+                "notes": "该 CLI 宿主当前不走自定义 slash，使用项目级 .codex/AGENTS.md 作为核心约束，并通过官方用户级 Skills 目录 ~/.codex/skills 安装 super-dev-core。",
             }
         if target == "trae":
             return {
-                "usage_mode": "rules-only",
-                "primary_entry": '在 Trae Agent Chat 输入 `super-dev: <需求描述>`（由 .trae/rules.md 生效）',
+                "usage_mode": "rules-and-skill",
+                "primary_entry": '在 Trae Agent Chat 输入 `super-dev: <需求描述>`（由 .trae/rules.md + 兼容 Skill〔若检测到〕生效）',
                 "trigger_command": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
                 "trigger_context": "Trae IDE Agent Chat",
                 "usage_location": usage_location,
-                "requires_restart_after_onboard": False,
+                "requires_restart_after_onboard": True,
                 "post_onboard_steps": [
-                    "打开 Trae Agent Chat，并确保当前项目就是已接入 Super Dev 的工作区。",
+                    "完成接入后重新打开 Trae，或至少新开一个 Trae Agent Chat，使新的规则与兼容 Skill（若已安装）一起生效。",
+                    "确保当前项目就是已接入 Super Dev 的工作区。",
                     "输入 `super-dev: <需求描述>` 触发完整流程。",
                     "按 output/* 与 .super-dev/changes/*/tasks.md 执行开发。",
                 ],
                 "usage_notes": usage_notes,
-                "notes": "该宿主当前走 rules-first 模式：依赖项目级 .trae/rules.md 约束执行流程。",
+                "notes": "该宿主当前以项目级 .trae/rules.md 为核心接入面；若检测到 ~/.trae/skills，则会增强安装 super-dev-core，但这条路径仍只视为兼容增强。",
             }
         if target == "kimi-cli":
             return {
-                "usage_mode": "rules-only",
-                "primary_entry": '在 Kimi CLI 会话输入 `super-dev: <需求描述>`（由 .kimi/AGENTS.md 生效）',
+                "usage_mode": "agents-and-skill",
+                "primary_entry": '在 Kimi CLI 会话输入 `super-dev: <需求描述>`（由 .kimi/AGENTS.md 生效；若检测到兼容 Skill 会额外增强）',
                 "trigger_command": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
                 "trigger_context": "Kimi CLI 当前会话",
                 "usage_location": usage_location,
@@ -580,39 +604,24 @@ class IntegrationManager:
                     "按 output/* 与 .super-dev/changes/*/tasks.md 执行开发。",
                 ],
                 "usage_notes": usage_notes,
-                "notes": "该宿主当前走 AGENTS.md / 自然语言规则模式：依赖项目级 .kimi/AGENTS.md 约束执行流程。",
+                "notes": "该宿主当前以项目级 .kimi/AGENTS.md 为核心上下文；若检测到 ~/.kimi/skills，则会增强安装 super-dev-core，但不再把 Skill 当成官方默认前提。",
             }
         if target == "kiro":
             return {
-                "usage_mode": "rules-only",
-                "primary_entry": '在 Kiro IDE Agent Chat 输入 `super-dev: <需求描述>`（由 .kiro/steering/super-dev.md 生效）',
+                "usage_mode": "rules-and-skill",
+                "primary_entry": '在 Kiro IDE Agent Chat 输入 `super-dev: <需求描述>`（由 .kiro/steering/super-dev.md + 兼容 Skill〔若检测到〕生效）',
                 "trigger_command": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
                 "trigger_context": "Kiro IDE Agent Chat",
                 "usage_location": usage_location,
-                "requires_restart_after_onboard": False,
+                "requires_restart_after_onboard": True,
                 "post_onboard_steps": [
-                    "打开 Kiro IDE Agent Chat，并确保当前项目就是已接入 Super Dev 的工作区。",
+                    "完成接入后重新打开 Kiro，或至少新开一个 Agent Chat，使 steering、rules 与兼容 Skill（若已安装）一起生效。",
+                    "确保当前项目就是已接入 Super Dev 的工作区。",
                     "输入 `super-dev: <需求描述>` 触发完整流程。",
                     "按 output/* 与 .super-dev/changes/*/tasks.md 执行开发。",
                 ],
                 "usage_notes": usage_notes,
-                "notes": "该宿主当前走 steering/rules 模式：依赖项目级 .kiro/steering/super-dev.md 与规则文件约束执行流程。",
-            }
-        if target == "qoder":
-            return {
-                "usage_mode": "rules-only",
-                "primary_entry": '在 Qoder IDE Agent Chat 输入 `super-dev: <需求描述>`（由 .qoder/rules.md 生效）',
-                "trigger_command": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
-                "trigger_context": "Qoder IDE Agent Chat",
-                "usage_location": usage_location,
-                "requires_restart_after_onboard": False,
-                "post_onboard_steps": [
-                    "打开 Qoder IDE Agent Chat，并确保当前项目就是已接入 Super Dev 的工作区。",
-                    "输入 `super-dev: <需求描述>` 触发完整流程。",
-                    "按 output/* 与 .super-dev/changes/*/tasks.md 执行开发。",
-                ],
-                "usage_notes": usage_notes,
-                "notes": "该宿主当前走 project rules 模式：依赖项目级 .qoder/rules.md 约束执行流程。",
+                "notes": "该宿主当前走 steering/rules + compatibility skill 模式：项目级 .kiro/steering/super-dev.md 是核心约束；若检测到 ~/.kiro/skills，则会增强安装 super-dev-core。",
             }
         if self.supports_slash(target):
             if category == "cli":
@@ -629,8 +638,9 @@ class IntegrationManager:
                     ],
                     "usage_notes": usage_notes or [
                         "建议在同一会话里连续完成 research、文档、Spec 与编码。",
+                        "接入时还会安装宿主级 super-dev-core Skill，让宿主理解完整流水线契约。",
                     ],
-                    "notes": "CLI 宿主建议直接在当前会话执行 slash 命令。",
+                    "notes": "CLI 宿主建议直接在当前会话执行 slash 命令；slash 负责触发，host skill 负责让宿主理解 Super Dev 流水线协议。",
                 }
             return {
                 "usage_mode": "native-slash",
@@ -645,8 +655,9 @@ class IntegrationManager:
                 ],
                 "usage_notes": usage_notes or [
                     "建议固定在项目级 Agent Chat 中完成整条流水线。",
+                    "接入时还会安装宿主级 super-dev-core Skill，让宿主理解完整流水线契约。",
                 ],
-                "notes": "IDE 宿主优先通过 Agent Chat 触发，保持上下文连续。",
+                "notes": "IDE 宿主优先通过 Agent Chat 触发；slash 负责触发，host skill 负责让宿主理解 Super Dev 流水线协议。",
             }
         return {
             "usage_mode": "rules-only",
@@ -688,6 +699,208 @@ class IntegrationManager:
             "smoke_success_signal": "宿主回复 SMOKE_OK，并明确表示已读取当前项目内的 Super Dev 规则/AGENTS/命令映射，且没有直接开始编码。",
         }
 
+    def _protocol_profile(self, *, target: str) -> dict[str, str]:
+        mapping = {
+            "claude-code": {
+                "mode": "official-subagent",
+                "summary": "官方 commands + subagents",
+            },
+            "codebuddy-cli": {
+                "mode": "official-skill",
+                "summary": "官方 commands + skills",
+            },
+            "codebuddy": {
+                "mode": "official-skill",
+                "summary": "官方 commands + skills",
+            },
+            "qoder-cli": {
+                "mode": "official-skill",
+                "summary": "官方 commands + skills",
+            },
+            "qoder": {
+                "mode": "official-skill",
+                "summary": "官方 commands + rules + skills",
+            },
+            "windsurf": {
+                "mode": "official-skill",
+                "summary": "官方 workflows + skills",
+            },
+            "opencode": {
+                "mode": "official-skill",
+                "summary": "官方 commands + skills",
+            },
+            "iflow": {
+                "mode": "official-skill",
+                "summary": "官方 commands + skills",
+            },
+            "kiro": {
+                "mode": "official-steering",
+                "summary": "官方 project steering + global steering",
+            },
+            "codex-cli": {
+                "mode": "official-skill",
+                "summary": "官方 AGENTS.md + 官方 Skills",
+            },
+            "cursor-cli": {
+                "mode": "official-context",
+                "summary": "官方 commands + rules",
+            },
+            "cursor": {
+                "mode": "official-context",
+                "summary": "官方 commands + rules",
+            },
+            "gemini-cli": {
+                "mode": "official-context",
+                "summary": "官方 commands + GEMINI.md",
+            },
+            "kimi-cli": {
+                "mode": "official-context",
+                "summary": "官方 AGENTS.md + 文本触发",
+            },
+            "kiro-cli": {
+                "mode": "official-context",
+                "summary": "官方 commands + AGENTS.md",
+            },
+            "trae": {
+                "mode": "compatibility-skill",
+                "summary": "官方 rules + 兼容 Skill",
+            },
+        }
+        return mapping.get(target, {"mode": "none", "summary": ""})
+
+    def _install_surfaces(self, *, target: str) -> dict[str, list[str]]:
+        by_target: dict[str, dict[str, list[str]]] = {
+            "claude-code": {
+                "official_project_surfaces": [
+                    ".claude/CLAUDE.md",
+                    ".claude/commands/super-dev.md",
+                    ".claude/agents/super-dev-core.md",
+                ],
+                "official_user_surfaces": ["~/.claude/agents/super-dev-core.md"],
+                "observed_compatibility_surfaces": [],
+            },
+            "codebuddy-cli": {
+                "official_project_surfaces": [
+                    ".codebuddy/AGENTS.md",
+                    ".codebuddy/commands/super-dev.md",
+                    ".codebuddy/skills/super-dev-core/SKILL.md",
+                ],
+                "official_user_surfaces": ["~/.codebuddy/skills/super-dev-core/SKILL.md"],
+                "observed_compatibility_surfaces": [],
+            },
+            "codebuddy": {
+                "official_project_surfaces": [
+                    ".codebuddy/rules.md",
+                    ".codebuddy/commands/super-dev.md",
+                    ".codebuddy/skills/super-dev-core/SKILL.md",
+                ],
+                "official_user_surfaces": ["~/.codebuddy/skills/super-dev-core/SKILL.md"],
+                "observed_compatibility_surfaces": [],
+            },
+            "codex-cli": {
+                "official_project_surfaces": [".codex/AGENTS.md"],
+                "official_user_surfaces": ["~/.codex/skills/super-dev-core/SKILL.md"],
+                "observed_compatibility_surfaces": [],
+            },
+            "cursor-cli": {
+                "official_project_surfaces": [".cursor/rules/super-dev.mdc", ".cursor/commands/super-dev.md"],
+                "official_user_surfaces": ["~/.cursor/commands/super-dev.md"],
+                "observed_compatibility_surfaces": ["~/.cursor/skills/super-dev-core/SKILL.md"],
+            },
+            "cursor": {
+                "official_project_surfaces": [".cursor/rules/super-dev.mdc", ".cursor/commands/super-dev.md"],
+                "official_user_surfaces": ["~/.cursor/commands/super-dev.md"],
+                "observed_compatibility_surfaces": ["~/.cursor/skills/super-dev-core/SKILL.md"],
+            },
+            "windsurf": {
+                "official_project_surfaces": [
+                    ".windsurf/rules.md",
+                    ".windsurf/workflows/super-dev.md",
+                    ".windsurf/skills/super-dev-core/SKILL.md",
+                ],
+                "official_user_surfaces": ["~/.codeium/windsurf/skills/super-dev-core/SKILL.md"],
+                "observed_compatibility_surfaces": [],
+            },
+            "gemini-cli": {
+                "official_project_surfaces": ["GEMINI.md", ".gemini/commands/super-dev.md"],
+                "official_user_surfaces": ["~/.gemini/GEMINI.md"],
+                "observed_compatibility_surfaces": ["~/.gemini/skills/super-dev-core/SKILL.md"],
+            },
+            "iflow": {
+                "official_project_surfaces": [
+                    ".iflow/AGENTS.md",
+                    ".iflow/commands/super-dev.toml",
+                    ".iflow/skills/super-dev-core/SKILL.md",
+                ],
+                "official_user_surfaces": ["~/.iflow/skills/super-dev-core/SKILL.md"],
+                "observed_compatibility_surfaces": [],
+            },
+            "kimi-cli": {
+                "official_project_surfaces": [".kimi/AGENTS.md"],
+                "official_user_surfaces": [],
+                "observed_compatibility_surfaces": ["~/.kimi/skills/super-dev-core/SKILL.md"],
+            },
+            "kiro-cli": {
+                "official_project_surfaces": [".kiro/AGENTS.md", ".kiro/commands/super-dev.md"],
+                "official_user_surfaces": [],
+                "observed_compatibility_surfaces": ["~/.kiro/skills/super-dev-core/SKILL.md"],
+            },
+            "kiro": {
+                "official_project_surfaces": [".kiro/AGENTS.md", ".kiro/steering/super-dev.md"],
+                "official_user_surfaces": ["~/.kiro/steering/AGENTS.md"],
+                "observed_compatibility_surfaces": ["~/.kiro/skills/super-dev-core/SKILL.md"],
+            },
+            "opencode": {
+                "official_project_surfaces": [
+                    ".opencode/AGENTS.md",
+                    ".opencode/commands/super-dev.md",
+                    ".opencode/skills/super-dev-core/SKILL.md",
+                ],
+                "official_user_surfaces": [
+                    "~/.config/opencode/commands/super-dev.md",
+                    "~/.config/opencode/skills/super-dev-core/SKILL.md",
+                ],
+                "observed_compatibility_surfaces": [],
+            },
+            "qoder-cli": {
+                "official_project_surfaces": [
+                    ".qoder/AGENTS.md",
+                    ".qoder/commands/super-dev.md",
+                    ".qoder/skills/super-dev-core/SKILL.md",
+                ],
+                "official_user_surfaces": [
+                    "~/.qoder/commands/super-dev.md",
+                    "~/.qoder/skills/super-dev-core/SKILL.md",
+                ],
+                "observed_compatibility_surfaces": [],
+            },
+            "qoder": {
+                "official_project_surfaces": [
+                    ".qoder/rules.md",
+                    ".qoder/commands/super-dev.md",
+                    ".qoder/skills/super-dev-core/SKILL.md",
+                ],
+                "official_user_surfaces": [
+                    "~/.qoder/commands/super-dev.md",
+                    "~/.qoderwork/skills/super-dev-core/SKILL.md",
+                ],
+                "observed_compatibility_surfaces": [],
+            },
+            "trae": {
+                "official_project_surfaces": [".trae/rules.md"],
+                "official_user_surfaces": [],
+                "observed_compatibility_surfaces": ["~/.trae/skills/super-dev-core/SKILL.md"],
+            },
+        }
+        return by_target.get(
+            target,
+            {
+                "official_project_surfaces": [],
+                "official_user_surfaces": [],
+                "observed_compatibility_surfaces": [],
+            },
+        )
+
     def setup(self, target: str, force: bool = False) -> list[Path]:
         if target not in self.TARGETS:
             raise ValueError(f"Unsupported target: {target}")
@@ -699,11 +912,56 @@ class IntegrationManager:
             if file_path.exists() and not force:
                 continue
             file_path.parent.mkdir(parents=True, exist_ok=True)
-            content = self._build_content(target=target)
+            content = self._build_file_content(target=target, relative=relative)
             file_path.write_text(content, encoding="utf-8")
             written_files.append(file_path)
 
         return written_files
+
+    def setup_global_protocol(self, target: str, force: bool = False) -> Path | None:
+        if target == "claude-code":
+            protocol_file = Path.home() / ".claude" / "agents" / "super-dev-core.md"
+            if protocol_file.exists() and not force:
+                return None
+            protocol_file.parent.mkdir(parents=True, exist_ok=True)
+            protocol_file.write_text(self._build_claude_agent_content(), encoding="utf-8")
+            return protocol_file
+
+        if target == "kiro":
+            protocol_file = Path.home() / ".kiro" / "steering" / "AGENTS.md"
+            if protocol_file.exists() and not force:
+                return None
+            protocol_file.parent.mkdir(parents=True, exist_ok=True)
+            protocol_file.write_text(self._build_kiro_global_steering_content(), encoding="utf-8")
+            return protocol_file
+
+        if target == "gemini-cli":
+            protocol_file = Path.home() / ".gemini" / "GEMINI.md"
+            if protocol_file.exists() and not force:
+                return None
+            protocol_file.parent.mkdir(parents=True, exist_ok=True)
+            protocol_file.write_text(self._build_content(target), encoding="utf-8")
+            return protocol_file
+
+        return None
+
+    def _build_kiro_global_steering_content(self) -> str:
+        return (
+            "# Super Dev Global Steering\n\n"
+            "This global steering file activates Super Dev governance for Kiro workspaces that opt into the pipeline.\n\n"
+            "## Activation\n"
+            "- When the user types `super-dev: ...`, enter the Super Dev workflow immediately.\n"
+            "- Treat project-local `.kiro/steering/super-dev.md` as the project-specific source of truth.\n\n"
+            "## Required Sequence\n"
+            "1. Research first\n"
+            "2. Draft PRD, architecture, and UIUX\n"
+            "3. Stop for user confirmation\n"
+            "4. Create Spec/tasks only after confirmation\n"
+            "5. Frontend runtime verification before backend and delivery\n\n"
+            "## Boundary\n"
+            "- Kiro remains the execution host.\n"
+            "- Super Dev is the governance layer and local Python tooling, not a separate model platform.\n"
+        )
 
     def setup_all(self, force: bool = False) -> dict[str, list[Path]]:
         result: dict[str, list[Path]] = {}
@@ -769,6 +1027,12 @@ class IntegrationManager:
         return result
 
     def _build_content(self, target: str) -> str:
+        return self._build_file_content(target=target, relative="")
+
+    def _build_file_content(self, target: str, relative: str) -> str:
+        if target == "claude-code" and relative.endswith(".claude/agents/super-dev-core.md"):
+            return self._build_claude_agent_content()
+
         if target == "cursor":
             cursor_template = self.templates_dir / ".cursorrules.template"
             if cursor_template.exists():
@@ -819,6 +1083,30 @@ class IntegrationManager:
             return self._claude_rules()
 
         return self._generic_cli_rules(target)
+
+    def _build_claude_agent_content(self) -> str:
+        return (
+            "---\n"
+            "name: super-dev-core\n"
+            "description: Activate the Super Dev pipeline for research-first, commercial-grade project delivery.\n"
+            "---\n"
+            "# Super Dev Core Subagent\n\n"
+            "You are the Claude Code subagent that activates Super Dev governance mode.\n\n"
+            "## Purpose\n"
+            "- Treat `/super-dev ...` as the entry point into the Super Dev pipeline.\n"
+            "- Enforce the sequence: research -> three core docs -> wait for confirmation -> Spec/tasks -> frontend runtime verification -> backend/tests/delivery.\n"
+            "- Use the local Python `super-dev` CLI for governance artifacts, checks, and delivery reports.\n"
+            "- Use the host's native tools for browsing, coding, terminal execution, and debugging.\n\n"
+            "## First Response Contract\n"
+            "- On the first reply after `/super-dev ...`, explicitly say Super Dev pipeline mode is active.\n"
+            "- Explicitly say the current phase is `research`.\n"
+            "- Explicitly state that you will read `knowledge/` and `output/knowledge-cache/*-knowledge-bundle.json` first when present.\n"
+            "- Explicitly promise that you will stop after PRD, architecture, and UIUX for user confirmation before creating Spec or writing code.\n\n"
+            "## Boundary\n"
+            "- Claude Code remains the execution host.\n"
+            "- Super Dev is the governance layer, not a separate model platform.\n"
+            "- Prefer repository-local rules and commands as the source of project-specific context.\n"
+        )
 
     def _build_slash_command_content(self, target: str) -> str:
         if target == "iflow":

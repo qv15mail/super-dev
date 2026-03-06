@@ -210,12 +210,22 @@ class ReleaseReadinessEvaluator:
         certified = [item.host for item in profiles if item.certification_level == "certified"]
         compatible = [item.host for item in profiles if item.certification_level == "compatible"]
         docs_unverified = [item.host for item in profiles if not item.docs_verified]
+        official_backed = [
+            item.host
+            for item in profiles
+            if item.host_protocol_mode in {"official-subagent", "official-skill", "official-steering", "official-context"}
+        ]
 
-        passed = len(certified) >= 3 and len(certified) + len(compatible) >= max(8, len(HOST_TOOL_IDS) // 2) and not docs_unverified
+        passed = (
+            len(certified) >= 2
+            and len(official_backed) >= max(10, len(HOST_TOOL_IDS) - 2)
+            and len(certified) + len(compatible) >= max(8, len(HOST_TOOL_IDS) // 2)
+            and not docs_unverified
+        )
         detail = (
-            f"certified={len(certified)}, compatible={len(compatible)}, total={len(profiles)}"
+            f"certified={len(certified)}, compatible={len(compatible)}, official_backed={len(official_backed)}, total={len(profiles)}"
             if passed
-            else f"certified={certified}, compatible={compatible}, docs_unverified={docs_unverified}"
+            else f"certified={certified}, compatible={compatible}, official_backed={official_backed}, docs_unverified={docs_unverified}"
         )
         return ReleaseReadinessCheck(
             name="Host Coverage Depth",

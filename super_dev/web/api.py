@@ -35,9 +35,9 @@ from super_dev.catalogs import (
     CICD_PLATFORM_TARGET_IDS,
     DOMAIN_CATALOG,
     HOST_COMMAND_CANDIDATES,
-    HOST_PATH_PATTERNS,
     HOST_TOOL_CATALOG,
     HOST_TOOL_CATEGORY_MAP,
+    host_path_candidates,
     LANGUAGE_PREFERENCE_CATALOG,
     PIPELINE_FRONTEND_TEMPLATE_CATALOG,
     PLATFORM_CATALOG,
@@ -717,9 +717,14 @@ def _build_host_tool_catalog_payload() -> list[dict[str, Any]]:
                 "certification_label": profile.certification_label,
                 "certification_reason": profile.certification_reason,
                 "certification_evidence": list(profile.certification_evidence),
+                "host_protocol_mode": profile.host_protocol_mode,
+                "host_protocol_summary": profile.host_protocol_summary,
                 "official_docs_url": profile.official_docs_url,
                 "docs_verified": profile.docs_verified,
                 "integration_files": list(target.files) if target else [],
+                "official_project_surfaces": list(profile.official_project_surfaces),
+                "official_user_surfaces": list(profile.official_user_surfaces),
+                "observed_compatibility_surfaces": list(profile.observed_compatibility_surfaces),
                 "slash_command_file": IntegrationManager.SLASH_COMMAND_FILES.get(host_id, "") if supports_slash else "",
                 "supports_slash": supports_slash,
                 "usage_mode": profile.usage_mode,
@@ -750,10 +755,9 @@ def _detect_host_targets(available_targets: list[str]) -> tuple[list[str], dict[
                 reasons.append(f"cmd:{command}")
                 break
 
-        for pattern in HOST_PATH_PATTERNS.get(target, []):
-            expanded = os.path.expanduser(pattern)
-            if glob.glob(expanded):
-                reasons.append(f"path:{pattern}")
+        for candidate in host_path_candidates(target):
+            if glob.glob(candidate):
+                reasons.append(f"path:{candidate}")
                 break
 
         if reasons:
@@ -773,7 +777,7 @@ def _collect_host_diagnostics(
 ) -> dict[str, Any]:
     integration_manager = IntegrationManager(project_dir)
     integration_targets = IntegrationManager.TARGETS
-    skill_paths = SkillManager.TARGET_PATHS
+    skill_manager = SkillManager(project_dir)
 
     report: dict[str, Any] = {"hosts": {}, "overall_ready": True}
     for target in targets:
@@ -800,12 +804,18 @@ def _collect_host_diagnostics(
                 )
 
         if check_skill and IntegrationManager.requires_skill(target):
-            skill_root = skill_paths.get(target)
-            skill_file = project_dir / skill_root / skill_name / "SKILL.md" if skill_root else None
+            skill_root = skill_manager._target_dir(target) if target in SkillManager.TARGET_PATHS else None
+            skill_file = skill_root / skill_name / "SKILL.md" if skill_root else None
             skill_path = str(skill_file) if skill_file else ""
-            skill_ok = skill_file.exists() if skill_file else False
-            host_report["checks"]["skill"] = {"ok": skill_ok, "file": skill_path}
-            if not skill_ok:
+            surface_available = skill_manager.skill_surface_available(target) if skill_file else False
+            skill_ok = skill_file.exists() if (skill_file and surface_available) else True
+            host_report["checks"]["skill"] = {
+                "ok": skill_ok,
+                "file": skill_path,
+                "surface_available": surface_available,
+                "mode": "managed" if surface_available else "compatibility-surface-unavailable",
+            }
+            if surface_available and not skill_ok:
                 host_report["ready"] = False
                 host_report["missing"].append("skill")
                 host_report["suggestions"].append(
@@ -873,6 +883,11 @@ def _serialize_host_usage_profile(
         "certification_label": profile.certification_label,
         "certification_reason": profile.certification_reason,
         "certification_evidence": list(profile.certification_evidence),
+        "host_protocol_mode": profile.host_protocol_mode,
+        "host_protocol_summary": profile.host_protocol_summary,
+        "official_project_surfaces": list(profile.official_project_surfaces),
+        "official_user_surfaces": list(profile.official_user_surfaces),
+        "observed_compatibility_surfaces": list(profile.observed_compatibility_surfaces),
         "usage_mode": profile.usage_mode,
         "primary_entry": profile.primary_entry,
         "trigger_command": profile.trigger_command,

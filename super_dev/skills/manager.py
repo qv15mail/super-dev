@@ -24,23 +24,34 @@ class SkillInstallResult:
 class SkillManager:
     """跨平台 AI Coding 工具 Skill 管理"""
 
+    # Official user-level skill paths confirmed by vendor docs.
+    OFFICIAL_TARGET_PATHS = {
+        "codebuddy-cli": "~/.codebuddy/skills",
+        "codebuddy": "~/.codebuddy/skills",
+        "codex-cli": "~/.codex/skills",
+        "iflow": "~/.iflow/skills",
+        "opencode": "~/.config/opencode/skills",
+        "qoder-cli": "~/.qoder/skills",
+        "qoder": "~/.qoderwork/skills",
+        "windsurf": "~/.codeium/windsurf/skills",
+    }
+
+    # Observed compatibility paths used when a host exposes a local skill loader
+    # but the vendor docs do not yet publish a stable user-level install path.
+    OBSERVED_TARGET_PATHS = {
+        "claude-code": "~/.claude/skills",
+        "cursor-cli": "~/.cursor/skills",
+        "cursor": "~/.cursor/skills",
+        "gemini-cli": "~/.gemini/skills",
+        "kimi-cli": "~/.kimi/skills",
+        "kiro-cli": "~/.kiro/skills",
+        "kiro": "~/.kiro/skills",
+        "trae": "~/.trae/skills",
+    }
+
     TARGET_PATHS = {
-        "claude-code": ".claude/skills",
-        "codebuddy-cli": ".codebuddy/skills",
-        "codebuddy": ".codebuddy/skills",
-        "codex-cli": ".codex/skills",
-        "cursor-cli": ".cursor/skills",
-        "windsurf": ".windsurf/skills",
-        "gemini-cli": ".gemini/skills",
-        "iflow": ".iflow/skills",
-        "kimi-cli": ".kimi/skills",
-        "kiro-cli": ".kiro/skills",
-        "opencode": ".opencode/skills",
-        "qoder-cli": ".qoder/skills",
-        "cursor": ".cursor/skills",
-        "kiro": ".kiro/skills",
-        "qoder": ".qoder/skills",
-        "trae": ".trae/skills",
+        **OBSERVED_TARGET_PATHS,
+        **OFFICIAL_TARGET_PATHS,
     }
 
     def __init__(self, project_dir: Path):
@@ -57,6 +68,23 @@ class SkillManager:
 
     def list_targets(self) -> list[str]:
         return list(self.TARGET_PATHS.keys())
+
+    @classmethod
+    def target_path_kind(cls, target: str) -> str:
+        if target in cls.OFFICIAL_TARGET_PATHS:
+            return "official-user-surface"
+        if target in cls.OBSERVED_TARGET_PATHS:
+            return "observed-compatibility-surface"
+        return "unknown"
+
+    def skill_surface_available(self, target: str) -> bool:
+        kind = self.target_path_kind(target)
+        target_dir = self._target_dir(target)
+        if kind == "official-user-surface":
+            return True
+        if kind == "observed-compatibility-surface":
+            return target_dir.exists() or target_dir.parent.exists()
+        return False
 
     def list_installed(self, target: str) -> list[str]:
         base = self._target_dir(target)
@@ -117,6 +145,9 @@ class SkillManager:
         relative = self.TARGET_PATHS.get(target)
         if relative is None:
             raise ValueError(f"Unsupported target: {target}")
+        raw_path = Path(relative).expanduser()
+        if raw_path.is_absolute():
+            return raw_path
         return self.project_dir / relative
 
     def _is_git_source(self, source: str) -> bool:
@@ -212,7 +243,7 @@ description: Super Dev pipeline governance for research-first, commercial-grade 
 ---
 # {skill_name} - Super Dev AI Coding Skill
 
-> 版本: 2.0.6 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
+> 版本: 2.0.7 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
 
 ---
 

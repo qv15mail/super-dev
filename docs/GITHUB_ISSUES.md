@@ -95,7 +95,7 @@ pip install git+https://github.com/shangyankeji/super-dev.git
 ```toml
 [project]
 name = "super-dev"
-version = "2.0.6"
+version = "2.0.7"
 license = "MIT"  # ✅ 使用新格式
 classifiers = [
     # ✅ 移除了旧的 "License :: OSI Approved :: MIT License"

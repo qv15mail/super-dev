@@ -1,4 +1,4 @@
-# Super Dev 宿主使用指南（2.0.6）
+# Super Dev 宿主使用指南（2.0.7）
 
 ## 目标
 
@@ -21,8 +21,8 @@
 | 宿主 | 类型 | 认证等级 | 是否支持 `/super-dev` | 正确触发方式 | 接入后是否需要重启 |
 | --- | --- | --- | --- | --- | --- |
 | Claude Code | CLI | Certified | 支持 | 在 Claude Code 会话中输入 `/super-dev 你的需求` | 否 |
-| CodeBuddy CLI | CLI | Compatible | 支持 | 在 CodeBuddy CLI 会话中输入 `/super-dev 你的需求` | 否 |
-| CodeBuddy IDE | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求` | 否 |
+| CodeBuddy CLI | CLI | Compatible | 支持 | 在 CodeBuddy CLI 会话中输入 `/super-dev 你的需求`（由 `.codebuddy/commands/super-dev.md` + `.codebuddy/skills/` / `~/.codebuddy/skills/` 生效） | 否 |
+| CodeBuddy IDE | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求`（由 `.codebuddy/commands/super-dev.md` + `.codebuddy/skills/` / `~/.codebuddy/skills/` 生效） | 否 |
 | Cursor CLI | CLI | Compatible | 支持 | 在 Cursor CLI 会话中输入 `/super-dev 你的需求` | 否 |
 | Cursor IDE | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求` | 否 |
 | Gemini CLI | CLI | Compatible | 支持 | 在 Gemini CLI 会话中输入 `/super-dev 你的需求` | 否 |
@@ -30,12 +30,12 @@
 | Kimi CLI | CLI | Experimental | 不支持 | 在 Kimi CLI 会话中输入 `super-dev: 你的需求`（由 `.kimi/AGENTS.md` 生效） | 否 |
 | Kiro CLI | CLI | Compatible | 支持 | 在 Kiro CLI 会话中输入 `/super-dev 你的需求` | 否 |
 | Kiro IDE | IDE | Experimental | 不支持 | 在 Kiro IDE Agent Chat 中输入 `super-dev: 你的需求`（由 `.kiro/steering/super-dev.md` 生效） | 否 |
-| OpenCode CLI | CLI | Experimental | 支持 | 在 OpenCode CLI 会话中输入 `/super-dev 你的需求` | 否 |
-| Qoder CLI | CLI | Compatible | 支持 | 在 Qoder CLI 会话中输入 `/super-dev 你的需求` | 否 |
-| Qoder IDE | IDE | Experimental | 不支持 | 在 Qoder IDE Agent Chat 中输入 `super-dev: 你的需求`（由 `.qoder/rules.md` 生效） | 否 |
-| Windsurf | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求` | 否 |
-| Codex CLI | CLI | Certified | 不支持 | 重启 Codex 后输入 `super-dev: 你的需求`，由 `.codex/AGENTS.md` + `super-dev-core` Skill 生效 | 是 |
-| Trae | IDE | Certified | 不支持 | 在 Trae Agent Chat 中输入 `super-dev: 你的需求`（由 `.trae/rules.md` 生效） | 否 |
+| OpenCode CLI | CLI | Experimental | 支持 | 在 OpenCode CLI 会话中输入 `/super-dev 你的需求`（由 `.opencode/commands/super-dev.md` + `.opencode/skills/` / `~/.config/opencode/skills/` 生效） | 否 |
+| Qoder CLI | CLI | Compatible | 支持 | 在 Qoder CLI 会话中输入 `/super-dev 你的需求`（由 `.qoder/commands/super-dev.md` + `.qoder/skills/` / `~/.qoder/skills/` 生效） | 否 |
+| Qoder IDE | IDE | Experimental | 支持 | 在 Qoder IDE Agent Chat 中输入 `/super-dev 你的需求`（由 `.qoder/commands/super-dev.md` + `.qoder/rules.md` + `.qoder/skills/` / `~/.qoderwork/skills/` 生效） | 否 |
+| Windsurf | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求`（由 `.windsurf/workflows/super-dev.md` + `.windsurf/skills/` / `~/.codeium/windsurf/skills/` 生效） | 否 |
+| Codex CLI | CLI | Certified | 不支持 | 重启 Codex 后输入 `super-dev: 你的需求`，由 `.codex/AGENTS.md` + 兼容 Skill 生效 | 是 |
+| Trae | IDE | Compatible | 不支持 | 在 Trae Agent Chat 中输入 `super-dev: 你的需求`（由 `.trae/rules.md` 生效；若检测到兼容 Skill `~/.trae/skills/super-dev-core/SKILL.md` 会额外增强） | 是 |
 
 ### 最简判断
 
@@ -133,6 +133,7 @@ super-dev onboard --host claude-code --force --yes
 补充说明：
 1. 推荐作为首选 CLI 宿主。
 2. 接入后可先执行 `super-dev doctor --host claude-code` 确认 slash 已生效。
+3. Claude Code 官方已公开 `.claude/agents/` 与 `~/.claude/agents/`，Super Dev 会同步生成 `super-dev-core` subagent。
 
 #### 2. CodeBuddy CLI
 
@@ -322,7 +323,8 @@ super-dev: 你的需求
 
 补充说明：
 1. Kiro IDE 当前优先按 steering/rules 模式触发，不走 `/super-dev`。
-2. 如果 steering/rules 未加载，先重开项目窗口。
+2. 接入会写入项目级 `.kiro/steering/super-dev.md`，并补充官方全局 steering `~/.kiro/steering/AGENTS.md`。
+3. 如果 steering/rules 未加载，先重开项目窗口。
 
 #### 11. OpenCode
 
@@ -365,6 +367,7 @@ super-dev onboard --host qoder-cli --force --yes
 补充说明：
 1. 适合命令行流水线开发。
 2. 若 slash 未生效，先确认 `.qoder/commands/super-dev.md` 已生成。
+3. 官方文档已公开 `.qoder/skills/` 与 `~/.qoder/skills/`，Super Dev 会同时安装命令与 Skill。
 
 #### 13. Qoder IDE
 
@@ -378,14 +381,15 @@ super-dev onboard --host qoder --force --yes
 
 触发命令：
 ```text
-super-dev: 你的需求
+/super-dev 你的需求
 ```
 
 接入后是否需要重启：否
 
 补充说明：
-1. Qoder IDE 当前优先按 project rules 模式触发，不走 `/super-dev`。
-2. 若规则未生效，重新打开项目或重新创建聊天。
+1. Qoder IDE 当前优先使用项目级 commands + rules + skill 模式，直接在 Agent Chat 输入 `/super-dev 你的需求`。
+2. 若新增命令未出现，先确认 `.qoder/commands/super-dev.md` 已生成，再重新打开项目或新开一个 Agent Chat。
+3. 官方文档已公开 `.qoder/skills/` 与 `~/.qoderwork/skills/`，Super Dev 会同步安装 `super-dev-core`。
 
 #### 14. Windsurf
 
@@ -407,6 +411,7 @@ super-dev onboard --host windsurf --force --yes
 补充说明：
 1. 当前按 IDE slash/workflow 模式适配。
 2. 更适合在同一个 Workflow 里连续完成研究、文档、Spec 和编码。
+3. 官方文档已公开 `.windsurf/skills/` 与 `~/.codeium/windsurf/skills/`。
 
 #### 15. Codex CLI
 
@@ -445,12 +450,13 @@ super-dev onboard --host trae --force --yes
 super-dev: 你的需求
 ```
 
-接入后是否需要重启：否
+接入后是否需要重启：是
 
 补充说明：
 1. 不要输入 `/super-dev`。
-2. Trae 当前默认按项目 rules 模式工作，无需手动开启 Skill。
-3. 随后按 `output/*` 与 `.super-dev/changes/*/tasks.md` 推进开发。
+2. 接入一定会写入项目级 `.trae/rules.md`；如果检测到兼容技能目录，也会增强安装 `~/.trae/skills/super-dev-core/SKILL.md`。
+3. 完成接入后建议重开 Trae 或至少新开一个 Agent Chat，使规则生效；如果兼容 Skill 已安装，也会一起生效。
+4. 随后按 `output/*` 与 `.super-dev/changes/*/tasks.md` 推进开发。
 
 ## 推荐给最终用户的最简说法
 

@@ -19,7 +19,7 @@
 
 ## Version
 
-Current version: `2.0.6`
+Current version: `2.0.7`
 
 ---
 
@@ -112,16 +112,38 @@ uv tool upgrade super-dev
 pip install -U super-dev
 ```
 
+After installation, run:
+
+```bash
+super-dev
+```
+
+By default this opens the host onboarding guide:
+
+- the top panel shows the `Super Dev` install entry
+- `↑ / ↓` moves through hosts
+- `Space` toggles a host
+- `Enter` installs the selected hosts
+- `A` selects all
+- `C` selects CLI hosts only
+- `I` selects IDE hosts only
+- `R` clears the selection
+
+After onboarding, the terminal prints the final trigger for each selected host:
+
+- slash hosts: `/super-dev your requirement`
+- text-trigger hosts: `super-dev: your requirement`
+
 ### 3. Pin a specific version
 
 ```bash
-pip install super-dev==2.0.6
+pip install super-dev==2.0.7
 ```
 
 ### 4. Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.6
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.7
 ```
 
 ### 5. Source install for development
@@ -255,22 +277,22 @@ Certification levels:
 
 | Host | Type | Certification | Supports `/super-dev` | Correct Trigger | Restart Required After Onboard |
 | --- | --- | --- | --- | --- | --- |
-| Claude Code | CLI | Certified | Yes | Run `/super-dev your requirement` inside the Claude Code session | No |
-| CodeBuddy CLI | CLI | Compatible | Yes | Run `/super-dev your requirement` inside the CodeBuddy CLI session | No |
-| CodeBuddy IDE | IDE | Experimental | Yes | Run `/super-dev your requirement` in Agent Chat | No |
+| Claude Code | CLI | Certified | Yes | Run `/super-dev your requirement` inside the Claude Code session (governed by `.claude/commands/` + `.claude/agents/` / `~/.claude/agents/`) | No |
+| CodeBuddy CLI | CLI | Compatible | Yes | Run `/super-dev your requirement` inside the CodeBuddy CLI session (governed by `.codebuddy/commands/` + `.codebuddy/skills/` / `~/.codebuddy/skills/`) | No |
+| CodeBuddy IDE | IDE | Experimental | Yes | Run `/super-dev your requirement` in Agent Chat (governed by `.codebuddy/commands/` + `.codebuddy/skills/` / `~/.codebuddy/skills/`) | No |
 | Cursor CLI | CLI | Compatible | Yes | Run `/super-dev your requirement` inside the Cursor CLI session | No |
 | Cursor IDE | IDE | Experimental | Yes | Run `/super-dev your requirement` in Agent Chat | No |
 | Gemini CLI | CLI | Compatible | Yes | Run `/super-dev your requirement` inside the Gemini CLI session | No |
 | iFlow CLI | CLI | Experimental | Yes | Run `/super-dev your requirement` inside the iFlow CLI session | No |
 | Kimi CLI | CLI | Experimental | No | Type `super-dev: your requirement` inside the Kimi CLI session (governed by `.kimi/AGENTS.md`) | No |
 | Kiro CLI | CLI | Compatible | Yes | Run `/super-dev your requirement` inside the Kiro CLI session | No |
-| Kiro IDE | IDE | Experimental | No | Type `super-dev: your requirement` inside Kiro IDE Agent Chat (governed by `.kiro/steering/super-dev.md`) | No |
-| OpenCode CLI | CLI | Experimental | Yes | Run `/super-dev your requirement` inside the OpenCode CLI session | No |
-| Qoder CLI | CLI | Compatible | Yes | Run `/super-dev your requirement` inside the Qoder CLI session | No |
-| Qoder IDE | IDE | Experimental | No | Type `super-dev: your requirement` inside Qoder IDE Agent Chat (governed by `.qoder/rules.md`) | No |
-| Windsurf | IDE | Experimental | Yes | Run `/super-dev your requirement` in Agent Chat | No |
-| Codex CLI | CLI | Certified | No | Restart Codex, then type `super-dev: your requirement`; `.codex/AGENTS.md` + `super-dev-core` Skill will govern execution | Yes |
-| Trae | IDE | Certified | No | Type `super-dev: your requirement` inside Trae Agent Chat (governed by `.trae/rules.md`) | No |
+| Kiro IDE | IDE | Experimental | No | Type `super-dev: your requirement` inside Kiro IDE Agent Chat (governed by `.kiro/steering/super-dev.md` + `~/.kiro/steering/AGENTS.md`) | No |
+| OpenCode CLI | CLI | Experimental | Yes | Run `/super-dev your requirement` inside the OpenCode CLI session (governed by `.opencode/commands/` + `.opencode/skills/` / `~/.config/opencode/skills/`) | No |
+| Qoder CLI | CLI | Compatible | Yes | Run `/super-dev your requirement` inside the Qoder CLI session (governed by `.qoder/commands/` + `.qoder/skills/` / `~/.qoder/skills/`) | No |
+| Qoder IDE | IDE | Experimental | Yes | Type `/super-dev your requirement` inside Qoder IDE Agent Chat (governed by `.qoder/commands/super-dev.md` + `.qoder/rules.md` + `.qoder/skills/` / `~/.qoderwork/skills/`) | No |
+| Windsurf | IDE | Experimental | Yes | Run `/super-dev your requirement` in Agent Chat (governed by `.windsurf/workflows/` + `.windsurf/skills/` / `~/.codeium/windsurf/skills/`) | No |
+| Codex CLI | CLI | Certified | No | Restart Codex, then type `super-dev: your requirement`; `.codex/AGENTS.md` + the compatibility skill will govern execution | Yes |
+| Trae | IDE | Compatible | No | Type `super-dev: your requirement` inside Trae Agent Chat (governed by `.trae/rules.md`; if `~/.trae/skills/super-dev-core/SKILL.md` exists it will add compatibility enhancement) | Yes |
 
 If you do not want to reason about host differences yourself, run:
 
@@ -315,6 +337,7 @@ Restart required after onboard: No
 Notes:
 1. This is the recommended primary CLI host.
 2. Run `super-dev doctor --host claude-code` if you want to confirm the slash mapping.
+3. Claude Code officially exposes `.claude/agents/` and `~/.claude/agents/`; Super Dev writes a `super-dev-core` subagent there.
 
 #### 2. CodeBuddy CLI
 
@@ -504,7 +527,8 @@ Restart required after onboard: No
 
 Notes:
 1. Kiro IDE currently uses steering/rules mode with `super-dev: your requirement`.
-2. If steering or rules did not load, reopen the project window.
+2. Onboarding writes project-level `.kiro/steering/super-dev.md` and also installs the official global steering file at `~/.kiro/steering/AGENTS.md`.
+3. If steering or rules did not load, reopen the project window.
 
 #### 11. OpenCode
 
@@ -560,14 +584,14 @@ Open Qoder IDE Agent Chat in the current project and trigger there.
 
 Trigger command:
 ```text
-super-dev: your requirement
+/super-dev your requirement
 ```
 
 Restart required after onboard: No
 
 Notes:
-1. Qoder IDE currently uses project rules mode with `super-dev: your requirement`.
-2. If rules are missing, reopen the project or start a new chat thread.
+1. Qoder IDE now uses project-level commands + rules, so trigger `/super-dev your requirement` in Agent Chat.
+2. If the command does not appear, verify that `.qoder/commands/super-dev.md` exists, then reopen the project or start a fresh chat.
 
 #### 14. Windsurf
 
@@ -609,7 +633,7 @@ Restart required after onboard: Yes
 
 Notes:
 1. Codex CLI currently uses `super-dev: your requirement` as the primary trigger.
-2. Execution relies on `.codex/AGENTS.md` and `.codex/skills/super-dev-core/SKILL.md`.
+2. Execution relies on `.codex/AGENTS.md` plus the official user-level skill at `~/.codex/skills/super-dev-core/SKILL.md`.
 3. If the old session did not reload the Skill, restart `codex` and retry.
 
 #### 16. Trae
@@ -627,12 +651,13 @@ Trigger command:
 super-dev: your requirement
 ```
 
-Restart required after onboard: No
+Restart required after onboard: Yes
 
 Notes:
 1. Trae currently uses `super-dev: your requirement` as the primary trigger.
-2. Trae is currently rules-first: just open Trae Agent Chat in the project and use the trigger phrase.
-3. Then continue delivery from `output/*` and `.super-dev/changes/*/tasks.md`.
+2. Onboarding always writes project-level `.trae/rules.md`; if a compatible host skill directory is detected, it also enhances `~/.trae/skills/super-dev-core/SKILL.md`.
+3. After onboarding, restart Trae or at least open a fresh Agent Chat so the rule file loads; if the compatibility skill exists it will load together.
+4. Then continue delivery from `output/*` and `.super-dev/changes/*/tasks.md`.
 
 ## Quick Start (Detailed)
 
@@ -844,7 +869,6 @@ super-dev quality --type all
 - `codebuddy`
 - `cursor`
 - `kiro`
-- `qoder`
 - `trae` (Rules-first)
 - `windsurf`
 
@@ -853,7 +877,7 @@ super-dev quality --type all
 - `CLI hosts (native slash)`: trigger `/super-dev` inside the host session, and let the host model perform code work
 - `CLI hosts (non-slash)`: type `super-dev: your requirement` inside the host session and let AGENTS / rules drive execution
 - `IDE hosts (native slash)`: trigger `/super-dev` in Agent Chat, then enforce execution through rules + skill constraints
-- `IDE hosts (non-slash)`: type `super-dev: your requirement` in Agent Chat and let project rules drive execution
+- `IDE hosts (non-slash)`: type `super-dev: your requirement` in Agent Chat and let project rules or host skills drive execution
 - `Terminal entry`: `super-dev "requirement"` only triggers local orchestration and does not directly call a host model session
 
 Inspect host adaptation matrix (official docs links, adaptation mode, injection paths, detection strategy):

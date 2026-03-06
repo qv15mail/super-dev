@@ -28,14 +28,14 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         parents=True,
         exist_ok=True,
     )
-    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.6"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
-    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.6"\n', encoding="utf-8")
+    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.7"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
+    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.7"\n', encoding="utf-8")
     (project_dir / "README.md").write_text(
-        "当前版本：`2.0.6`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "当前版本：`2.0.7`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "README_EN.md").write_text(
-        "Current version: `2.0.6`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "Current version: `2.0.7`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "docs" / "HOST_USAGE_GUIDE.md").write_text("Smoke\n/super-dev\nsuper-dev:\n", encoding="utf-8")
@@ -1040,12 +1040,27 @@ class TestWebAPI:
         assert "SMOKE_OK" in payload["usage_profiles"]["claude-code"]["smoke_test_prompt"]
         host = payload["report"]["hosts"]["claude-code"]
         assert host["ready"] is False
-        assert {"integrate", "skill", "slash"}.issubset(set(host["missing"]))
+        assert {"integrate", "slash"}.issubset(set(host["missing"]))
         assert host["usage_profile"]["usage_mode"] == "native-slash"
         assert host["usage_profile"]["certification_label"] == "Certified"
         assert host["usage_profile"]["requires_restart_after_onboard"] is False
 
-    def test_hosts_doctor_skill_only_host_skips_slash(self, temp_project_dir: Path):
+    def test_detect_host_targets_uses_windows_env_candidates(self, temp_project_dir: Path, monkeypatch):
+        localapp = temp_project_dir / "LocalAppData"
+        target = localapp / "Programs" / "Trae" / "Trae.exe"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("", encoding="utf-8")
+        monkeypatch.setenv("LOCALAPPDATA", str(localapp))
+
+        detected, details = web_api._detect_host_targets(["trae"])
+        assert detected == ["trae"]
+        assert any(item.startswith("path:") for item in details["trae"])
+
+    def test_hosts_doctor_trae_requires_host_skill_and_skips_slash(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        (fake_home / ".trae").mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
         client = TestClient(web_api.app)
         resp = client.get(
             "/api/hosts/doctor",
@@ -1058,14 +1073,35 @@ class TestWebAPI:
         payload = resp.json()
         host = payload["report"]["hosts"]["trae"]
         assert host["ready"] is False
+        assert "skill" in host["missing"]
         assert "slash" not in host["missing"]
         assert host["checks"]["slash"]["ok"] is True
         assert host["checks"]["slash"]["mode"] == "rules-only"
-        assert payload["usage_profiles"]["trae"]["usage_mode"] == "rules-only"
-        assert payload["usage_profiles"]["trae"]["certification_level"] == "certified"
+        assert payload["usage_profiles"]["trae"]["usage_mode"] == "rules-and-skill"
+        assert payload["usage_profiles"]["trae"]["certification_level"] == "compatible"
         assert host["usage_profile"]["trigger_command"] == "super-dev: <需求描述>"
+        assert str(fake_home / ".trae" / "skills") in host["checks"]["skill"]["file"]
         assert payload["usage_profiles"]["trae"]["usage_location"]
         assert payload["usage_profiles"]["trae"]["usage_notes"]
+
+    def test_hosts_doctor_trae_skips_missing_compat_surface(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+        client = TestClient(web_api.app)
+        resp = client.get(
+            "/api/hosts/doctor",
+            params={
+                "project_dir": str(temp_project_dir),
+                "host": "trae",
+            },
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        host = payload["report"]["hosts"]["trae"]
+        assert "skill" not in host["missing"]
+        assert host["checks"]["skill"]["surface_available"] is False
+        assert host["checks"]["skill"]["mode"] == "compatibility-surface-unavailable"
 
     def test_codex_host_catalog_is_skill_only(self):
         client = TestClient(web_api.app)
@@ -1078,6 +1114,8 @@ class TestWebAPI:
         assert codex_host["certification_level"] == "certified"
         assert codex_host["certification_label"] == "Certified"
         assert codex_host["usage_mode"] == "agents-and-skill"
+        assert codex_host["host_protocol_mode"] == "official-skill"
+        assert codex_host["host_protocol_summary"] == "官方 AGENTS.md + 官方 Skills"
         assert "super-dev: <需求描述>" in codex_host["primary_entry"]
         assert codex_host["usage_location"]
         assert codex_host["usage_notes"]
@@ -1085,11 +1123,25 @@ class TestWebAPI:
         assert any("重启 codex" in step for step in codex_host["post_onboard_steps"])
         assert codex_host["commands"]["slash"] == ""
         assert codex_host["commands"]["skill"] == "super-dev-core"
+        assert "~/.codex/skills/super-dev-core/SKILL.md" in codex_host["official_user_surfaces"]
         assert codex_host["commands"]["trigger"] == "super-dev: 你的需求"
         assert codex_host["final_trigger"] == "super-dev: 你的需求"
         assert "SMOKE_OK" in codex_host["smoke_test_prompt"]
 
-    def test_kimi_host_catalog_is_rules_only(self):
+    def test_claude_host_catalog_uses_official_subagent_surfaces(self):
+        client = TestClient(web_api.app)
+        resp = client.get("/api/catalogs")
+        assert resp.status_code == 200
+        payload = resp.json()
+        claude_host = next(item for item in payload["host_tools"] if item["id"] == "claude-code")
+        assert claude_host["supports_slash"] is True
+        assert claude_host["host_protocol_mode"] == "official-subagent"
+        assert claude_host["host_protocol_summary"] == "官方 commands + subagents"
+        assert ".claude/agents/super-dev-core.md" in claude_host["official_project_surfaces"]
+        assert "~/.claude/agents/super-dev-core.md" in claude_host["official_user_surfaces"]
+        assert claude_host["commands"]["skill"] == ""
+
+    def test_kimi_host_catalog_is_agents_and_skill(self):
         client = TestClient(web_api.app)
         resp = client.get("/api/catalogs")
         assert resp.status_code == 200
@@ -1097,14 +1149,46 @@ class TestWebAPI:
         kimi_host = next(item for item in payload["host_tools"] if item["id"] == "kimi-cli")
         assert kimi_host["supports_slash"] is False
         assert kimi_host["slash_command_file"] == ""
-        assert kimi_host["usage_mode"] == "rules-only"
+        assert kimi_host["usage_mode"] == "agents-and-skill"
+        assert kimi_host["host_protocol_mode"] == "official-context"
+        assert kimi_host["host_protocol_summary"] == "官方 AGENTS.md + 文本触发"
         assert kimi_host["commands"]["slash"] == ""
-        assert kimi_host["commands"]["skill"] == ""
+        assert kimi_host["commands"]["skill"] == "super-dev-core"
         assert kimi_host["commands"]["trigger"] == "super-dev: 你的需求"
         assert kimi_host["final_trigger"] == "super-dev: 你的需求"
         assert "SMOKE_OK" in kimi_host["smoke_test_prompt"]
         assert ".kimi/AGENTS.md" in kimi_host["integration_files"]
         assert "super-dev: <需求描述>" in kimi_host["primary_entry"]
+
+    def test_qoder_host_catalog_is_native_slash(self):
+        client = TestClient(web_api.app)
+        resp = client.get("/api/catalogs")
+        assert resp.status_code == 200
+        payload = resp.json()
+        qoder_host = next(item for item in payload["host_tools"] if item["id"] == "qoder")
+        assert qoder_host["supports_slash"] is True
+        assert qoder_host["host_protocol_mode"] == "official-skill"
+        assert qoder_host["slash_command_file"] == ".qoder/commands/super-dev.md"
+        assert qoder_host["usage_mode"] == "native-slash"
+        assert qoder_host["commands"]["slash"] == '/super-dev "你的需求"'
+        assert qoder_host["commands"]["trigger"] == '/super-dev "你的需求"'
+        assert qoder_host["final_trigger"] == '/super-dev "你的需求"'
+        assert ".qoder/rules.md" in qoder_host["integration_files"]
+        assert ".qoder/commands/super-dev.md" in qoder_host["official_project_surfaces"]
+        assert "~/.qoder/commands/super-dev.md" in qoder_host["official_user_surfaces"]
+        assert ".qoder/skills/super-dev-core/SKILL.md" in qoder_host["official_project_surfaces"]
+        assert "~/.qoderwork/skills/super-dev-core/SKILL.md" in qoder_host["official_user_surfaces"]
+
+    def test_kiro_host_catalog_uses_global_steering_surface(self):
+        client = TestClient(web_api.app)
+        resp = client.get("/api/catalogs")
+        assert resp.status_code == 200
+        payload = resp.json()
+        kiro_host = next(item for item in payload["host_tools"] if item["id"] == "kiro")
+        assert kiro_host["supports_slash"] is False
+        assert kiro_host["host_protocol_mode"] == "official-steering"
+        assert ".kiro/steering/super-dev.md" in kiro_host["official_project_surfaces"]
+        assert "~/.kiro/steering/AGENTS.md" in kiro_host["official_user_surfaces"]
 
     @pytest.mark.parametrize(
         ("host_id", "slash_file"),
@@ -1113,7 +1197,9 @@ class TestWebAPI:
             ("cursor", ".cursor/commands/super-dev.md"),
             ("windsurf", ".windsurf/workflows/super-dev.md"),
             ("gemini-cli", ".gemini/commands/super-dev.md"),
+            ("kiro-cli", ".kiro/commands/super-dev.md"),
             ("opencode", ".opencode/commands/super-dev.md"),
+            ("qoder", ".qoder/commands/super-dev.md"),
         ],
     )
     def test_verified_slash_hosts_catalog_keeps_native_entry(self, host_id: str, slash_file: str):
@@ -1125,6 +1211,15 @@ class TestWebAPI:
         assert host["supports_slash"] is True
         assert host["usage_mode"] == "native-slash"
         assert host["slash_command_file"] == slash_file
+        if host_id == "gemini-cli":
+            assert host["host_protocol_mode"] == "official-context"
+            assert host["host_protocol_summary"] == "官方 commands + GEMINI.md"
+            assert "GEMINI.md" in host["official_project_surfaces"]
+            assert "~/.gemini/GEMINI.md" in host["official_user_surfaces"]
+        if host_id == "kiro-cli":
+            assert host["host_protocol_mode"] == "official-context"
+            assert host["host_protocol_summary"] == "官方 commands + AGENTS.md"
+            assert ".kiro/AGENTS.md" in host["official_project_surfaces"]
         assert host["commands"]["trigger"] == '/super-dev "你的需求"'
         assert host["final_trigger"] == '/super-dev "你的需求"'
 
@@ -1134,11 +1229,8 @@ class TestWebAPI:
         (temp_project_dir / ".claude" / "CLAUDE.md").write_text("ok", encoding="utf-8")
         (temp_project_dir / ".claude" / "commands").mkdir(parents=True, exist_ok=True)
         (temp_project_dir / ".claude" / "commands" / "super-dev.md").write_text("ok", encoding="utf-8")
-        (temp_project_dir / ".claude" / "skills" / "super-dev-core").mkdir(parents=True, exist_ok=True)
-        (temp_project_dir / ".claude" / "skills" / "super-dev-core" / "SKILL.md").write_text(
-            "# skill",
-            encoding="utf-8",
-        )
+        (temp_project_dir / ".claude" / "agents").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / ".claude" / "agents" / "super-dev-core.md").write_text("ok", encoding="utf-8")
 
         resp = client.get(
             "/api/hosts/doctor",

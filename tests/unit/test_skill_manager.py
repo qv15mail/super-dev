@@ -15,6 +15,13 @@ class TestSkillManager:
         assert gaps["missing_in_skill_targets"] == []
         assert gaps["extra_in_skill_targets"] == []
 
+    def test_target_path_kind_distinguishes_official_and_observed(self):
+        assert SkillManager.target_path_kind("qoder-cli") == "official-user-surface"
+        assert SkillManager.target_path_kind("trae") == "observed-compatibility-surface"
+        assert SkillManager.TARGET_PATHS["qoder"] == "~/.qoderwork/skills"
+        assert SkillManager.TARGET_PATHS["windsurf"] == "~/.codeium/windsurf/skills"
+        assert SkillManager.TARGET_PATHS["opencode"] == "~/.config/opencode/skills"
+
     def test_install_from_directory_and_uninstall(self, temp_project_dir: Path):
         source_skill = temp_project_dir / "my-skill"
         source_skill.mkdir(parents=True, exist_ok=True)
@@ -37,7 +44,10 @@ class TestSkillManager:
         "target",
         list(SkillManager.TARGET_PATHS.keys()),
     )
-    def test_install_builtin_skill(self, temp_project_dir: Path, target: str):
+    def test_install_builtin_skill(self, temp_project_dir: Path, target: str, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
         manager = SkillManager(temp_project_dir)
         result = manager.install(source="super-dev", target=target, name="super-dev-core")
 

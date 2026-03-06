@@ -58,7 +58,7 @@ class TestIntegrationManager:
         assert codex.adapter_mode == "native-cli-session"
         assert codex.terminal_entry_scope.startswith("仅触发本地编排")
         assert codex.slash_command_file == ""
-        assert codex.skill_dir.startswith(".codex/")
+        assert codex.skill_dir.startswith("~/.codex/")
         assert codex.certification_level == "certified"
         assert codex.certification_label == "Certified"
         assert codex.certification_reason
@@ -69,6 +69,9 @@ class TestIntegrationManager:
         assert "重启 codex" in codex.usage_location
         assert any("重启 codex" in step for step in codex.post_onboard_steps)
         assert any("不要输入 /super-dev" in note for note in codex.usage_notes)
+        assert codex.host_protocol_mode == "official-skill"
+        assert codex.host_protocol_summary == "官方 AGENTS.md + 官方 Skills"
+        assert "~/.codex/skills/super-dev-core/SKILL.md" in codex.official_user_surfaces
         assert "Skill" in codex.primary_entry or "AGENTS" in codex.notes
 
         qoder = by_host["qoder"]
@@ -77,20 +80,51 @@ class TestIntegrationManager:
         assert qoder.integration_files[0] == ".qoder/rules.md"
         assert qoder.docs_verified is True
         assert qoder.certification_level == "experimental"
-        assert qoder.usage_mode == "rules-only"
+        assert qoder.usage_mode == "native-slash"
+        assert qoder.slash_command_file == ".qoder/commands/super-dev.md"
+        assert ".qoder/rules.md" in qoder.official_project_surfaces
+        assert "~/.qoder/commands/super-dev.md" in qoder.official_user_surfaces
+        assert "~/.qoderwork/skills/super-dev-core/SKILL.md" in qoder.official_user_surfaces
+        assert ".qoder/skills/super-dev-core/SKILL.md" in qoder.official_project_surfaces
+
+        claude = by_host["claude-code"]
+        assert claude.host_protocol_mode == "official-subagent"
+        assert claude.host_protocol_summary == "官方 commands + subagents"
+        assert ".claude/agents/super-dev-core.md" in claude.official_project_surfaces
+        assert "~/.claude/agents/super-dev-core.md" in claude.official_user_surfaces
+        assert claude.skill_dir == ""
+
+        gemini = by_host["gemini-cli"]
+        assert gemini.host_protocol_mode == "official-context"
+        assert gemini.host_protocol_summary == "官方 commands + GEMINI.md"
+        assert "GEMINI.md" in gemini.official_project_surfaces
+        assert "~/.gemini/GEMINI.md" in gemini.official_user_surfaces
 
         kimi = by_host["kimi-cli"]
         assert kimi.category == "cli"
+        assert kimi.host_protocol_mode == "official-context"
+        assert kimi.host_protocol_summary == "官方 AGENTS.md + 文本触发"
         assert kimi.docs_verified is True
         assert kimi.certification_level == "experimental"
         assert kimi.slash_command_file == ""
-        assert kimi.skill_dir == ""
-        assert kimi.usage_mode == "rules-only"
+        assert kimi.skill_dir == "~/.kimi/skills"
+        assert kimi.usage_mode == "agents-and-skill"
         assert kimi.trigger_command == "super-dev: <需求描述>"
         assert ".kimi/AGENTS.md" in kimi.integration_files
+        assert "~/.kimi/skills/super-dev-core/SKILL.md" in kimi.observed_compatibility_surfaces
         assert "SMOKE_OK" in kimi.smoke_test_prompt
         assert kimi.smoke_test_steps
         assert "SMOKE_OK" in kimi.smoke_success_signal
+
+        kiro_cli = by_host["kiro-cli"]
+        assert kiro_cli.host_protocol_mode == "official-context"
+        assert kiro_cli.host_protocol_summary == "官方 commands + AGENTS.md"
+        assert ".kiro/AGENTS.md" in kiro_cli.official_project_surfaces
+
+        kiro = by_host["kiro"]
+        assert kiro.host_protocol_mode == "official-steering"
+        assert ".kiro/steering/super-dev.md" in kiro.official_project_surfaces
+        assert "~/.kiro/steering/AGENTS.md" in kiro.official_user_surfaces
 
     def test_qoder_rules_generated(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)
@@ -200,11 +234,11 @@ class TestIntegrationManager:
         assert manager.setup_global_slash_command(target="codex-cli", force=True) is None
         assert manager.setup_global_slash_command(target="kimi-cli", force=True) is None
         assert manager.supports_slash("kiro") is False
-        assert manager.supports_slash("qoder") is False
+        assert manager.supports_slash("qoder") is True
         assert manager.supports_slash("trae") is False
-        assert manager.requires_skill("kimi-cli") is False
+        assert manager.requires_skill("kimi-cli") is True
         assert manager.setup_slash_command(target="kiro", force=True) is None
-        assert manager.setup_slash_command(target="qoder", force=True) is None
+        assert manager.setup_slash_command(target="qoder", force=True) is not None
         assert manager.setup_slash_command(target="trae", force=True) is None
         assert manager.setup_global_slash_command(target="trae", force=True) is None
 

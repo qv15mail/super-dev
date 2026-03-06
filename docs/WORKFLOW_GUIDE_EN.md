@@ -1,4 +1,4 @@
-# Super Dev Workflow Guide (2.0.6)
+# Super Dev Workflow Guide (2.0.7)
 
 This is the practical handbook for running Super Dev in real projects. It covers:
 
@@ -243,8 +243,8 @@ If you need a local constrained run:
 
 Supported AI coding environments:
 
-- CLI: `claude-code`, `codex-cli`, `gemini-cli`, `kimi-cli`, `kiro-cli`, `qoder-cli`
-- IDE: `qoder`
+- CLI: `claude-code`, `codebuddy-cli`, `codex-cli`, `cursor-cli`, `gemini-cli`, `iflow`, `kimi-cli`, `kiro-cli`, `opencode`, `qoder-cli`
+- IDE: `codebuddy`, `cursor`, `kiro`, `qoder`, `trae`, `windsurf`
 
 Recommended auto-detect flow:
 

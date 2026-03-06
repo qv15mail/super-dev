@@ -23,6 +23,7 @@ from typing import Any, Literal, cast
 try:
     import requests
     from rich.console import Console
+    from rich.table import Table
     from rich.panel import Panel
     from rich.text import Text
     RICH_AVAILABLE = True
@@ -35,11 +36,11 @@ from .catalogs import (
     DOMAIN_IDS,
     FULL_FRONTEND_TEMPLATE_IDS,
     HOST_COMMAND_CANDIDATES,
-    HOST_PATH_PATTERNS,
     HOST_TOOL_IDS,
     PIPELINE_BACKEND_IDS,
     PIPELINE_FRONTEND_TEMPLATE_IDS,
     PLATFORM_IDS,
+    host_path_candidates,
 )
 from .config import ConfigManager, ProjectConfig, get_config_manager
 from .exceptions import SuperDevError
@@ -4687,10 +4688,11 @@ class SuperDevCLI:
         if non_interactive:
             return available_targets
 
-        self.console.print("[cyan]请选择宿主 AI Coding 工具（可多选）:[/cyan]")
-        for idx, target in enumerate(available_targets, 1):
-            self.console.print(f"  {idx}. {target}")
-        self.console.print("[dim]输入编号（逗号分隔），直接回车表示全部[/dim]")
+        interactive_targets = self._interactive_host_selector(available_targets=available_targets)
+        if interactive_targets is not None:
+            return interactive_targets
+
+        self._render_host_selection_guide(available_targets=available_targets)
         raw = input("宿主选择: ").strip()
         if not raw:
             return available_targets
@@ -4711,6 +4713,235 @@ class SuperDevCLI:
             targets.append(target)
         return targets
 
+    def _super_dev_ascii_banner(self) -> str:
+        return (
+            "  ____                        ____             \n"
+            " / ___| _   _ _ __   ___ _ __|  _ \\  _____   __\n"
+            " \\___ \\| | | | '_ \\ / _ \\ '__| | | |/ _ \\ \\ / /\n"
+            "  ___) | |_| | |_) |  __/ |  | |_| |  __/\\ V / \n"
+            " |____/ \\__,_| .__/ \\___|_|  |____/ \\___| \\_/  \n"
+            "             |_|                               "
+        )
+
+    def _read_single_key(self) -> str:
+        if os.name == "nt":
+            import msvcrt
+
+            key = msvcrt.getwch()
+            if key in ("\x00", "\xe0"):
+                special = msvcrt.getwch()
+                return {
+                    "H": "UP",
+                    "P": "DOWN",
+                }.get(special, special)
+            if key == "\r":
+                return "ENTER"
+            if key == " ":
+                return "SPACE"
+            if key == "\x1b":
+                return "ESC"
+            return key
+
+        import termios
+        import tty
+
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            first = sys.stdin.read(1)
+            if first == "\x1b":
+                second = sys.stdin.read(1)
+                if second == "[":
+                    third = sys.stdin.read(1)
+                    return {
+                        "A": "UP",
+                        "B": "DOWN",
+                    }.get(third, "ESC")
+                return "ESC"
+            if first in ("\r", "\n"):
+                return "ENTER"
+            if first == " ":
+                return "SPACE"
+            return first
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+    def _interactive_host_selector(self, *, available_targets: list[str]) -> list[str] | None:
+        from .integrations import IntegrationManager
+
+        if not RICH_AVAILABLE:
+            return None
+        if not sys.stdin.isatty() or not sys.stdout.isatty():
+            return None
+
+        integration_manager = IntegrationManager(Path.cwd())
+        detected_targets, _ = self._detect_host_targets(available_targets=available_targets)
+        selected: set[str] = set(detected_targets)
+        cursor = 0
+
+        def render() -> None:
+            self.console.clear()
+            subtitle = (
+                "Space 勾选，Enter 安装，↑/↓ 移动，A 全选，C 仅 CLI，I 仅 IDE，R 清空，Esc 取消\n"
+                "slash 宿主用 /super-dev；非 slash 宿主用 super-dev:"
+            )
+            self.console.print(Panel(f"{self._super_dev_ascii_banner()}\n\n{subtitle}", title="Super Dev"))
+
+            table = Table(title="选择宿主工具", show_header=True, header_style="bold cyan")
+            table.add_column("", width=3)
+            table.add_column("#", width=4, style="cyan")
+            table.add_column("宿主", style="bold")
+            table.add_column("认证", width=12)
+            table.add_column("触发", width=12)
+            table.add_column("协议", overflow="fold")
+            table.add_column("检测", width=8)
+
+            for idx, target in enumerate(available_targets, 1):
+                profile = integration_manager.get_adapter_profile(target)
+                selected_mark = "[x]" if target in selected else "[ ]"
+                pointer = ">" if idx - 1 == cursor else " "
+                trigger = "/super-dev" if integration_manager.supports_slash(target) else "super-dev:"
+                detected = "已检测" if target in detected_targets else ""
+                table.add_row(
+                    pointer,
+                    str(idx),
+                    f"{selected_mark} {target}",
+                    profile.certification_label,
+                    trigger,
+                    profile.host_protocol_summary or profile.host_protocol_mode,
+                    detected,
+                )
+
+            self.console.print(table)
+            selected_text = ", ".join(sorted(selected)) if selected else "未选择"
+            self.console.print(f"[cyan]当前选择[/cyan]: {selected_text}")
+
+        while True:
+            render()
+            key = self._read_single_key()
+            if key == "UP":
+                cursor = (cursor - 1) % len(available_targets)
+                continue
+            if key == "DOWN":
+                cursor = (cursor + 1) % len(available_targets)
+                continue
+            if key == "SPACE":
+                target = available_targets[cursor]
+                if target in selected:
+                    selected.remove(target)
+                else:
+                    selected.add(target)
+                continue
+            if key in ("a", "A"):
+                selected = set(available_targets)
+                continue
+            if key in ("c", "C"):
+                selected = {
+                    target for target in available_targets
+                    if target in {"claude-code", "codebuddy-cli", "codex-cli", "cursor-cli", "gemini-cli", "iflow", "kimi-cli", "kiro-cli", "opencode", "qoder-cli"}
+                }
+                continue
+            if key in ("i", "I"):
+                selected = {
+                    target for target in available_targets
+                    if target in {"codebuddy", "cursor", "kiro", "qoder", "trae", "windsurf"}
+                }
+                continue
+            if key in ("r", "R"):
+                selected.clear()
+                continue
+            if key == "ENTER":
+                chosen = [target for target in available_targets if target in selected]
+                if chosen:
+                    self.console.clear()
+                    return chosen
+                self.console.print("[yellow]请至少选择一个宿主[/yellow]")
+                time.sleep(0.8)
+                continue
+            if key == "ESC":
+                self.console.clear()
+                raise ValueError("已取消宿主选择")
+
+    def _build_install_summary(self, *, available_targets: list[str]) -> str:
+        from .integrations import IntegrationManager
+
+        integration_manager = IntegrationManager(Path.cwd())
+        slash_hosts = [target for target in available_targets if integration_manager.supports_slash(target)]
+        text_hosts = [target for target in available_targets if not integration_manager.supports_slash(target)]
+        return (
+            f"slash 宿主 ({len(slash_hosts)}): " + ", ".join(slash_hosts) + "\n"
+            f"text 宿主 ({len(text_hosts)}): " + ", ".join(text_hosts)
+        )
+
+    def _render_host_selection_guide(self, *, available_targets: list[str]) -> None:
+        from .integrations import IntegrationManager
+
+        if not RICH_AVAILABLE:
+            self.console.print("[cyan]请选择宿主 AI Coding 工具（可多选）:[/cyan]")
+            for idx, target in enumerate(available_targets, 1):
+                self.console.print(f"  {idx}. {target}")
+            self.console.print("[dim]输入编号（逗号分隔），直接回车表示全部[/dim]")
+            return
+
+        integration_manager = IntegrationManager(Path.cwd())
+        detected_targets, _ = self._detect_host_targets(available_targets=available_targets)
+        intro = (
+            "安装后直接在宿主里触发。\n"
+            "支持 slash 的宿主使用 `/super-dev 你的需求`。\n"
+            "不支持 slash 的宿主使用 `super-dev: 你的需求`。"
+        )
+        self.console.print(Panel(intro, title="Super Dev 安装向导", padding=(1, 2)))
+
+        table = Table(title="宿主选择", show_header=True, header_style="bold cyan")
+        table.add_column("#", style="cyan", width=4)
+        table.add_column("宿主", style="bold")
+        table.add_column("认证", width=12)
+        table.add_column("触发", width=12)
+        table.add_column("宿主协议", overflow="fold")
+        table.add_column("检测", width=8)
+
+        for idx, target in enumerate(available_targets, 1):
+            profile = integration_manager.get_adapter_profile(target)
+            trigger = "/super-dev" if integration_manager.supports_slash(target) else "super-dev:"
+            detected = "已检测" if target in detected_targets else ""
+            table.add_row(
+                str(idx),
+                target,
+                profile.certification_label,
+                trigger,
+                profile.host_protocol_summary or profile.host_protocol_mode,
+                detected,
+            )
+        self.console.print(table)
+        self.console.print("[dim]输入编号（逗号分隔），直接回车表示全部[/dim]")
+
+    def _render_install_intro(self, *, args) -> None:
+        from .integrations import IntegrationManager
+
+        if not RICH_AVAILABLE:
+            self.console.print("[cyan]Super Dev 安装入口[/cyan]")
+            self.console.print("宿主负责编码与模型调用；Super Dev 负责流程、门禁、审计与交付标准。")
+            self.console.print("slash 宿主输入 /super-dev；非 slash 宿主输入 super-dev:")
+            return
+
+        integration_manager = IntegrationManager(Path.cwd())
+        available_targets = [item.name for item in integration_manager.list_targets()]
+        lines = [
+            "宿主负责编码、工具调用和模型能力。",
+            "Super Dev 负责 research → 三文档 → 确认门 → Spec → 前端优先 → 质量门禁 → 交付。",
+            "slash 宿主输入 `/super-dev 你的需求`，非 slash 宿主输入 `super-dev: 你的需求`。",
+            "",
+            self._build_install_summary(available_targets=available_targets),
+        ]
+        if getattr(args, "auto", False):
+            lines.append("当前模式: 自动检测宿主。")
+        elif getattr(args, "host", None):
+            lines.append(f"当前模式: 仅接入 {args.host}。")
+        elif getattr(args, "all", False):
+            lines.append("当前模式: 接入全部宿主。")
+        self.console.print(Panel("\n".join(lines), title="Super Dev 安装入口", padding=(1, 2)))
+
     def _detect_host_targets(
         self,
         *,
@@ -4727,10 +4958,9 @@ class SuperDevCLI:
                     reasons.append(f"cmd:{command}")
                     break
 
-            for pattern in HOST_PATH_PATTERNS.get(target, []):
-                expanded = os.path.expanduser(pattern)
-                if glob.glob(expanded):
-                    reasons.append(f"path:{pattern}")
+            for candidate in host_path_candidates(target):
+                if glob.glob(candidate):
+                    reasons.append(f"path:{candidate}")
                     break
 
             if reasons:
@@ -4749,9 +4979,9 @@ class SuperDevCLI:
         from .skills import SkillManager
 
         configured: list[str] = []
+        skill_manager = SkillManager(project_dir)
         for target in available_targets:
             integration_files = IntegrationManager.TARGETS[target].files
-            skill_dir = SkillManager.TARGET_PATHS.get(target, "")
 
             has_integration = any((project_dir / relative).exists() for relative in integration_files)
             if IntegrationManager.supports_slash(target):
@@ -4768,7 +4998,12 @@ class SuperDevCLI:
                 project_slash_exists = False
                 global_slash_exists = False
             has_slash = project_slash_exists or global_slash_exists
-            has_skill = bool(skill_dir) and (project_dir / skill_dir).exists()
+            has_skill = False
+            if IntegrationManager.requires_skill(target):
+                try:
+                    has_skill = skill_manager.skill_surface_available(target)
+                except ValueError:
+                    has_skill = False
             if has_integration or has_slash or has_skill:
                 configured.append(target)
         return configured
@@ -4872,7 +5107,7 @@ class SuperDevCLI:
 
         integration_manager = IntegrationManager(project_dir)
         integration_targets = IntegrationManager.TARGETS
-        skill_paths = SkillManager.TARGET_PATHS
+        skill_manager = SkillManager(project_dir)
 
         report: dict[str, Any] = {"hosts": {}, "overall_ready": True}
         for target in targets:
@@ -4898,10 +5133,17 @@ class SuperDevCLI:
                     )
 
             if check_skill and IntegrationManager.requires_skill(target):
-                skill_file = project_dir / skill_paths[target] / skill_name / "SKILL.md"
-                skill_ok = skill_file.exists()
-                host_report["checks"]["skill"] = {"ok": skill_ok, "file": str(skill_file)}
-                if not skill_ok:
+                skill_root = skill_manager._target_dir(target)
+                skill_file = skill_root / skill_name / "SKILL.md"
+                surface_available = skill_manager.skill_surface_available(target)
+                skill_ok = skill_file.exists() if surface_available else True
+                host_report["checks"]["skill"] = {
+                    "ok": skill_ok,
+                    "file": str(skill_file),
+                    "surface_available": surface_available,
+                    "mode": "managed" if surface_available else "compatibility-surface-unavailable",
+                }
+                if surface_available and not skill_ok:
                     host_report["ready"] = False
                     host_report["missing"].append("skill")
                     host_report["suggestions"].append(
@@ -5139,25 +5381,31 @@ class SuperDevCLI:
                             self.console.print(f"  [green]✓[/green] 集成规则: {item}")
                     else:
                         self.console.print("  [dim]- 集成规则已存在（可加 --force 覆盖）[/dim]")
+                    global_protocol = integration_manager.setup_global_protocol(target=target, force=args.force)
+                    if global_protocol is not None:
+                        self.console.print(f"  [green]✓[/green] 宿主协议: {global_protocol}")
                 except Exception as exc:
                     has_error = True
                     self.console.print(f"  [red]✗[/red] 集成失败: {exc}")
 
             if not args.skip_skill and IntegrationManager.requires_skill(target):
                 try:
-                    installed = set(skill_manager.list_installed(target))
-                    if args.skill_name in installed and not args.force:
-                        self.console.print(
-                            f"  [dim]- Skill 已存在: {args.skill_name}（可加 --force 重装）[/dim]"
-                        )
+                    if not skill_manager.skill_surface_available(target):
+                        self.console.print("  [dim]- 未检测到官方或兼容 Skill 目录，已跳过宿主级 Skill 安装[/dim]")
                     else:
-                        install_result = skill_manager.install(
-                            source="super-dev",
-                            target=target,
-                            name=args.skill_name,
-                            force=args.force,
-                        )
-                        self.console.print(f"  [green]✓[/green] Skill: {install_result.path}")
+                        installed = set(skill_manager.list_installed(target))
+                        if args.skill_name in installed and not args.force:
+                            self.console.print(
+                                f"  [dim]- Skill 已存在: {args.skill_name}（可加 --force 重装）[/dim]"
+                            )
+                        else:
+                            install_result = skill_manager.install(
+                                source="super-dev",
+                                target=target,
+                                name=args.skill_name,
+                                force=args.force,
+                            )
+                            self.console.print(f"  [green]✓[/green] Skill: {install_result.path}")
                 except Exception as exc:
                     has_error = True
                     self.console.print(f"  [red]✗[/red] Skill 安装失败: {exc}")
@@ -5383,6 +5631,7 @@ class SuperDevCLI:
 
     def _cmd_install(self, args) -> int:
         """面向 PyPI 用户的一键安装入口"""
+        self._render_install_intro(args=args)
         setup_args = argparse.Namespace(
             host=args.host,
             all=bool(args.all),
@@ -5732,12 +5981,34 @@ class SuperDevCLI:
             f"{indent}认证等级: {usage['certification_label']} ({usage['certification_level']})"
         )
         self.console.print(f"{indent}使用模式: {usage['usage_mode']}")
+        protocol_mode = str(usage.get("host_protocol_mode", "")).strip()
+        protocol_summary = str(usage.get("host_protocol_summary", "")).strip()
+        if protocol_mode or protocol_summary:
+            protocol_text = protocol_summary or protocol_mode
+            if protocol_mode and protocol_summary and protocol_mode != protocol_summary:
+                protocol_text = f"{protocol_summary} ({protocol_mode})"
+            self.console.print(f"{indent}宿主协议: {protocol_text}")
         self.console.print(f"{indent}触发命令: {usage['trigger_command']}")
         self.console.print(f"{indent}触发上下文: {usage['trigger_context']}")
         self.console.print(f"{indent}触发位置: {usage['usage_location']}")
         self.console.print(f"{indent}接入后重启: {usage['restart_required_label']}")
         if usage.get("certification_reason"):
             self.console.print(f"{indent}认证说明: {usage['certification_reason']}")
+        official_project = usage.get("official_project_surfaces", [])
+        if isinstance(official_project, list) and official_project:
+            self.console.print(f"{indent}官方项目级接入面:")
+            for item in official_project:
+                self.console.print(f"{indent}  - {item}")
+        official_user = usage.get("official_user_surfaces", [])
+        if isinstance(official_user, list) and official_user:
+            self.console.print(f"{indent}官方用户级接入面:")
+            for item in official_user:
+                self.console.print(f"{indent}  - {item}")
+        observed_surfaces = usage.get("observed_compatibility_surfaces", [])
+        if isinstance(observed_surfaces, list) and observed_surfaces:
+            self.console.print(f"{indent}兼容增强路径:")
+            for item in observed_surfaces:
+                self.console.print(f"{indent}  - {item}")
         steps = usage.get("post_onboard_steps", [])
         if isinstance(steps, list) and steps:
             self.console.print(f"{indent}接入后步骤:")
@@ -5880,6 +6151,11 @@ class SuperDevCLI:
             "certification_label": profile.certification_label,
             "certification_reason": profile.certification_reason,
             "certification_evidence": list(profile.certification_evidence),
+            "host_protocol_mode": profile.host_protocol_mode,
+            "host_protocol_summary": profile.host_protocol_summary,
+            "official_project_surfaces": list(profile.official_project_surfaces),
+            "official_user_surfaces": list(profile.official_user_surfaces),
+            "observed_compatibility_surfaces": list(profile.observed_compatibility_surfaces),
             "usage_mode": profile.usage_mode,
             "primary_entry": profile.primary_entry,
             "trigger_command": profile.trigger_command,

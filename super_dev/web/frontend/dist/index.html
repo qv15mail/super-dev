@@ -1625,6 +1625,7 @@
                             <div><strong>认证</strong>: {{ host.certification_label || 'Experimental' }}</div>
                             <div><strong>入口</strong>: {{ host.commands.trigger || host.primary_entry }}</div>
                             <div><strong>模式</strong>: {{ hostUsageModeLabel(host.usage_mode) }}</div>
+                            <div><strong>协议</strong>: {{ hostProtocolLabel(host.host_protocol_mode, host.host_protocol_summary) }}</div>
                         </div>
                         <div v-if="host.integration_files && host.integration_files.length" class="host-card-file">
                             规则: {{ host.integration_files[0] }}
@@ -1678,6 +1679,10 @@
                         <div class="host-detail-card">
                             <span>使用模式</span>
                             <strong>{{ hostUsageModeLabel(selectedHostTool.usage_mode) }}</strong>
+                        </div>
+                        <div class="host-detail-card">
+                            <span>宿主协议</span>
+                            <strong>{{ hostProtocolLabel(selectedHostTool.host_protocol_mode, selectedHostTool.host_protocol_summary) }}</strong>
                         </div>
                         <div class="host-detail-card">
                             <span>触发位置</span>
@@ -2213,7 +2218,7 @@
                             key: 'skill',
                             label: 'Skill 名称',
                             description: '适用于需要 AGENTS/Skill 协同的非 slash 宿主',
-                            command: ['skill-only', 'agents-and-skill'].includes(host.usage_mode) ? (host.commands.skill || '') : ''
+                            command: ['skill-only', 'agents-and-skill', 'rules-and-skill'].includes(host.usage_mode) ? (host.commands.skill || '') : ''
                         },
                         { key: 'run', label: '终端兜底', description: '仅触发本地编排，不替代宿主模型会话', command: this.selectedHostTool.commands.run || '' },
                     ].filter((item) => typeof item.command === 'string' && item.command.trim());
@@ -2848,10 +2853,32 @@
                             return '原生 Slash';
                         case 'agents-and-skill':
                             return 'AGENTS + Skill';
+                        case 'rules-and-skill':
+                            return 'Rules + Skill';
                         case 'skill-only':
                             return 'Skill Only';
                         default:
                             return 'Rules Only';
+                    }
+                },
+
+                hostProtocolLabel(mode, summary) {
+                    if (summary && typeof summary === 'string' && summary.trim()) {
+                        return summary;
+                    }
+                    switch (mode) {
+                        case 'official-subagent':
+                            return '官方 commands + subagents';
+                        case 'official-skill':
+                            return '官方 Skill 面';
+                        case 'official-steering':
+                            return '官方 steering 面';
+                        case 'official-context':
+                            return '官方 commands / context 面';
+                        case 'compatibility-skill':
+                            return '兼容 Skill 增强';
+                        default:
+                            return '未声明';
                     }
                 },
 
@@ -2901,6 +2928,7 @@
                         '',
                         `最终输入: ${finalTrigger}`,
                         `认证等级: ${host.certification_label || 'Experimental'} (${host.certification_level || 'experimental'})`,
+                        `宿主协议: ${this.hostProtocolLabel(host.host_protocol_mode, host.host_protocol_summary)}`,
                         host.certification_reason || '当前宿主已接入，但应按认证等级理解适配深度。',
                         '',
                         '1. 在项目根目录完成接入',

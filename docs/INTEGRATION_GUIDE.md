@@ -1,4 +1,4 @@
-# Super Dev 集成指南（2.0.6）
+# Super Dev 集成指南（2.0.7）
 
 > 宿主详细试用方式、是否支持 `/super-dev`、各宿主的正确入口，请优先查看：
 > [HOST_USAGE_GUIDE.md](/Users/weiyou/Documents/kaifa/super-dev/docs/HOST_USAGE_GUIDE.md)
@@ -68,7 +68,6 @@ super-dev skill install super-dev --target gemini-cli --name super-dev-core --fo
 super-dev skill install super-dev --target kimi-cli --name super-dev-core --force
 super-dev skill install super-dev --target kiro-cli --name super-dev-core --force
 super-dev skill install super-dev --target qoder-cli --name super-dev-core --force
-super-dev skill install super-dev --target qoder --name super-dev-core --force
 ```
 
 ---
@@ -79,13 +78,15 @@ super-dev skill install super-dev --target qoder --name super-dev-core --force
 |:---|:---|
 | claude-code | `.claude/CLAUDE.md` |
 | codex-cli | `.codex/AGENTS.md` |
-| gemini-cli | `.gemini/AGENTS.md` |
+| gemini-cli | `GEMINI.md` |
 | kimi-cli | `.kimi/AGENTS.md` |
 | kiro-cli | `.kiro/AGENTS.md` |
 | qoder-cli | `.qoder/AGENTS.md` |
-| qoder | `.qoder/rules.md` |
+| qoder | `.qoder/rules.md` + `.qoder/commands/super-dev.md` |
 
-Skill 安装目录（按 target）由 `super-dev skill` 自动处理。
+Skill 安装目录（按 target）由 `super-dev skill` 自动处理。官方路径与兼容增强路径的边界见：
+
+- `docs/HOST_INSTALL_SURFACES.md`
 
 ---
 
@@ -135,7 +136,7 @@ super-dev task run <change_id>
 
 ### 1. 我只想用“super-dev 需求”模式
 
-可以，`2.0.6` 默认就是该模式。只要第一个参数不是子命令，就会自动进入完整流水线。
+可以，`2.0.7` 默认就是该模式。只要第一个参数不是子命令，就会自动进入完整流水线。
 
 ### 2. 我要给特定平台补装 Skill
 

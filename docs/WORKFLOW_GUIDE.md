@@ -1,4 +1,4 @@
-# Super Dev 详细使用指南（2.0.6）
+# Super Dev 详细使用指南（2.0.7）
 
 > 宿主详细试用方式、是否支持 `/super-dev`、各宿主正确入口，请优先查看：
 > [HOST_USAGE_GUIDE.md](/Users/weiyou/Documents/kaifa/super-dev/docs/HOST_USAGE_GUIDE.md)
@@ -87,7 +87,7 @@ pip install -U super-dev
 指定版本：
 
 ```bash
-pip install super-dev==2.0.6
+pip install super-dev==2.0.7
 ```
 
 ### 2.2 初始化（可选，但团队项目建议）
@@ -442,7 +442,6 @@ super-dev install
 
 ```bash
 super-dev integrate setup --target qoder --force
-super-dev skill install super-dev --target qoder --name super-dev-core --force
 ```
 
 ### 7.5 自动探测宿主并接入（推荐）
@@ -479,8 +478,8 @@ super-dev doctor --auto --repair --force
 
 支持目标：
 
-- CLI: `claude-code`, `codex-cli`, `gemini-cli`, `kimi-cli`, `kiro-cli`, `qoder-cli`
-- IDE: `qoder`
+- CLI: `claude-code`, `codebuddy-cli`, `codex-cli`, `cursor-cli`, `gemini-cli`, `iflow`, `kimi-cli`, `kiro-cli`, `opencode`, `qoder-cli`
+- IDE: `codebuddy`, `cursor`, `kiro`, `qoder`, `trae`, `windsurf`
 
 ---
 
@@ -523,7 +522,7 @@ super-dev quality --type all
 
 ```bash
 ./scripts/preflight.sh
-bash scripts/release.sh --version 2.0.6 --no-publish
+bash scripts/release.sh --version 2.0.7 --no-publish
 bash scripts/publish.sh --repository pypi
 ```
 

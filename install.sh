@@ -87,14 +87,29 @@ from super_dev.integrations.manager import IntegrationManager
 
 target = sys.argv[1]
 profile = IntegrationManager(Path.cwd()).get_adapter_profile(target)
+protocol = profile.host_protocol_summary or profile.host_protocol_mode
+final_trigger = str(profile.trigger_command).replace("<需求描述>", "你的需求")
 
 print(f"  认证等级: {profile.certification_label} ({profile.certification_level})")
-print(f"  最终输入: {profile.trigger_command}")
+print(f"  宿主协议: {protocol}")
+print(f"  最终输入: {final_trigger}")
 print(f"  触发方式: {profile.primary_entry}")
 print(f"  使用模式: {profile.usage_mode}")
 print(f"  触发上下文: {profile.trigger_context}")
 print(f"  触发位置: {profile.usage_location}")
 print(f"  接入后重启: {'是' if profile.requires_restart_after_onboard else '否'}")
+if profile.official_project_surfaces:
+    print("  官方项目级接入面:")
+    for item in profile.official_project_surfaces:
+        print(f"    - {item}")
+if profile.official_user_surfaces:
+    print("  官方用户级接入面:")
+    for item in profile.official_user_surfaces:
+        print(f"    - {item}")
+if profile.observed_compatibility_surfaces:
+    print("  兼容增强面:")
+    for item in profile.observed_compatibility_surfaces:
+        print(f"    - {item}")
 print("  治理边界: 宿主负责模型调用、工具使用与代码产出；Super Dev 负责流程、质量与交付标准。")
 print("  首轮响应契约:")
 print("    1. 宿主第一轮回复必须说明：已进入 Super Dev 流水线，当前不是普通聊天。")
@@ -194,6 +209,7 @@ run_guided_selector() {
   echo -e "${GREEN}Super Dev 安装向导${NC}"
   echo "=================================="
   echo "定位：宿主负责编码，Super Dev 负责治理、规范、门禁与交付标准"
+  echo "触发规则：支持 slash 的宿主使用 /super-dev；不支持 slash 的宿主使用 super-dev:"
   echo "请选择要接入的宿主工具（支持多选）"
   echo ""
   echo "CLI 宿主:"
@@ -341,6 +357,7 @@ echo -e "${GREEN}Super Dev Installer${NC}"
 echo "=================================="
 echo "Targets: $TARGETS"
 echo "Install skill: $WITH_SKILL"
+echo "触发规则: slash 宿主 => /super-dev 你的需求；非 slash 宿主 => super-dev: 你的需求"
 echo ""
 
 if [[ -t 0 ]]; then

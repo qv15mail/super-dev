@@ -6,6 +6,9 @@
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 PLATFORM_CATALOG: list[dict[str, str]] = [
     {"id": "web", "name": "Web 应用"},
     {"id": "mobile", "name": "移动应用"},
@@ -183,12 +186,87 @@ HOST_COMMAND_CANDIDATES: dict[str, list[str]] = {
 }
 
 HOST_PATH_PATTERNS: dict[str, list[str]] = {
-    "codebuddy": ["~/Applications/CodeBuddy.app", "/Applications/CodeBuddy.app"],
-    "cursor-cli": ["~/Applications/Cursor.app", "/Applications/Cursor.app"],
-    "cursor": ["~/Applications/Cursor.app", "/Applications/Cursor.app"],
-    "kiro": ["~/Applications/Kiro.app", "/Applications/Kiro.app"],
-    "windsurf": ["~/Applications/Windsurf.app", "/Applications/Windsurf.app"],
-    "qoder-cli": ["~/Applications/Qoder.app", "/Applications/Qoder.app"],
-    "qoder": ["~/Applications/Qoder.app", "/Applications/Qoder.app"],
-    "trae": ["~/Applications/Trae.app", "/Applications/Trae.app"],
+    "codebuddy": [
+        "~/Applications/CodeBuddy.app",
+        "/Applications/CodeBuddy.app",
+        "%LOCALAPPDATA%/Programs/CodeBuddy/CodeBuddy.exe",
+        "%PROGRAMFILES%/CodeBuddy/CodeBuddy.exe",
+        "%PROGRAMFILES(X86)%/CodeBuddy/CodeBuddy.exe",
+    ],
+    "cursor-cli": [
+        "~/Applications/Cursor.app",
+        "/Applications/Cursor.app",
+        "%LOCALAPPDATA%/Programs/Cursor/Cursor.exe",
+        "%PROGRAMFILES%/Cursor/Cursor.exe",
+        "%PROGRAMFILES(X86)%/Cursor/Cursor.exe",
+    ],
+    "cursor": [
+        "~/Applications/Cursor.app",
+        "/Applications/Cursor.app",
+        "%LOCALAPPDATA%/Programs/Cursor/Cursor.exe",
+        "%PROGRAMFILES%/Cursor/Cursor.exe",
+        "%PROGRAMFILES(X86)%/Cursor/Cursor.exe",
+    ],
+    "kiro": [
+        "~/Applications/Kiro.app",
+        "/Applications/Kiro.app",
+        "%LOCALAPPDATA%/Programs/Kiro/Kiro.exe",
+        "%PROGRAMFILES%/Kiro/Kiro.exe",
+        "%PROGRAMFILES(X86)%/Kiro/Kiro.exe",
+    ],
+    "windsurf": [
+        "~/Applications/Windsurf.app",
+        "/Applications/Windsurf.app",
+        "%LOCALAPPDATA%/Programs/Windsurf/Windsurf.exe",
+        "%PROGRAMFILES%/Windsurf/Windsurf.exe",
+        "%PROGRAMFILES(X86)%/Windsurf/Windsurf.exe",
+    ],
+    "qoder-cli": [
+        "~/Applications/Qoder.app",
+        "/Applications/Qoder.app",
+        "%LOCALAPPDATA%/Programs/Qoder/Qoder.exe",
+        "%PROGRAMFILES%/Qoder/Qoder.exe",
+        "%PROGRAMFILES(X86)%/Qoder/Qoder.exe",
+    ],
+    "qoder": [
+        "~/Applications/Qoder.app",
+        "/Applications/Qoder.app",
+        "%LOCALAPPDATA%/Programs/Qoder/Qoder.exe",
+        "%PROGRAMFILES%/Qoder/Qoder.exe",
+        "%PROGRAMFILES(X86)%/Qoder/Qoder.exe",
+    ],
+    "trae": [
+        "~/Applications/Trae.app",
+        "/Applications/Trae.app",
+        "%LOCALAPPDATA%/Programs/Trae/Trae.exe",
+        "%PROGRAMFILES%/Trae/Trae.exe",
+        "%PROGRAMFILES(X86)%/Trae/Trae.exe",
+    ],
 }
+
+
+def _expand_host_pattern(pattern: str) -> str:
+    expanded = pattern
+    windows_aliases = {
+        "%LOCALAPPDATA%": os.environ.get("LOCALAPPDATA", ""),
+        "%APPDATA%": os.environ.get("APPDATA", ""),
+        "%PROGRAMFILES%": os.environ.get("PROGRAMFILES", ""),
+        "%PROGRAMFILES(X86)%": os.environ.get("PROGRAMFILES(X86)", ""),
+        "%USERPROFILE%": os.environ.get("USERPROFILE", str(Path.home())),
+    }
+    for key, value in windows_aliases.items():
+        if key in expanded:
+            expanded = expanded.replace(key, value)
+    return os.path.expanduser(os.path.expandvars(expanded))
+
+
+def host_path_candidates(host_id: str) -> list[str]:
+    seen: set[str] = set()
+    candidates: list[str] = []
+    for pattern in HOST_PATH_PATTERNS.get(host_id, []):
+        expanded = _expand_host_pattern(pattern)
+        if not expanded or expanded in seen:
+            continue
+        seen.add(expanded)
+        candidates.append(expanded)
+    return candidates

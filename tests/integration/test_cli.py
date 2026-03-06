@@ -36,14 +36,14 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         parents=True,
         exist_ok=True,
     )
-    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.6"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
-    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.6"\n', encoding="utf-8")
+    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.7"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
+    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.7"\n', encoding="utf-8")
     (project_dir / "README.md").write_text(
-        "当前版本：`2.0.6`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "当前版本：`2.0.7`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "README_EN.md").write_text(
-        "Current version: `2.0.6`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "Current version: `2.0.7`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "docs" / "HOST_USAGE_GUIDE.md").write_text("Smoke\n/super-dev\nsuper-dev:\n", encoding="utf-8")
@@ -567,7 +567,10 @@ class TestCLISkillAndIntegrate:
         "target",
         list(SkillManager.TARGET_PATHS.keys()),
     )
-    def test_skill_builtin_install_each_target(self, temp_project_dir: Path, target: str):
+    def test_skill_builtin_install_each_target(self, temp_project_dir: Path, target: str, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
         original_cwd = os.getcwd()
         os.chdir(temp_project_dir)
         try:
@@ -585,7 +588,10 @@ class TestCLISkillAndIntegrate:
         finally:
             os.chdir(original_cwd)
 
-    def test_onboard_single_host_installs_all_components(self, temp_project_dir: Path):
+    def test_onboard_single_host_installs_all_components(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
         original_cwd = os.getcwd()
         os.chdir(temp_project_dir)
         try:
@@ -593,12 +599,17 @@ class TestCLISkillAndIntegrate:
             result = cli.run(["onboard", "--host", "claude-code", "--force", "--yes"])
             assert result == 0
             assert (temp_project_dir / ".claude" / "CLAUDE.md").exists()
-            assert (temp_project_dir / ".claude" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (temp_project_dir / ".claude" / "agents" / "super-dev-core.md").exists()
+            assert (fake_home / ".claude" / "agents" / "super-dev-core.md").exists()
             assert (temp_project_dir / ".claude" / "commands" / "super-dev.md").exists()
         finally:
             os.chdir(original_cwd)
 
-    def test_onboard_rules_only_host_skips_slash_mapping(self, temp_project_dir: Path):
+    def test_onboard_trae_installs_project_rules_and_host_skill(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        (fake_home / ".trae").mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
         original_cwd = os.getcwd()
         os.chdir(temp_project_dir)
         try:
@@ -606,12 +617,33 @@ class TestCLISkillAndIntegrate:
             result = cli.run(["onboard", "--host", "trae", "--force", "--yes"])
             assert result == 0
             assert (temp_project_dir / ".trae" / "rules.md").exists()
-            assert not (temp_project_dir / ".trae" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (fake_home / ".trae" / "skills" / "super-dev-core" / "SKILL.md").exists()
             assert not (temp_project_dir / ".trae" / "commands" / "super-dev.md").exists()
         finally:
             os.chdir(original_cwd)
 
-    def test_onboard_codex_cli_skips_slash_mapping(self, temp_project_dir: Path):
+    def test_onboard_trae_skips_compat_skill_when_surface_missing(self, temp_project_dir: Path, monkeypatch, capsys):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["onboard", "--host", "trae", "--force", "--yes"])
+            assert result == 0
+            assert (temp_project_dir / ".trae" / "rules.md").exists()
+            assert not (fake_home / ".trae" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            output = capsys.readouterr().out
+            assert "未检测到官方或兼容 Skill 目录" in output
+        finally:
+            os.chdir(original_cwd)
+
+    def test_onboard_codex_cli_skips_slash_mapping(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        (fake_home / ".codex").mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
         original_cwd = os.getcwd()
         os.chdir(temp_project_dir)
         try:
@@ -619,8 +651,23 @@ class TestCLISkillAndIntegrate:
             result = cli.run(["onboard", "--host", "codex-cli", "--force", "--yes"])
             assert result == 0
             assert (temp_project_dir / ".codex" / "AGENTS.md").exists()
-            assert (temp_project_dir / ".codex" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (fake_home / ".codex" / "skills" / "super-dev-core" / "SKILL.md").exists()
             assert not (temp_project_dir / ".codex" / "commands" / "super-dev.md").exists()
+        finally:
+            os.chdir(original_cwd)
+
+    def test_onboard_kiro_installs_global_steering(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["onboard", "--host", "kiro", "--force", "--yes"])
+            assert result == 0
+            assert (temp_project_dir / ".kiro" / "steering" / "super-dev.md").exists()
+            assert (fake_home / ".kiro" / "steering" / "AGENTS.md").exists()
         finally:
             os.chdir(original_cwd)
 
@@ -649,12 +696,29 @@ class TestCLISkillAndIntegrate:
             assert (temp_project_dir / ".codex" / "AGENTS.md").exists()
             assert (temp_project_dir / ".kimi" / "AGENTS.md").exists()
             assert (temp_project_dir / ".qoder" / "rules.md").exists()
+            assert (temp_project_dir / ".qoder" / "commands" / "super-dev.md").exists()
             assert (temp_project_dir / ".claude" / "commands" / "super-dev.md").exists()
             assert not (temp_project_dir / ".kimi" / "commands" / "super-dev.md").exists()
         finally:
             os.chdir(original_cwd)
 
-    def test_onboard_auto_detects_targets_from_path(self, temp_project_dir: Path):
+    def test_detect_host_targets_uses_windows_env_candidates(self, temp_project_dir: Path, monkeypatch):
+        localapp = temp_project_dir / "LocalAppData"
+        target = localapp / "Programs" / "Trae" / "Trae.exe"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("", encoding="utf-8")
+        monkeypatch.setenv("LOCALAPPDATA", str(localapp))
+
+        cli = SuperDevCLI()
+        detected, details = cli._detect_host_targets(available_targets=["trae"])
+        assert detected == ["trae"]
+        assert any(item.startswith("path:") for item in details["trae"])
+
+    def test_onboard_auto_detects_targets_from_path(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        (fake_home / ".codex").mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
         original_cwd = os.getcwd()
         original_path = os.environ.get("PATH", "")
         os.chdir(temp_project_dir)
@@ -670,7 +734,7 @@ class TestCLISkillAndIntegrate:
             result = cli.run(["onboard", "--auto", "--yes", "--force"])
             assert result == 0
             assert (temp_project_dir / ".codex" / "AGENTS.md").exists()
-            assert (temp_project_dir / ".codex" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (fake_home / ".codex" / "skills" / "super-dev-core" / "SKILL.md").exists()
             assert not (temp_project_dir / ".codex" / "commands" / "super-dev.md").exists()
         finally:
             os.environ["PATH"] = original_path
@@ -693,6 +757,11 @@ class TestCLISkillAndIntegrate:
             os.chdir(original_cwd)
 
     def test_doctor_prints_usage_guidance_for_codex_cli(self, temp_project_dir: Path, capsys):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        (fake_home / ".codex").mkdir(parents=True, exist_ok=True)
+        original_home = os.environ.get("HOME")
+        os.environ["HOME"] = str(fake_home)
         original_cwd = os.getcwd()
         os.chdir(temp_project_dir)
         try:
@@ -709,6 +778,10 @@ class TestCLISkillAndIntegrate:
             assert "Smoke 验收语句" in output
             assert "SMOKE_OK" in output
         finally:
+            if original_home is None:
+                os.environ.pop("HOME", None)
+            else:
+                os.environ["HOME"] = original_home
             os.chdir(original_cwd)
 
     def test_doctor_accepts_global_slash_mapping_when_project_slash_missing(
@@ -739,7 +812,11 @@ class TestCLISkillAndIntegrate:
         finally:
             os.chdir(original_cwd)
 
-    def test_doctor_repair_fixes_host_issues(self, temp_project_dir: Path):
+    def test_doctor_repair_fixes_host_issues(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        (fake_home / ".codex").mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
         original_cwd = os.getcwd()
         os.chdir(temp_project_dir)
         try:
@@ -751,7 +828,7 @@ class TestCLISkillAndIntegrate:
             assert repaired == 0
 
             assert (temp_project_dir / ".codex" / "AGENTS.md").exists()
-            assert (temp_project_dir / ".codex" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (fake_home / ".codex" / "skills" / "super-dev-core" / "SKILL.md").exists()
             assert not (temp_project_dir / ".codex" / "commands" / "super-dev.md").exists()
         finally:
             os.chdir(original_cwd)
@@ -784,6 +861,8 @@ class TestCLISkillAndIntegrate:
             assert payload["usage_profiles"]["codex-cli"]["certification_label"] == "Certified"
             assert payload["usage_profiles"]["codex-cli"]["trigger_command"] == "super-dev: <需求描述>"
             assert payload["usage_profiles"]["codex-cli"]["final_trigger"] == "super-dev: 你的需求"
+            assert payload["usage_profiles"]["codex-cli"]["host_protocol_mode"] == "official-skill"
+            assert payload["usage_profiles"]["codex-cli"]["host_protocol_summary"] == "官方 AGENTS.md + 官方 Skills"
             assert "SMOKE_OK" in payload["usage_profiles"]["codex-cli"]["smoke_test_prompt"]
             assert payload["usage_profiles"]["codex-cli"]["smoke_test_steps"]
             assert payload["report"]["hosts"]["codex-cli"]["usage_profile"]["requires_restart_after_onboard"] is True
@@ -867,6 +946,7 @@ class TestCLISkillAndIntegrate:
 
             output = capsys.readouterr().out
             assert "主入口" in output
+            assert "宿主协议: 官方 AGENTS.md + 官方 Skills (official-skill)" in output
             assert "触发命令: super-dev: <需求描述>" in output
             assert "触发位置" in output
             assert "接入后重启: 是" in output
@@ -918,6 +998,8 @@ class TestCLISkillAndIntegrate:
             payload = json.loads(capsys.readouterr().out)
             assert payload["selected_host"] == "claude-code"
             assert payload["usage_profile"]["certification_level"] == "certified"
+            assert payload["usage_profile"]["host_protocol_mode"] == "official-subagent"
+            assert payload["usage_profile"]["host_protocol_summary"] == "官方 commands + subagents"
             assert payload["usage_profile"]["final_trigger"] == '/super-dev "你的需求"'
             assert payload["recommended_trigger"].startswith('/super-dev "')
 
@@ -935,8 +1017,8 @@ class TestCLISkillAndIntegrate:
             monkeypatch.setenv("PATH", str(temp_project_dir / "empty-bin"))
             monkeypatch.setattr(
                 cli_module,
-                "HOST_PATH_PATTERNS",
-                {key: [] for key in cli_module.HOST_PATH_PATTERNS},
+                "host_path_candidates",
+                lambda _target: [],
             )
             cli = SuperDevCLI()
             result = cli.run(["start", "--json", "--skip-onboard"])
@@ -946,7 +1028,7 @@ class TestCLISkillAndIntegrate:
             assert payload["status"] == "error"
             assert payload["reason"] == "no-host-detected"
             recommended_ids = {item["id"] for item in payload["recommended_hosts"]}
-            assert {"claude-code", "codex-cli", "trae"}.issubset(recommended_ids)
+            assert {"claude-code", "codex-cli"}.issubset(recommended_ids)
         finally:
             os.chdir(original_cwd)
 
@@ -958,7 +1040,7 @@ class TestCLISkillAndIntegrate:
                 return None
 
             def json(self):
-                return {"info": {"version": "2.0.6"}}
+                return {"info": {"version": "2.0.7"}}
 
         monkeypatch.setattr("super_dev.cli.requests.get", lambda *args, **kwargs: DummyResponse())
 
@@ -967,7 +1049,7 @@ class TestCLISkillAndIntegrate:
         output = capsys.readouterr().out
         assert "当前版本" in output
         assert "PyPI 最新版本" in output
-        assert "2.0.6" in output
+        assert "2.0.7" in output
 
     def test_update_uses_uv_when_requested(self, capsys, monkeypatch):
         cli = SuperDevCLI()
@@ -978,7 +1060,7 @@ class TestCLISkillAndIntegrate:
                 return None
 
             def json(self):
-                return {"info": {"version": "2.0.6"}}
+                return {"info": {"version": "2.0.7"}}
 
         monkeypatch.setattr("super_dev.cli.requests.get", lambda *args, **kwargs: DummyResponse())
 
@@ -1004,7 +1086,7 @@ class TestCLISkillAndIntegrate:
                 return None
 
             def json(self):
-                return {"info": {"version": "2.0.6"}}
+                return {"info": {"version": "2.0.7"}}
 
         monkeypatch.setattr("super_dev.cli.requests.get", lambda *args, **kwargs: DummyResponse())
 
@@ -1040,7 +1122,11 @@ class TestCLISkillAndIntegrate:
         finally:
             os.chdir(original_cwd)
 
-    def test_setup_host_runs_onboard_and_doctor(self, temp_project_dir: Path):
+    def test_setup_host_runs_onboard_and_doctor(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        (fake_home / ".codex").mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
         original_cwd = os.getcwd()
         os.chdir(temp_project_dir)
         try:
@@ -1048,12 +1134,16 @@ class TestCLISkillAndIntegrate:
             result = cli.run(["setup", "--host", "codex-cli", "--force"])
             assert result == 0
             assert (temp_project_dir / ".codex" / "AGENTS.md").exists()
-            assert (temp_project_dir / ".codex" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (fake_home / ".codex" / "skills" / "super-dev-core" / "SKILL.md").exists()
             assert not (temp_project_dir / ".codex" / "commands" / "super-dev.md").exists()
         finally:
             os.chdir(original_cwd)
 
-    def test_install_host_runs_setup_flow(self, temp_project_dir: Path):
+    def test_install_host_runs_setup_flow(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        (fake_home / ".codex").mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
         original_cwd = os.getcwd()
         os.chdir(temp_project_dir)
         try:
@@ -1061,7 +1151,7 @@ class TestCLISkillAndIntegrate:
             result = cli.run(["install", "--host", "codex-cli", "--force", "--yes"])
             assert result == 0
             assert (temp_project_dir / ".codex" / "AGENTS.md").exists()
-            assert (temp_project_dir / ".codex" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (fake_home / ".codex" / "skills" / "super-dev-core" / "SKILL.md").exists()
             assert not (temp_project_dir / ".codex" / "commands" / "super-dev.md").exists()
         finally:
             os.chdir(original_cwd)
@@ -1130,6 +1220,26 @@ class TestCLIPipeline:
             monkeypatch.setattr(cli, "_cmd_install", fake_cmd_install)
             assert cli.run([]) == 0
             assert called["value"] is True
+        finally:
+            os.chdir(original_cwd)
+
+    def test_install_command_renders_intro_then_runs_setup(self, temp_project_dir: Path, capsys, monkeypatch):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+
+            def fake_cmd_setup(args):
+                return 0
+
+            monkeypatch.setattr(cli, "_cmd_setup", fake_cmd_setup)
+            result = cli.run(["install", "--host", "claude-code", "--yes"])
+            assert result == 0
+            output = capsys.readouterr().out
+            assert "Super Dev 安装入口" in output
+            assert "/super-dev 你的需求" in output
+            assert "super-dev:" in output
+            assert "text 宿主" in output
         finally:
             os.chdir(original_cwd)
 

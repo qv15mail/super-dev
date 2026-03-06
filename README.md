@@ -19,7 +19,7 @@
 
 ## 版本
 
-当前版本：`2.0.6`
+当前版本：`2.0.7`
 
 ---
 
@@ -112,16 +112,38 @@ uv tool upgrade super-dev
 pip install -U super-dev
 ```
 
+安装完成后，直接运行：
+
+```bash
+super-dev
+```
+
+默认会进入宿主安装引导：
+
+- 顶部显示 `Super Dev` 安装入口
+- `↑ / ↓` 选择宿主
+- `Space` 勾选宿主
+- `Enter` 开始安装
+- `A` 全选
+- `C` 仅选择 CLI 宿主
+- `I` 仅选择 IDE 宿主
+- `R` 清空选择
+
+安装完成后，终端会直接给出该宿主的最终触发方式：
+
+- slash 宿主：`/super-dev 你的需求`
+- 非 slash 宿主：`super-dev: 你的需求`
+
 ### 3. 指定版本安装
 
 ```bash
-pip install super-dev==2.0.6
+pip install super-dev==2.0.7
 ```
 
 ### 4. GitHub 指定标签安装
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.6
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.7
 ```
 
 ### 5. 源码开发安装
@@ -267,6 +289,7 @@ super-dev onboard --host claude-code --force --yes
 补充说明：
 1. 推荐作为首选 CLI 宿主。
 2. 接入后可先执行 `super-dev doctor --host claude-code` 确认 slash 已生效。
+3. Claude Code 官方已公开 `.claude/agents/` 与 `~/.claude/agents/`，Super Dev 会同步生成 `super-dev-core` subagent。
 
 #### 2. CodeBuddy CLI
 
@@ -456,7 +479,8 @@ super-dev: 你的需求
 
 补充说明：
 1. Kiro IDE 当前使用 steering/rules 模式，触发词为 `super-dev: 你的需求`。
-2. 如果 steering/rules 未加载，先重开项目窗口。
+2. 接入会写入项目级 `.kiro/steering/super-dev.md`，并补充官方全局 steering `~/.kiro/steering/AGENTS.md`。
+3. 如果 steering/rules 未加载，先重开项目窗口。
 
 #### 11. OpenCode
 
@@ -512,14 +536,14 @@ super-dev onboard --host qoder --force --yes
 
 触发命令：
 ```text
-super-dev: 你的需求
+/super-dev 你的需求
 ```
 
 接入后是否需要重启：否
 
 补充说明：
-1. Qoder IDE 当前使用 project rules 模式，触发词为 `super-dev: 你的需求`。
-2. 若规则未生效，重新打开项目或重新创建聊天。
+1. Qoder IDE 当前优先使用项目级 commands + rules 模式，直接在 Agent Chat 输入 `/super-dev 你的需求`。
+2. 若新增命令未出现，先确认 `.qoder/commands/super-dev.md` 已生成，再重新打开项目或新开一个 Agent Chat。
 
 #### 14. Windsurf
 
@@ -561,7 +585,7 @@ super-dev: 你的需求
 
 补充说明：
 1. Codex CLI 当前使用 `super-dev: 你的需求` 作为主触发方式。
-2. 实际依赖 `.codex/AGENTS.md` 和 `.codex/skills/super-dev-core/SKILL.md`。
+2. 实际依赖 `.codex/AGENTS.md` 与官方用户级 Skill `~/.codex/skills/super-dev-core/SKILL.md`。
 3. 如果旧会话没加载新 Skill，重启 `codex` 再试。
 
 #### 16. Trae
@@ -583,8 +607,9 @@ super-dev: 你的需求
 
 补充说明：
 1. Trae 当前使用 `super-dev: 你的需求` 作为主触发方式。
-2. Trae 当前默认按项目 rules 模式工作，无需手动开启 Skill。
-3. 随后按 `output/*` 与 `.super-dev/changes/*/tasks.md` 推进开发。
+2. 接入一定会写入项目级 `.trae/rules.md`；如果检测到兼容技能目录，也会增强安装 `~/.trae/skills/super-dev-core/SKILL.md`。
+3. 完成接入后建议重开 Trae 或至少新开一个 Agent Chat，使规则生效；如果兼容 Skill 已安装，也会一起生效。
+4. 随后按 `output/*` 与 `.super-dev/changes/*/tasks.md` 推进开发。
 
 ## 快速开始（详细使用说明）
 
@@ -603,22 +628,22 @@ super-dev: 你的需求
 
 | 宿主 | 类型 | 认证等级 | 是否支持 `/super-dev` | 正确触发方式 | 接入后是否需要重启 |
 | --- | --- | --- | --- | --- | --- |
-| Claude Code | CLI | Certified | 支持 | 在 Claude Code 会话中输入 `/super-dev 你的需求` | 否 |
-| CodeBuddy CLI | CLI | Compatible | 支持 | 在 CodeBuddy CLI 会话中输入 `/super-dev 你的需求` | 否 |
-| CodeBuddy IDE | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求` | 否 |
+| Claude Code | CLI | Certified | 支持 | 在 Claude Code 会话中输入 `/super-dev 你的需求`（由 `.claude/commands/` + `.claude/agents/` / `~/.claude/agents/` 生效） | 否 |
+| CodeBuddy CLI | CLI | Compatible | 支持 | 在 CodeBuddy CLI 会话中输入 `/super-dev 你的需求`（由 `.codebuddy/commands/` + `.codebuddy/skills/` / `~/.codebuddy/skills/` 生效） | 否 |
+| CodeBuddy IDE | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求`（由 `.codebuddy/commands/` + `.codebuddy/skills/` / `~/.codebuddy/skills/` 生效） | 否 |
 | Cursor CLI | CLI | Compatible | 支持 | 在 Cursor CLI 会话中输入 `/super-dev 你的需求` | 否 |
 | Cursor IDE | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求` | 否 |
 | Gemini CLI | CLI | Compatible | 支持 | 在 Gemini CLI 会话中输入 `/super-dev 你的需求` | 否 |
 | iFlow CLI | CLI | Experimental | 支持 | 在 iFlow CLI 会话中输入 `/super-dev 你的需求` | 否 |
 | Kimi CLI | CLI | Experimental | 不支持 | 在 Kimi CLI 会话中输入 `super-dev: 你的需求`（由 `.kimi/AGENTS.md` 生效） | 否 |
 | Kiro CLI | CLI | Compatible | 支持 | 在 Kiro CLI 会话中输入 `/super-dev 你的需求` | 否 |
-| Kiro IDE | IDE | Experimental | 不支持 | 在 Kiro IDE Agent Chat 中输入 `super-dev: 你的需求`（由 `.kiro/steering/super-dev.md` 生效） | 否 |
-| OpenCode CLI | CLI | Experimental | 支持 | 在 OpenCode CLI 会话中输入 `/super-dev 你的需求` | 否 |
-| Qoder CLI | CLI | Compatible | 支持 | 在 Qoder CLI 会话中输入 `/super-dev 你的需求` | 否 |
-| Qoder IDE | IDE | Experimental | 不支持 | 在 Qoder IDE Agent Chat 中输入 `super-dev: 你的需求`（由 `.qoder/rules.md` 生效） | 否 |
-| Windsurf | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求` | 否 |
-| Codex CLI | CLI | Certified | 不支持 | 重启 Codex 后输入 `super-dev: 你的需求`，由 `.codex/AGENTS.md` + `super-dev-core` Skill 生效 | 是 |
-| Trae | IDE | Certified | 不支持 | 在 Trae Agent Chat 中输入 `super-dev: 你的需求`（由 `.trae/rules.md` 生效） | 否 |
+| Kiro IDE | IDE | Experimental | 不支持 | 在 Kiro IDE Agent Chat 中输入 `super-dev: 你的需求`（由 `.kiro/steering/super-dev.md` + `~/.kiro/steering/AGENTS.md` 生效） | 否 |
+| OpenCode CLI | CLI | Experimental | 支持 | 在 OpenCode CLI 会话中输入 `/super-dev 你的需求`（由 `.opencode/commands/` + `.opencode/skills/` / `~/.config/opencode/skills/` 生效） | 否 |
+| Qoder CLI | CLI | Compatible | 支持 | 在 Qoder CLI 会话中输入 `/super-dev 你的需求`（由 `.qoder/commands/` + `.qoder/skills/` / `~/.qoder/skills/` 生效） | 否 |
+| Qoder IDE | IDE | Experimental | 支持 | 在 Qoder IDE Agent Chat 中输入 `/super-dev 你的需求`（由 `.qoder/commands/super-dev.md` + `.qoder/rules.md` + `.qoder/skills/` / `~/.qoderwork/skills/` 生效） | 否 |
+| Windsurf | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求`（由 `.windsurf/workflows/` + `.windsurf/skills/` / `~/.codeium/windsurf/skills/` 生效） | 否 |
+| Codex CLI | CLI | Certified | 不支持 | 重启 Codex 后输入 `super-dev: 你的需求`，由 `.codex/AGENTS.md` + 兼容 Skill 生效 | 是 |
+| Trae | IDE | Compatible | 不支持 | 在 Trae Agent Chat 中输入 `super-dev: 你的需求`（由 `.trae/rules.md` 生效；若检测到兼容 Skill `~/.trae/skills/super-dev-core/SKILL.md` 会额外增强） | 是 |
 
 ### 1. 安装后直接进入引导
 
@@ -844,7 +869,6 @@ super-dev quality --type all
 - `codebuddy`
 - `cursor`
 - `kiro`
-- `qoder`
 - `trae`（Rules-first）
 - `windsurf`
 
@@ -853,7 +877,7 @@ super-dev quality --type all
 - `CLI 宿主（原生 slash）`：在宿主会话内触发 `/super-dev`，由宿主模型执行编码
 - `CLI 宿主（非 slash）`：在宿主会话内输入 `super-dev: 你的需求`，由 AGENTS / 规则文件驱动执行
 - `IDE 宿主（原生 slash）`：在 Agent Chat 触发 `/super-dev`，由规则文件与 Skill 约束执行流程
-- `IDE 宿主（非 slash）`：在 Agent Chat 输入 `super-dev: 你的需求`，由项目规则驱动执行
+- `IDE 宿主（非 slash）`：在 Agent Chat 输入 `super-dev: 你的需求`，由项目规则或宿主 Skill 驱动执行
 - `终端入口`：`super-dev "需求"` 仅触发本地流水线编排，不直接调用宿主模型会话
 
 查看宿主适配矩阵（官方文档链接、适配模式、注入路径、探测策略）：
@@ -935,6 +959,7 @@ UV_PUBLISH_TOKEN="<your-token>" uv publish
 
 ## 相关文档
 
+- [宿主接入面说明](docs/HOST_INSTALL_SURFACES.md)
 - [详细工作流指南](docs/WORKFLOW_GUIDE.md)
 - [快速开始](docs/QUICKSTART.md)
 - [发布指南](docs/PUBLISHING.md)
