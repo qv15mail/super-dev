@@ -1,0 +1,20 @@
+graph TD
+    classDef layer fill:#f9f9f9,stroke:#ddd,stroke-width:2px;
+    classDef core fill:#e1f5fe,stroke:#03a9f4,stroke-width:2px;
+
+    User([开发者]) -->|"/super-dev 需求"| Host[宿主层<br>Claude Code / IDE 等]
+    Host -->|触发集成规则| Adapter[接入适配层<br>rules / slash 映射]
+    
+    Adapter --> Engine{{核心编排引擎<br>WorkflowEngine}}:::core
+    
+    Engine -->|1. 策略拦截| Policy[策略治理]
+    Engine -->|2. 背景挂载| Knowledge[领域知识库]
+    Engine -->|3. 调度推演| Experts[专家系统协作]
+    
+    Experts -->|生成内容| Builders[文档与代码生成器]
+    Builders -->|校验产物| Reviewers[红队与质量门禁]
+    
+    Reviewers -- 质量阻断 --> Engine
+    Reviewers -- 通过发布 --> Deploy[部署与交付包]
+    
+    Deploy --> Output[(output/ 最终产物)]

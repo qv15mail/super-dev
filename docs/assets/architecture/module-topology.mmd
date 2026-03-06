@@ -1,0 +1,18 @@
+graph TB
+    subgraph Orcehstration [中枢调度]
+        O(orchestrator/<br>工作流引擎) --> I(integrations/<br>多宿主适配)
+        O --> P(policy/<br>分级护栏策略)
+    end
+
+    subgraph Generation [专家构建]
+        E(experts/<br>10大角色服务) --> C(creators/<br>内容生成器)
+        D(design/<br>UI美学知识) --> C
+    end
+
+    subgraph Verification [审计验收]
+        R(reviewers/<br>门禁审查) --> O
+        DEP(deployers/<br>CI与发布验证) --> O
+    end
+
+    O ==> Generation
+    Generation ==> Verification

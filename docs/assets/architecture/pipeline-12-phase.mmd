@@ -1,0 +1,20 @@
+flowchart LR
+    classDef stage fill:#fdfefe,stroke:#aab7b8;
+    classDef gate fill:#fef9e7,stroke:#f1c40f;
+
+    S([需求触发]) --> P0[0. 需求增强]:::stage
+    P0 --> P05[0.5 市场情报检索]:::stage
+    P05 --> P1[1. 生成核心三文档<br>PRD/架构/UI]:::stage
+    
+    P1 --> P2{2. 用户确认门}:::gate
+    P2 -- Revision --> P1
+    
+    P2 -- Confirmed --> P3[3. Spec与Task规格]:::stage
+    P3 --> P4[4. 前端优先实现]:::stage
+    
+    P4 --> P5{5. 红队审查与<br>质量门禁}:::gate
+    P5 -- Fail/Fix --> P4
+    
+    P5 -- Pass ≥80 --> P7[7-8. 审查与提示词包]:::stage
+    P7 --> P9[9-11. CICD与流水线交付]:::stage
+    P9 --> D([交付收敛])

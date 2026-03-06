@@ -19,7 +19,7 @@
 
 ## Version
 
-Current version: `2.0.5`
+Current version: `2.0.6`
 
 ---
 
@@ -112,13 +112,13 @@ pip install -U super-dev
 ### 3. Pin a specific version
 
 ```bash
-pip install super-dev==2.0.5
+pip install super-dev==2.0.6
 ```
 
 ### 4. Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.5
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.6
 ```
 
 ### 5. Source install for development
@@ -139,6 +139,80 @@ git clone https://github.com/shangyankeji/super-dev.git
 cd super-dev
 pip install -e ".[dev]"
 ```
+
+---
+
+## Dependency Installation Behavior
+
+When a user runs:
+
+```bash
+pip install -U super-dev
+```
+
+or:
+
+```bash
+uv tool install super-dev
+```
+
+the installer will automatically install the Python dependencies declared in `pyproject.toml`, such as:
+
+- `rich`
+- `pyyaml`
+- `ddgs`
+- `requests`
+- `beautifulsoup4`
+- `fastapi`
+- `uvicorn`
+
+It will not automatically install:
+
+- host applications themselves, such as Claude Code, Codex CLI, Gemini CLI, Cursor, Trae, or Windsurf
+- system-level runtimes such as Node.js, npm, pnpm, Docker, or database services
+- host login state, browsing permissions, or web access capabilities
+- project-specific frontend/backend runtime dependencies outside Super Dev itself
+
+In short:
+
+- `pip` / `uv` automatically install **Super Dev's own Python dependencies**
+- they do not install **host tools or system environments**
+
+---
+
+## How The System Works
+
+`Super Dev` does not work by calling its own model to write code. Instead:
+
+1. the user runs `super-dev` inside the project
+2. onboarding connects Super Dev to the chosen host
+3. the user types `/super-dev requirement` or `super-dev: requirement` inside the host
+4. the host enters the Super Dev pipeline
+5. the host handles browsing, reasoning, coding, execution, and file edits
+6. Super Dev governs the workflow, documents, gates, audit artifacts, and delivery standards
+
+Core principle:
+
+- the host is responsible for "writing code"
+- `Super Dev` is responsible for "making the delivery process correct, complete, and auditable"
+
+### 1. System Overview
+
+This view shows how users, host-side tools, the Super Dev orchestration engine, and final artifacts connect.
+
+![System Overview](docs/assets/architecture/system-overview.png)
+
+### 2. The 12-Phase Pipeline
+
+This view shows the internal execution flow after each host-side trigger.
+
+![The 12-Phase Pipeline](docs/assets/architecture/pipeline-12-phase.png)
+
+### 3. Core Module Topology
+
+This view shows the main source directories under `super_dev` and their dependency boundaries.
+
+![Core Module Topology](docs/assets/architecture/module-topology.png)
 
 ---
 

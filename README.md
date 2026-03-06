@@ -19,7 +19,7 @@
 
 ## 版本
 
-当前版本：`2.0.5`
+当前版本：`2.0.6`
 
 ---
 
@@ -112,13 +112,13 @@ pip install -U super-dev
 ### 3. 指定版本安装
 
 ```bash
-pip install super-dev==2.0.5
+pip install super-dev==2.0.6
 ```
 
 ### 4. GitHub 指定标签安装
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.5
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.6
 ```
 
 ### 5. 源码开发安装
@@ -139,6 +139,80 @@ git clone https://github.com/shangyankeji/super-dev.git
 cd super-dev
 pip install -e ".[dev]"
 ```
+
+---
+
+## 依赖安装说明
+
+当用户执行：
+
+```bash
+pip install -U super-dev
+```
+
+或：
+
+```bash
+uv tool install super-dev
+```
+
+安装器会自动安装 `pyproject.toml` 中声明的 Python 依赖，例如：
+
+- `rich`
+- `pyyaml`
+- `ddgs`
+- `requests`
+- `beautifulsoup4`
+- `fastapi`
+- `uvicorn`
+
+不会自动安装的内容：
+
+- Claude Code / Codex CLI / Gemini CLI / Cursor / Trae / Windsurf 等宿主软件本身
+- Node.js、npm、pnpm、Docker、数据库服务这类系统级运行环境
+- 宿主账号登录状态、联网权限、浏览器能力
+- 项目业务依赖以外的前后端运行时
+
+一句话：
+
+- `pip` / `uv` 会自动安装 **Super Dev 自己的 Python 依赖**
+- 不会替用户安装 **宿主工具和系统环境**
+
+---
+
+## 整个系统如何工作
+
+`Super Dev` 的工作方式不是“自己调用模型写代码”，而是：
+
+1. 用户在项目目录执行 `super-dev`
+2. 安装引导把 Super Dev 接入到目标宿主
+3. 用户在宿主里输入 `/super-dev 需求` 或 `super-dev: 需求`
+4. 宿主进入 Super Dev 流水线
+5. 宿主负责联网、推理、编码、运行与修改文件
+6. Super Dev 负责流程、文档、门禁、审计和交付标准
+
+核心原则：
+
+- 宿主负责“写代码”
+- `Super Dev` 负责“把开发过程做对、做全、可审计”
+
+### 一、系统高阶流转架构
+
+展示用户、宿主端工具、Super Dev 编排引擎与最终产物之间的流转关系。
+
+![系统高阶流转架构](docs/assets/architecture/system-overview.png)
+
+### 二、12 阶段核心工作流
+
+详细描绘每次对话触发后，引擎在底层的流转经过。
+
+![12 阶段核心工作流](docs/assets/architecture/pipeline-12-phase.png)
+
+### 三、核心模块调用拓扑
+
+展示 `super_dev` 下核心源码目录的职责边界和调用关系。
+
+![核心模块调用拓扑](docs/assets/architecture/module-topology.png)
 
 ---
 

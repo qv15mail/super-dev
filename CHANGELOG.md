@@ -23,6 +23,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added dedicated CI `Platform Compatibility` job for multi-target integration visibility.
 - Tag-based CD publishing now hard-fails when `PYPI_API_TOKEN` is missing (no silent skip).
 
+## [2.0.6] - 2026-03-07
+
+### Added
+
+- Added architecture image assets for README and synchronized the Chinese and English overview sections to use image-first diagrams.
+- Added project-tracked Codex skill directory content under `.codex/skills/super-dev-core/`.
+- Added lockfiles for the example frontend/backend workspaces to keep dependency snapshots reproducible.
+
+### Changed
+
+- Unified the active project version to `2.0.6` across package metadata, runtime metadata, docs, examples, release scripts, and tests.
+- Refined repository tracking boundaries so project integration assets are versioned while local runtime artifacts remain ignored.
+- Updated README and README_EN with clearer dependency-install behavior, system workflow explanation, and architecture visuals.
+
+### Fixed
+
+- Fixed repository completeness gaps around tracked host integration assets and release documentation consistency.
+
 ## [2.0.2] - 2026-03-05
 
 ### Added

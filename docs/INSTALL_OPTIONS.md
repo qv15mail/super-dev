@@ -1,4 +1,4 @@
-# Super Dev 安装方式（2.0.5）
+# Super Dev 安装方式（2.0.6）
 
 宿主详细试用方式请看：
 
@@ -29,7 +29,7 @@ pip install -U super-dev
 ## 方式 3：安装指定版本（复现/回滚）
 
 ```bash
-pip install super-dev==2.0.5
+pip install super-dev==2.0.6
 ```
 
 适用：需要稳定复现、灰度回滚。
@@ -37,7 +37,7 @@ pip install super-dev==2.0.5
 ## 方式 4：GitHub 直装（Tag）
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.5
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.6
 ```
 
 适用：希望直接基于 GitHub Tag 安装。
@@ -92,15 +92,15 @@ super-dev integrate smoke --target <host_id>
 
 它会输出该宿主的验收语句、验收步骤和通过标准。
 
-## 升级到 2.0.5
+## 升级到 2.0.6
 
 ```bash
 # uv 方式
 uv tool upgrade super-dev
 
 # GitHub 方式
-pip install --upgrade "git+https://github.com/shangyankeji/super-dev.git@v2.0.5"
+pip install --upgrade "git+https://github.com/shangyankeji/super-dev.git@v2.0.6"
 
 # PyPI 方式
-pip install --upgrade "super-dev==2.0.5"
+pip install --upgrade "super-dev==2.0.6"
 ```

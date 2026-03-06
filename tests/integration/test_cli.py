@@ -36,14 +36,14 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         parents=True,
         exist_ok=True,
     )
-    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.5"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
-    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.5"\n', encoding="utf-8")
+    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.6"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
+    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.6"\n', encoding="utf-8")
     (project_dir / "README.md").write_text(
-        "当前版本：`2.0.5`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "当前版本：`2.0.6`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "README_EN.md").write_text(
-        "Current version: `2.0.5`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "Current version: `2.0.6`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "docs" / "HOST_USAGE_GUIDE.md").write_text("Smoke\n/super-dev\nsuper-dev:\n", encoding="utf-8")
@@ -958,7 +958,7 @@ class TestCLISkillAndIntegrate:
                 return None
 
             def json(self):
-                return {"info": {"version": "2.0.5"}}
+                return {"info": {"version": "2.0.6"}}
 
         monkeypatch.setattr("super_dev.cli.requests.get", lambda *args, **kwargs: DummyResponse())
 
@@ -967,7 +967,7 @@ class TestCLISkillAndIntegrate:
         output = capsys.readouterr().out
         assert "当前版本" in output
         assert "PyPI 最新版本" in output
-        assert "2.0.5" in output
+        assert "2.0.6" in output
 
     def test_update_uses_uv_when_requested(self, capsys, monkeypatch):
         cli = SuperDevCLI()
@@ -978,7 +978,7 @@ class TestCLISkillAndIntegrate:
                 return None
 
             def json(self):
-                return {"info": {"version": "2.0.5"}}
+                return {"info": {"version": "2.0.6"}}
 
         monkeypatch.setattr("super_dev.cli.requests.get", lambda *args, **kwargs: DummyResponse())
 
@@ -1004,7 +1004,7 @@ class TestCLISkillAndIntegrate:
                 return None
 
             def json(self):
-                return {"info": {"version": "2.0.5"}}
+                return {"info": {"version": "2.0.6"}}
 
         monkeypatch.setattr("super_dev.cli.requests.get", lambda *args, **kwargs: DummyResponse())
 
