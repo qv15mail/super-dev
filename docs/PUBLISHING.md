@@ -6,7 +6,7 @@
 
 1. 更新版本号（`pyproject.toml` 与 `super_dev/__init__.py`）。
 2. 更新 `CHANGELOG.md`。
-3. 确认 CI 与本地均可通过。
+3. 确认本地预检全部通过。
 
 执行强制预检：
 
@@ -57,8 +57,7 @@ git push origin v2.0.8
 ```
 
 然后在 GitHub 创建 Release，关联本次变更说明。
-
-注意：Tag 触发的 CD 会强制检查 `PYPI_API_TOKEN`，未配置时发布作业会失败。
+当前仓库采用手动发布策略，不依赖 GitHub Actions 自动发布。
 
 ## 4. 发布后验证
 

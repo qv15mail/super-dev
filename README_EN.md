@@ -9,7 +9,6 @@
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![Type Checks](https://img.shields.io/badge/type%20checks-mypy-success)](https://mypy-lang.org/)
 [![Lint](https://img.shields.io/badge/lint-ruff-success)](https://docs.astral.sh/ruff/)
-[![CI](https://img.shields.io/badge/CI-GitHub%20Actions-success)](.github/workflows/ci.yml)
 
 [简体中文](README.md) | English
 
@@ -686,4 +685,3 @@ Notes:
 2. Onboarding always writes project-level `.trae/project_rules.md` + `.trae/rules.md` and user-level `~/.trae/user_rules.md` + `~/.trae/rules.md`; if a compatible host skill directory is detected, it also enhances `~/.trae/skills/super-dev-core/SKILL.md`.
 3. After onboarding, restart Trae or at least open a fresh Agent Chat so the rule file loads; if the compatibility skill exists it will load together.
 4. Then continue delivery from `output/*` and `.super-dev/changes/*/tasks.md`.
-

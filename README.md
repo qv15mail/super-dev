@@ -9,7 +9,6 @@
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![Type Checks](https://img.shields.io/badge/type%20checks-mypy-success)](https://mypy-lang.org/)
 [![Lint](https://img.shields.io/badge/lint-ruff-success)](https://docs.astral.sh/ruff/)
-[![CI](https://img.shields.io/badge/CI-GitHub%20Actions-success)](.github/workflows/ci.yml)
 
 [English](README_EN.md) | 简体中文
 
@@ -637,4 +636,3 @@ super-dev: 你的需求
 2. 接入一定会写入项目级 `.trae/project_rules.md`、`.trae/rules.md` 和用户级 `~/.trae/user_rules.md`、`~/.trae/rules.md`；如果检测到兼容技能目录，也会增强安装 `~/.trae/skills/super-dev-core/SKILL.md`。
 3. 完成接入后建议重开 Trae 或至少新开一个 Agent Chat，使规则生效；如果兼容 Skill 已安装，也会一起生效。
 4. 随后按 `output/*` 与 `.super-dev/changes/*/tasks.md` 推进开发。
-

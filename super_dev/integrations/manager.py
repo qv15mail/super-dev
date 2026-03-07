@@ -1146,7 +1146,7 @@ class IntegrationManager:
             return self._build_codebuddy_agent_content()
 
         if target == "trae":
-            return self._generic_ide_rules("trae")
+            return self._trae_rules()
 
         if relative.endswith("/skills/super-dev-core/SKILL.md"):
             return self._build_embedded_skill_content()
@@ -1499,6 +1499,34 @@ class IntegrationManager:
             "- UI must avoid AI-looking output (purple/pink gradient-first theme, emoji as icons, default-font-only pages).\n"
             "- UI must define typography, tokens, grid, component states and trust signals before page implementation.\n"
             "- Prefer the component ecosystem and implementation baseline recommended in output/*-uiux.md instead of switching UI libraries ad hoc.\n"
+        )
+
+    def _trae_rules(self) -> str:
+        return (
+            "# Super Dev Trae Rules\n\n"
+            "## Critical Trigger Switch\n"
+            "- If a user message starts with `super-dev:`, immediately switch into Super Dev pipeline mode.\n"
+            "- Do not treat `super-dev:` as normal chat, brainstorming, or generic coding mode.\n"
+            "- After `super-dev:` is seen, do not start implementation directly.\n"
+            "- Your first reply must say `SMOKE_OK` when the user is smoke-testing, or explicitly say Super Dev pipeline mode is active.\n"
+            "- Your first reply must explicitly say the current phase is `research`.\n"
+            "- Your first reply must explicitly promise the sequence: research -> three core documents -> wait for user confirmation -> Spec/tasks -> frontend runtime verification -> backend/tests/delivery.\n"
+            "- After the three core documents are generated, you must stop and wait for approval before creating Spec or writing code.\n\n"
+            "## Runtime Contract\n"
+            "- Treat Super Dev as the local Python workflow tool plus Trae rule files, not as a separate coding engine.\n"
+            "- Keep using the host's model, tools, browse/search/web and editor capabilities.\n"
+            "- Use local `super-dev` commands when you need to generate or refresh documents, specs, quality reports, or delivery manifests.\n"
+            "- The host remains responsible for coding, tool execution, and file changes.\n\n"
+            "## Local Knowledge Contract\n"
+            "- Read relevant files under `knowledge/` before drafting the three core documents.\n"
+            "- If `output/knowledge-cache/*-knowledge-bundle.json` exists, read it first and carry its matched local knowledge into PRD, architecture, UIUX, Spec, and execution.\n"
+            "- Treat matched standards, anti-patterns, checklists, baselines, and scenario packs as hard constraints.\n\n"
+            "## Working Agreement\n"
+            "- If browse/search/web is available, research similar products first and write `output/*-research.md`.\n"
+            "- Generate PRD, architecture, and UIUX before coding.\n"
+            "- Ask the user to confirm or revise the three documents before creating Spec or code.\n"
+            "- Implement frontend first and verify runtime before moving into backend-heavy work.\n"
+            "- Keep UI implementation consistent with `output/*-uiux.md` and avoid AI-looking templates.\n"
         )
 
     def _claude_rules(self) -> str:

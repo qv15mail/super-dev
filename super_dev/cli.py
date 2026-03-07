@@ -22,11 +22,10 @@ from typing import Any, Literal, cast
 
 try:
     import requests
-    from rich.console import Console
-    from rich.console import Group
+    from rich.console import Console, Group
     from rich.live import Live
-    from rich.table import Table
     from rich.panel import Panel
+    from rich.table import Table
     from rich.text import Text
     RICH_AVAILABLE = True
 except ImportError:

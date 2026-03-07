@@ -37,10 +37,10 @@ from super_dev.catalogs import (
     HOST_COMMAND_CANDIDATES,
     HOST_TOOL_CATALOG,
     HOST_TOOL_CATEGORY_MAP,
-    host_path_candidates,
     LANGUAGE_PREFERENCE_CATALOG,
     PIPELINE_FRONTEND_TEMPLATE_CATALOG,
     PLATFORM_CATALOG,
+    host_path_candidates,
 )
 from super_dev.config import ConfigManager
 from super_dev.deployers import CICDGenerator
@@ -57,7 +57,11 @@ from super_dev.integrations.manager import IntegrationManager
 from super_dev.orchestrator import Phase, WorkflowContext, WorkflowEngine
 from super_dev.policy import PipelinePolicy, PipelinePolicyManager
 from super_dev.release_readiness import ReleaseReadinessEvaluator
-from super_dev.review_state import docs_confirmation_file, load_docs_confirmation, save_docs_confirmation
+from super_dev.review_state import (
+    docs_confirmation_file,
+    load_docs_confirmation,
+    save_docs_confirmation,
+)
 from super_dev.skills import SkillManager
 
 # ==================== 数据模型 ====================

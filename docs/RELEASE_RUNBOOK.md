@@ -7,8 +7,7 @@
 - 确认版本号已更新：`pyproject.toml`
 - 确认更新日志已更新：`CHANGELOG.md`
 - 确认主分支状态与发布分支策略（建议从 `main` 发布）
-- 确认 PyPI Token 可用（`PYPI_API_TOKEN` 或 CI Secret）
-- GitHub Tag 发布必须配置 `PYPI_API_TOKEN`（未配置将被 CD 强制阻断）
+- 确认 PyPI Token 可用（`PYPI_API_TOKEN`）
 
 ## 2. 预检（必须通过）
 
@@ -59,6 +58,8 @@
    - `git tag v<version>`
    - `git push origin v<version>`
 5. 创建 GitHub Release（附变更说明和风险提示）。
+
+当前仓库不依赖 GitHub Actions 自动发布，发布链路以本地预检 + 手动上传 PyPI 为准。
 
 ## 4. 发布后验证
 
