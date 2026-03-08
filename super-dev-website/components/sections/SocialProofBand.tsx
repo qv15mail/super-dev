@@ -1,10 +1,11 @@
 import { HOSTS, STATS } from '@/lib/constants';
 import type { SiteLocale } from '@/lib/site-locale';
 
-function HostLogo({ abbr, name }: { abbr: string; name: string }) {
+function HostLogo({ name }: { name: string }) {
+  const initial = name.trim().charAt(0).toUpperCase();
   return (
     <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border-muted bg-bg-secondary/50 px-4 py-2 opacity-70 transition-opacity duration-200 hover:opacity-100" title={name}>
-      <span className="flex h-6 w-6 items-center justify-center rounded bg-bg-tertiary text-xs font-mono font-bold text-text-muted">{abbr}</span>
+      <span className="flex h-6 w-6 items-center justify-center rounded bg-bg-tertiary text-xs font-mono font-bold text-text-muted">{initial}</span>
       <span className="whitespace-nowrap text-sm text-text-secondary">{name}</span>
     </div>
   );
@@ -47,10 +48,10 @@ export function SocialProofBand({ locale = 'zh' }: { locale?: SiteLocale }) {
           <div className="pointer-events-none absolute bottom-0 right-0 top-0 z-10 w-16 bg-gradient-to-l from-bg-secondary to-transparent" aria-hidden="true" />
           <div className="flex gap-3 [&:hover>div]:animation-play-state-paused">
             <div className="flex gap-3 animate-marquee" aria-hidden="true">
-              {HOSTS.map((host) => <HostLogo key={`a-${host.name}`} abbr={host.abbr} name={host.name} />)}
+              {HOSTS.map((host) => <HostLogo key={`a-${host.name}`} name={host.name} />)}
             </div>
             <div className="flex gap-3 animate-marquee2" aria-hidden="true">
-              {HOSTS.map((host) => <HostLogo key={`b-${host.name}`} abbr={host.abbr} name={host.name} />)}
+              {HOSTS.map((host) => <HostLogo key={`b-${host.name}`} name={host.name} />)}
             </div>
           </div>
         </div>
