@@ -8,23 +8,26 @@
  */
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { Github, Menu, X, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { formatStarCount, GITHUB_REPO_URL } from '@/lib/github';
+import { useGithubStars } from '@/lib/useGithubStars';
 
 const NAV_LINKS = [
-  { label: '功能', href: '#features' },
-  { label: '宿主', href: '#hosts' },
+  { label: '功能', href: '/#features' },
+  { label: '宿主', href: '/#hosts' },
   { label: '定价', href: '/pricing' },
-  { label: '文档', href: 'https://github.com/shangyankeji/super-dev', external: true },
+  { label: '文档', href: GITHUB_REPO_URL, external: true },
 ] as const;
 
-const GITHUB_URL = 'https://github.com/shangyankeji/super-dev';
-
 export function Nav() {
+  const pathname = usePathname();
+  const router = useRouter();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [stars] = useState(108);
+  const stars = useGithubStars();
 
   useEffect(() => {
     function handleScroll() {
@@ -44,6 +47,15 @@ export function Nav() {
 
   function handleMobileClose() {
     setMobileOpen(false);
+  }
+
+  function handleGetStarted() {
+    if (pathname === '/') {
+      document.getElementById('get-started')?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+
+    router.push('/#get-started');
   }
 
   return (
@@ -103,7 +115,7 @@ export function Nav() {
           {/* 右侧操作区 */}
           <div className="hidden md:flex items-center gap-3">
             <a
-              href={GITHUB_URL}
+              href={GITHUB_REPO_URL}
               target="_blank"
               rel="noopener noreferrer"
               className={cn(
@@ -116,15 +128,9 @@ export function Nav() {
             >
               <Github size={14} aria-hidden="true" />
               <Star size={12} aria-hidden="true" />
-              <span className="font-mono">{stars}</span>
+              <span className="font-mono">{formatStarCount(stars)}</span>
             </a>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => {
-                document.getElementById('get-started')?.scrollIntoView({ behavior: 'smooth' });
-              }}
-            >
+            <Button variant="primary" size="sm" onClick={handleGetStarted}>
               开始使用
             </Button>
           </div>
@@ -176,15 +182,23 @@ export function Nav() {
             ))}
             <div className="mt-4 pt-4 border-t border-border-muted flex flex-col gap-3">
               <a
-                href={GITHUB_URL}
+                href={GITHUB_REPO_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 py-3 px-4 text-text-secondary hover:text-text-primary"
               >
                 <Github size={16} aria-hidden="true" />
-                GitHub (★{stars})
+                GitHub (★{formatStarCount(stars)})
               </a>
-              <Button variant="primary" size="lg" className="w-full" onClick={handleMobileClose}>
+              <Button
+                variant="primary"
+                size="lg"
+                className="w-full"
+                onClick={() => {
+                  handleMobileClose();
+                  handleGetStarted();
+                }}
+              >
                 开始使用
               </Button>
             </div>
