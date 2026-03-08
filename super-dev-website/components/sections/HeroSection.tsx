@@ -16,17 +16,17 @@ const TerminalWindow = dynamic(
 const COPY = {
   zh: {
     openSource: 'MIT 开源',
-    title: '让宿主 AI 按商业级流程把项目做出来。',
-    body: 'Super Dev 安装在 Claude Code、Cursor、Codex、Trae 等宿主和当前项目里，统一 research、三文档、确认门、Spec、前端验证、质量门禁和交付标准，把 AI 开发变成可审计的工程交付。',
-    points: ['继续使用你现有的宿主和模型', '统一 research、文档、实现、验证、交付顺序', '把需求落成可审计工程资产'],
+    title: 'AI 能写代码，Super Dev 让项目能交付。',
+    body: '辅助用户在 Claude Code、Cursor、Codex、Trae 等开发工具中，更标准地完成商业交付。需求进入后，宿主会按 research、三文档、确认门、Spec、前端验证、质量门禁和交付标准推进。',
+    points: ['适配主流 CLI 与 IDE 宿主', '把 AI 开发过程拉回标准流水线', '输出可审计的工程交付资产'],
     docs: '查看文档',
     installNote: '支持 pip 或 uv 安装，安装后终端输入 super-dev 进入宿主接入引导。',
   },
   en: {
     openSource: 'MIT Open Source',
-    title: 'Make host AI deliver projects through a commercial-grade workflow.',
-    body: 'Super Dev installs into Claude Code, Cursor, Codex, Trae, and the current project, then governs research, the three core docs, approval gates, spec generation, frontend runtime validation, quality gates, and delivery standards.',
-    points: ['Keep the host and model you already use', 'Standardize research, docs, implementation, verification, and delivery', 'Turn requirements into auditable engineering assets'],
+    title: 'AI can write code. Super Dev helps teams ship it properly.',
+    body: 'Use Super Dev inside Claude Code, Cursor, Codex, Trae, and similar tools to move from requirement to delivery through one governed path: research, the three core docs, approval, spec, frontend validation, quality gates, and delivery standards.',
+    points: ['Works across major CLI and IDE hosts', 'Pulls AI coding back into a governed workflow', 'Produces auditable engineering delivery assets'],
     docs: 'Read Docs',
     installNote: 'Install with pip or uv, then run super-dev in the terminal to open the host onboarding flow.',
   },
