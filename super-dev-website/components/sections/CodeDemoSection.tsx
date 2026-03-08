@@ -7,6 +7,7 @@
  * 最后修改：2026-03-08
  */
 import { useState } from 'react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { CodeBlock } from '@/components/ui/CodeBlock';
 import { CODE_DEMO_TABS } from '@/lib/constants';
@@ -93,14 +94,12 @@ export function CodeDemoSection() {
 
         {/* 底部操作链接 */}
         <div className="flex flex-wrap justify-center gap-6 mt-8 text-sm text-text-muted">
-          <a
-            href="https://github.com/shangyankeji/super-dev#readme"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href="/docs"
             className="hover:text-text-secondary transition-colors"
           >
             查看完整文档
-          </a>
+          </Link>
           <span className="hidden sm:block text-border-default" aria-hidden="true">|</span>
           <a
             href="https://github.com/shangyankeji/super-dev"

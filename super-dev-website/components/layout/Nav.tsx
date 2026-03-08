@@ -19,7 +19,7 @@ const NAV_LINKS = [
   { label: '功能', href: '/#features' },
   { label: '宿主', href: '/#hosts' },
   { label: '定价', href: '/pricing' },
-  { label: '文档', href: GITHUB_REPO_URL, external: true },
+  { label: '文档', href: '/docs' },
 ] as const;
 
 export function Nav() {

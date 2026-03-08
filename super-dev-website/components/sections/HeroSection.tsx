@@ -8,7 +8,7 @@
  */
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { ArrowRight, Github } from 'lucide-react';
+import { ArrowRight, BookOpen } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { CopyCommand } from '@/components/ui/CopyCommand';
 import { formatStarCount, GITHUB_REPO_URL } from '@/lib/github';
@@ -80,12 +80,10 @@ export function HeroSection() {
             <div id="get-started" className="flex flex-col sm:flex-row gap-3 pt-2">
               <CopyCommand command="pip install super-dev" className="sm:w-auto" />
               <Link
-                href={GITHUB_REPO_URL}
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/docs"
                 className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium text-text-secondary border border-border-default hover:border-border-emphasis hover:text-text-primary transition-all duration-150"
               >
-                <Github size={16} aria-hidden="true" />
+                <BookOpen size={16} aria-hidden="true" />
                 查看文档
                 <ArrowRight size={14} aria-hidden="true" />
               </Link>

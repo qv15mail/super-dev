@@ -21,7 +21,7 @@ const FOOTER_SECTIONS = [
   {
     title: '资源',
     links: [
-      { label: '文档', href: 'https://github.com/shangyankeji/super-dev', external: true },
+      { label: '文档中心', href: '/docs' },
       { label: 'README', href: 'https://github.com/shangyankeji/super-dev#readme', external: true },
       { label: 'PyPI', href: 'https://pypi.org/project/super-dev/', external: true },
     ],
