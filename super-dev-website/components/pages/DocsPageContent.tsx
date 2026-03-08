@@ -8,9 +8,7 @@ import {
   FolderTree,
   LifeBuoy,
   Package,
-  Rocket,
   Search,
-  ShieldCheck,
   Sparkles,
   Terminal,
   Workflow,
@@ -522,15 +520,15 @@ function SectionShell({
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className="scroll-mt-24 rounded-[28px] border border-border-default bg-[linear-gradient(180deg,rgba(22,27,34,0.92),rgba(13,17,23,0.9))] p-6 sm:p-8 lg:p-10">
-      <div className="mb-8 flex items-start gap-4">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-accent-blue/30 bg-accent-blue/10 text-accent-blue">
+    <section id={id} className="scroll-mt-24 border-b border-border-default/70 pb-10 last:border-b-0 last:pb-0">
+      <div className="mb-6 flex items-start gap-4">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-accent-blue/25 bg-accent-blue/8 text-accent-blue">
           <Icon size={20} />
         </div>
-        <div className="max-w-3xl">
+        <div className="max-w-4xl">
           <p className="mb-2 text-xs font-mono uppercase tracking-[0.22em] text-accent-blue">{label}</p>
-          <h2 className="mb-3 text-2xl font-bold tracking-tight text-text-primary sm:text-3xl">{title}</h2>
-          <p className="text-base leading-7 text-text-secondary">{body}</p>
+          <h2 className="mb-3 text-2xl font-bold tracking-tight text-text-primary sm:text-[2rem]">{title}</h2>
+          <p className="text-[15px] leading-8 text-text-secondary">{body}</p>
         </div>
       </div>
       {children}
@@ -547,83 +545,38 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
       <section className="relative overflow-hidden border-b border-border-muted bg-bg-primary">
         <div className="absolute inset-0 opacity-70 [background-image:radial-gradient(circle_at_top_left,rgba(37,99,235,0.22),transparent_32%),radial-gradient(circle_at_80%_12%,rgba(59,130,246,0.12),transparent_24%)]" />
         <div className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(59,130,246,0.65),transparent)]" />
-        <div className="relative mx-auto w-full max-w-[1720px] px-4 py-16 sm:px-6 lg:px-8 lg:py-20 2xl:px-10">
-          <div className="max-w-[1120px]">
-            <div className="mb-5 flex flex-wrap items-center gap-2">
-              <Badge variant="version">{content.heroKicker}</Badge>
-              <Badge variant="certified">v2.0.8</Badge>
-              <Badge variant="compatible">{locale === 'en' ? 'Bilingual' : '中英双语'}</Badge>
-            </div>
-            <h1 className="max-w-[1100px] text-4xl font-bold leading-[1.08] tracking-tight text-text-primary sm:text-5xl lg:text-6xl">
-              {content.heroTitle}
-            </h1>
-            <p className="mt-5 max-w-[860px] text-lg leading-8 text-text-secondary">{content.heroBody}</p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                href="#commands"
-                className="inline-flex items-center gap-2 rounded-xl bg-accent-blue px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-accent-blue-hover"
-              >
-                {locale === 'en' ? 'Open command map' : '查看命令地图'}
-                <ArrowRight size={16} />
-              </Link>
-              <Link
-                href={homeHref}
-                className="inline-flex items-center gap-2 rounded-xl border border-border-emphasis px-5 py-3 text-sm font-semibold text-text-primary transition-colors hover:bg-bg-tertiary"
-              >
-                {locale === 'en' ? 'Back to website' : '返回官网'}
-              </Link>
-            </div>
-          </div>
-
-          <div className="mt-10 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.72fr)] 2xl:grid-cols-[minmax(0,1fr)_minmax(430px,0.7fr)]">
-            <div className="grid gap-4">
-              <div className="grid gap-4 md:grid-cols-3">
-                {content.heroStats.map((stat) => (
-                  <div key={stat.label} className="rounded-2xl border border-border-default bg-bg-secondary/80 p-4 text-center">
-                    <div className="text-2xl font-bold text-text-primary">{stat.value}</div>
-                    <div className="mt-1 text-xs uppercase tracking-[0.18em] text-text-muted">{stat.label}</div>
-                  </div>
-                ))}
+        <div className="relative mx-auto w-full max-w-[1540px] px-4 py-14 sm:px-6 lg:px-8 lg:py-16">
+          <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_420px]">
+            <div className="max-w-[900px]">
+              <div className="mb-5 flex flex-wrap items-center gap-2">
+                <Badge variant="version">{content.heroKicker}</Badge>
+                <Badge variant="certified">v2.0.8</Badge>
+                <Badge variant="compatible">{locale === 'en' ? 'Bilingual' : '中英双语'}</Badge>
               </div>
-
-              <div className="grid gap-4 md:grid-cols-3">
-                {content.governanceCards.map((card, index) => (
-                  <div
-                    key={card.title}
-                    className="rounded-2xl border border-border-default bg-[linear-gradient(180deg,rgba(22,27,34,0.9),rgba(13,17,23,0.86))] p-4"
-                  >
-                    <div className="mb-3 inline-flex h-8 w-8 items-center justify-center rounded-xl border border-accent-blue/35 bg-accent-blue/10 font-mono text-xs text-accent-blue">
-                      {index + 1}
-                    </div>
-                    <h3 className="mb-2 text-sm font-semibold text-text-primary">{card.title}</h3>
-                    <p className="text-sm leading-6 text-text-secondary">{card.body}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="rounded-[24px] border border-border-default bg-bg-secondary/55 p-5 backdrop-blur-sm">
-                <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-text-primary">
-                  <ShieldCheck size={16} className="text-accent-blue" />
-                  {locale === 'en' ? 'Read this page in order' : '建议这样阅读这个页面'}
-                </div>
-                <div className="grid gap-3 md:grid-cols-4">
-                  {content.sections.slice(0, 4).map((section, index) => {
-                    const Icon = section.icon;
-                    return (
-                      <a
-                        key={section.id}
-                        href={`#${section.id}`}
-                        className="rounded-2xl border border-border-default bg-bg-elevated/80 p-4 transition-colors hover:border-border-emphasis hover:bg-bg-elevated"
-                      >
-                        <div className="mb-3 flex items-center justify-between gap-3">
-                          <Icon size={18} className="text-accent-blue" />
-                          <span className="font-mono text-xs text-text-muted">{index + 1}</span>
-                        </div>
-                        <div className="text-sm font-semibold text-text-primary">{section.label}</div>
-                      </a>
-                    );
-                  })}
-                </div>
+              <h1 className="max-w-[900px] text-4xl font-bold leading-[1.08] tracking-tight text-text-primary sm:text-5xl lg:text-[3.5rem]">
+                {content.heroTitle}
+              </h1>
+              <p className="mt-5 max-w-[760px] text-lg leading-8 text-text-secondary">{content.heroBody}</p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link
+                  href="#install"
+                  className="inline-flex items-center gap-2 rounded-xl bg-accent-blue px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-accent-blue-hover"
+                >
+                  {locale === 'en' ? 'Open install guide' : '查看安装方式'}
+                  <ArrowRight size={16} />
+                </Link>
+                <Link
+                  href="#commands"
+                  className="inline-flex items-center gap-2 rounded-xl border border-border-emphasis px-5 py-3 text-sm font-semibold text-text-primary transition-colors hover:bg-bg-tertiary"
+                >
+                  {locale === 'en' ? 'Command reference' : '命令参考'}
+                </Link>
+                <Link
+                  href={homeHref}
+                  className="inline-flex items-center gap-2 rounded-xl border border-border-default px-5 py-3 text-sm font-semibold text-text-secondary transition-colors hover:bg-bg-tertiary hover:text-text-primary"
+                >
+                  {locale === 'en' ? 'Back to website' : '返回官网'}
+                </Link>
               </div>
             </div>
 
@@ -631,12 +584,20 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
                   <Sparkles size={16} className="text-accent-blue" />
-                  {content.quickTitle}
+                  {locale === 'en' ? 'Start working' : '开始工作'}
                 </div>
                 <Badge variant="default">{locale === 'en' ? 'Quick path' : '最快路径'}</Badge>
               </div>
+              <div className="mb-4 grid grid-cols-3 gap-3">
+                {content.heroStats.map((stat) => (
+                  <div key={stat.label} className="rounded-xl border border-border-default bg-bg-primary/75 px-3 py-3 text-center">
+                    <div className="text-lg font-bold text-text-primary">{stat.value}</div>
+                    <div className="mt-1 text-[10px] uppercase tracking-[0.16em] text-text-muted">{stat.label}</div>
+                  </div>
+                ))}
+              </div>
               <p className="mb-5 text-sm leading-7 text-text-secondary">{content.quickBody}</p>
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-3">
                 {content.quickCards.map((card) => (
                   <div key={card.title} className="rounded-2xl border border-border-default bg-bg-primary/80 p-4">
                     <div className="mb-2 text-sm font-semibold text-text-primary">{card.title}</div>
@@ -649,51 +610,31 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             </div>
           </div>
 
-          <div className="mt-6 grid gap-4 xl:grid-cols-2">
-            <div className="rounded-[24px] border border-border-default bg-bg-secondary/55 p-5 backdrop-blur-sm">
-              <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-text-primary">
-                <Command size={16} className="text-accent-blue" />
-                {locale === 'en' ? 'Trigger model' : '触发模型'}
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {content.triggerCards.map((card) => (
-                  <div key={card.title} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-4">
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <div className="text-sm font-semibold text-text-primary">{card.title}</div>
-                      <Badge variant={card.variant}>{card.variant === 'certified' ? 'Slash' : locale === 'en' ? 'Text trigger' : '文本触发'}</Badge>
+          <div className="mt-8 rounded-2xl border border-border-default bg-bg-secondary/45 p-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {content.sections.map((section, index) => {
+                const Icon = section.icon;
+                return (
+                  <a
+                    key={section.id}
+                    href={`#${section.id}`}
+                    className="flex items-center justify-between rounded-xl border border-border-default bg-bg-elevated/70 px-4 py-3 transition-colors hover:border-border-emphasis hover:bg-bg-elevated"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon size={16} className="text-accent-blue" />
+                      <span className="text-sm font-medium text-text-primary">{section.label}</span>
                     </div>
-                    <div className="mb-2 font-mono text-sm text-accent-blue">{card.command}</div>
-                    <p className="text-xs leading-6 text-text-secondary">{card.note}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-[24px] border border-border-default bg-bg-secondary/55 p-5 backdrop-blur-sm">
-              <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-text-primary">
-                <Workflow size={16} className="text-accent-blue" />
-                {locale === 'en' ? 'Pipeline snapshot' : '流程快照'}
-              </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {content.pipelineSteps.slice(0, 3).map((step) => (
-                  <div key={step.step} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-4">
-                    <div className="mb-2 flex items-center gap-2">
-                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-accent-blue/35 bg-accent-blue/10 font-mono text-[11px] text-accent-blue">
-                        {step.step}
-                      </span>
-                      <div className="text-sm font-semibold text-text-primary">{step.title}</div>
-                    </div>
-                    <p className="text-xs leading-6 text-text-secondary">{step.body}</p>
-                  </div>
-                ))}
-              </div>
+                    <span className="font-mono text-xs text-text-muted">{String(index + 1).padStart(2, '0')}</span>
+                  </a>
+                );
+              })}
             </div>
           </div>
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-[1720px] px-4 py-10 sm:px-6 lg:px-8 lg:py-14 2xl:px-10">
-        <div className="grid gap-8 xl:grid-cols-[240px_minmax(0,1fr)_300px] 2xl:grid-cols-[260px_minmax(0,1fr)_320px]">
+      <section className="mx-auto w-full max-w-[1540px] px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+        <div className="grid gap-8 xl:grid-cols-[220px_minmax(0,1fr)]">
           <aside className="hidden xl:block">
             <div className="sticky top-24 rounded-[24px] border border-border-default bg-bg-secondary/55 p-4 backdrop-blur-sm">
               <div className="mb-3 text-xs font-mono uppercase tracking-[0.18em] text-text-muted">
@@ -881,45 +822,6 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
               </div>
             </SectionShell>
           </div>
-
-          <aside>
-            <div className="sticky top-24 space-y-4">
-              <div className="rounded-[24px] border border-border-default bg-bg-secondary/55 p-5">
-                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-text-primary">
-                  <Rocket size={16} className="text-accent-blue" />
-                  {content.sideRailTitle}
-                </div>
-                <p className="mb-4 text-sm leading-7 text-text-secondary">{content.sideRailBody}</p>
-                <div className="space-y-2">
-                  {content.sideRailLinks.map((link) => {
-                    const href = link.href.startsWith('http') ? link.href : localizedPath(locale, link.href);
-                    return (
-                      <Link
-                        key={link.label}
-                        href={href}
-                        className="flex items-center justify-between rounded-xl border border-border-default bg-bg-elevated/70 px-4 py-3 text-sm text-text-secondary transition-colors hover:border-border-emphasis hover:text-text-primary"
-                      >
-                        <span>{link.label}</span>
-                        <ArrowRight size={15} />
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="rounded-[24px] border border-border-default bg-bg-secondary/55 p-5">
-                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-text-primary">
-                  <ShieldCheck size={16} className="text-accent-blue" />
-                  {locale === 'en' ? 'Completion rule' : '完成定义'}
-                </div>
-                <p className="text-sm leading-7 text-text-secondary">
-                  {locale === 'en'
-                    ? 'The project is not done when the host generated code. It is done when the governed pipeline has moved through confirmation, runtime verification, quality gates, and delivery readiness.'
-                    : '项目不是宿主写出代码就算完成，而是要真正走过确认门、运行验证、质量门禁和交付准备。'}
-                </p>
-              </div>
-            </div>
-          </aside>
         </div>
       </section>
     </main>
