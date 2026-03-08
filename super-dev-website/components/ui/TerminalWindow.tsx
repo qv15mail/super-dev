@@ -1,14 +1,7 @@
 'use client';
-/**
- * 开发：Excellent（11964948@qq.com）
- * 功能：终端窗口模拟组件
- * 作用：逐行打印动画，展示 super-dev 安装和运行过程
- * 创建时间：2026-03-08
- * 最后修改：2026-03-08
- */
 import { useEffect, useState } from 'react';
-import { TERMINAL_LINES } from '@/lib/constants';
 import { cn } from '@/lib/utils';
+import type { SiteLocale } from '@/lib/site-locale';
 
 type LineType = 'input' | 'output' | 'success' | 'blank' | 'brand' | 'info' | 'certified';
 
@@ -16,6 +9,45 @@ interface TerminalLine {
   readonly type: string;
   readonly text: string;
 }
+
+const TERMINAL_LINES: Record<SiteLocale, readonly TerminalLine[]> = {
+  zh: [
+    { type: 'input', text: 'pip install super-dev' },
+    { type: 'output', text: 'Collecting super-dev' },
+    { type: 'output', text: '  Downloading super_dev-2.0.8-py3-none-any.whl' },
+    { type: 'output', text: 'Installing collected packages: super-dev' },
+    { type: 'success', text: 'Successfully installed super-dev-2.0.8' },
+    { type: 'blank', text: '' },
+    { type: 'input', text: 'super-dev' },
+    { type: 'blank', text: '' },
+    { type: 'brand', text: 'Super Dev v2.0.8 — Governance Layer for AI Coding' },
+    { type: 'blank', text: '' },
+    { type: 'info', text: 'Detecting AI hosts in your environment...' },
+    { type: 'certified', text: 'Claude Code    [Certified]' },
+    { type: 'certified', text: 'Cursor         [Certified]' },
+    { type: 'certified', text: 'Windsurf       [Certified]' },
+    { type: 'blank', text: '' },
+    { type: 'info', text: 'Run /super-dev <requirement> to start pipeline.' },
+  ],
+  en: [
+    { type: 'input', text: 'pip install super-dev' },
+    { type: 'output', text: 'Collecting super-dev' },
+    { type: 'output', text: '  Downloading super_dev-2.0.8-py3-none-any.whl' },
+    { type: 'output', text: 'Installing collected packages: super-dev' },
+    { type: 'success', text: 'Successfully installed super-dev-2.0.8' },
+    { type: 'blank', text: '' },
+    { type: 'input', text: 'super-dev' },
+    { type: 'blank', text: '' },
+    { type: 'brand', text: 'Super Dev v2.0.8 — Governance Layer for AI Coding' },
+    { type: 'blank', text: '' },
+    { type: 'info', text: 'Detecting AI hosts in your environment...' },
+    { type: 'certified', text: 'Claude Code    [Certified]' },
+    { type: 'certified', text: 'Cursor         [Certified]' },
+    { type: 'certified', text: 'Windsurf       [Certified]' },
+    { type: 'blank', text: '' },
+    { type: 'info', text: 'Run /super-dev <requirement> to start the pipeline.' },
+  ],
+};
 
 function getLineStyle(type: string): string {
   const styles: Record<LineType, string> = {
@@ -37,21 +69,23 @@ function getLinePrefix(type: string): string {
 
 interface TerminalWindowProps {
   className?: string;
+  locale?: SiteLocale;
 }
 
-export function TerminalWindow({ className }: TerminalWindowProps) {
+export function TerminalWindow({ className, locale = 'zh' }: TerminalWindowProps) {
   const [visibleLines, setVisibleLines] = useState(0);
+  const lines = TERMINAL_LINES[locale];
 
   useEffect(() => {
-    if (visibleLines >= TERMINAL_LINES.length) return;
+    setVisibleLines(0);
+  }, [locale]);
 
-    const delay = (TERMINAL_LINES[visibleLines] as TerminalLine).type === 'blank' ? 80 : 120;
-    const timer = setTimeout(() => {
-      setVisibleLines((prev) => prev + 1);
-    }, delay);
-
+  useEffect(() => {
+    if (visibleLines >= lines.length) return;
+    const delay = lines[visibleLines].type === 'blank' ? 80 : 120;
+    const timer = setTimeout(() => setVisibleLines((prev) => prev + 1), delay);
     return () => clearTimeout(timer);
-  }, [visibleLines]);
+  }, [visibleLines, lines]);
 
   return (
     <div
@@ -61,7 +95,6 @@ export function TerminalWindow({ className }: TerminalWindowProps) {
         className
       )}
     >
-      {/* 终端标题栏 */}
       <div className="flex items-center gap-2 px-4 py-3 bg-bg-secondary border-b border-border-default">
         <div className="flex gap-1.5">
           <span className="w-3 h-3 rounded-full bg-[#FF5F56]" aria-hidden="true" />
@@ -71,9 +104,8 @@ export function TerminalWindow({ className }: TerminalWindowProps) {
         <span className="text-xs text-text-muted font-mono ml-2">Terminal</span>
       </div>
 
-      {/* 终端内容 */}
       <div className="p-5 font-mono text-sm leading-relaxed min-h-[320px]">
-        {(TERMINAL_LINES as readonly TerminalLine[]).slice(0, visibleLines).map((line, index) => (
+        {lines.slice(0, visibleLines).map((line, index) => (
           <div key={index} className={cn('whitespace-pre', getLineStyle(line.type))}>
             {line.type === 'blank' ? (
               <span>&nbsp;</span>
@@ -85,7 +117,7 @@ export function TerminalWindow({ className }: TerminalWindowProps) {
             )}
           </div>
         ))}
-        {visibleLines < TERMINAL_LINES.length && (
+        {visibleLines < lines.length && (
           <span className="inline-block w-2 h-4 bg-text-primary animate-blink" aria-hidden="true" />
         )}
       </div>

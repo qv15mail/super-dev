@@ -1,11 +1,4 @@
 'use client';
-/**
- * 开发：Excellent（11964948@qq.com）
- * 功能：Hero 主视觉区组件
- * 作用：品牌标题、核心价值主张、CTA 按钮组、终端演示
- * 创建时间：2026-03-08
- * 最后修改：2026-03-08
- */
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { ArrowRight, BookOpen } from 'lucide-react';
@@ -13,38 +6,52 @@ import { Badge } from '@/components/ui/Badge';
 import { CopyCommand } from '@/components/ui/CopyCommand';
 import { formatStarCount, GITHUB_REPO_URL } from '@/lib/github';
 import { useGithubStars } from '@/lib/useGithubStars';
+import { localizedPath, type SiteLocale } from '@/lib/site-locale';
 
 const TerminalWindow = dynamic(
   () => import('@/components/ui/TerminalWindow').then((mod) => mod.TerminalWindow),
   { ssr: false }
 );
 
-export function HeroSection() {
+const COPY = {
+  zh: {
+    openSource: 'MIT 开源',
+    title: 'AI 能写代码，',
+    highlight: 'Super Dev',
+    titleAfter: '让代码能交付。',
+    body: 'AI 编码工具的流程治理层。12 阶段流水线、商业级质量门禁、可审计交付产物——兼容你正在使用的任意 AI 工具。',
+    docs: '查看文档',
+    installNote: '支持 Python 3.10+，或使用',
+  },
+  en: {
+    openSource: 'MIT Open Source',
+    title: 'AI can write code,',
+    highlight: 'Super Dev',
+    titleAfter: 'makes it shippable.',
+    body: 'The governance layer for AI coding tools. A 12-phase pipeline, commercial-grade quality gates, and auditable delivery outputs—compatible with the AI host you already use.',
+    docs: 'Read Docs',
+    installNote: 'Requires Python 3.10+, or use',
+  },
+} as const;
+
+export function HeroSection({ locale = 'zh' }: { locale?: SiteLocale }) {
   const stars = useGithubStars();
+  const copy = COPY[locale];
 
   return (
-    <section
-      className="relative min-h-screen flex items-center pt-14 overflow-hidden"
-      aria-labelledby="hero-title"
-    >
-      {/* 背景：中心径向渐变光晕 */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        aria-hidden="true"
-      >
+    <section className="relative min-h-screen flex items-center pt-14 overflow-hidden" aria-labelledby="hero-title">
+      <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-accent-blue/5 rounded-full blur-3xl" />
         <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border-default to-transparent" />
       </div>
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-20 lg:py-28 w-full">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-          {/* 左侧：文案区 */}
           <div className="flex flex-col gap-6">
-            {/* 版本徽章 */}
             <div className="flex items-center gap-2 flex-wrap">
               <Badge variant="version">v2.0.8</Badge>
               <span className="text-text-muted text-sm">·</span>
-              <Badge variant="certified">MIT 开源</Badge>
+              <Badge variant="certified">{copy.openSource}</Badge>
               <span className="text-text-muted text-sm">·</span>
               <a
                 href={GITHUB_REPO_URL}
@@ -59,53 +66,36 @@ export function HeroSection() {
               </a>
             </div>
 
-            {/* 主标题 */}
-            <h1
-              id="hero-title"
-              className="text-4xl sm:text-5xl lg:text-6xl font-bold text-text-primary leading-[1.1] tracking-tight"
-            >
-              AI 能写代码，
+            <h1 id="hero-title" className="text-4xl sm:text-5xl lg:text-6xl font-bold text-text-primary leading-[1.1] tracking-tight">
+              {copy.title}
               <br />
-              <span className="text-gradient-blue">Super Dev</span>{' '}
-              让代码能交付。
+              <span className="text-gradient-blue">{copy.highlight}</span>{' '}
+              {copy.titleAfter}
             </h1>
 
-            {/* 副标题 */}
-            <p className="text-lg text-text-secondary leading-relaxed max-w-xl">
-              AI 编码工具的流程治理层。12 阶段流水线、商业级质量门禁、可审计交付产物——
-              兼容你正在使用的任意 AI 工具。
-            </p>
+            <p className="text-lg text-text-secondary leading-relaxed max-w-xl">{copy.body}</p>
 
-            {/* CTA 区域 */}
             <div id="get-started" className="flex flex-col sm:flex-row gap-3 pt-2">
               <CopyCommand command="pip install super-dev" className="sm:w-auto" />
               <Link
-                href="/docs"
+                href={localizedPath(locale, '/docs')}
                 className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium text-text-secondary border border-border-default hover:border-border-emphasis hover:text-text-primary transition-all duration-150"
               >
                 <BookOpen size={16} aria-hidden="true" />
-                查看文档
+                {copy.docs}
                 <ArrowRight size={14} aria-hidden="true" />
               </Link>
             </div>
 
-            {/* 小字说明 */}
             <p className="text-xs text-text-muted">
-              支持 Python 3.10+，或使用{' '}
-              <code className="font-mono text-text-secondary bg-bg-secondary px-1.5 py-0.5 rounded">
-                uv tool install super-dev
-              </code>
+              {copy.installNote}{' '}
+              <code className="font-mono text-text-secondary bg-bg-secondary px-1.5 py-0.5 rounded">uv tool install super-dev</code>
             </p>
           </div>
 
-          {/* 右侧：终端演示 */}
           <div className="relative">
-            <TerminalWindow className="w-full" />
-            {/* 装饰：右下角光晕 */}
-            <div
-              className="absolute -bottom-8 -right-8 w-48 h-48 bg-accent-blue/10 rounded-full blur-2xl pointer-events-none"
-              aria-hidden="true"
-            />
+            <TerminalWindow className="w-full" locale={locale} />
+            <div className="absolute -bottom-8 -right-8 w-48 h-48 bg-accent-blue/10 rounded-full blur-2xl pointer-events-none" aria-hidden="true" />
           </div>
         </div>
       </div>

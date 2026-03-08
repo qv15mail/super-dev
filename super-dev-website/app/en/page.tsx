@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { Nav } from '@/components/layout/Nav';
 import { Footer } from '@/components/layout/Footer';
 import { HeroSection } from '@/components/sections/HeroSection';
@@ -9,21 +10,26 @@ import { CodeDemoSection } from '@/components/sections/CodeDemoSection';
 import { FaqSection } from '@/components/sections/FaqSection';
 import { BottomCta } from '@/components/sections/BottomCta';
 
-export default function HomePage() {
+export const metadata: Metadata = {
+  title: 'Super Dev — The Governance Layer for AI Coding',
+  description: 'AI can write code. Super Dev makes it shippable with a governed pipeline, quality gates, and auditable delivery outputs.',
+};
+
+export default function HomePageEn() {
   return (
     <>
-      <Nav locale="zh" />
+      <Nav locale="en" />
       <main id="main-content">
-        <HeroSection locale="zh" />
-        <SocialProofBand locale="zh" />
-        <ValuePropsSection locale="zh" />
-        <PipelineSection locale="zh" />
-        <HostCompatSection locale="zh" />
-        <CodeDemoSection locale="zh" />
-        <FaqSection locale="zh" />
-        <BottomCta locale="zh" />
+        <HeroSection locale="en" />
+        <SocialProofBand locale="en" />
+        <ValuePropsSection locale="en" />
+        <PipelineSection locale="en" />
+        <HostCompatSection locale="en" />
+        <CodeDemoSection locale="en" />
+        <FaqSection locale="en" />
+        <BottomCta locale="en" />
       </main>
-      <Footer locale="zh" />
+      <Footer locale="en" />
     </>
   );
 }
