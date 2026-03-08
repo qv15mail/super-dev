@@ -1,53 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { TERMINAL_LINES } from '@/lib/constants';
 import type { SiteLocale } from '@/lib/site-locale';
 
 type LineType = 'input' | 'output' | 'success' | 'blank' | 'brand' | 'info' | 'certified';
-
-interface TerminalLine {
-  readonly type: string;
-  readonly text: string;
-}
-
-const TERMINAL_LINES: Record<SiteLocale, readonly TerminalLine[]> = {
-  zh: [
-    { type: 'input', text: 'pip install super-dev' },
-    { type: 'output', text: 'Collecting super-dev' },
-    { type: 'output', text: '  Downloading super_dev-2.0.8-py3-none-any.whl' },
-    { type: 'output', text: 'Installing collected packages: super-dev' },
-    { type: 'success', text: 'Successfully installed super-dev-2.0.8' },
-    { type: 'blank', text: '' },
-    { type: 'input', text: 'super-dev' },
-    { type: 'blank', text: '' },
-    { type: 'brand', text: 'Super Dev v2.0.8 — Governance Layer for AI Coding' },
-    { type: 'blank', text: '' },
-    { type: 'info', text: 'Detecting AI hosts in your environment...' },
-    { type: 'certified', text: 'Claude Code    [Certified]' },
-    { type: 'certified', text: 'Cursor         [Certified]' },
-    { type: 'certified', text: 'Windsurf       [Certified]' },
-    { type: 'blank', text: '' },
-    { type: 'info', text: 'Run /super-dev <requirement> to start pipeline.' },
-  ],
-  en: [
-    { type: 'input', text: 'pip install super-dev' },
-    { type: 'output', text: 'Collecting super-dev' },
-    { type: 'output', text: '  Downloading super_dev-2.0.8-py3-none-any.whl' },
-    { type: 'output', text: 'Installing collected packages: super-dev' },
-    { type: 'success', text: 'Successfully installed super-dev-2.0.8' },
-    { type: 'blank', text: '' },
-    { type: 'input', text: 'super-dev' },
-    { type: 'blank', text: '' },
-    { type: 'brand', text: 'Super Dev v2.0.8 — Governance Layer for AI Coding' },
-    { type: 'blank', text: '' },
-    { type: 'info', text: 'Detecting AI hosts in your environment...' },
-    { type: 'certified', text: 'Claude Code    [Certified]' },
-    { type: 'certified', text: 'Cursor         [Certified]' },
-    { type: 'certified', text: 'Windsurf       [Certified]' },
-    { type: 'blank', text: '' },
-    { type: 'info', text: 'Run /super-dev <requirement> to start the pipeline.' },
-  ],
-};
 
 function getLineStyle(type: string): string {
   const styles: Record<LineType, string> = {

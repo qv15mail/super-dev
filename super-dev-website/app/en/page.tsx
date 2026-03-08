@@ -4,15 +4,18 @@ import { Footer } from '@/components/layout/Footer';
 import { HeroSection } from '@/components/sections/HeroSection';
 import { SocialProofBand } from '@/components/sections/SocialProofBand';
 import { ValuePropsSection } from '@/components/sections/ValuePropsSection';
+import { WhoItsForSection } from '@/components/sections/WhoItsForSection';
+import { UseCasesSection } from '@/components/sections/UseCasesSection';
 import { PipelineSection } from '@/components/sections/PipelineSection';
 import { HostCompatSection } from '@/components/sections/HostCompatSection';
+import { TrustSection } from '@/components/sections/TrustSection';
 import { CodeDemoSection } from '@/components/sections/CodeDemoSection';
 import { FaqSection } from '@/components/sections/FaqSection';
 import { BottomCta } from '@/components/sections/BottomCta';
 
 export const metadata: Metadata = {
   title: 'Super Dev — The Governance Layer for AI Coding',
-  description: 'AI can write code. Super Dev makes it shippable with a governed pipeline, quality gates, and auditable delivery outputs.',
+  description: 'Super Dev governs how AI hosts deliver work: research, the three core docs, approval gates, runtime validation, quality gates, and auditable delivery outputs.',
 };
 
 export default function HomePageEn() {
@@ -23,8 +26,11 @@ export default function HomePageEn() {
         <HeroSection locale="en" />
         <SocialProofBand locale="en" />
         <ValuePropsSection locale="en" />
+        <WhoItsForSection locale="en" />
+        <UseCasesSection locale="en" />
         <PipelineSection locale="en" />
         <HostCompatSection locale="en" />
+        <TrustSection locale="en" />
         <CodeDemoSection locale="en" />
         <FaqSection locale="en" />
         <BottomCta locale="en" />

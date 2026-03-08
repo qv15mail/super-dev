@@ -4,15 +4,15 @@ import type { SiteLocale } from '@/lib/site-locale';
 
 const COPY = {
   zh: {
-    title: '立即开始',
-    body: '让 AI 产出达到商业级标准。一行命令，接入你现有的工具链。',
-    installNote: '或使用',
+    title: '把宿主接起来，然后开始按流程开发。',
+    body: '安装 Super Dev，运行 super-dev 进入宿主接入引导，再在宿主里输入 /super-dev 或 super-dev:。后面的 research、三文档、确认门、运行验证和交付门禁会自动接管。',
+    installNote: '也可以使用',
     github: '在 GitHub 查看源代码',
   },
   en: {
-    title: 'Start Now',
-    body: 'Raise AI output to a commercial-grade standard. One command connects it to the toolchain you already use.',
-    installNote: 'Or use',
+    title: 'Connect the host, then start building through the governed flow.',
+    body: 'Install Super Dev, run super-dev to onboard the host, then trigger /super-dev or super-dev: inside the host. Research, the three core docs, approval, runtime validation, and delivery gates take over from there.',
+    installNote: 'You can also use',
     github: 'View source on GitHub',
   },
 } as const;
@@ -20,29 +20,29 @@ const COPY = {
 export function BottomCta({ locale = 'zh' }: { locale?: SiteLocale }) {
   const copy = COPY[locale];
   return (
-    <section className="relative py-24 lg:py-32 bg-bg-secondary overflow-hidden" aria-labelledby="bottom-cta-title">
+    <section className="relative overflow-hidden bg-bg-primary py-24 lg:py-28" aria-labelledby="bottom-cta-title">
       <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-accent-blue/8 rounded-full blur-3xl" />
+        <div className="absolute left-1/2 top-1/2 h-[360px] w-[720px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-blue/6 blur-3xl" />
       </div>
 
-      <div className="relative max-w-3xl mx-auto px-4 sm:px-6 text-center">
-        <h2 id="bottom-cta-title" className="text-3xl sm:text-4xl lg:text-5xl font-bold text-text-primary mb-4 tracking-tight">{copy.title}</h2>
-        <p className="text-lg text-text-secondary mb-10 max-w-xl mx-auto">{copy.body}</p>
+      <div className="relative mx-auto max-w-4xl px-4 text-center sm:px-6">
+        <h2 id="bottom-cta-title" className="text-3xl font-bold tracking-tight text-text-primary sm:text-4xl lg:text-5xl">{copy.title}</h2>
+        <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-text-secondary">{copy.body}</p>
 
-        <div className="flex justify-center mb-6">
-          <CopyCommand command="pip install super-dev" className="sm:w-auto" />
+        <div className="mt-10 flex justify-center">
+          <CopyCommand command="pip install -U super-dev" className="sm:w-auto" />
         </div>
 
-        <p className="text-sm text-text-muted mb-10">
+        <p className="mt-4 text-sm text-text-muted">
           {copy.installNote}{' '}
-          <code className="font-mono text-text-secondary bg-bg-tertiary px-1.5 py-0.5 rounded">uv tool install super-dev</code>
+          <code className="rounded bg-bg-secondary px-1.5 py-0.5 font-mono text-text-secondary">uv tool install super-dev</code>
         </p>
 
         <a
           href="https://github.com/shangyankeji/super-dev"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors duration-150"
+          className="mt-8 inline-flex items-center gap-2 text-text-secondary transition-colors duration-150 hover:text-text-primary"
         >
           <Github size={16} aria-hidden="true" />
           <span>{copy.github}</span>

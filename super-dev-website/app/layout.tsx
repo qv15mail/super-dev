@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     template: '%s | Super Dev',
   },
   description:
-    'AI 能写代码，Super Dev 让代码能交付。12 阶段开发流水线、商业级质量门禁、可审计交付产物，兼容 Claude Code、Cursor、Windsurf 等 15+ AI 宿主。',
+    'Super Dev 是宿主内的 AI 开发治理层。它把 research、三文档、确认门、前端运行验证、质量门禁和交付标准接到你正在使用的 AI 宿主里。',
   keywords: [
     'AI 编程',
     'Claude Code',
@@ -48,7 +48,7 @@ export const metadata: Metadata = {
     url: siteUrl,
     siteName: 'Super Dev',
     title: 'Super Dev — AI 编码工具的流程治理层',
-    description: 'AI 能写代码，Super Dev 让代码能交付。',
+    description: '宿主继续负责编码与执行，Super Dev 负责完整开发流程和交付门禁。',
     images: [
       {
         url: '/og-image.png',
@@ -61,7 +61,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Super Dev — AI 编码工具的流程治理层',
-    description: 'AI 能写代码，Super Dev 让代码能交付。',
+    description: '宿主继续负责编码与执行，Super Dev 负责完整开发流程和交付门禁。',
     images: ['/og-image.png'],
   },
   robots: {

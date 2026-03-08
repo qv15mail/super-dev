@@ -1,6 +1,5 @@
-import { HOSTS } from '@/lib/constants';
 import { Badge } from '@/components/ui/Badge';
-import type { HostStatus } from '@/lib/constants';
+import { HOSTS, SLASH_HOSTS, TEXT_TRIGGER_HOSTS, type HostStatus } from '@/lib/constants';
 import type { SiteLocale } from '@/lib/site-locale';
 
 const STATUS_BADGE_VARIANT: Record<HostStatus, 'certified' | 'compatible' | 'experimental'> = {
@@ -11,75 +10,112 @@ const STATUS_BADGE_VARIANT: Record<HostStatus, 'certified' | 'compatible' | 'exp
 
 const COPY = {
   zh: {
-    eyebrow: '跨平台兼容，不站队',
-    title: '支持 15+ AI 宿主工具',
-    body: '你用什么 AI 工具，Super Dev 就在哪里工作。不需要切换工具，不需要放弃已有的工作流——即插即用。',
+    eyebrow: 'Host Support',
+    title: '先看怎么触发，再看宿主协议类型。',
+    body: '官网先给用户一个能立刻执行的答案：哪些宿主用 /super-dev，哪些宿主用 super-dev:。文档页再展开 commands、AGENTS、steering、rules、skills 这些接入面。',
+    slash: 'Slash 宿主',
+    text: 'Text-trigger 宿主',
+    slashBody: '这些宿主直接输入 /super-dev 你的需求。',
+    textBody: '这些宿主使用 super-dev: 你的需求。',
+    matrixTitle: '宿主矩阵',
+    protocol: '协议面',
+    trigger: '触发',
+    maturity: '成熟度',
     labels: { certified: '认证', compatible: '兼容', experimental: '实验性' },
-    descriptions: {
-      certified: '经过完整测试，推荐使用',
-      compatible: '基础功能可用，持续优化中',
-      experimental: '实验性支持，欢迎反馈',
-    },
-    footer: '更多宿主持续接入中。',
-    issues: '提交 Issue 申请支持你的工具',
   },
   en: {
-    eyebrow: 'Cross-platform, host-agnostic',
-    title: 'Support for 15+ AI hosts',
-    body: 'Super Dev works where your AI host already works. No switching tools, no abandoning your workflow, no separate platform to adopt.',
+    eyebrow: 'Host Support',
+    title: 'Show the trigger first, then the protocol type.',
+    body: 'The homepage should answer the practical question first: which hosts use /super-dev and which hosts use super-dev:. The docs page can expand the underlying protocol surfaces later.',
+    slash: 'Slash hosts',
+    text: 'Text-trigger hosts',
+    slashBody: 'These hosts accept /super-dev your requirement.',
+    textBody: 'These hosts use super-dev: your requirement.',
+    matrixTitle: 'Host matrix',
+    protocol: 'Protocol surface',
+    trigger: 'Trigger',
+    maturity: 'Maturity',
     labels: { certified: 'Certified', compatible: 'Compatible', experimental: 'Experimental' },
-    descriptions: {
-      certified: 'Fully tested and recommended',
-      compatible: 'Core flows work and are being refined',
-      experimental: 'Supported experimentally, feedback welcome',
-    },
-    footer: 'More hosts are being integrated continuously.',
-    issues: 'Open an issue to request support for your tool',
   },
 } as const;
 
+function HostChip({ label }: { label: string }) {
+  return <span className="rounded-lg border border-border-default bg-bg-primary px-3 py-2 font-mono text-sm text-text-primary">{label}</span>;
+}
+
 export function HostCompatSection({ locale = 'zh' }: { locale?: SiteLocale }) {
   const copy = COPY[locale];
+
   return (
-    <section id="hosts" className="py-20 lg:py-28 bg-bg-secondary" aria-labelledby="hosts-title">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="text-center mb-14">
-          <p className="text-sm font-mono text-accent-blue mb-3 tracking-wider uppercase">{copy.eyebrow}</p>
-          <h2 id="hosts-title" className="text-3xl sm:text-4xl font-bold text-text-primary mb-4 tracking-tight">{copy.title}</h2>
-          <p className="text-text-secondary max-w-2xl mx-auto">{copy.body}</p>
+    <section id="hosts" className="border-b border-border-muted bg-bg-secondary py-20 lg:py-24" aria-labelledby="hosts-title">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        <div className="mb-14 max-w-3xl">
+          <p className="mb-3 text-sm font-mono uppercase tracking-wider text-accent-blue">{copy.eyebrow}</p>
+          <h2 id="hosts-title" className="text-3xl font-bold tracking-tight text-text-primary sm:text-4xl">{copy.title}</h2>
+          <p className="mt-4 text-lg leading-8 text-text-secondary">{copy.body}</p>
         </div>
 
-        <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3" role="list" aria-label="支持的宿主工具列表">
-          {HOSTS.map((host) => (
-            <li key={host.name}>
-              <div className="p-4 rounded-xl bg-bg-primary border border-border-default hover:border-accent-blue/30 transition-all duration-200 group">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-bg-tertiary border border-border-muted flex items-center justify-center shrink-0">
-                    <span className="text-xs font-mono font-bold text-text-muted">{host.abbr}</span>
-                  </div>
-                  <p className="text-sm font-medium text-text-primary">{host.name}</p>
-                </div>
-                <Badge variant={STATUS_BADGE_VARIANT[host.status]}>{copy.labels[host.status]}</Badge>
-              </div>
-            </li>
-          ))}
-        </ul>
-
-        <div className="mt-8 flex flex-wrap justify-center gap-6" aria-label="兼容状态说明">
-          {(Object.keys(copy.descriptions) as HostStatus[]).map((status) => (
-            <div key={status} className="flex items-center gap-2 text-xs text-text-muted">
-              <Badge variant={STATUS_BADGE_VARIANT[status]}>{copy.labels[status]}</Badge>
-              <span>{copy.descriptions[status]}</span>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <article className="rounded-2xl border border-border-default bg-bg-primary/70 p-6">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="text-xl font-semibold text-text-primary">{copy.slash}</h3>
+              <code className="rounded-md bg-bg-secondary px-2.5 py-1 font-mono text-sm text-accent-blue">/super-dev</code>
             </div>
-          ))}
+            <p className="mb-5 text-sm leading-7 text-text-secondary">{copy.slashBody}</p>
+            <div className="flex flex-wrap gap-2">
+              {SLASH_HOSTS.map((host) => (
+                <HostChip key={host.name} label={host.name} />
+              ))}
+            </div>
+          </article>
+
+          <article className="rounded-2xl border border-border-default bg-bg-primary/70 p-6">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="text-xl font-semibold text-text-primary">{copy.text}</h3>
+              <code className="rounded-md bg-bg-secondary px-2.5 py-1 font-mono text-sm text-accent-blue">super-dev:</code>
+            </div>
+            <p className="mb-5 text-sm leading-7 text-text-secondary">{copy.textBody}</p>
+            <div className="flex flex-wrap gap-2">
+              {TEXT_TRIGGER_HOSTS.map((host) => (
+                <HostChip key={host.name} label={host.name} />
+              ))}
+            </div>
+          </article>
         </div>
 
-        <p className="text-center text-sm text-text-muted mt-8">
-          {copy.footer}
-          <a href="https://github.com/shangyankeji/super-dev/issues" target="_blank" rel="noopener noreferrer" className="text-accent-blue hover:text-accent-blue-hover transition-colors ml-1">
-            {copy.issues}
-          </a>
-        </p>
+        <div className="mt-12 rounded-2xl border border-border-default bg-bg-primary/70 p-6">
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <h3 className="text-xl font-semibold text-text-primary">{copy.matrixTitle}</h3>
+            <div className="flex flex-wrap gap-2">
+              {(Object.keys(copy.labels) as HostStatus[]).map((status) => (
+                <Badge key={status} variant={STATUS_BADGE_VARIANT[status]}>{copy.labels[status]}</Badge>
+              ))}
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-separate border-spacing-y-3 text-left text-sm">
+              <thead>
+                <tr className="text-text-muted">
+                  <th className="px-3 py-2 font-medium">Host</th>
+                  <th className="px-3 py-2 font-medium">{copy.trigger}</th>
+                  <th className="px-3 py-2 font-medium">{copy.protocol}</th>
+                  <th className="px-3 py-2 font-medium">{copy.maturity}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {HOSTS.map((host) => (
+                  <tr key={host.name} className="rounded-xl border border-border-default bg-bg-secondary/45">
+                    <td className="rounded-l-xl px-3 py-3 font-mono text-text-primary">{host.name}</td>
+                    <td className="px-3 py-3 font-mono text-accent-blue">{host.trigger === 'slash' ? '/super-dev' : 'super-dev:'}</td>
+                    <td className="px-3 py-3 text-text-secondary">{host.protocol}</td>
+                    <td className="rounded-r-xl px-3 py-3"><Badge variant={STATUS_BADGE_VARIANT[host.status]}>{copy.labels[host.status]}</Badge></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </section>
   );

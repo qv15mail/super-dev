@@ -3,8 +3,11 @@ import { Footer } from '@/components/layout/Footer';
 import { HeroSection } from '@/components/sections/HeroSection';
 import { SocialProofBand } from '@/components/sections/SocialProofBand';
 import { ValuePropsSection } from '@/components/sections/ValuePropsSection';
+import { WhoItsForSection } from '@/components/sections/WhoItsForSection';
+import { UseCasesSection } from '@/components/sections/UseCasesSection';
 import { PipelineSection } from '@/components/sections/PipelineSection';
 import { HostCompatSection } from '@/components/sections/HostCompatSection';
+import { TrustSection } from '@/components/sections/TrustSection';
 import { CodeDemoSection } from '@/components/sections/CodeDemoSection';
 import { FaqSection } from '@/components/sections/FaqSection';
 import { BottomCta } from '@/components/sections/BottomCta';
@@ -17,8 +20,11 @@ export default function HomePage() {
         <HeroSection locale="zh" />
         <SocialProofBand locale="zh" />
         <ValuePropsSection locale="zh" />
+        <WhoItsForSection locale="zh" />
+        <UseCasesSection locale="zh" />
         <PipelineSection locale="zh" />
         <HostCompatSection locale="zh" />
+        <TrustSection locale="zh" />
         <CodeDemoSection locale="zh" />
         <FaqSection locale="zh" />
         <BottomCta locale="zh" />

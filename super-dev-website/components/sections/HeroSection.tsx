@@ -16,21 +16,19 @@ const TerminalWindow = dynamic(
 const COPY = {
   zh: {
     openSource: 'MIT 开源',
-    title: 'AI 能写代码，',
-    highlight: 'Super Dev',
-    titleAfter: '让代码能交付。',
-    body: 'AI 编码工具的流程治理层。12 阶段流水线、商业级质量门禁、可审计交付产物——兼容你正在使用的任意 AI 工具。',
+    title: 'Super Dev 是宿主内的 AI 开发治理层。',
+    body: '它不替代 Claude Code、Cursor、Codex、Trae 这些宿主，而是把宿主拉进 research、三文档、确认门、前端验证、质量门禁和交付标准这条完整流水线。',
+    points: ['宿主负责模型、工具和编码', 'Super Dev 负责流程、门禁和交付', '从需求到可审计工程资产一条线走完'],
     docs: '查看文档',
-    installNote: '支持 Python 3.10+，或使用',
+    installNote: '支持 pip 或 uv 安装，安装后终端输入 super-dev 进入宿主接入引导。',
   },
   en: {
     openSource: 'MIT Open Source',
-    title: 'AI can write code,',
-    highlight: 'Super Dev',
-    titleAfter: 'makes it shippable.',
-    body: 'The governance layer for AI coding tools. A 12-phase pipeline, commercial-grade quality gates, and auditable delivery outputs—compatible with the AI host you already use.',
+    title: 'Super Dev is the host-side governance layer for AI coding.',
+    body: 'It does not replace Claude Code, Cursor, Codex, or Trae. It forces the host through research, the three core docs, approval gates, frontend runtime validation, quality gates, and delivery standards.',
+    points: ['The host handles models, tools, and coding', 'Super Dev handles flow, gates, and delivery', 'Turn a requirement into auditable engineering assets'],
     docs: 'Read Docs',
-    installNote: 'Requires Python 3.10+, or use',
+    installNote: 'Install with pip or uv, then run super-dev in the terminal to open the host onboarding flow.',
   },
 } as const;
 
@@ -39,64 +37,59 @@ export function HeroSection({ locale = 'zh' }: { locale?: SiteLocale }) {
   const copy = COPY[locale];
 
   return (
-    <section className="relative min-h-screen flex items-center pt-14 overflow-hidden" aria-labelledby="hero-title">
+    <section className="relative overflow-hidden border-b border-border-muted bg-bg-primary pt-24 lg:pt-28" aria-labelledby="hero-title">
       <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-accent-blue/5 rounded-full blur-3xl" />
+        <div className="absolute left-1/2 top-0 h-[460px] w-[780px] -translate-x-1/2 rounded-full bg-accent-blue/6 blur-3xl" />
         <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border-default to-transparent" />
       </div>
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-20 lg:py-28 w-full">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-          <div className="flex flex-col gap-6">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant="version">v2.0.8</Badge>
-              <span className="text-text-muted text-sm">·</span>
-              <Badge variant="certified">{copy.openSource}</Badge>
-              <span className="text-text-muted text-sm">·</span>
-              <a
-                href={GITHUB_REPO_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 text-sm text-text-muted hover:text-text-secondary transition-colors"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
-                </svg>
-                {formatStarCount(stars)} Stars
-              </a>
-            </div>
-
-            <h1 id="hero-title" className="text-4xl sm:text-5xl lg:text-6xl font-bold text-text-primary leading-[1.1] tracking-tight">
-              {copy.title}
-              <br />
-              <span className="text-gradient-blue">{copy.highlight}</span>{' '}
-              {copy.titleAfter}
-            </h1>
-
-            <p className="text-lg text-text-secondary leading-relaxed max-w-xl">{copy.body}</p>
-
-            <div id="get-started" className="flex flex-col sm:flex-row gap-3 pt-2">
-              <CopyCommand command="pip install super-dev" className="sm:w-auto" />
-              <Link
-                href={localizedPath(locale, '/docs')}
-                className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium text-text-secondary border border-border-default hover:border-border-emphasis hover:text-text-primary transition-all duration-150"
-              >
-                <BookOpen size={16} aria-hidden="true" />
-                {copy.docs}
-                <ArrowRight size={14} aria-hidden="true" />
-              </Link>
-            </div>
-
-            <p className="text-xs text-text-muted">
-              {copy.installNote}{' '}
-              <code className="font-mono text-text-secondary bg-bg-secondary px-1.5 py-0.5 rounded">uv tool install super-dev</code>
-            </p>
+      <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-14 px-4 pb-20 sm:px-6 lg:grid lg:grid-cols-[minmax(0,1fr)_520px] lg:items-center lg:gap-16 lg:pb-24">
+        <div className="flex flex-col gap-7">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="version">v2.0.8</Badge>
+            <Badge variant="certified">{copy.openSource}</Badge>
+            <a
+              href={GITHUB_REPO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-sm text-text-muted transition-colors hover:text-text-secondary"
+            >
+              {formatStarCount(stars)} Stars
+            </a>
           </div>
 
-          <div className="relative">
-            <TerminalWindow className="w-full" locale={locale} />
-            <div className="absolute -bottom-8 -right-8 w-48 h-48 bg-accent-blue/10 rounded-full blur-2xl pointer-events-none" aria-hidden="true" />
+          <h1 id="hero-title" className="max-w-3xl text-4xl font-bold leading-[1.06] tracking-tight text-text-primary sm:text-5xl lg:text-6xl">
+            {copy.title}
+          </h1>
+
+          <p className="max-w-2xl text-lg leading-8 text-text-secondary">{copy.body}</p>
+
+          <ul className="grid gap-3 text-sm text-text-secondary sm:grid-cols-3">
+            {copy.points.map((point) => (
+              <li key={point} className="rounded-xl border border-border-default bg-bg-secondary/55 px-4 py-3 leading-6">
+                {point}
+              </li>
+            ))}
+          </ul>
+
+          <div id="get-started" className="flex flex-col gap-3 pt-1 sm:flex-row sm:flex-wrap sm:items-center">
+            <CopyCommand command="pip install -U super-dev" className="sm:w-auto" />
+            <Link
+              href={localizedPath(locale, '/docs')}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-border-default px-4 py-3 text-sm font-medium text-text-secondary transition-all duration-150 hover:border-border-emphasis hover:text-text-primary"
+            >
+              <BookOpen size={16} aria-hidden="true" />
+              {copy.docs}
+              <ArrowRight size={14} aria-hidden="true" />
+            </Link>
           </div>
+
+          <p className="text-sm text-text-muted">{copy.installNote}</p>
+        </div>
+
+        <div className="relative">
+          <TerminalWindow className="w-full" locale={locale} />
+          <div className="pointer-events-none absolute -bottom-10 -right-8 h-48 w-48 rounded-full bg-accent-blue/10 blur-2xl" aria-hidden="true" />
         </div>
       </div>
     </section>

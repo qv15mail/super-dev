@@ -1,104 +1,77 @@
-import { GitBranch, ShieldCheck, FileCheck } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { Bot, FileCheck2, ShieldCheck } from 'lucide-react';
 import type { SiteLocale } from '@/lib/site-locale';
 
-interface ValueProp {
-  Icon: LucideIcon;
-  title: string;
-  titleEn: string;
-  description: string;
-  tags: string[];
-}
-
-const VALUE_PROPS: Record<SiteLocale, ValueProp[]> = {
-  zh: [
-    {
-      Icon: GitBranch,
-      title: '流程治理',
-      titleEn: 'Pipeline Governance',
-      description: '从研究到交付，每个阶段都有规范。研究 → 三文档 → 用户确认 → Spec → 实现 → 门禁 → 归档，不跳步，不走捷径。',
-      tags: ['研究阶段', '需求文档', '编码实现', '交付归档'],
-    },
-    {
-      Icon: ShieldCheck,
-      title: '商业级门禁',
-      titleEn: 'Commercial-Grade Quality Gates',
-      description: '红队审查（安全 / 性能 / 架构三维度）+ 策略阈值双重校验 + 发布演练与回滚预案，让 AI 代码真正满足商业交付标准。',
-      tags: ['红队审查', '策略阈值', '发布演练', '回滚预案'],
-    },
-    {
-      Icon: FileCheck,
-      title: '可审计交付',
-      titleEn: 'Auditable Delivery',
-      description: '每个阶段都产出证据。Pipeline 契约、交付清单、指标报告——AI 写的代码完整可溯源、可复盘、可合规审查。',
-      tags: ['Pipeline 契约', '交付清单', '指标报告', '全流程可溯源'],
-    },
-  ],
-  en: [
-    {
-      Icon: GitBranch,
-      title: 'Pipeline Governance',
-      titleEn: 'Pipeline Governance',
-      description: 'Every stage is governed. Research → documents → user confirmation → spec → implementation → gates → archive. No skipped steps and no silent shortcuts.',
-      tags: ['Research', 'Documents', 'Implementation', 'Delivery archive'],
-    },
-    {
-      Icon: ShieldCheck,
-      title: 'Commercial Gates',
-      titleEn: 'Commercial-Grade Quality Gates',
-      description: 'Red-team review across security, performance, and architecture, plus policy thresholds and release rehearsal, so AI output reaches an actual shipping standard.',
-      tags: ['Red team', 'Policy thresholds', 'Release rehearsal', 'Rollback plan'],
-    },
-    {
-      Icon: FileCheck,
-      title: 'Auditable Delivery',
-      titleEn: 'Auditable Delivery',
-      description: 'Every stage produces evidence. Pipeline contract, delivery manifest, and metrics make AI output traceable, reviewable, and suitable for compliance review.',
-      tags: ['Pipeline contract', 'Delivery manifest', 'Metrics', 'Traceability'],
-    },
-  ],
-};
-
-const SECTION_COPY = {
+const COPY = {
   zh: {
-    eyebrow: '为什么选择 Super Dev',
-    title: '三大核心能力',
-    body: '你已经有最好的 AI 模型。Super Dev 确保它们的产出达到商业交付标准。',
+    eyebrow: 'Why Super Dev',
+    title: '它解决的不是“会不会写代码”，而是“能不能按商业级流程把项目做对”。',
+    body: '首页先说明区别，再说明流程。用户已经有宿主和模型，真正缺的是一套能约束宿主工作的治理协议。',
+    cards: [
+      {
+        icon: Bot,
+        title: '宿主负责模型和编码',
+        body: 'Claude Code、Cursor、Codex、Trae 这些宿主继续负责联网、调用工具、改代码和运行项目。',
+      },
+      {
+        icon: ShieldCheck,
+        title: 'Super Dev 负责流程治理',
+        body: '需求进入后不会直接写代码，而是先 research、先三文档、先确认，再进入 Spec、实现、质量和交付。',
+      },
+      {
+        icon: FileCheck2,
+        title: '输出是可审计交付资产',
+        body: 'PRD、架构、UI/UX、Spec、运行验证、质量报告、交付归档都会落成产物，而不是只留一段聊天记录。',
+      },
+    ],
   },
   en: {
     eyebrow: 'Why Super Dev',
-    title: 'Three Core Capabilities',
-    body: 'You already have strong AI models. Super Dev makes sure their output reaches a commercial delivery standard.',
+    title: 'The real problem is not whether AI can write code. It is whether the work can follow a commercial delivery process.',
+    body: 'The user already has hosts and models. What is missing is a governance layer that can force the host to work through a shippable path.',
+    cards: [
+      {
+        icon: Bot,
+        title: 'The host handles models and coding',
+        body: 'Claude Code, Cursor, Codex, and Trae still handle browsing, tool calls, file edits, and runtime execution.',
+      },
+      {
+        icon: ShieldCheck,
+        title: 'Super Dev handles process governance',
+        body: 'The host does not jump straight into coding. It must go through research, the three core docs, approval, spec, implementation, quality, and delivery.',
+      },
+      {
+        icon: FileCheck2,
+        title: 'The output is auditable delivery assets',
+        body: 'PRD, architecture, UI/UX, spec, runtime validation, quality reports, and delivery archives are written as artifacts instead of being lost in chat.',
+      },
+    ],
   },
 } as const;
 
 export function ValuePropsSection({ locale = 'zh' }: { locale?: SiteLocale }) {
-  const copy = SECTION_COPY[locale];
+  const copy = COPY[locale];
   return (
-    <section id="features" className="py-20 lg:py-28 bg-bg-primary" aria-labelledby="features-title">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="text-center mb-14">
-          <p className="text-sm font-mono text-accent-blue mb-3 tracking-wider uppercase">{copy.eyebrow}</p>
-          <h2 id="features-title" className="text-3xl sm:text-4xl font-bold text-text-primary mb-4 tracking-tight">{copy.title}</h2>
-          <p className="text-text-secondary max-w-2xl mx-auto text-lg">{copy.body}</p>
+    <section id="features" className="border-b border-border-muted bg-bg-secondary py-20 lg:py-24" aria-labelledby="why-title">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        <div className="mb-14 max-w-3xl">
+          <p className="mb-3 text-sm font-mono uppercase tracking-wider text-accent-blue">{copy.eyebrow}</p>
+          <h2 id="why-title" className="text-3xl font-bold tracking-tight text-text-primary sm:text-4xl">{copy.title}</h2>
+          <p className="mt-4 text-lg leading-8 text-text-secondary">{copy.body}</p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          {VALUE_PROPS[locale].map(({ Icon, title, titleEn, description, tags }) => (
-            <article key={title} className="group p-6 rounded-xl bg-bg-secondary border border-border-default hover:border-accent-blue/40 transition-all duration-200 hover:-translate-y-0.5">
-              <div className="w-10 h-10 rounded-lg bg-accent-blue/10 flex items-center justify-center mb-4">
-                <Icon size={20} className="text-accent-blue" aria-hidden="true" />
-              </div>
-              <h3 className="text-lg font-semibold text-text-primary mb-1">{title}</h3>
-              <p className="text-xs font-mono text-text-muted mb-3">{titleEn}</p>
-              <p className="text-sm text-text-secondary leading-relaxed mb-5">{description}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {tags.map((tag) => (
-                  <span key={tag} className="text-xs px-2 py-0.5 rounded-md bg-bg-tertiary text-text-muted border border-border-muted">{tag}</span>
-                ))}
-              </div>
-            </article>
-          ))}
+        <div className="grid gap-5 lg:grid-cols-3">
+          {copy.cards.map((card) => {
+            const Icon = card.icon;
+            return (
+              <article key={card.title} className="rounded-2xl border border-border-default bg-bg-primary/70 p-6">
+                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl border border-accent-blue/25 bg-accent-blue/10 text-accent-blue">
+                  <Icon size={20} aria-hidden="true" />
+                </div>
+                <h3 className="mb-3 text-xl font-semibold text-text-primary">{card.title}</h3>
+                <p className="text-sm leading-7 text-text-secondary">{card.body}</p>
+              </article>
+            );
+          })}
         </div>
       </div>
     </section>

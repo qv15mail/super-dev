@@ -45,9 +45,6 @@ type Content = {
   heroTitle: string;
   heroBody: string;
   heroStats: { label: string; value: string }[];
-  quickTitle: string;
-  quickBody: string;
-  quickCards: { title: string; body: string; code?: string; copy?: string; filename?: string }[];
   sections: SectionLink[];
   governanceTitle: string;
   governanceBody: string;
@@ -79,9 +76,6 @@ type Content = {
   troubleshootingSteps: string[];
   smokeTitle: string;
   smokeCode: string;
-  sideRailTitle: string;
-  sideRailBody: string;
-  sideRailLinks: { label: string; href: string }[];
 };
 
 function gradeVariant(grade: string) {
@@ -99,27 +93,6 @@ const zhContent: Content = {
     { label: '支持宿主', value: '17' },
     { label: '触发模型', value: '2 种' },
     { label: '核心阶段', value: '9 段' },
-  ],
-  quickTitle: '先完成接入，再触发宿主工作。',
-  quickBody: '最短路径应该足够短，短到用户不用翻长文就能开始。文档的第一页应该先给操作路径，再给完整解释。',
-  quickCards: [
-    {
-      title: '安装工具',
-      body: '安装的是 Super Dev 这个 Python CLI 及其 Python 依赖，不会替你安装 Claude Code、Cursor、Trae 等宿主本体。',
-      copy: 'pip install -U super-dev',
-    },
-    {
-      title: '进入引导',
-      body: '终端输入 super-dev，空格勾选宿主，回车安装到宿主与当前项目。',
-      code: 'super-dev',
-      filename: 'Bootstrap',
-    },
-    {
-      title: '开始工作',
-      body: 'Slash 宿主用 /super-dev；非 slash 宿主用 super-dev:。宿主会先进入 research，而不是直接写代码。',
-      code: '/super-dev 你的需求\n\nsuper-dev: 你的需求',
-      filename: 'Trigger',
-    },
   ],
   sections: [
     { id: 'governance', label: '产品定位', icon: BookOpen },
@@ -284,17 +257,9 @@ const zhContent: Content = {
     '先用 smoke 触发语句，而不是直接输入正式需求。',
     '如果宿主直接开始开发，优先判断当前会话没有重新加载规则。',
   ],
-  smokeTitle: '推荐 smoke',
+  smokeTitle: 'Smoke 验收',
   smokeCode:
     '# slash 宿主\n/super-dev "请先不要开始编码，只回复 SMOKE_OK，并说明你会先做 research、再写三文档并等待确认。"\n\n# 非 slash 宿主\nsuper-dev: 请先不要开始编码，只回复 SMOKE_OK，并说明你会先做 research、再写三文档并等待确认。',
-  sideRailTitle: '继续深入',
-  sideRailBody: '文档页应该像一个导航枢纽，而不是一个信息孤岛。这里保留几个最有用的后续入口。',
-  sideRailLinks: [
-    { label: 'GitHub 仓库', href: 'https://github.com/shangyankeji/super-dev' },
-    { label: 'PyPI 包页面', href: 'https://pypi.org/project/super-dev/' },
-    { label: '返回首页', href: '/' },
-    { label: '更新日志', href: '/changelog' },
-  ],
 };
 
 const enContent: Content = {
@@ -306,27 +271,6 @@ const enContent: Content = {
     { label: 'Hosts', value: '17' },
     { label: 'Trigger modes', value: '2' },
     { label: 'Core phases', value: '9' },
-  ],
-  quickTitle: 'Complete onboarding first, then trigger the host.',
-  quickBody: 'The shortest path should stay short. The first screen should help a user start, then explain the system behind it.',
-  quickCards: [
-    {
-      title: 'Install the tool',
-      body: 'This installs the Super Dev Python CLI and its Python dependencies. It does not install Claude Code, Cursor, Trae, or any other host tool.',
-      copy: 'pip install -U super-dev',
-    },
-    {
-      title: 'Open the installer',
-      body: 'Run super-dev in the terminal, select hosts with Space, and press Enter to install into the host and the current project.',
-      code: 'super-dev',
-      filename: 'Bootstrap',
-    },
-    {
-      title: 'Start the workflow',
-      body: 'Slash hosts use /super-dev. Non-slash hosts use super-dev:. The host should enter research first, not start coding immediately.',
-      code: '/super-dev your requirement\n\nsuper-dev: your requirement',
-      filename: 'Trigger',
-    },
   ],
   sections: [
     { id: 'governance', label: 'Positioning', icon: BookOpen },
@@ -491,17 +435,9 @@ const enContent: Content = {
     'Use a smoke prompt before trying the real requirement.',
     'If the host starts coding immediately, assume the current session did not reload the rules.',
   ],
-  smokeTitle: 'Recommended smoke',
+  smokeTitle: 'Smoke validation',
   smokeCode:
     '# slash hosts\n/super-dev "Do not start coding. Reply only with SMOKE_OK and explain that you will do research first, then generate the three core docs, then wait for confirmation."\n\n# non-slash hosts\nsuper-dev: Do not start coding. Reply only with SMOKE_OK and explain that you will do research first, then generate the three core docs, then wait for confirmation.',
-  sideRailTitle: 'Continue deeper',
-  sideRailBody: 'The docs page should behave like a navigation hub, not an isolated wall of text.',
-  sideRailLinks: [
-    { label: 'GitHub repository', href: 'https://github.com/shangyankeji/super-dev' },
-    { label: 'PyPI package', href: 'https://pypi.org/project/super-dev/' },
-    { label: 'Back to home', href: '/en' },
-    { label: 'Changelog', href: '/en/changelog' },
-  ],
 };
 
 function SectionShell({
@@ -779,7 +715,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             <SectionShell id="troubleshooting" icon={LifeBuoy} label={content.sections[8].label} title={content.troubleshootingTitle} body={content.troubleshootingBody}>
               <div className="space-y-4">
                 <div className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
-                  <h3 className="mb-4 text-lg font-semibold text-text-primary">{locale === 'en' ? 'Recommended order' : '推荐排查顺序'}</h3>
+                  <h3 className="mb-4 text-lg font-semibold text-text-primary">{locale === 'en' ? 'Troubleshooting order' : '排查顺序'}</h3>
                   <ol className="space-y-3 text-sm leading-7 text-text-secondary">
                     {content.troubleshootingSteps.map((step, index) => (
                       <li key={step} className="flex gap-3">
@@ -790,10 +726,10 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
                       </li>
                     ))}
                   </ol>
-                </div>
-                <div className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
-                  <h3 className="mb-4 text-lg font-semibold text-text-primary">{content.smokeTitle}</h3>
-                  <CodeBlock code={content.smokeCode} filename="Smoke" />
+                  <div className="mt-6 border-t border-border-default pt-6">
+                    <h3 className="mb-4 text-lg font-semibold text-text-primary">{content.smokeTitle}</h3>
+                    <CodeBlock code={content.smokeCode} filename="Smoke" />
+                  </div>
                 </div>
               </div>
             </SectionShell>
