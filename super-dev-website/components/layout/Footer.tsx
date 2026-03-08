@@ -24,7 +24,6 @@ const COPY = {
         links: [
           { label: '功能特性', href: '/#features' },
           { label: '宿主兼容性', href: '/#hosts' },
-          { label: '定价', href: '/pricing' },
           { label: '更新日志', href: '/changelog' },
         ],
       },
@@ -63,7 +62,6 @@ const COPY = {
         links: [
           { label: 'Features', href: '/#features' },
           { label: 'Hosts', href: '/#hosts' },
-          { label: 'Pricing', href: '/pricing' },
           { label: 'Changelog', href: '/changelog' },
         ],
       },

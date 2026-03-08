@@ -26,7 +26,6 @@ const COPY = {
     nav: [
       { label: '功能', href: '/#features' },
       { label: '宿主', href: '/#hosts' },
-      { label: '定价', href: '/pricing' },
       { label: '文档', href: '/docs' },
     ],
     start: '开始使用',
@@ -40,7 +39,6 @@ const COPY = {
     nav: [
       { label: 'Features', href: '/#features' },
       { label: 'Hosts', href: '/#hosts' },
-      { label: 'Pricing', href: '/pricing' },
       { label: 'Docs', href: '/docs' },
     ],
     start: 'Get Started',

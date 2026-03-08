@@ -293,7 +293,7 @@ const zhContent: Content = {
     { label: 'GitHub 仓库', href: 'https://github.com/shangyankeji/super-dev' },
     { label: 'PyPI 包页面', href: 'https://pypi.org/project/super-dev/' },
     { label: '返回首页', href: '/' },
-    { label: '价格与版本', href: '/pricing' },
+    { label: '更新日志', href: '/changelog' },
   ],
 };
 
@@ -500,7 +500,7 @@ const enContent: Content = {
     { label: 'GitHub repository', href: 'https://github.com/shangyankeji/super-dev' },
     { label: 'PyPI package', href: 'https://pypi.org/project/super-dev/' },
     { label: 'Back to home', href: '/en' },
-    { label: 'Pricing & releases', href: '/en/pricing' },
+    { label: 'Changelog', href: '/en/changelog' },
   ],
 };
 
