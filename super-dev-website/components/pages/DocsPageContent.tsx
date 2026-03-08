@@ -92,9 +92,9 @@ function gradeVariant(grade: string) {
 
 const zhContent: Content = {
   heroKicker: 'Documentation Center',
-  heroTitle: '把文档中心做成产品入口，而不是 README 的展开页。',
+  heroTitle: '安装、接入、触发、流水线和交付，都从这里开始。',
   heroBody:
-    '这个页面的目标不是把信息堆满，而是把 Super Dev 的真实使用路径、宿主协议、流水线阶段和质量门禁组织成用户能快速理解、快速执行的结构。先看入口，再看协议，再看流水线，最后看命令和排障。',
+    '这份文档先说明如何安装和接入宿主，再说明如何触发 Super Dev 流水线，最后说明文档确认、前端验证、质量门禁和交付要求。先把入口走通，再看协议和排障。',
   heroStats: [
     { label: '支持宿主', value: '17' },
     { label: '触发模型', value: '2 种' },
@@ -299,9 +299,9 @@ const zhContent: Content = {
 
 const enContent: Content = {
   heroKicker: 'Documentation Center',
-  heroTitle: 'Turn the docs center into a product entry point, not a stretched README.',
+  heroTitle: 'Start with install, host onboarding, triggers, pipeline, and delivery.',
   heroBody:
-    'This page is built to make Super Dev usable fast: understand the entry path first, then the host protocol surfaces, then the governed pipeline, and only then the deeper operational commands. The visual structure should help users move, not slow them down.',
+    'This documentation starts with installation and host onboarding, then shows how to trigger the Super Dev pipeline, and finally explains document approval, frontend runtime validation, quality gates, and delivery. Get the entry path working first, then move to protocol details and troubleshooting.',
   heroStats: [
     { label: 'Hosts', value: '17' },
     { label: 'Trigger modes', value: '2' },
