@@ -545,9 +545,9 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
       <section className="relative overflow-hidden border-b border-border-muted bg-bg-primary">
         <div className="absolute inset-0 opacity-70 [background-image:radial-gradient(circle_at_top_left,rgba(37,99,235,0.22),transparent_32%),radial-gradient(circle_at_80%_12%,rgba(59,130,246,0.12),transparent_24%)]" />
         <div className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(59,130,246,0.65),transparent)]" />
-        <div className="relative mx-auto w-full max-w-[1540px] px-4 py-14 sm:px-6 lg:px-8 lg:py-16">
-          <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_420px]">
-            <div className="max-w-[900px]">
+        <div className="relative mx-auto w-full max-w-[1380px] px-4 py-14 sm:px-6 lg:px-8 lg:py-16">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="max-w-[860px]">
               <div className="mb-5 flex flex-wrap items-center gap-2">
                 <Badge variant="version">{content.heroKicker}</Badge>
                 <Badge variant="certified">v2.0.8</Badge>
@@ -584,57 +584,33 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
                   <Sparkles size={16} className="text-accent-blue" />
-                  {locale === 'en' ? 'Start working' : '开始工作'}
+                  {locale === 'en' ? 'Install command' : '安装指令'}
                 </div>
-                <Badge variant="default">{locale === 'en' ? 'Quick path' : '最快路径'}</Badge>
+                <Badge variant="default">{locale === 'en' ? 'First step' : '第一步'}</Badge>
               </div>
-              <div className="mb-4 grid grid-cols-3 gap-3">
-                {content.heroStats.map((stat) => (
-                  <div key={stat.label} className="rounded-xl border border-border-default bg-bg-primary/75 px-3 py-3 text-center">
-                    <div className="text-lg font-bold text-text-primary">{stat.value}</div>
-                    <div className="mt-1 text-[10px] uppercase tracking-[0.16em] text-text-muted">{stat.label}</div>
-                  </div>
-                ))}
-              </div>
-              <p className="mb-5 text-sm leading-7 text-text-secondary">{content.quickBody}</p>
-              <div className="space-y-3">
-                {content.quickCards.map((card) => (
-                  <div key={card.title} className="rounded-2xl border border-border-default bg-bg-primary/80 p-4">
-                    <div className="mb-2 text-sm font-semibold text-text-primary">{card.title}</div>
-                    <p className="mb-3 text-sm leading-7 text-text-secondary">{card.body}</p>
-                    {card.copy ? <CopyCommand command={card.copy} className="w-full" /> : null}
-                    {card.code ? <CodeBlock code={card.code} filename={card.filename} className="bg-bg-primary" /> : null}
-                  </div>
-                ))}
+              <p className="mb-5 text-sm leading-7 text-text-secondary">
+                {locale === 'en'
+                  ? 'Install the CLI first. Then run super-dev in the terminal to open the host installer and write the required protocol surfaces.'
+                  : '先安装 CLI。然后在终端输入 super-dev，进入宿主安装引导并写入所需接入面。'}
+              </p>
+              <div className="rounded-2xl border border-border-default bg-bg-primary/80 p-4">
+                <CopyCommand command="pip install -U super-dev" className="w-full" />
+                <div className="mt-3">
+                  <CodeBlock
+                    code={`pip install -U super-dev\n# or\nuv tool install super-dev\n\nsuper-dev`}
+                    filename={locale === 'en' ? 'Install' : '安装'}
+                    className="bg-bg-primary"
+                  />
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="mt-8 rounded-2xl border border-border-default bg-bg-secondary/45 p-4">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {content.sections.map((section, index) => {
-                const Icon = section.icon;
-                return (
-                  <a
-                    key={section.id}
-                    href={`#${section.id}`}
-                    className="flex items-center justify-between rounded-xl border border-border-default bg-bg-elevated/70 px-4 py-3 transition-colors hover:border-border-emphasis hover:bg-bg-elevated"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Icon size={16} className="text-accent-blue" />
-                      <span className="text-sm font-medium text-text-primary">{section.label}</span>
-                    </div>
-                    <span className="font-mono text-xs text-text-muted">{String(index + 1).padStart(2, '0')}</span>
-                  </a>
-                );
-              })}
-            </div>
-          </div>
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-[1540px] px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
-        <div className="grid gap-8 xl:grid-cols-[220px_minmax(0,1fr)]">
+      <section className="mx-auto w-full max-w-[1380px] px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+        <div className="grid gap-8 xl:grid-cols-[220px_minmax(0,860px)]">
           <aside className="hidden xl:block">
             <div className="sticky top-24 rounded-[24px] border border-border-default bg-bg-secondary/55 p-4 backdrop-blur-sm">
               <div className="mb-3 text-xs font-mono uppercase tracking-[0.18em] text-text-muted">
@@ -660,7 +636,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
 
           <div className="space-y-8">
             <SectionShell id="governance" icon={BookOpen} label={content.sections[0].label} title={content.governanceTitle} body={content.governanceBody}>
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 lg:grid-cols-2">
                 {content.governanceCards.map((item) => (
                   <div key={item.title} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
                     <h3 className="mb-2 text-base font-semibold text-text-primary">{item.title}</h3>
@@ -671,7 +647,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             </SectionShell>
 
             <SectionShell id="install" icon={Package} label={content.sections[1].label} title={content.installTitle} body={content.installBody}>
-              <div className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
                 <div className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
                   <h3 className="mb-4 text-lg font-semibold text-text-primary">{locale === 'en' ? 'Installation notes' : '安装说明'}</h3>
                   <ul className="space-y-3 text-sm leading-7 text-text-secondary">
@@ -688,7 +664,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             </SectionShell>
 
             <SectionShell id="surfaces" icon={Boxes} label={content.sections[2].label} title={content.surfacesTitle} body={content.surfacesBody}>
-              <div className="grid gap-4 lg:grid-cols-3">
+              <div className="grid gap-4 lg:grid-cols-2">
                 {content.surfaces.map((surface) => (
                   <div key={surface.title} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
                     <h3 className="mb-3 text-lg font-semibold text-text-primary">{surface.title}</h3>
@@ -707,7 +683,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             </SectionShell>
 
             <SectionShell id="triggers" icon={Command} label={content.sections[3].label} title={content.triggerTitle} body={content.triggerBody}>
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-4">
                 {content.triggerCards.map((card) => (
                   <div key={card.title} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
                     <div className="mb-3 flex items-center justify-between gap-3">
@@ -727,7 +703,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             </SectionShell>
 
             <SectionShell id="hosts" icon={Terminal} label={content.sections[4].label} title={content.matrixTitle} body={content.matrixBody}>
-              <div className="grid gap-4 xl:grid-cols-2">
+              <div className="space-y-4">
                 {content.matrixGroups.map((group) => (
                   <div key={group.category} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
                     <div className="mb-5 flex items-center justify-between gap-3">
@@ -771,7 +747,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             </SectionShell>
 
             <SectionShell id="operations" icon={FolderTree} label={content.sections[6].label} title={content.operationsTitle} body={content.operationsBody}>
-              <div className="grid gap-4 lg:grid-cols-3">
+              <div className="space-y-4">
                 {content.operationsCards.map((card) => (
                   <div key={card.title} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
                     <h3 className="mb-3 text-lg font-semibold text-text-primary">{card.title}</h3>
@@ -790,7 +766,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             </SectionShell>
 
             <SectionShell id="commands" icon={Package} label={content.sections[7].label} title={content.commandsTitle} body={content.commandsBody}>
-              <div className="grid gap-4 xl:grid-cols-2">
+              <div className="space-y-4">
                 {content.commands.map((command) => (
                   <div key={command.title} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
                     <h3 className="mb-4 text-lg font-semibold text-text-primary">{command.title}</h3>
@@ -801,7 +777,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             </SectionShell>
 
             <SectionShell id="troubleshooting" icon={LifeBuoy} label={content.sections[8].label} title={content.troubleshootingTitle} body={content.troubleshootingBody}>
-              <div className="grid gap-4 xl:grid-cols-[1.12fr_0.88fr]">
+              <div className="space-y-4">
                 <div className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
                   <h3 className="mb-4 text-lg font-semibold text-text-primary">{locale === 'en' ? 'Recommended order' : '推荐排查顺序'}</h3>
                   <ol className="space-y-3 text-sm leading-7 text-text-secondary">

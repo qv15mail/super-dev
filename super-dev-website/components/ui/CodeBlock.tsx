@@ -61,7 +61,7 @@ export function CodeBlock({ code, filename, className }: CodeBlockProps) {
 
       {/* 代码内容 */}
       <div className="overflow-x-auto">
-        <pre className="p-5 text-sm font-mono leading-relaxed text-text-secondary">
+        <pre className="whitespace-pre-wrap break-words p-5 text-sm font-mono leading-relaxed text-text-secondary">
           <code>{code}</code>
         </pre>
       </div>
