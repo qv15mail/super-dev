@@ -16,17 +16,17 @@ const TerminalWindow = dynamic(
 const COPY = {
   zh: {
     openSource: 'MIT 开源',
-    title: 'Super Dev 是宿主内的 AI 开发治理层。',
-    body: '它不替代 Claude Code、Cursor、Codex、Trae 这些宿主，而是把宿主拉进 research、三文档、确认门、前端验证、质量门禁和交付标准这条完整流水线。',
-    points: ['宿主负责模型、工具和编码', 'Super Dev 负责流程、门禁和交付', '从需求到可审计工程资产一条线走完'],
+    title: '让宿主 AI 按商业级流程把项目做出来。',
+    body: 'Super Dev 安装在 Claude Code、Cursor、Codex、Trae 等宿主和当前项目里，统一 research、三文档、确认门、Spec、前端验证、质量门禁和交付标准，把 AI 开发变成可审计的工程交付。',
+    points: ['继续使用你现有的宿主和模型', '统一 research、文档、实现、验证、交付顺序', '把需求落成可审计工程资产'],
     docs: '查看文档',
     installNote: '支持 pip 或 uv 安装，安装后终端输入 super-dev 进入宿主接入引导。',
   },
   en: {
     openSource: 'MIT Open Source',
-    title: 'Super Dev is the host-side governance layer for AI coding.',
-    body: 'It does not replace Claude Code, Cursor, Codex, or Trae. It forces the host through research, the three core docs, approval gates, frontend runtime validation, quality gates, and delivery standards.',
-    points: ['The host handles models, tools, and coding', 'Super Dev handles flow, gates, and delivery', 'Turn a requirement into auditable engineering assets'],
+    title: 'Make host AI deliver projects through a commercial-grade workflow.',
+    body: 'Super Dev installs into Claude Code, Cursor, Codex, Trae, and the current project, then governs research, the three core docs, approval gates, spec generation, frontend runtime validation, quality gates, and delivery standards.',
+    points: ['Keep the host and model you already use', 'Standardize research, docs, implementation, verification, and delivery', 'Turn requirements into auditable engineering assets'],
     docs: 'Read Docs',
     installNote: 'Install with pip or uv, then run super-dev in the terminal to open the host onboarding flow.',
   },

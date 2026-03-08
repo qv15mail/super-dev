@@ -4,8 +4,8 @@ import type { SiteLocale } from '@/lib/site-locale';
 const COPY = {
   zh: {
     eyebrow: 'Use Cases',
-    title: '首页应该讲用户会怎么用，而不是只讲功能名词。',
-    body: '这些场景是用户最容易立刻代入的地方。功能介绍服务于场景，不反过来。',
+    title: '四类最常见的落地场景。',
+    body: 'Super Dev 更适合真实项目推进，而不是一次性演示。下面这些场景最能体现它的价值。',
     cards: [
       { icon: Rocket, title: '从 0 到 1 做 MVP', body: '输入需求后，先研究同类产品，再生成三文档、Spec 和前端验证，快速做出可演示、可验证的 MVP。'},
       { icon: RefreshCw, title: '接手已有项目继续开发', body: '先理解现有项目和相似产品，再补文档和约束，让宿主不是直接改代码，而是按流水线接手。'},
@@ -15,8 +15,8 @@ const COPY = {
   },
   en: {
     eyebrow: 'Use Cases',
-    title: 'The homepage should explain how people will use it, not just name features.',
-    body: 'These are the scenarios users can recognize immediately. Features should support scenarios, not replace them.',
+    title: 'Four common ways teams actually use it.',
+    body: 'Super Dev fits real project execution more than one-off demos. These scenarios show where it adds the most value.',
     cards: [
       { icon: Rocket, title: 'Build an MVP from zero to one', body: 'Start with similar-product research, then generate the three core docs, the spec, and frontend validation to ship a demoable MVP fast.'},
       { icon: RefreshCw, title: 'Take over an existing project', body: 'Understand the existing codebase and comparable products first, then rebuild constraints and docs before the host starts changing code.'},

@@ -11,8 +11,8 @@ const STATUS_BADGE_VARIANT: Record<HostStatus, 'certified' | 'compatible' | 'exp
 const COPY = {
   zh: {
     eyebrow: 'Host Support',
-    title: '先看怎么触发，再看宿主协议类型。',
-    body: '官网先给用户一个能立刻执行的答案：哪些宿主用 /super-dev，哪些宿主用 super-dev:。文档页再展开 commands、AGENTS、steering、rules、skills 这些接入面。',
+    title: '不同宿主，不同协议；触发方式只有两种。',
+    body: '先记住该输入什么。需要更深入时，再看 commands、AGENTS、steering、rules、skills 这些接入面。',
     slash: 'Slash 宿主',
     text: 'Text-trigger 宿主',
     slashBody: '这些宿主直接输入 /super-dev 你的需求。',
@@ -25,8 +25,8 @@ const COPY = {
   },
   en: {
     eyebrow: 'Host Support',
-    title: 'Show the trigger first, then the protocol type.',
-    body: 'The homepage should answer the practical question first: which hosts use /super-dev and which hosts use super-dev:. The docs page can expand the underlying protocol surfaces later.',
+    title: 'Different hosts, different protocols, only two trigger styles.',
+    body: 'Start with the practical answer: what to type. Dive into commands, AGENTS, steering, rules, and skills only when you need the protocol details.',
     slash: 'Slash hosts',
     text: 'Text-trigger hosts',
     slashBody: 'These hosts accept /super-dev your requirement.',

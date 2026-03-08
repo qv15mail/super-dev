@@ -93,14 +93,14 @@ output/delivery/manifest.json`,
 const COPY = {
   zh: {
     eyebrow: 'How it works',
-    title: '从安装到交付，用户只需要记住一条最短路径。',
-    body: '先安装并进入宿主引导，再在宿主里触发流程。命令只是入口，真正的价值在于后续的文档、门禁、运行验证和交付产物。',
+    title: '从安装到交付，入口始终很短。',
+    body: '先安装并进入宿主引导，再在宿主里触发流程。后续的文档、门禁、运行验证和交付产物会沿着这条路径持续生成。',
     docs: '查看完整文档',
   },
   en: {
     eyebrow: 'How it works',
-    title: 'From install to delivery, the user only needs one short path.',
-    body: 'Install and onboard first, then trigger the flow inside the host. The command is only the entry point. The real value is in the documents, gates, runtime validation, and delivery artifacts that follow.',
+    title: 'From install to delivery, the entry path stays short.',
+    body: 'Install and onboard first, then trigger the flow inside the host. The workflow keeps producing documents, gates, runtime validation, and delivery artifacts after that.',
     docs: 'Read full docs',
   },
 } as const;

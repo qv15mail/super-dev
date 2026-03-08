@@ -4,14 +4,14 @@ import type { SiteLocale } from '@/lib/site-locale';
 
 const COPY = {
   zh: {
-    title: '把宿主接起来，然后开始按流程开发。',
-    body: '安装 Super Dev，运行 super-dev 进入宿主接入引导，再在宿主里输入 /super-dev 或 super-dev:。后面的 research、三文档、确认门、运行验证和交付门禁会自动接管。',
+    title: '先接入宿主，再开始按流程开发。',
+    body: '安装 Super Dev，运行 super-dev 完成宿主接入，然后在宿主里输入 /super-dev 或 super-dev:。从 research 到交付的关键门禁会接管后续流程。',
     installNote: '也可以使用',
     github: '在 GitHub 查看源代码',
   },
   en: {
-    title: 'Connect the host, then start building through the governed flow.',
-    body: 'Install Super Dev, run super-dev to onboard the host, then trigger /super-dev or super-dev: inside the host. Research, the three core docs, approval, runtime validation, and delivery gates take over from there.',
+    title: 'Connect the host first, then build through the governed flow.',
+    body: 'Install Super Dev, run super-dev to onboard the host, then trigger /super-dev or super-dev: inside the host. The workflow gates take over from research through delivery.',
     installNote: 'You can also use',
     github: 'View source on GitHub',
   },

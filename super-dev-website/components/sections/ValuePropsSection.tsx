@@ -4,8 +4,8 @@ import type { SiteLocale } from '@/lib/site-locale';
 const COPY = {
   zh: {
     eyebrow: 'Why Super Dev',
-    title: '它解决的不是“会不会写代码”，而是“能不能按商业级流程把项目做对”。',
-    body: '首页先说明区别，再说明流程。用户已经有宿主和模型，真正缺的是一套能约束宿主工作的治理协议。',
+    title: '宿主继续写代码，Super Dev 负责把流程拉直。',
+    body: '你不用换宿主，也不用换模型。接入后，宿主会按统一的研发顺序、门禁和交付要求工作，而不是直接冲进编码。',
     cards: [
       {
         icon: Bot,
@@ -26,8 +26,8 @@ const COPY = {
   },
   en: {
     eyebrow: 'Why Super Dev',
-    title: 'The real problem is not whether AI can write code. It is whether the work can follow a commercial delivery process.',
-    body: 'The user already has hosts and models. What is missing is a governance layer that can force the host to work through a shippable path.',
+    title: 'Keep the host coding. Let Super Dev straighten the workflow.',
+    body: 'You do not need a new model or a new IDE. Once installed, the host follows one governed path from research to delivery instead of jumping straight into implementation.',
     cards: [
       {
         icon: Bot,

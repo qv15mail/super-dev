@@ -4,8 +4,8 @@ import type { SiteLocale } from '@/lib/site-locale';
 const COPY = {
   zh: {
     eyebrow: 'Who It Is For',
-    title: '先服务最需要把 AI 开发拉回正轨的人。',
-    body: '官网不应该泛泛地说“适合所有人”。Super Dev 最先服务的是那些已经在用 AI coding，但不希望结果停留在聊天记录和半成品上的用户。',
+    title: '适合已经在用 AI coding、但不想继续靠运气交付的人。',
+    body: '这不是给纯围观用户的工具。它适合已经把 AI 放进日常开发、现在需要更稳流程和更强交付控制的人。',
     cards: [
       {
         icon: UserRound,
@@ -26,8 +26,8 @@ const COPY = {
   },
   en: {
     eyebrow: 'Who It Is For',
-    title: 'Start with the users who already rely on AI coding and need the output to stay under control.',
-    body: 'The homepage should not claim that this is for everyone. Super Dev is for people who already use AI coding heavily and do not want the outcome to stop at chat logs and partial code.',
+    title: 'Built for people already using AI coding and tired of unreliable delivery.',
+    body: 'This is not a generic curiosity product. It is for teams and individuals already shipping with AI and now trying to make the process predictable, reviewable, and repeatable.',
     cards: [
       {
         icon: UserRound,

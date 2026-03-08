@@ -4,8 +4,8 @@ import type { SiteLocale } from '@/lib/site-locale';
 const COPY = {
   zh: {
     eyebrow: 'Pipeline',
-    title: '这不是一条提示词链，而是一条被强制执行的交付流水线。',
-    body: '首页不需要把 12 个阶段逐一讲完，先把关键动作和三个门讲清楚。文档页再展开完整阶段和协议面。',
+    title: '从需求到交付，固定走同一条路径。',
+    body: '入口很短，流程很硬。宿主接到需求后不会直接写代码，而是按研究、文档、确认、实现、验证、交付推进。',
     stages: [
       {
         icon: Search,
@@ -37,8 +37,8 @@ const COPY = {
   },
   en: {
     eyebrow: 'Pipeline',
-    title: 'This is not a prompt chain. It is an enforced delivery pipeline.',
-    body: 'The homepage should not explain all 12 phases in detail. It should make the critical path and the three hard gates obvious, and leave the full expansion to docs.',
+    title: 'From requirement to delivery, the path stays fixed.',
+    body: 'The trigger is short, the workflow is strict. The host does not start coding immediately. It moves through research, documentation, approval, implementation, verification, and delivery.',
     stages: [
       {
         icon: Search,

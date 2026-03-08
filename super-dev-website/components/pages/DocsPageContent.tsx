@@ -105,17 +105,17 @@ const zhContent: Content = {
     { id: 'commands', label: '常用命令', icon: Package },
     { id: 'troubleshooting', label: '排障', icon: LifeBuoy },
   ],
-  governanceTitle: 'Super Dev 规范的是宿主里的 AI 开发过程。',
+  governanceTitle: 'Super Dev 负责规范宿主里的 AI 开发过程。',
   governanceBody:
-    '它不是再造一个写代码的平台，而是把 Claude Code、Codex CLI、Cursor、Trae、Qoder、Windsurf 这些宿主拉进同一套商业级开发流程里。宿主负责模型推理、联网检索、终端调用和真实编码；Super Dev 负责阶段纪律、质量门禁、确认门和交付标准。',
+    '宿主负责模型推理、联网检索、终端调用和真实编码。Super Dev 负责 research、三文档、确认门、Spec、前端验证、质量门禁和交付标准，把整个开发过程拉回同一条流水线。',
   governanceCards: [
     { title: '宿主负责执行', body: '模型、工具、联网、改代码、运行项目，这些都由宿主完成。' },
     { title: 'Super Dev 负责治理', body: '强制 research、三文档、确认门、前端运行验证、质量门禁和交付标准。' },
     { title: '项目产物可审计', body: 'research、PRD、Architecture、UI/UX、Spec、运行验证、交付报告都会落到文件。' },
   ],
-  installTitle: '安装方式应该紧跟定位说明，先告诉用户怎么落地。',
+  installTitle: '安装方式',
   installBody:
-    '用户理解产品定位后，下一步就应该看到安装方式，而不是先被协议细节和工程矩阵淹没。安装阶段要回答三件事：安装什么、不会自动安装什么、安装后下一步做什么。',
+    '先把工具装好，再进入宿主接入引导。安装阶段只需要弄清三件事：会安装什么、不会安装什么、下一步怎么触发宿主开始工作。',
   installBullets: [
     'pip 或 uv 会自动安装 Super Dev 的 Python 依赖。',
     '不会自动安装 Claude Code、Cursor、Trae、Gemini CLI 等宿主本体。',
@@ -123,9 +123,9 @@ const zhContent: Content = {
   ],
   installCode:
     'pip install -U super-dev\n# 或\nuv tool install super-dev\n\n# 打开安装引导\nsuper-dev\n\n# 更新到最新版\nsuper-dev update',
-  surfacesTitle: '真正生效靠接入面，而不是一句提示词。',
+  surfacesTitle: '宿主接入面',
   surfacesBody:
-    '每个宿主都会读取不同的官方面。安装引导的职责，是把这些接入面写到项目级和用户级路径里，让宿主理解 Super Dev 是什么、何时接管、如何按流水线工作。',
+    '不同宿主会读取不同的官方接入面。安装引导会把这些面写到项目级和用户级路径里，让宿主知道何时进入 Super Dev 流水线。',
   surfaces: [
     {
       title: 'Python CLI',
@@ -143,8 +143,8 @@ const zhContent: Content = {
       points: ['knowledge/', 'output/*', '.super-dev/changes/*'],
     },
   ],
-  triggerTitle: '触发只有两种，任何入口都不该给出第三种说法。',
-  triggerBody: '官网、安装引导、doctor/detect、README 和宿主指南都应该输出同一个最终答案，用户不需要理解底层协议细节。',
+  triggerTitle: '触发方式',
+  triggerBody: '只记住两种触发方式即可。是否继续深挖协议细节，留到宿主矩阵和接入面一节再看。',
   triggerCards: [
     {
       title: 'Slash 宿主',
@@ -161,8 +161,8 @@ const zhContent: Content = {
       variant: 'compatible',
     },
   ],
-  matrixTitle: '宿主不是一刀切，协议面必须按官方机制分别处理。',
-  matrixBody: '这张矩阵保留为工程参考，但视觉上退居第二层。用户先知道怎么用，再知道为什么这样用。',
+  matrixTitle: '宿主矩阵',
+  matrixBody: '这张矩阵列出每个宿主的触发方式、协议面和成熟度，方便在接入、排障和团队规范时统一判断。',
   matrixGroups: [
     {
       category: 'CLI',
@@ -192,8 +192,8 @@ const zhContent: Content = {
       ],
     },
   ],
-  pipelineTitle: '真正的产品是这条被强制执行的流水线。',
-  pipelineBody: 'slash 命令只是入口。真正的价值在于：宿主不会在收到需求后直接开始开发，而是会被限制在 research → 三文档 → 用户确认 → Spec → 前端验证 → 后端 → 质量 → 交付 的路径里。',
+  pipelineTitle: '流水线',
+  pipelineBody: '入口命令很短，真正重要的是后面的阶段纪律。宿主接到需求后会按研究、文档、确认、实现、验证和交付推进。',
   pipelineSteps: [
     { step: '01', title: '同类产品研究', body: '先使用宿主联网能力研究同类产品、交互模式、差异化机会和商业信号。' },
     { step: '02', title: '需求增强', body: '把边界条件、异常路径、验收口径和优先级补足，避免模糊需求直接进编码。' },
@@ -205,8 +205,8 @@ const zhContent: Content = {
     { step: '08', title: '质量门禁', body: '执行 UI Review、红队、安全、性能和架构阈值检查。' },
     { step: '09', title: '交付与发布演练', body: '交付包 ready、演练 passed、release readiness 通过后才算完成。' },
   ],
-  operationsTitle: '知识库、门禁、交付不是附属功能，而是流水线下半场。',
-  operationsBody: '如果文档中心只讲安装和触发，用户会误以为 Super Dev 只是一个 slash 命令集合。真正的竞争力在于本地知识库、确认门、运行验证和交付标准。',
+  operationsTitle: '知识库与门禁',
+  operationsBody: '本地知识库、确认门、运行验证和交付标准决定了这条流水线能否真正落地。它们不是附属功能，而是执行约束本身。',
   operationsCards: [
     {
       title: '知识库优先',
@@ -224,8 +224,8 @@ const zhContent: Content = {
       bullets: ['UI Review', 'delivery ready', 'rehearsal passed'],
     },
   ],
-  commandsTitle: '命令应该集中展示成几组，而不是散落在长文里。',
-  commandsBody: '用户不需要背完整 CLI 参考，他们只需要能快速复制安装、接入、确认、质量和发布相关命令。',
+  commandsTitle: '常用命令',
+  commandsBody: '先看最常用的命令组：安装与引导、宿主接入、文档确认、质量检查、发布检查和更新。',
   commands: [
     {
       title: '安装与引导',
@@ -248,8 +248,8 @@ const zhContent: Content = {
       filename: 'Quality & Release',
     },
   ],
-  troubleshootingTitle: '先检查宿主有没有读到接入面，再谈 prompt。',
-  troubleshootingBody: '大多数“Super Dev 没工作”的问题，不是触发词不对，而是宿主没有加载 commands、rules、AGENTS、steering 或 skills。排障应该优先确认接入面是否被宿主真正读取。',
+  troubleshootingTitle: '排障',
+  troubleshootingBody: '大多数问题都出在宿主没有真正读取接入面，而不是触发词本身。排障时优先确认 commands、rules、AGENTS、steering 或 skills 是否已被宿主加载。',
   troubleshootingSteps: [
     '执行 super-dev doctor --host <host> --repair --force。',
     '确认安装引导输出的项目级与用户级接入面真实存在。',
@@ -285,15 +285,15 @@ const enContent: Content = {
   ],
   governanceTitle: 'Super Dev governs the AI development process inside the host.',
   governanceBody:
-    'It is not another coding platform. It puts Claude Code, Codex CLI, Cursor, Trae, Qoder, Windsurf, and similar hosts inside the same commercial-grade delivery workflow. The host executes model reasoning, tools, browsing, and real coding. Super Dev governs stages, gates, and delivery standards.',
+    'The host handles model reasoning, browsing, tool execution, and real coding. Super Dev governs research, the three core docs, approval gates, spec creation, frontend validation, quality thresholds, and delivery standards.',
   governanceCards: [
     { title: 'Host executes', body: 'Reasoning, browsing, code edits, terminal commands, and runtime execution stay inside the host.' },
     { title: 'Super Dev governs', body: 'Research-first flow, the three core docs, confirmation gates, frontend verification, quality gates, and delivery readiness.' },
     { title: 'Artifacts stay auditable', body: 'Research, PRD, Architecture, UI/UX, Spec, runtime reports, and delivery outputs remain inspectable.' },
   ],
-  installTitle: 'Installation should come right after positioning, before protocol detail.',
+  installTitle: 'Installation',
   installBody:
-    'Once a user understands what the product is, the next thing they need is the actual install path. The install section should answer three questions clearly: what gets installed, what does not, and what happens right after installation.',
+    'Install the tool first, then enter the host onboarding flow. This section answers what gets installed, what does not, and what to run next.',
   installBullets: [
     'pip or uv automatically install Super Dev and its Python dependencies.',
     'They do not install Claude Code, Cursor, Trae, Gemini CLI, or any host application.',
@@ -301,9 +301,9 @@ const enContent: Content = {
   ],
   installCode:
     'pip install -U super-dev\n# or\nuv tool install super-dev\n\n# open the installer\nsuper-dev\n\n# update later\nsuper-dev update',
-  surfacesTitle: 'The system works because the host reads the right surfaces.',
+  surfacesTitle: 'Integration surfaces',
   surfacesBody:
-    'A prompt alone is not enough. The installer writes the right project-level and user-level surfaces so the host can understand what Super Dev is, when it takes over, and how the governed workflow should proceed.',
+    'A trigger alone is not enough. The installer writes the required project-level and user-level surfaces so the host can recognize and execute the Super Dev workflow.',
   surfaces: [
     {
       title: 'Python CLI',
@@ -321,8 +321,8 @@ const enContent: Content = {
       points: ['knowledge/', 'output/*', '.super-dev/changes/*'],
     },
   ],
-  triggerTitle: 'There are only two trigger syntaxes, and every entry point should say the same thing.',
-  triggerBody: 'The website, installer, README, host guide, doctor, and detect outputs should all converge on one final answer. Consistency matters more than adding more syntax variants.',
+  triggerTitle: 'Trigger model',
+  triggerBody: 'There are only two trigger syntaxes. Learn those first, then inspect the host protocol surfaces when needed.',
   triggerCards: [
     {
       title: 'Slash hosts',
@@ -339,8 +339,8 @@ const enContent: Content = {
       variant: 'compatible',
     },
   ],
-  matrixTitle: 'Hosts are not interchangeable. Their protocol surfaces differ by design.',
-  matrixBody: 'This matrix stays available as an engineering reference, but it should sit behind the simpler user-facing answer: what to type, and what happens next.',
+  matrixTitle: 'Host matrix',
+  matrixBody: 'This matrix lists trigger style, protocol surface, and maturity for each supported host.',
   matrixGroups: [
     {
       category: 'CLI',
@@ -370,8 +370,8 @@ const enContent: Content = {
       ],
     },
   ],
-  pipelineTitle: 'The real product is the governed pipeline behind the trigger.',
-  pipelineBody: 'The command is only the entry point. The real value is that the host is forced through research, the three core docs, user confirmation, Spec, frontend-first verification, backend completion, quality gates, and delivery readiness.',
+  pipelineTitle: 'Pipeline',
+  pipelineBody: 'The trigger is short. The actual value is the enforced flow behind it: research, documentation, approval, implementation, verification, quality, and delivery.',
   pipelineSteps: [
     { step: '01', title: 'Comparable-product research', body: 'Use the host web tools first to study adjacent products, interaction patterns, differentiation, and commercial signals.' },
     { step: '02', title: 'Requirement expansion', body: 'Fill in boundaries, edge cases, acceptance criteria, and priorities before any implementation starts.' },
@@ -383,8 +383,8 @@ const enContent: Content = {
     { step: '08', title: 'Quality gates', body: 'Run UI review, red-team review, security, performance, and architecture threshold checks.' },
     { step: '09', title: 'Delivery & release rehearsal', body: 'Only finish after the delivery package is ready and release rehearsal passes.' },
   ],
-  operationsTitle: 'Knowledge, gates, and delivery are the second half of the product.',
-  operationsBody: 'If the docs page explains only install and trigger syntax, users will mistake Super Dev for a command pack. The real differentiation comes from the local knowledge base, confirmation gates, runtime verification, and shipping standards.',
+  operationsTitle: 'Knowledge and gates',
+  operationsBody: 'Local knowledge, approval gates, runtime verification, and delivery standards are what make the workflow enforceable instead of cosmetic.',
   operationsCards: [
     {
       title: 'Knowledge-first execution',
@@ -402,8 +402,8 @@ const enContent: Content = {
       bullets: ['UI Review', 'delivery ready', 'rehearsal passed'],
     },
   ],
-  commandsTitle: 'Keep critical commands visible, grouped, and easy to copy.',
-  commandsBody: 'Users do not need the whole CLI reference first. They need the commands that move a real project from onboarding to approval, to quality, to release.',
+  commandsTitle: 'Commands',
+  commandsBody: 'Keep the critical commands visible: install, onboarding, approval, quality, release checks, and update.',
   commands: [
     {
       title: 'Install & bootstrap',
@@ -426,8 +426,8 @@ const enContent: Content = {
       filename: 'Quality & Release',
     },
   ],
-  troubleshootingTitle: 'Check whether the host actually loaded the integration surface before blaming the prompt.',
-  troubleshootingBody: 'Most “it did not work” cases are caused by the host not loading commands, rules, AGENTS, steering, or skills, not by the trigger syntax itself. Diagnose the integration surface first.',
+  troubleshootingTitle: 'Troubleshooting',
+  troubleshootingBody: 'Most failures happen because the host did not load commands, rules, AGENTS, steering, or skills. Check the integration surface before you blame the trigger.',
   troubleshootingSteps: [
     'Run super-dev doctor --host <host> --repair --force.',
     'Verify that the project-level and user-level surfaces reported by onboarding actually exist.',

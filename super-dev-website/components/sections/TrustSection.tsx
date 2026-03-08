@@ -4,20 +4,20 @@ import type { SiteLocale } from '@/lib/site-locale';
 const COPY = {
   zh: {
     eyebrow: 'Proof / Trust',
-    title: '信任不是一句“更专业”，而是要看到可验证的证据。',
-    body: '官网需要明确展示这个工具为什么值得信任：开源、已发布、多宿主、本地知识库、质量门禁和交付产物都应该是可见信号。',
+    title: '可信度来自可验证的证据。',
+    body: '开源、已发布、多宿主、本地知识库、质量门禁和交付产物，都直接展示给用户。',
     items: [
-      { icon: BadgeCheck, title: 'MIT 开源与 PyPI 发布', body: '代码可见、安装路径清晰、版本可追踪，不是黑箱式托管平台。'},
+      { icon: BadgeCheck, title: 'MIT 开源与 PyPI 发布', body: '代码可见、安装路径清晰、版本可追踪，版本升级和分发路径也足够明确。'},
       { icon: PackageCheck, title: '多宿主接入', body: '同一套治理逻辑可安装到 CLI 和 IDE 宿主，不要求用户迁移到新的开发工具。'},
       { icon: BookCopy, title: '本地知识库优先', body: 'knowledge/ 和 knowledge bundle 会优先进入 research、三文档、Spec、质量与交付。'},
-      { icon: ShieldCheck, title: 'UI Review 与 Release Readiness', body: '不是“能生成代码”就结束，而是要通过运行验证、质量门禁和发布检查。'},
-      { icon: Archive, title: '交付产物可审计', body: '交付清单、质量报告、运行验证和 release readiness 都会落盘，而不是消失在会话里。'},
+      { icon: ShieldCheck, title: 'UI Review 与 Release Readiness', body: '运行验证、质量门禁和发布检查都会明确产出结果，方便判断项目是否达到交付标准。'},
+      { icon: Archive, title: '交付产物可审计', body: '交付清单、质量报告、运行验证和 release readiness 都会落盘，便于复盘、交接和审查。'},
     ],
   },
   en: {
     eyebrow: 'Proof / Trust',
-    title: 'Trust should come from visible evidence, not from vague claims of being more professional.',
-    body: 'The site should make the trust signals explicit: open source, published package, host coverage, local knowledge integration, quality gates, and delivery artifacts.',
+    title: 'Trust should come from evidence users can verify.',
+    body: 'Open source, published packages, host coverage, local knowledge, quality gates, and delivery artifacts should all be visible on the page.',
     items: [
       { icon: BadgeCheck, title: 'MIT open source and PyPI release', body: 'The code is visible, the install path is clear, and versions are traceable. This is not a black-box hosted platform.'},
       { icon: PackageCheck, title: 'Multi-host integration', body: 'The same governance model installs into CLI and IDE hosts without forcing the user onto a new coding tool.'},
