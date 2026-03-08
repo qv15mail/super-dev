@@ -8,7 +8,6 @@
  */
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { Github, Menu, X, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -16,7 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { LocaleSwitch } from '@/components/ui/LocaleSwitch';
 import { formatStarCount, GITHUB_REPO_URL } from '@/lib/github';
 import { useGithubStars } from '@/lib/useGithubStars';
-import { localizedPath, type SiteLocale } from '@/lib/site-locale';
+import { assetPath, localizedPath, type SiteLocale } from '@/lib/site-locale';
 
 interface NavProps {
   locale?: SiteLocale;
@@ -108,12 +107,10 @@ export function Nav({ locale = 'zh' }: NavProps) {
             aria-label={copy.ariaHome}
           >
             <span className="relative h-7 w-7 overflow-hidden rounded-lg border border-border-default/80 bg-bg-secondary/70 ring-1 ring-white/5 transition-all duration-150 group-hover:border-accent-blue/60">
-              <Image
-                src="/super-dev-icon.svg"
+              <img
+                src={assetPath('/super-dev-icon.svg')}
                 alt=""
-                fill
-                sizes="28px"
-                className="object-cover"
+                className="h-full w-full object-cover"
                 aria-hidden="true"
               />
             </span>

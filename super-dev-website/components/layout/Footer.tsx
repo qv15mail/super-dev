@@ -6,9 +6,8 @@
  * 最后修改：2026-03-08
  */
 import Link from 'next/link';
-import Image from 'next/image';
 import { Github } from 'lucide-react';
-import { localizedPath, type SiteLocale } from '@/lib/site-locale';
+import { assetPath, localizedPath, type SiteLocale } from '@/lib/site-locale';
 
 interface FooterProps {
   locale?: SiteLocale;
@@ -108,12 +107,10 @@ export function Footer({ locale = 'zh' }: FooterProps) {
               aria-label="Super Dev 首页"
             >
               <span className="relative h-7 w-7 overflow-hidden rounded-lg border border-border-default/80 bg-bg-secondary/70 ring-1 ring-white/5 transition-all duration-150 group-hover:border-accent-blue/60">
-                <Image
-                  src="/super-dev-icon.svg"
+                <img
+                  src={assetPath('/super-dev-icon.svg')}
                   alt=""
-                  fill
-                  sizes="28px"
-                  className="object-cover"
+                  className="h-full w-full object-cover"
                   aria-hidden="true"
                 />
               </span>

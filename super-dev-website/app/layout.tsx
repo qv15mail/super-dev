@@ -8,8 +8,7 @@
 import type { Metadata } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import '@/styles/globals.css';
-
-const siteUrl = 'https://shangyankeji.github.io/super-dev/';
+import { SITE_URL } from '@/lib/site-locale';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -24,7 +23,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: 'Super Dev — AI 编码工具的流程治理层',
     template: '%s | Super Dev',
@@ -44,24 +43,25 @@ export const metadata: Metadata = {
   authors: [{ name: 'shangyankeji' }],
   icons: {
     icon: [
-      { url: '/icon.svg', type: 'image/svg+xml' },
-      { url: '/super-dev-icon.svg', type: 'image/svg+xml' },
+      { url: `${SITE_URL}favicon.svg`, type: 'image/svg+xml' },
+      { url: `${SITE_URL}icon.svg`, type: 'image/svg+xml' },
+      { url: `${SITE_URL}super-dev-icon.svg`, type: 'image/svg+xml' },
     ],
-    shortcut: '/icon.svg',
-    apple: '/icon.svg',
+    shortcut: `${SITE_URL}favicon.svg`,
+    apple: `${SITE_URL}apple-icon.svg`,
   },
   openGraph: {
     type: 'website',
     locale: 'zh_CN',
-    url: siteUrl,
+    url: SITE_URL,
     siteName: 'Super Dev',
     title: 'Super Dev — AI 编码工具的流程治理层',
     description: '宿主继续负责编码与执行，Super Dev 负责完整开发流程和交付门禁。',
     images: [
       {
-        url: '/og-image.png',
+        url: `${SITE_URL}super-dev-icon.svg`,
         width: 1200,
-        height: 630,
+        height: 1200,
         alt: 'Super Dev — AI 编码工具的流程治理层',
       },
     ],
@@ -70,7 +70,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Super Dev — AI 编码工具的流程治理层',
     description: '宿主继续负责编码与执行，Super Dev 负责完整开发流程和交付门禁。',
-    images: ['/og-image.png'],
+    images: [`${SITE_URL}super-dev-icon.svg`],
   },
   robots: {
     index: true,
