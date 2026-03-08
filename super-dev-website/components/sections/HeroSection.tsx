@@ -59,7 +59,17 @@ export function HeroSection({ locale = 'zh' }: { locale?: SiteLocale }) {
           </div>
 
           <h1 id="hero-title" className="max-w-3xl text-4xl font-bold leading-[1.06] tracking-tight text-text-primary sm:text-5xl lg:text-6xl">
-            {copy.title}
+            {locale === 'zh' ? (
+              <>
+                AI 能写代码，
+                <span className="text-gradient-brand">Super Dev</span>
+                让项目能交付。
+              </>
+            ) : (
+              <>
+                AI can write code. <span className="text-gradient-brand">Super Dev</span> helps teams ship it properly.
+              </>
+            )}
           </h1>
 
           <p className="max-w-2xl text-lg leading-8 text-text-secondary">{copy.body}</p>

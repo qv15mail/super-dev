@@ -51,7 +51,7 @@ const COPY = {
 export function ValuePropsSection({ locale = 'zh' }: { locale?: SiteLocale }) {
   const copy = COPY[locale];
   return (
-    <section id="features" className="border-b border-border-muted bg-bg-secondary py-20 lg:py-24" aria-labelledby="why-title">
+    <section id="features" className="section-glow border-b border-border-muted bg-bg-secondary py-20 lg:py-24" aria-labelledby="why-title">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="mb-14 max-w-3xl">
           <p className="mb-3 text-sm font-mono uppercase tracking-wider text-accent-blue">{copy.eyebrow}</p>

@@ -61,8 +61,32 @@
     background-clip: text;
   }
 
+  .text-gradient-brand {
+    background: linear-gradient(135deg, #6aa6ff 0%, #3b82f6 38%, #7dd3fc 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+  }
+
   .glow-blue {
     box-shadow: 0 0 40px #2563EB20;
+  }
+
+  .section-glow {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .section-glow::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: -1;
+    background:
+      radial-gradient(circle at 18% 16%, rgba(59, 130, 246, 0.1), transparent 32%),
+      radial-gradient(circle at 82% 14%, rgba(37, 99, 235, 0.08), transparent 28%);
   }
 }
 
