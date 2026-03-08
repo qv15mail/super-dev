@@ -522,35 +522,36 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
         <div className="absolute inset-0 opacity-70 [background-image:radial-gradient(circle_at_top_left,rgba(37,99,235,0.22),transparent_32%),radial-gradient(circle_at_80%_12%,rgba(59,130,246,0.12),transparent_24%)]" />
         <div className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(59,130,246,0.65),transparent)]" />
         <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:py-20">
-          <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_380px] lg:items-end">
-            <div>
-              <div className="mb-5 flex flex-wrap items-center gap-2">
-                <Badge variant="version">{content.heroKicker}</Badge>
-                <Badge variant="certified">v2.0.8</Badge>
-                <Badge variant="compatible">{locale === 'en' ? 'Bilingual' : '中英双语'}</Badge>
-              </div>
-              <h1 className="max-w-5xl text-4xl font-bold leading-[1.08] tracking-tight text-text-primary sm:text-5xl lg:text-6xl">
-                {content.heroTitle}
-              </h1>
-              <p className="mt-5 max-w-3xl text-lg leading-8 text-text-secondary">{content.heroBody}</p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <Link
-                  href="#commands"
-                  className="inline-flex items-center gap-2 rounded-xl bg-accent-blue px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-accent-blue-hover"
-                >
-                  {locale === 'en' ? 'Open command map' : '查看命令地图'}
-                  <ArrowRight size={16} />
-                </Link>
-                <Link
-                  href={homeHref}
-                  className="inline-flex items-center gap-2 rounded-xl border border-border-emphasis px-5 py-3 text-sm font-semibold text-text-primary transition-colors hover:bg-bg-tertiary"
-                >
-                  {locale === 'en' ? 'Back to website' : '返回官网'}
-                </Link>
-              </div>
+          <div className="max-w-5xl">
+            <div className="mb-5 flex flex-wrap items-center gap-2">
+              <Badge variant="version">{content.heroKicker}</Badge>
+              <Badge variant="certified">v2.0.8</Badge>
+              <Badge variant="compatible">{locale === 'en' ? 'Bilingual' : '中英双语'}</Badge>
             </div>
+            <h1 className="max-w-5xl text-4xl font-bold leading-[1.08] tracking-tight text-text-primary sm:text-5xl lg:text-6xl">
+              {content.heroTitle}
+            </h1>
+            <p className="mt-5 max-w-3xl text-lg leading-8 text-text-secondary">{content.heroBody}</p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href="#commands"
+                className="inline-flex items-center gap-2 rounded-xl bg-accent-blue px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-accent-blue-hover"
+              >
+                {locale === 'en' ? 'Open command map' : '查看命令地图'}
+                <ArrowRight size={16} />
+              </Link>
+              <Link
+                href={homeHref}
+                className="inline-flex items-center gap-2 rounded-xl border border-border-emphasis px-5 py-3 text-sm font-semibold text-text-primary transition-colors hover:bg-bg-tertiary"
+              >
+                {locale === 'en' ? 'Back to website' : '返回官网'}
+              </Link>
+            </div>
+          </div>
+
+          <div className="mt-10 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_420px]">
             <div className="grid gap-4">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid gap-4 md:grid-cols-3">
                 {content.heroStats.map((stat) => (
                   <div key={stat.label} className="rounded-2xl border border-border-default bg-bg-secondary/80 p-4 text-center">
                     <div className="text-2xl font-bold text-text-primary">{stat.value}</div>
@@ -558,22 +559,107 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
                   </div>
                 ))}
               </div>
-              <div className="rounded-[24px] border border-border-default bg-[linear-gradient(180deg,rgba(45,51,59,0.9),rgba(22,27,34,0.94))] p-5 glow-blue">
+
+              <div className="grid gap-4 md:grid-cols-3">
+                {content.governanceCards.map((card, index) => (
+                  <div
+                    key={card.title}
+                    className="rounded-2xl border border-border-default bg-[linear-gradient(180deg,rgba(22,27,34,0.9),rgba(13,17,23,0.86))] p-4"
+                  >
+                    <div className="mb-3 inline-flex h-8 w-8 items-center justify-center rounded-xl border border-accent-blue/35 bg-accent-blue/10 font-mono text-xs text-accent-blue">
+                      {index + 1}
+                    </div>
+                    <h3 className="mb-2 text-sm font-semibold text-text-primary">{card.title}</h3>
+                    <p className="text-sm leading-6 text-text-secondary">{card.body}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-[24px] border border-border-default bg-bg-secondary/55 p-5 backdrop-blur-sm">
                 <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-text-primary">
+                  <ShieldCheck size={16} className="text-accent-blue" />
+                  {locale === 'en' ? 'Read this page in order' : '建议这样阅读这个页面'}
+                </div>
+                <div className="grid gap-3 md:grid-cols-4">
+                  {content.sections.slice(0, 4).map((section, index) => {
+                    const Icon = section.icon;
+                    return (
+                      <a
+                        key={section.id}
+                        href={`#${section.id}`}
+                        className="rounded-2xl border border-border-default bg-bg-elevated/80 p-4 transition-colors hover:border-border-emphasis hover:bg-bg-elevated"
+                      >
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <Icon size={18} className="text-accent-blue" />
+                          <span className="font-mono text-xs text-text-muted">{index + 1}</span>
+                        </div>
+                        <div className="text-sm font-semibold text-text-primary">{section.label}</div>
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[24px] border border-border-default bg-[linear-gradient(180deg,rgba(45,51,59,0.92),rgba(22,27,34,0.96))] p-5 glow-blue">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
                   <Sparkles size={16} className="text-accent-blue" />
                   {content.quickTitle}
                 </div>
-                <p className="mb-5 text-sm leading-7 text-text-secondary">{content.quickBody}</p>
-                <div className="space-y-3">
-                  {content.quickCards.map((card) => (
-                    <div key={card.title} className="rounded-2xl border border-border-default bg-bg-primary/80 p-4">
-                      <div className="mb-2 text-sm font-semibold text-text-primary">{card.title}</div>
-                      <p className="mb-3 text-sm leading-7 text-text-secondary">{card.body}</p>
-                      {card.copy ? <CopyCommand command={card.copy} className="w-full" /> : null}
-                      {card.code ? <CodeBlock code={card.code} filename={card.filename} className="bg-bg-primary" /> : null}
+                <Badge variant="default">{locale === 'en' ? 'Quick path' : '最快路径'}</Badge>
+              </div>
+              <p className="mb-5 max-w-3xl text-sm leading-7 text-text-secondary">{content.quickBody}</p>
+              <div className="grid gap-3 md:grid-cols-3">
+                {content.quickCards.map((card) => (
+                  <div key={card.title} className="rounded-2xl border border-border-default bg-bg-primary/80 p-4">
+                    <div className="mb-2 text-sm font-semibold text-text-primary">{card.title}</div>
+                    <p className="mb-3 text-sm leading-7 text-text-secondary">{card.body}</p>
+                    {card.copy ? <CopyCommand command={card.copy} className="w-full" /> : null}
+                    {card.code ? <CodeBlock code={card.code} filename={card.filename} className="bg-bg-primary" /> : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 xl:grid-cols-2">
+            <div className="rounded-[24px] border border-border-default bg-bg-secondary/55 p-5 backdrop-blur-sm">
+              <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-text-primary">
+                <Command size={16} className="text-accent-blue" />
+                {locale === 'en' ? 'Trigger model' : '触发模型'}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {content.triggerCards.map((card) => (
+                  <div key={card.title} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-4">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <div className="text-sm font-semibold text-text-primary">{card.title}</div>
+                      <Badge variant={card.variant}>{card.variant === 'certified' ? 'Slash' : locale === 'en' ? 'Text trigger' : '文本触发'}</Badge>
                     </div>
-                  ))}
-                </div>
+                    <div className="mb-2 font-mono text-sm text-accent-blue">{card.command}</div>
+                    <p className="text-xs leading-6 text-text-secondary">{card.note}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-[24px] border border-border-default bg-bg-secondary/55 p-5 backdrop-blur-sm">
+              <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-text-primary">
+                <Workflow size={16} className="text-accent-blue" />
+                {locale === 'en' ? 'Pipeline snapshot' : '流程快照'}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {content.pipelineSteps.slice(0, 3).map((step) => (
+                  <div key={step.step} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-4">
+                    <div className="mb-2 flex items-center gap-2">
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-accent-blue/35 bg-accent-blue/10 font-mono text-[11px] text-accent-blue">
+                        {step.step}
+                      </span>
+                      <div className="text-sm font-semibold text-text-primary">{step.title}</div>
+                    </div>
+                    <p className="text-xs leading-6 text-text-secondary">{step.body}</p>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
