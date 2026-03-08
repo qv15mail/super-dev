@@ -12,7 +12,7 @@ const COPY = {
   zh: {
     eyebrow: 'Host Support',
     title: '不同宿主，不同协议；触发方式只有两种。',
-    body: '先记住该输入什么。需要更深入时，再看 commands、AGENTS、steering、rules、skills 这些接入面。',
+    body: '先记住该输入什么。commands、AGENTS、steering、rules、skills 这些接入面放在文档里展开。',
     slash: 'Slash 宿主',
     text: 'Text-trigger 宿主',
     slashBody: '这些宿主直接输入 /super-dev 你的需求。',
@@ -26,7 +26,7 @@ const COPY = {
   en: {
     eyebrow: 'Host Support',
     title: 'Different hosts, different protocols, only two trigger styles.',
-    body: 'Start with the practical answer: what to type. Dive into commands, AGENTS, steering, rules, and skills only when you need the protocol details.',
+    body: 'Start with the practical answer: what to type. Commands, AGENTS, steering, rules, and skills are documented in detail below.',
     slash: 'Slash hosts',
     text: 'Text-trigger hosts',
     slashBody: 'These hosts accept /super-dev your requirement.',

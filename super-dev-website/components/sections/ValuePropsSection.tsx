@@ -5,7 +5,7 @@ const COPY = {
   zh: {
     eyebrow: 'Why Super Dev',
     title: '宿主继续写代码，Super Dev 负责把流程拉直。',
-    body: '你不用换宿主，也不用换模型。接入后，宿主会按统一的研发顺序、门禁和交付要求工作，而不是直接冲进编码。',
+    body: '接入后，宿主会按统一的研发顺序、门禁和交付要求工作。',
     cards: [
       {
         icon: Bot,
@@ -15,19 +15,19 @@ const COPY = {
       {
         icon: ShieldCheck,
         title: 'Super Dev 负责流程治理',
-        body: '需求进入后不会直接写代码，而是先 research、先三文档、先确认，再进入 Spec、实现、质量和交付。',
+        body: '需求进入后先做 research、三文档和确认，再进入 Spec、实现、质量和交付。',
       },
       {
         icon: FileCheck2,
         title: '输出是可审计交付资产',
-        body: 'PRD、架构、UI/UX、Spec、运行验证、质量报告、交付归档都会落成产物，而不是只留一段聊天记录。',
+        body: 'PRD、架构、UI/UX、Spec、运行验证、质量报告和交付归档都会落成产物。',
       },
     ],
   },
   en: {
     eyebrow: 'Why Super Dev',
     title: 'Keep the host coding. Let Super Dev straighten the workflow.',
-    body: 'You do not need a new model or a new IDE. Once installed, the host follows one governed path from research to delivery instead of jumping straight into implementation.',
+    body: 'Once installed, the host follows one governed path from research to delivery.',
     cards: [
       {
         icon: Bot,
@@ -37,12 +37,12 @@ const COPY = {
       {
         icon: ShieldCheck,
         title: 'Super Dev handles process governance',
-        body: 'The host does not jump straight into coding. It must go through research, the three core docs, approval, spec, implementation, quality, and delivery.',
+        body: 'The host moves through research, the three core docs, approval, spec, implementation, quality, and delivery.',
       },
       {
         icon: FileCheck2,
         title: 'The output is auditable delivery assets',
-        body: 'PRD, architecture, UI/UX, spec, runtime validation, quality reports, and delivery archives are written as artifacts instead of being lost in chat.',
+        body: 'PRD, architecture, UI/UX, spec, runtime validation, quality reports, and delivery archives are written as artifacts.',
       },
     ],
   },

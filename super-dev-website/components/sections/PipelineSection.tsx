@@ -5,7 +5,7 @@ const COPY = {
   zh: {
     eyebrow: 'Pipeline',
     title: '从需求到交付，固定走同一条路径。',
-    body: '入口很短，流程很硬。宿主接到需求后不会直接写代码，而是按研究、文档、确认、实现、验证、交付推进。',
+    body: '入口很短，流程很固定。宿主接到需求后按研究、文档、确认、实现、验证、交付推进。',
     stages: [
       {
         icon: Search,
@@ -38,7 +38,7 @@ const COPY = {
   en: {
     eyebrow: 'Pipeline',
     title: 'From requirement to delivery, the path stays fixed.',
-    body: 'The trigger is short, the workflow is strict. The host does not start coding immediately. It moves through research, documentation, approval, implementation, verification, and delivery.',
+    body: 'The trigger is short and the workflow is fixed. The host moves through research, documentation, approval, implementation, verification, and delivery.',
     stages: [
       {
         icon: Search,

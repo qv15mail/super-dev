@@ -8,15 +8,15 @@ const FAQ_ITEMS = {
   zh: [
     {
       question: '宿主和 Super Dev 的关系到底是什么？',
-      answer: '宿主负责模型、联网、调用工具、改代码和运行项目。Super Dev 负责研究顺序、三文档、确认门、前端运行验证、质量门禁和交付标准。两者不是竞争关系，而是执行层和治理层的关系。',
+      answer: '宿主负责模型、联网、调用工具、改代码和运行项目。Super Dev 负责研究顺序、三文档、确认门、前端运行验证、质量门禁和交付标准。',
     },
     {
-      question: '为什么它不是一个提示词模板？',
-      answer: '提示词模板只能影响当前对话，不能稳定安装到宿主协议面，也不能持续维护确认门、运行验证、质量门禁、交付状态和 release readiness。Super Dev 是一个 Python CLI + 宿主接入面 + 产物治理系统。',
+      question: '和提示词模板有什么区别？',
+      answer: '提示词模板只影响当前对话。Super Dev 会安装到宿主接入面，并持续维护确认门、运行验证、质量门禁、交付状态和 release readiness。',
     },
     {
-      question: '为什么它不是一个 spec 工具？',
-      answer: 'Spec 工具主要规范项目规格。Super Dev 规范的是宿主里的 AI 开发过程，从 research、三文档、Spec、前后端、测试到交付都在同一条流水线上，而不是只停在规格阶段。',
+      question: '和 spec 工具有什么区别？',
+      answer: 'Spec 工具主要规范项目规格。Super Dev 规范的是宿主里的 AI 开发过程，从 research、三文档、Spec、前后端、测试到交付都在同一条流水线上。',
     },
     {
       question: '宿主不支持 slash 时怎么工作？',
@@ -25,27 +25,27 @@ const FAQ_ITEMS = {
   ],
   en: [
     {
-      question: 'What is the relationship between the host and Super Dev?',
-      answer: 'The host handles the model, browsing, tool calls, file edits, and runtime execution. Super Dev handles research order, the three core docs, approval gates, frontend runtime validation, quality gates, and delivery standards. They are execution and governance layers, not competitors.',
+      question: 'Host and Super Dev',
+      answer: 'The host handles the model, browsing, tool calls, file edits, and runtime execution. Super Dev handles research order, the three core docs, approval gates, frontend runtime validation, quality gates, and delivery standards.',
     },
     {
-      question: 'Why is this not just a prompt template?',
-      answer: 'A prompt template only affects one conversation. It does not install into host protocol surfaces, and it cannot persist approval gates, runtime validation, quality gates, delivery state, or release readiness. Super Dev is a Python CLI plus host integration surfaces plus artifact governance.',
+      question: 'Prompt template vs Super Dev',
+      answer: 'A prompt template only affects one conversation. Super Dev installs into host protocol surfaces and persists approval gates, runtime validation, quality gates, delivery state, and release readiness.',
     },
     {
-      question: 'Why is this not just a spec tool?',
+      question: 'Spec tool vs Super Dev',
       answer: 'Spec tools mainly govern project specs. Super Dev governs the AI development process inside the host, covering research, the three core docs, spec, frontend, backend, testing, and delivery in one governed path.',
     },
     {
-      question: 'How does it work when the host does not support slash commands?',
+      question: 'Non-slash hosts',
       answer: 'Those hosts use super-dev: as the text trigger, then rely on AGENTS, rules, steering, or skills to interpret and execute the Super Dev flow. The user only needs to remember the trigger, not the underlying protocol details.',
     },
   ],
 } as const;
 
 const COPY = {
-  zh: { title: '常见问题', body: '这些问题回答的是定位和工作方式，不是语法细节。' },
-  en: { title: 'FAQ', body: 'These answers explain positioning and operating model, not just syntax.' },
+  zh: { title: '常见问题', body: '这里说明产品定位、接入方式和工作流程。' },
+  en: { title: 'FAQ', body: 'These answers cover positioning, integration, and workflow.' },
 } as const;
 
 function FaqItem({ question, answer, isOpen, onToggle, id }: { question: string; answer: string; isOpen: boolean; onToggle: () => void; id: string; }) {

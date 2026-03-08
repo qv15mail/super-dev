@@ -88,7 +88,7 @@ const zhContent: Content = {
   heroKicker: 'Documentation Center',
   heroTitle: '安装、接入、触发、流水线和交付，都从这里开始。',
   heroBody:
-    '这份文档先说明如何安装和接入宿主，再说明如何触发 Super Dev 流水线，最后说明文档确认、前端验证、质量门禁和交付要求。先把入口走通，再看协议和排障。',
+    '这份文档说明安装方式、宿主接入、触发方式、流水线、知识库、门禁和交付要求。',
   heroStats: [
     { label: '支持宿主', value: '17' },
     { label: '触发模型', value: '2 种' },
@@ -144,7 +144,7 @@ const zhContent: Content = {
     },
   ],
   triggerTitle: '触发方式',
-  triggerBody: '只记住两种触发方式即可。是否继续深挖协议细节，留到宿主矩阵和接入面一节再看。',
+  triggerBody: '只记住两种触发方式即可。协议细节放在宿主矩阵和接入面一节展开。',
   triggerCards: [
     {
       title: 'Slash 宿主',
@@ -201,12 +201,12 @@ const zhContent: Content = {
     { step: '04', title: '用户确认门', body: '三文档完成后强制暂停，用户确认前不得创建 Spec 或继续编码。' },
     { step: '05', title: 'Spec / Tasks', body: '确认通过后生成变更提案与任务清单，收紧范围和顺序。' },
     { step: '06', title: '前端优先', body: '先做前端、先跑起来、先可审查，再进入后端和联调。' },
-    { step: '07', title: '后端与联调', body: '完成 API、服务、数据层和真实交互闭环，而不是只做静态页。' },
+    { step: '07', title: '后端与联调', body: '完成 API、服务、数据层和真实交互闭环。' },
     { step: '08', title: '质量门禁', body: '执行 UI Review、红队、安全、性能和架构阈值检查。' },
     { step: '09', title: '交付与发布演练', body: '交付包 ready、演练 passed、release readiness 通过后才算完成。' },
   ],
   operationsTitle: '知识库与门禁',
-  operationsBody: '本地知识库、确认门、运行验证和交付标准决定了这条流水线能否真正落地。它们不是附属功能，而是执行约束本身。',
+  operationsBody: '本地知识库、确认门、运行验证和交付标准决定了这条流水线如何执行。',
   operationsCards: [
     {
       title: '知识库优先',
@@ -215,7 +215,7 @@ const zhContent: Content = {
     },
     {
       title: '前端运行验证门',
-      body: '不是页面文件存在就算完成。必须有 frontend-runtime 报告通过，中后段才允许继续。',
+      body: '必须有 frontend-runtime 报告通过，中后段才允许继续。',
       bullets: ['preview.html', 'frontend-runtime.json', '运行通过后再进后端'],
     },
     {
@@ -225,7 +225,7 @@ const zhContent: Content = {
     },
   ],
   commandsTitle: '常用命令',
-  commandsBody: '先看最常用的命令组：安装与引导、宿主接入、文档确认、质量检查、发布检查和更新。',
+  commandsBody: '这里整理最常用的命令组：安装与引导、宿主接入、文档确认、质量检查、发布检查和更新。',
   commands: [
     {
       title: '安装与引导',
@@ -249,12 +249,12 @@ const zhContent: Content = {
     },
   ],
   troubleshootingTitle: '排障',
-  troubleshootingBody: '大多数问题都出在宿主没有真正读取接入面，而不是触发词本身。排障时优先确认 commands、rules、AGENTS、steering 或 skills 是否已被宿主加载。',
+  troubleshootingBody: '大多数问题都出在宿主没有真正读取接入面。排障时优先确认 commands、rules、AGENTS、steering 或 skills 是否已被宿主加载。',
   troubleshootingSteps: [
     '执行 super-dev doctor --host <host> --repair --force。',
     '确认安装引导输出的项目级与用户级接入面真实存在。',
     '完全关闭宿主，重新打开项目，并新建一个会话。',
-    '先用 smoke 触发语句，而不是直接输入正式需求。',
+    '先用 smoke 触发语句。',
     '如果宿主直接开始开发，优先判断当前会话没有重新加载规则。',
   ],
   smokeTitle: 'Smoke 验收',
@@ -266,7 +266,7 @@ const enContent: Content = {
   heroKicker: 'Documentation Center',
   heroTitle: 'Start with install, host onboarding, triggers, pipeline, and delivery.',
   heroBody:
-    'This documentation starts with installation and host onboarding, then shows how to trigger the Super Dev pipeline, and finally explains document approval, frontend runtime validation, quality gates, and delivery. Get the entry path working first, then move to protocol details and troubleshooting.',
+    'This documentation covers installation, host onboarding, triggers, pipeline stages, local knowledge, workflow gates, and delivery requirements.',
   heroStats: [
     { label: 'Hosts', value: '17' },
     { label: 'Trigger modes', value: '2' },
@@ -293,7 +293,7 @@ const enContent: Content = {
   ],
   installTitle: 'Installation',
   installBody:
-    'Install the tool first, then enter the host onboarding flow. This section answers what gets installed, what does not, and what to run next.',
+    'Install the tool first, then enter the host onboarding flow. This section covers what gets installed and what to run next.',
   installBullets: [
     'pip or uv automatically install Super Dev and its Python dependencies.',
     'They do not install Claude Code, Cursor, Trae, Gemini CLI, or any host application.',
@@ -303,7 +303,7 @@ const enContent: Content = {
     'pip install -U super-dev\n# or\nuv tool install super-dev\n\n# open the installer\nsuper-dev\n\n# update later\nsuper-dev update',
   surfacesTitle: 'Integration surfaces',
   surfacesBody:
-    'A trigger alone is not enough. The installer writes the required project-level and user-level surfaces so the host can recognize and execute the Super Dev workflow.',
+    'The installer writes the required project-level and user-level surfaces so the host can recognize and execute the Super Dev workflow.',
   surfaces: [
     {
       title: 'Python CLI',
@@ -384,11 +384,11 @@ const enContent: Content = {
     { step: '09', title: 'Delivery & release rehearsal', body: 'Only finish after the delivery package is ready and release rehearsal passes.' },
   ],
   operationsTitle: 'Knowledge and gates',
-  operationsBody: 'Local knowledge, approval gates, runtime verification, and delivery standards are what make the workflow enforceable instead of cosmetic.',
+  operationsBody: 'Local knowledge, approval gates, runtime verification, and delivery standards define how the workflow runs.',
   operationsCards: [
     {
       title: 'Knowledge-first execution',
-      body: 'When knowledge/ and a knowledge bundle exist, the host should read them before doing external research.',
+      body: 'When knowledge/ and a knowledge bundle exist, the host reads them before external research.',
       bullets: ['knowledge before research', 'phase-based mapping into PRD / Architecture / UI/UX', 'continued reuse in quality and delivery'],
     },
     {

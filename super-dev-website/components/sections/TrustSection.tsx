@@ -16,14 +16,14 @@ const COPY = {
   },
   en: {
     eyebrow: 'Proof / Trust',
-    title: 'Trust should come from evidence users can verify.',
-    body: 'Open source, published packages, host coverage, local knowledge, quality gates, and delivery artifacts should all be visible on the page.',
+    title: 'Visible trust signals.',
+    body: 'Open source, published packages, host coverage, local knowledge, quality gates, and delivery artifacts all appear directly on the page.',
     items: [
       { icon: BadgeCheck, title: 'MIT open source and PyPI release', body: 'The code is visible, the install path is clear, and versions are traceable. This is not a black-box hosted platform.'},
       { icon: PackageCheck, title: 'Multi-host integration', body: 'The same governance model installs into CLI and IDE hosts without forcing the user onto a new coding tool.'},
       { icon: BookCopy, title: 'Local knowledge first', body: 'knowledge/ and knowledge bundles are reused in research, the three core docs, spec generation, quality, and delivery.'},
       { icon: ShieldCheck, title: 'UI Review and Release Readiness', body: 'The work is not done when code is generated. It must pass runtime validation, quality gates, and release checks.'},
-      { icon: Archive, title: 'Auditable delivery artifacts', body: 'Delivery manifests, quality reports, runtime validation, and release readiness are written to disk instead of disappearing into chat.'},
+      { icon: Archive, title: 'Auditable delivery artifacts', body: 'Delivery manifests, quality reports, runtime validation, and release readiness are written to disk.'},
     ],
   },
 } as const;

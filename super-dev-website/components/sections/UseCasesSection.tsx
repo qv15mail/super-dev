@@ -5,10 +5,10 @@ const COPY = {
   zh: {
     eyebrow: 'Use Cases',
     title: '四类最常见的落地场景。',
-    body: 'Super Dev 更适合真实项目推进，而不是一次性演示。下面这些场景最能体现它的价值。',
+    body: '下面这些场景最能体现它的价值。',
     cards: [
       { icon: Rocket, title: '从 0 到 1 做 MVP', body: '输入需求后，先研究同类产品，再生成三文档、Spec 和前端验证，快速做出可演示、可验证的 MVP。'},
-      { icon: RefreshCw, title: '接手已有项目继续开发', body: '先理解现有项目和相似产品，再补文档和约束，让宿主不是直接改代码，而是按流水线接手。'},
+      { icon: RefreshCw, title: '接手已有项目继续开发', body: '先理解现有项目和相似产品，再补文档和约束，让宿主按流水线接手。'},
       { icon: Boxes, title: '统一团队里的 AI 开发流程', body: '不同成员可以继续使用各自习惯的宿主，但 Super Dev 统一触发方式、协议面、质量门禁和交付产物。'},
       { icon: ShieldAlert, title: '把宿主从直接写代码拉回商业交付路径', body: '当宿主倾向于直接开始开发时，Super Dev 强制它先 research、先三文档、先确认，再进入实现。'},
     ],

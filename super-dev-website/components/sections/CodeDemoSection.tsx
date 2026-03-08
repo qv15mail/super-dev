@@ -71,7 +71,7 @@ super-dev`,
 # Non-slash hosts
 super-dev: Build a shippable product
 
-# The host should start with research, generate the three core docs, and wait for approval.`,
+# Research starts first, followed by the three core docs and approval.`,
     },
     {
       id: 'artifacts',

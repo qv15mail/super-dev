@@ -5,7 +5,7 @@ const COPY = {
   zh: {
     eyebrow: 'Who It Is For',
     title: '适合已经在用 AI coding、但不想继续靠运气交付的人。',
-    body: '这不是给纯围观用户的工具。它适合已经把 AI 放进日常开发、现在需要更稳流程和更强交付控制的人。',
+    body: '它适合已经把 AI 放进日常开发、现在需要更稳流程和更强交付控制的人。',
     cards: [
       {
         icon: UserRound,
@@ -20,14 +20,14 @@ const COPY = {
       {
         icon: Briefcase,
         title: '需要规范宿主开发流程的项目团队',
-        body: '你们要让不同成员在不同宿主里保持同样的流程纪律、质量标准和交付证据，而不是各写各的。',
+        body: '你们要让不同成员在不同宿主里保持同样的流程纪律、质量标准和交付证据。',
       },
     ],
   },
   en: {
     eyebrow: 'Who It Is For',
     title: 'Built for people already using AI coding and tired of unreliable delivery.',
-    body: 'This is not a generic curiosity product. It is for teams and individuals already shipping with AI and now trying to make the process predictable, reviewable, and repeatable.',
+    body: 'It is for teams and individuals already shipping with AI and now trying to make the process predictable, reviewable, and repeatable.',
     cards: [
       {
         icon: UserRound,
