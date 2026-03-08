@@ -42,6 +42,14 @@ export const metadata: Metadata = {
     'super-dev',
   ],
   authors: [{ name: 'shangyankeji' }],
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/super-dev-icon.svg', type: 'image/svg+xml' },
+    ],
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
+  },
   openGraph: {
     type: 'website',
     locale: 'zh_CN',

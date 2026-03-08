@@ -6,6 +6,7 @@
  * 最后修改：2026-03-08
  */
 import Link from 'next/link';
+import Image from 'next/image';
 import { Github } from 'lucide-react';
 import { localizedPath, type SiteLocale } from '@/lib/site-locale';
 
@@ -106,11 +107,17 @@ export function Footer({ locale = 'zh' }: FooterProps) {
               className="flex items-center gap-2 mb-3 group w-fit"
               aria-label="Super Dev 首页"
             >
-              <span
-                className="w-2.5 h-6 bg-accent-blue rounded-sm group-hover:bg-accent-blue-hover transition-colors duration-150"
-                aria-hidden="true"
-              />
-              <span className="font-mono font-bold text-text-primary text-base">super-dev</span>
+              <span className="relative h-7 w-7 overflow-hidden rounded-lg border border-border-default/80 bg-bg-secondary/70 ring-1 ring-white/5 transition-all duration-150 group-hover:border-accent-blue/60">
+                <Image
+                  src="/super-dev-icon.svg"
+                  alt=""
+                  fill
+                  sizes="28px"
+                  className="object-cover"
+                  aria-hidden="true"
+                />
+              </span>
+              <span className="font-mono font-bold text-text-primary text-base">Super Dev</span>
             </Link>
             <p className="text-sm text-text-muted leading-relaxed max-w-[220px]">{copy.brand}</p>
             <a
@@ -167,7 +174,7 @@ export function Footer({ locale = 'zh' }: FooterProps) {
               rel="noopener noreferrer"
               className="text-accent-blue hover:text-accent-blue-hover transition-colors"
             >
-              super-dev
+              Super Dev
             </a>
           </p>
         </div>
