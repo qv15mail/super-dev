@@ -23,6 +23,15 @@ Current version: `2.0.9`
 
 ---
 
+## Demo Video
+
+<video controls playsinline preload="metadata" src="https://shangyankeji.github.io/super-dev/demo.mp4" width="100%"></video>
+
+- Stream online: [Watch the demo](https://shangyankeji.github.io/super-dev/demo.mp4)
+- Repository file: [demo.mp4](demo.mp4)
+
+---
+
 ## Project Introduction
 
 `Super Dev` is an AI delivery orchestration tool for commercial-grade execution. It turns host-side model capability into a governed engineering pipeline with clear artifacts, review gates, and delivery standards.

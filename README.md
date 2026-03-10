@@ -23,6 +23,15 @@
 
 ---
 
+## 演示视频
+
+<video controls playsinline preload="metadata" src="https://shangyankeji.github.io/super-dev/demo.mp4" width="100%"></video>
+
+- 在线播放：[观看演示视频](https://shangyankeji.github.io/super-dev/demo.mp4)
+- 仓库文件：[demo.mp4](demo.mp4)
+
+---
+
 ## 项目介绍
 
 `Super Dev` 是一个面向商业级交付的 AI 开发编排工具，用于把宿主里的模型能力组织成一套稳定、清晰、可审计的工程流水线。
