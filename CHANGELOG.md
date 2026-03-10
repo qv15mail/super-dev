@@ -7,21 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.9] - 2026-03-11
+
 ### Added
 
-- New delivery packager: `output/delivery/*` now includes manifest, report, and versioned zip bundle.
-- New release gate script: `scripts/check_delivery_ready.py` (supports manifest check and `--smoke` end-to-end verification).
-- Knowledge augmenter now has dual web-search path (DDGS primary + DuckDuckGo Instant API fallback).
+- Added explicit `bootstrap` flow that generates `.super-dev/WORKFLOW.md` and `output/*-bootstrap.md`.
+- Added `integrate validate` runtime-validation state recording for host真人验收。
+- Added `release proof-pack` to aggregate delivery evidence into a single report.
 
 ### Changed
 
-- Stabilized release workflow around `scripts/preflight.sh` and release runbook.
-- Pipeline Stage 11 now performs both database migration generation and delivery packaging.
-- Preflight/release/publish scripts now enforce delivery gate smoke before packaging/release.
-- Repository CI/CD workflows rebuilt for production use (quality gate, security scan, package checks, tag-based release pipeline).
-- Cross-platform integration/skill acceptance coverage expanded to all supported CLI/IDE targets in automated tests.
-- Added dedicated CI `Platform Compatibility` job for multi-target integration visibility.
-- Tag-based CD publishing now hard-fails when `PYPI_API_TOKEN` is missing (no silent skip).
+- Unified the active project version to `2.0.9` across package metadata, runtime metadata, docs, examples, release scripts, tests, and website copy.
+- Strengthened host contracts so non-slash hosts must also落盘 research / PRD / architecture / UIUX artifacts instead of only describing the workflow in chat.
+- Improved website structure and docs center, including bilingual routes and a simplified documentation layout.
+
+### Fixed
+
+- Fixed analyzer scope so `.venv`, `site-packages`, and similar dependency directories are excluded from project analysis.
+- Fixed bugfix-mode regression by restoring lightweight patch workflow, clarification prompts, and default sequence diagrams.
+- Fixed proof-pack visibility by surfacing progress, blockers, and key artifacts in the Web management UI.
 
 ## [2.0.8] - 2026-03-07
 

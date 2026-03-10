@@ -15,6 +15,9 @@ class TestAIPromptGenerator:
         (output_dir / "demo-uiux.md").write_text("# uiux", encoding="utf-8")
         (output_dir / "demo-execution-plan.md").write_text("# plan", encoding="utf-8")
         (output_dir / "demo-frontend-blueprint.md").write_text("# frontend blueprint", encoding="utf-8")
+        (temp_project_dir / ".super-dev").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / ".super-dev" / "WORKFLOW.md").write_text("# workflow", encoding="utf-8")
+        (output_dir / "demo-bootstrap.md").write_text("# bootstrap", encoding="utf-8")
 
         config = {
             "description": "构建商业级协作工作台",
@@ -36,6 +39,8 @@ class TestAIPromptGenerator:
         assert "必须按其中的阶段应用计划使用本地知识" in prompt
         assert "首轮响应契约（首次触发必须执行）" in prompt
         assert "Super Dev` 流水线已激活" in prompt
+        assert ".super-dev/WORKFLOW.md" in prompt
+        assert "output/demo-bootstrap.md" in prompt
         assert "当前阶段是 `research`" in prompt
         assert "三份核心文档完成后会暂停等待用户确认" in prompt
         assert "阶段 1.5. 文档确认门（强制暂停）" in prompt
@@ -45,3 +50,25 @@ class TestAIPromptGenerator:
         assert "UI 达到商业级完成度而不是模板化页面" in prompt
         assert "本项目 UI 实现基线" in prompt
         assert "首选组件生态" in prompt
+
+    def test_generate_bugfix_prompt_requires_lightweight_docs(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        for suffix in ("research", "prd", "architecture", "uiux", "execution-plan", "frontend-blueprint"):
+            (output_dir / f"demo-{suffix}.md").write_text(f"# {suffix}", encoding="utf-8")
+
+        config = {
+            "description": "修复登录接口报错并补充回归测试",
+            "platform": "web",
+            "frontend": "react",
+            "backend": "python",
+        }
+        (temp_project_dir / "super-dev.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
+
+        generator = AIPromptGenerator(project_dir=temp_project_dir, name="demo")
+        prompt = generator.generate()
+
+        assert "如果当前任务属于缺陷修复 / bugfix / 回归修复，也不得跳过文档与验证" in prompt
+        assert "如果当前需求明显属于 bugfix / regression / hotfix" in prompt
+        assert "阶段 4.8. 缺陷修复轻量路径（仅 bugfix 场景）" in prompt
+        assert "- `bugfix`" in prompt

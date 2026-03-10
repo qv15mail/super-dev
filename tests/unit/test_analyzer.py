@@ -463,3 +463,27 @@ def read_root():
         # src 应该有子目录
         assert "components" in report.directory_structure.get("src", {})
         assert "utils" in report.directory_structure.get("src", {})
+
+    def test_analyzer_ignores_virtualenv_site_packages_for_patterns(self, temp_project_dir: Path):
+        """设计模式分析不应扫描 .venv/site-packages。"""
+        (temp_project_dir / "requirements.txt").write_text("fastapi==0.100.0\n", encoding="utf-8")
+        src_dir = temp_project_dir / "src"
+        src_dir.mkdir()
+        (src_dir / "event_publisher.py").write_text(
+            "def subscribe(observer):\n    return observer\n",
+            encoding="utf-8",
+        )
+
+        venv_pkg = temp_project_dir / ".venv" / "Lib" / "site-packages"
+        venv_pkg.mkdir(parents=True)
+        (venv_pkg / "mypy_extensions.py").write_text(
+            "class _TypedDictMeta:\n    _instance = None\n",
+            encoding="utf-8",
+        )
+
+        analyzer = ProjectAnalyzer(temp_project_dir)
+        report = analyzer.analyze()
+
+        locations = {str(pattern.location) for pattern in report.design_patterns}
+        assert any("event_publisher.py" in location for location in locations)
+        assert not any("site-packages" in location or ".venv" in location for location in locations)

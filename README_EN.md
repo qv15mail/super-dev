@@ -2,7 +2,8 @@
 
 <div align="center">
 
-# Super Dev Squad
+<img src="docs/assets/super-dev-logo.svg" alt="Super Dev - AI PIPELINE ORCHESTRATOR" width="600">
+
 ### An AI delivery orchestration tool for commercial-grade outcomes
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -18,7 +19,7 @@
 
 ## Version
 
-Current version: `2.0.8`
+Current version: `2.0.9`
 
 ---
 
@@ -53,6 +54,7 @@ It is built to solve delivery-process problems:
 
 - Similar-product research -> requirement enrichment -> three core docs -> user confirmation gate -> spec -> frontend runtime validation -> backend integration -> quality gate -> delivery
 - Resume support for failed/interrupted runs (`run --resume`)
+- Formal UI revision loop when the frontend needs another pass (`review ui`)
 - Works for both greenfield and iterative delivery
 
 ### 3. Policy Governance (Policy DSL)
@@ -74,6 +76,7 @@ It is built to solve delivery-process problems:
 - `pipeline-contract` stage evidence
 - `resume-audit` for resumed runs
 - Delivery package: manifest/report/archive
+- `proof-pack` delivery evidence bundle
 
 ### 6. Commercial-Grade Gate Chain
 
@@ -119,6 +122,17 @@ After installation, run:
 super-dev
 ```
 
+Common delivery-evidence commands:
+
+```bash
+super-dev integrate audit --auto --repair --force
+super-dev integrate validate --auto
+super-dev release proof-pack
+super-dev release readiness
+super-dev review architecture --status revision_requested --comment "The technical plan must be redesigned"
+super-dev review quality --status revision_requested --comment "Quality gate failed and needs remediation"
+```
+
 By default this opens the host onboarding guide:
 
 - the top panel shows the `Super Dev` install entry
@@ -134,17 +148,31 @@ After onboarding, the terminal prints the final trigger for each selected host:
 
 - slash hosts: `/super-dev your requirement`
 - text-trigger hosts: `super-dev: your requirement`
+- for manual runtime acceptance, run `super-dev integrate validate --target <host>`
+
+If you want an explicit bootstrap step before host onboarding:
+
+```bash
+super-dev bootstrap --name my-project --platform web --frontend next --backend node
+```
+
+This will explicitly generate:
+
+- `.super-dev/WORKFLOW.md`
+- `output/*-bootstrap.md`
+
+These files make the initialization contract, trigger model, and pipeline order visible.
 
 ### 3. Pin a specific version
 
 ```bash
-pip install super-dev==2.0.8
+pip install super-dev==2.0.9
 ```
 
 ### 4. Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.8
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.9
 ```
 
 ### 5. Source install for development
@@ -216,6 +244,23 @@ In short:
 4. the host enters the Super Dev pipeline
 5. the host handles browsing, reasoning, coding, execution, and file edits
 6. Super Dev governs the workflow, documents, gates, audit artifacts, and delivery standards
+
+Additional notes:
+
+- Feature work follows the full path: `research -> three core docs -> user confirmation -> Spec / tasks -> frontend runtime verification -> backend / tests / delivery`
+- Bugfix work still produces docs; it uses a lighter patch path that records symptoms, reproduction steps, impact scope, and regression risk before implementation
+- The analyzer excludes non-project source directories such as `.venv`, `site-packages`, and `node_modules`
+
+---
+
+## Key Docs
+
+- [Host usage guide](docs/HOST_USAGE_GUIDE.md)
+- [Host capability audit](docs/HOST_CAPABILITY_AUDIT.md)
+- [Host runtime validation matrix](docs/HOST_RUNTIME_VALIDATION.md)
+- [Host install surfaces](docs/HOST_INSTALL_SURFACES.md)
+- [Workflow guide](docs/WORKFLOW_GUIDE_EN.md)
+- [Product audit](docs/PRODUCT_AUDIT.md)
 
 Operating principle:
 
@@ -293,7 +338,7 @@ Certification levels:
 | Qoder CLI | CLI | Compatible | Yes | Run `/super-dev your requirement` inside the Qoder CLI session (governed by `.qoder/commands/` + `.qoder/skills/` / `~/.qoder/skills/`) | No |
 | Qoder IDE | IDE | Experimental | Yes | Type `/super-dev your requirement` inside Qoder IDE Agent Chat (governed by `.qoder/commands/super-dev.md` + `.qoder/rules.md` + `.qoder/skills/` / `~/.qoderwork/skills/`) | No |
 | Windsurf | IDE | Experimental | Yes | Run `/super-dev your requirement` in Agent Chat (governed by `.windsurf/workflows/` + `.windsurf/skills/` / `~/.codeium/windsurf/skills/`) | No |
-| Codex CLI | CLI | Certified | No | Restart Codex, then type `super-dev: your requirement`; `.codex/AGENTS.md` + the compatibility skill will govern execution | Yes |
+| Codex CLI | CLI | Certified | No | Restart Codex, then type `super-dev: your requirement`; `AGENTS.md` + the compatibility skill will govern execution | Yes |
 | Trae | IDE | Compatible | No | Type `super-dev: your requirement` inside Trae Agent Chat (governed by `.trae/project_rules.md` + `~/.trae/user_rules.md`; it also writes `.trae/rules.md` + `~/.trae/rules.md` as compatibility rule surfaces, and `~/.trae/skills/super-dev-core/SKILL.md` adds extra enhancement when available) | Yes |
 
 If you do not want to reason about host differences yourself, run:
@@ -491,6 +536,7 @@ Restart required after onboard: No
 Notes:
 1. Currently adapted as a slash-capable CLI host.
 2. If slash does not appear, verify that the project command file was written.
+3. If the host returns `Invalid API key provided`, run `/auth` inside iFlow first, or update `IFLOW_API_KEY` / `settings.json`, then restart the host session.
 
 #### 10. Kimi CLI
 
@@ -660,7 +706,7 @@ Restart required after onboard: Yes
 
 Notes:
 1. Codex CLI currently uses `super-dev: your requirement` as the primary trigger.
-2. Execution relies on `.codex/AGENTS.md` plus the official user-level skill at `~/.codex/skills/super-dev-core/SKILL.md`.
+2. Execution relies on `AGENTS.md` plus the official user-level skill at `~/.codex/skills/super-dev-core/SKILL.md`.
 3. If the old session did not reload the Skill, restart `codex` and retry.
 
 #### 18. Trae

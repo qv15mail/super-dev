@@ -2,7 +2,8 @@
 
 <div align="center">
 
-# 超级开发战队
+<img src="docs/assets/super-dev-logo.svg" alt="Super Dev - AI PIPELINE ORCHESTRATOR" width="600">
+
 ### 面向商业级交付的 AI 开发编排工具
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -18,7 +19,7 @@
 
 ## 版本
 
-当前版本：`2.0.8`
+当前版本：`2.0.9`
 
 ---
 
@@ -53,6 +54,7 @@
 
 - 同类产品研究 -> 需求增强 -> 文档 -> Spec -> 实现骨架 -> 红队 -> 质量门禁 -> 交付
 - 全流程可恢复执行（`run --resume`）
+- UI 不满意时可发起正式改版回路（`review ui`）
 - 适配 0-1 新建与 1-N+1 增量场景
 
 ### 3. 策略治理（Policy DSL）
@@ -74,6 +76,7 @@
 - `pipeline-contract` 阶段契约证据
 - `resume-audit` 恢复执行审计
 - `delivery manifest/report/archive` 交付包
+- `proof-pack` 交付证据汇总
 
 ### 6. 商业级门禁链路
 
@@ -119,6 +122,17 @@ super-dev update
 super-dev
 ```
 
+常用交付证据命令：
+
+```bash
+super-dev integrate audit --auto --repair --force
+super-dev integrate validate --auto
+super-dev release proof-pack
+super-dev release readiness
+super-dev review architecture --status revision_requested --comment "技术方案需要重构"
+super-dev review quality --status revision_requested --comment "质量门禁未通过，需要整改"
+```
+
 默认会进入宿主安装引导：
 
 - 顶部显示 `Super Dev` 安装入口
@@ -134,17 +148,31 @@ super-dev
 
 - slash 宿主：`/super-dev 你的需求`
 - 非 slash 宿主：`super-dev: 你的需求`
+- 需要真人验收时，可执行：`super-dev integrate validate --target <host>`
+
+如果你希望先显式初始化项目契约，再开始接入宿主：
+
+```bash
+super-dev bootstrap --name my-project --platform web --frontend next --backend node
+```
+
+这会显式生成：
+
+- `.super-dev/WORKFLOW.md`
+- `output/*-bootstrap.md`
+
+用来固定初始化规范、触发方式和阶段顺序。
 
 ### 3. 指定版本安装
 
 ```bash
-pip install super-dev==2.0.8
+pip install super-dev==2.0.9
 ```
 
 ### 4. GitHub 指定标签安装
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.8
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.9
 ```
 
 ### 5. 源码开发安装
@@ -216,6 +244,23 @@ uv tool install super-dev
 4. 宿主进入 Super Dev 流水线
 5. 宿主负责联网、推理、编码、运行与修改文件
 6. Super Dev 负责流程、文档、门禁、审计和交付标准
+
+补充说明：
+
+- 新功能开发默认走完整流水线：`research -> 三文档 -> 用户确认 -> Spec / tasks -> 前端运行验证 -> 后端 / 测试 / 交付`
+- 缺陷修复同样不会直接跳过文档；会走轻量补丁路径，先整理问题现象、复现条件、影响范围和回归风险，再更新补丁文档与验证结果
+- 分析阶段默认排除 `.venv`、`site-packages`、`node_modules` 等非项目源码目录
+
+---
+
+## 关键文档
+
+- [宿主使用指南](docs/HOST_USAGE_GUIDE.md)
+- [宿主能力审计](docs/HOST_CAPABILITY_AUDIT.md)
+- [宿主运行时验收矩阵](docs/HOST_RUNTIME_VALIDATION.md)
+- [宿主接入面说明](docs/HOST_INSTALL_SURFACES.md)
+- [工作流指南](docs/WORKFLOW_GUIDE.md)
+- [产品审查](docs/PRODUCT_AUDIT.md)
 
 执行原则：
 
@@ -442,6 +487,7 @@ super-dev onboard --host iflow --force --yes
 补充说明：
 1. 当前按 slash 宿主适配。
 2. 如果 slash 未出现，先检查项目级命令文件是否已写入。
+3. 如果宿主返回 `Invalid API key provided`，先在 iFlow 会话内执行 `/auth`，或更新 `IFLOW_API_KEY` / `settings.json` 后重启宿主会话。
 
 #### 10. Kimi CLI
 
@@ -611,7 +657,7 @@ super-dev: 你的需求
 
 补充说明：
 1. Codex CLI 当前使用 `super-dev: 你的需求` 作为主触发方式。
-2. 实际依赖 `.codex/AGENTS.md` 与官方用户级 Skill `~/.codex/skills/super-dev-core/SKILL.md`。
+2. 实际依赖 `AGENTS.md` 与官方用户级 Skill `~/.codex/skills/super-dev-core/SKILL.md`。
 3. 如果旧会话没加载新 Skill，重启 `codex` 再试。
 
 #### 18. Trae

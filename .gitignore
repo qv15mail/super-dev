@@ -58,3 +58,22 @@ output/
 *.pdf
 artifacts/
 .super-dev/runs/
+.super-dev/review-state/
+
+# Host runtime / onboarding artifacts (project-local generated files)
+/.agent/
+/.claude/
+/.codebuddy/
+/.cursor/
+/.gemini/
+/.iflow/
+/.kimi/
+/.kiro/
+/.opencode/
+/.qoder/
+/.trae/
+/.windsurf/
+/GEMINI.md
+
+# Local logs and media
+logs/

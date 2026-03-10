@@ -42,6 +42,26 @@ class ProjectAnalyzer:
             raise FileNotFoundError(f"项目不存在: {self.project_path}")
 
         self._report: ArchitectureReport | None = None
+        self._ignored_dir_names = {
+            "node_modules",
+            "__pycache__",
+            ".git",
+            "venv",
+            ".venv",
+            "env",
+            ".env",
+            "dist",
+            "build",
+            "target",
+            "bin",
+            "obj",
+            ".next",
+            ".nuxt",
+            "coverage",
+            ".pytest_cache",
+            "site-packages",
+            "dist-packages",
+        }
 
     def analyze(self) -> ArchitectureReport:
         """
@@ -101,12 +121,7 @@ class ProjectAnalyzer:
             tree: dict[str, dict | None] = {}
             try:
                 for item in sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name)):
-                    # 跳过隐藏文件和目录
-                    if item.name.startswith("."):
-                        continue
-
-                    # 跳过常见忽略目录
-                    if item.name in ["node_modules", "__pycache__", ".git", "venv", "dist", "build"]:
+                    if self._should_ignore_path(item):
                         continue
 
                     if item.is_dir():
@@ -162,16 +177,9 @@ class ProjectAnalyzer:
             ".svelte": "Svelte",
         }
 
-        # 忽略的目录
-        ignore_dirs = {
-            "node_modules", "__pycache__", ".git", "venv", "env",
-            ".venv", "dist", "build", "target", "bin", "obj",
-            ".next", ".nuxt", "coverage", ".pytest_cache",
-        }
-
         for root, dirs, files in os.walk(self.project_path):
             # 过滤忽略的目录
-            dirs[:] = [d for d in dirs if d not in ignore_dirs]
+            dirs[:] = [d for d in dirs if not self._should_ignore_dir_name(d)]
 
             for file in files:
                 suffix = Path(file).suffix
@@ -180,6 +188,8 @@ class ProjectAnalyzer:
                     continue
 
                 file_path = Path(root) / file
+                if self._should_ignore_path(file_path):
+                    continue
                 try:
                     with open(file_path, encoding="utf-8", errors="ignore") as f:
                         lines = len(f.readlines())
@@ -238,9 +248,26 @@ class ProjectAnalyzer:
         patterns: list[DesignPattern] = []
 
         for py_file in self.project_path.rglob("*.py"):
+            if self._should_ignore_path(py_file):
+                continue
             self._check_file_for_patterns(py_file, patterns, "python")
 
         return patterns
+
+    def _should_ignore_dir_name(self, name: str) -> bool:
+        return name in self._ignored_dir_names
+
+    def _should_ignore_path(self, path: Path) -> bool:
+        try:
+            relative = path.resolve().relative_to(self.project_path)
+            parts = relative.parts
+        except Exception:
+            parts = path.parts
+
+        return any(
+            part.startswith(".") or part in self._ignored_dir_names
+            for part in parts
+        )
 
     def _check_file_for_patterns(
         self, file_path: Path, patterns: list[DesignPattern], language: str

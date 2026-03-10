@@ -10,14 +10,39 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         parents=True,
         exist_ok=True,
     )
-    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.8"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
-    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.8"\n', encoding="utf-8")
+    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.9"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
+    (project_dir / ".gitignore").write_text(
+        "\n".join(
+            [
+                "output/",
+                "artifacts/",
+                ".super-dev/runs/",
+                ".super-dev/review-state/",
+                "/.agent/",
+                "/.claude/",
+                "/.codebuddy/",
+                "/.cursor/",
+                "/.gemini/",
+                "/.iflow/",
+                "/.kimi/",
+                "/.kiro/",
+                "/.opencode/",
+                "/.qoder/",
+                "/.trae/",
+                "/.windsurf/",
+                "/GEMINI.md",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.9"\n', encoding="utf-8")
     (project_dir / "README.md").write_text(
-        "当前版本：`2.0.8`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "当前版本：`2.0.9`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "README_EN.md").write_text(
-        "Current version: `2.0.8`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "Current version: `2.0.9`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "docs" / "HOST_USAGE_GUIDE.md").write_text(
@@ -28,6 +53,7 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         "官方依据\nsuper-dev integrate smoke\n",
         encoding="utf-8",
     )
+    (project_dir / "docs" / "PRODUCT_AUDIT.md").write_text("P0\nP1\nP2\n", encoding="utf-8")
     (project_dir / "docs" / "WORKFLOW_GUIDE.md").write_text(
         "super-dev review docs\nsuper-dev run --resume\n",
         encoding="utf-8",

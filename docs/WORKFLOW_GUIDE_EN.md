@@ -1,4 +1,4 @@
-# Super Dev Workflow Guide (2.0.8)
+# Super Dev Workflow Guide (2.0.9)
 
 This is the practical handbook for running Super Dev in real projects. It covers:
 
@@ -38,6 +38,12 @@ That single command triggers the full pipeline end to end:
 5. Frontend-first implementation and runtime validation
 6. Backend integration, testing, gates, and delivery
 
+Additional rules:
+
+- Bugfix work does not skip documentation; it follows a lighter patch path that captures symptoms, reproduction steps, impact scope, and regression risk before implementation.
+- The analysis stage excludes non-project source directories such as `.venv`, `site-packages`, and `node_modules`.
+- When the requirement is ambiguous, PRD should surface clarification questions first, and architecture should include a key sequence diagram by default.
+
 The document confirmation gate can be handled in the Web console or directly from the terminal:
 
 ```bash
@@ -45,6 +51,49 @@ super-dev review docs
 super-dev review docs --status revision_requested --comment "Add differentiation and improve hero information architecture"
 super-dev review docs --status confirmed --comment "Core documents approved, proceed to Spec"
 ```
+
+If the frontend visual quality is unsatisfactory, start a formal UI revision loop instead of making ad hoc CSS edits:
+
+```bash
+super-dev review ui
+super-dev review ui --status revision_requested --comment "Hero feels empty and lacks brand presence; redesign the first screen"
+super-dev review ui --status confirmed --comment "UI revision approved"
+```
+
+The required order for UI revision is:
+
+1. Update `output/*-uiux.md`
+2. Redo the frontend implementation
+3. Rerun frontend runtime and UI review
+4. Continue delivery only after the revision is approved
+
+If the user says the technical plan, module boundaries, or API design are wrong, start a formal architecture revision loop:
+
+```bash
+super-dev review architecture
+super-dev review architecture --status revision_requested --comment "Service boundaries are too coarse and the API contract must be redesigned"
+super-dev review architecture --status confirmed --comment "Architecture revision approved"
+```
+
+The required order for architecture revision is:
+
+1. Update `output/*-architecture.md`
+2. Realign Spec / tasks and the implementation plan
+3. Continue only after the architecture revision is approved
+
+If the user says quality, security, or delivery evidence is still unacceptable, start a formal quality revision loop:
+
+```bash
+super-dev review quality
+super-dev review quality --status revision_requested --comment "Quality gate still fails and security issues remain"
+super-dev review quality --status confirmed --comment "Quality revision approved"
+```
+
+The required order for quality revision is:
+
+1. Fix the quality / security issues
+2. Rerun the quality gate and `super-dev release proof-pack`
+3. Continue delivery or resume execution only after the revision is approved
 
 ### Advanced entrypoint
 
@@ -88,6 +137,19 @@ host_profile_enforce_selected: true
 ```text
 /super-dev <requirement>             # recommended inside the host session
 ```
+
+### Explicit bootstrap
+
+```bash
+super-dev bootstrap --name my-project --platform web --frontend next --backend node
+```
+
+This explicitly generates:
+
+- `.super-dev/WORKFLOW.md`
+- `output/*-bootstrap.md`
+
+so the initialization contract remains visible before host execution begins.
 
 ```bash
 super-dev start --idea "<requirement>"  # recommended machine-side bootstrap
@@ -224,6 +286,7 @@ A change is considered release-ready only if all are true:
 3. Spec execution status is complete or explicitly waived with rationale.
 4. CI/CD assets are generated and mapped to the target platform.
 5. Delivery manifest reports `ready`.
+6. `super-dev release proof-pack` aggregates the delivery evidence set.
 
 Run full preflight before tagging:
 

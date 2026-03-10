@@ -33,7 +33,7 @@ Super Dev 的宿主接入由三层组成：
 1. 项目级接入面
 - 例如 `.qoder/rules.md`
 - 例如 `.qoder/commands/super-dev.md`
-- 例如 `.codex/AGENTS.md`
+- 例如 `AGENTS.md`
 - 例如 `.trae/project_rules.md`
 
 2. 宿主级接入面
@@ -157,7 +157,7 @@ Super Dev 的宿主接入由三层组成：
 
 ### Codex CLI
 - 触发：`super-dev: 你的需求`
-- 项目级：`.codex/AGENTS.md`
+- 项目级：`AGENTS.md`
 - 用户级：`~/.codex/skills/super-dev-core/SKILL.md`
 - 说明：Codex 当前按项目级 AGENTS.md + 官方用户级 Skills 目录建模，不走自定义 slash。
 

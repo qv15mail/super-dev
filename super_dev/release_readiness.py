@@ -109,9 +109,30 @@ class ReleaseReadinessEvaluator:
         "README_EN.md": ["pip install", "uv tool install", "/super-dev", "super-dev:", "super-dev update"],
         "docs/HOST_USAGE_GUIDE.md": ["Smoke", "/super-dev", "super-dev:"],
         "docs/HOST_CAPABILITY_AUDIT.md": ["官方依据", "super-dev integrate smoke"],
+        "docs/PRODUCT_AUDIT.md": ["P0", "P1", "P2"],
         "docs/WORKFLOW_GUIDE.md": ["super-dev review docs", "super-dev run --resume"],
         "docs/WORKFLOW_GUIDE_EN.md": ["super-dev review docs", "super-dev run --resume"],
     }
+
+    REQUIRED_RUNTIME_IGNORE_RULES = [
+        "output/",
+        "artifacts/",
+        ".super-dev/runs/",
+        ".super-dev/review-state/",
+        "/.agent/",
+        "/.claude/",
+        "/.codebuddy/",
+        "/.cursor/",
+        "/.gemini/",
+        "/.iflow/",
+        "/.kimi/",
+        "/.kiro/",
+        "/.opencode/",
+        "/.qoder/",
+        "/.trae/",
+        "/.windsurf/",
+        "/GEMINI.md",
+    ]
 
     def __init__(self, project_dir: Path):
         self.project_dir = Path(project_dir).resolve()
@@ -126,6 +147,7 @@ class ReleaseReadinessEvaluator:
                 self._check_required_docs(),
                 self._check_host_matrix_integrity(),
                 self._check_host_coverage_depth(),
+                self._check_runtime_boundary_rules(),
                 self._check_packaging_entrypoints(),
                 self._check_release_spec_exists(),
             ]
@@ -258,6 +280,20 @@ class ReleaseReadinessEvaluator:
             detail=detail,
             severity="high" if not passed else "low",
             recommendation="确保 pip/uv 安装、入口脚本和 update 命令文档一致。",
+        )
+
+    def _check_runtime_boundary_rules(self) -> ReleaseReadinessCheck:
+        gitignore = self.project_dir / ".gitignore"
+        text = gitignore.read_text(encoding="utf-8", errors="ignore") if gitignore.exists() else ""
+        missing = [rule for rule in self.REQUIRED_RUNTIME_IGNORE_RULES if rule not in text]
+        passed = not missing
+        detail = "runtime host surfaces and review-state ignore rules are present" if passed else f"missing ignore rules: {', '.join(missing[:8])}"
+        return ReleaseReadinessCheck(
+            name="Runtime Boundary Rules",
+            passed=passed,
+            detail=detail,
+            severity="medium" if not passed else "low",
+            recommendation="明确忽略宿主运行时目录、review-state 与项目级宿主接入产物，避免本机生成文件混入仓库。",
         )
 
     def _check_release_spec_exists(self) -> ReleaseReadinessCheck:

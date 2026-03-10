@@ -10,6 +10,7 @@ AI 提示词生成器 - 生成可直接给 AI 的提示词
 from pathlib import Path
 
 from ..specs.models import TaskStatus
+from .requirement_parser import RequirementParser
 
 
 class AIPromptGenerator:
@@ -35,6 +36,7 @@ class AIPromptGenerator:
         description = project_config.get("description", "见 PRD 文档")
         frontend = project_config.get("frontend", "react")
         advisor = UIIntelligenceAdvisor()
+        request_mode = RequirementParser().detect_request_mode(description)
         ui_profile = advisor.recommend(
             description=description,
             frontend=frontend,
@@ -81,6 +83,8 @@ class AIPromptGenerator:
 4. **每完成一个任务，标记为 [x]**
 5. **遵循规范中的所有要求**
 6. **参考架构文档中的技术选型**
+7. **如果用户明确表示 UI 不满意、要求改版、重做视觉、页面太 AI 味，必须先更新 `output/*-uiux.md`，再重做前端，并重新执行 frontend runtime 与 UI review**
+8. **如果当前任务属于缺陷修复 / bugfix / 回归修复，也不得跳过文档与验证；必须先完成轻量复现分析与补丁文档，再实施修复**
 
 ---
 
@@ -88,6 +92,7 @@ class AIPromptGenerator:
 
 1. 第一轮回复必须明确说明：`Super Dev` 流水线已激活，当前不是普通聊天模式。
 2. 第一轮回复必须明确说明当前阶段是 `research`，会先读取 `knowledge/` 与 `output/knowledge-cache/{self.name}-knowledge-bundle.json`（若存在），再使用宿主原生联网 / browse / search 研究同类产品。
+2.1 第一轮回复前，优先读取 `.super-dev/WORKFLOW.md` 与 `output/{self.name}-bootstrap.md`（若存在），把其中的初始化契约视为当前仓库的显式 bootstrap 规则。
 3. 第一轮回复必须明确说明固定顺序：
    - research
    - 三份核心文档
@@ -96,6 +101,7 @@ class AIPromptGenerator:
    - 前端优先并运行验证
    - 后端 / 测试 / 交付
 4. 第一轮回复必须明确说明：三份核心文档完成后会暂停等待用户确认；未经确认不会创建 `.super-dev/changes/*`，也不会开始编码。
+5. 如果当前需求明显属于 bugfix / regression / hotfix，第一轮回复必须明确说明会先整理问题现象、复现条件、影响范围与回归风险，再输出轻量 PRD / Architecture / UIUX 补丁文档。
 
 ---
 
@@ -124,6 +130,7 @@ class AIPromptGenerator:
 ### 阶段 1. 冻结核心文档
 
 1. 先完整读取 `output/*-research.md`
+1.0 先读取 `.super-dev/WORKFLOW.md` 与 `output/{self.name}-bootstrap.md`（若存在），确认该仓库已经完成 bootstrap，以及固定触发方式、阶段顺序和产物路径。
 2. 再读取 `output/*-prd.md`
 3. 再读取 `output/*-architecture.md`
 4. 再读取 `output/*-uiux.md`
@@ -161,9 +168,46 @@ class AIPromptGenerator:
 2. 每完成一项任务立即标记 `[x]`
 3. 完成测试、质量门禁、交付清单后，才可以宣称项目完成
 
+### 阶段 4.5. UI 改版返工（用户提出 UI 不满意时强制执行）
+
+1. 当用户明确表示 UI 不满意、需要改版、要重做视觉、页面太 AI 味时，禁止直接改 CSS 或局部样式。
+2. 必须先回到 `output/*-uiux.md`，更新视觉方向、字体系统、版式节奏、组件状态、CTA 层级或信任设计。
+3. 然后重做前端实现，并重新执行 frontend runtime 与 UI review。
+4. 只有在 UI 改版通过后，才允许继续后续交付动作。
+
+### 阶段 4.6. 架构返工（用户提出架构问题时强制执行）
+
+1. 当用户明确表示架构不合理、模块边界错误、技术方案需要重构、接口设计需要调整时，禁止直接跳到实现细节。
+2. 必须先回到 `output/*-architecture.md`，更新系统边界、模块拆分、依赖关系、接口契约、容错与扩展方案。
+3. 然后同步调整 Spec / tasks 与相关实现方案，再继续执行。
+4. 只有在架构返工通过后，才允许恢复后续实施动作。
+
+### 阶段 4.7. 质量返工（用户要求整改质量/安全问题时强制执行）
+
+1. 当用户明确表示质量不达标、安全问题未解决、交付证据不完整、测试或门禁结果不可接受时，禁止直接宣称完成。
+2. 必须先修复相关质量问题，并重新执行 quality gate 与 release proof-pack。
+3. 如问题涉及文档、架构或 UI，同步回写对应 `output/*` 文档。
+4. 只有在质量返工通过后，才允许继续交付或恢复后续动作。
+
+### 阶段 4.8. 缺陷修复轻量路径（仅 bugfix 场景）
+
+1. 如果当前需求是修复已有问题，仍然必须输出文档，但文档应聚焦于：问题现象、复现条件、影响范围、根因假设、修复边界、回归风险。
+2. 轻量 bugfix 文档也必须真实写入项目：
+   - `output/*-research.md`：记录问题背景、历史行为、同类案例或错误上下文
+   - `output/*-prd.md`：记录期望行为与验收条件
+   - `output/*-architecture.md`：记录根因、受影响模块、回滚点与回归范围
+   - `output/*-uiux.md`：若影响前端，则记录交互、状态或文案补丁
+3. 未完成这些补丁文档前，不得直接跳到修复实现。
+4. 修复后必须重新执行前端运行验证、测试、quality gate 与 release proof-pack。
+
 ---
 
 ## 核心文档摘要
+
+### 当前请求模式
+
+- `{request_mode}`
+- 若为 `bugfix`，请执行轻量补丁流程，不得跳过文档与验证。
 
 ### 0. 研究报告
 

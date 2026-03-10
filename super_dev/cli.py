@@ -46,8 +46,25 @@ from .catalogs import (
 from .config import ConfigManager, ProjectConfig, get_config_manager
 from .exceptions import SuperDevError
 from .orchestrator import Phase, WorkflowContext, WorkflowEngine
+from .proof_pack import ProofPackBuilder
 from .release_readiness import ReleaseReadinessEvaluator
-from .review_state import docs_confirmation_file, load_docs_confirmation, save_docs_confirmation
+from .review_state import (
+    architecture_revision_file,
+    docs_confirmation_file,
+    host_runtime_validation_file,
+    load_architecture_revision,
+    load_docs_confirmation,
+    load_host_runtime_validation,
+    load_quality_revision,
+    load_ui_revision,
+    quality_revision_file,
+    save_architecture_revision,
+    save_docs_confirmation,
+    save_host_runtime_validation,
+    save_quality_revision,
+    save_ui_revision,
+    ui_revision_file,
+)
 from .utils import get_logger
 
 CICDPlatform = Literal["github", "gitlab", "jenkins", "azure", "bitbucket", "all"]
@@ -162,6 +179,72 @@ class SuperDevCLI:
             help="后端框架"
         )
         init_parser.add_argument(
+            "--domain",
+            choices=SUPPORTED_DOMAINS,
+            default="",
+            help="业务领域"
+        )
+        bootstrap_parser = subparsers.add_parser(
+            "bootstrap",
+            help="显式初始化 Super Dev 工作流契约",
+            description="创建项目配置、SDD 目录、工作流契约和 bootstrap 摘要，让初始化规范可见"
+        )
+        bootstrap_parser.add_argument(
+            "--name",
+            help="项目名称；默认使用当前目录名"
+        )
+        bootstrap_parser.add_argument(
+            "-d", "--description",
+            default="",
+            help="项目描述"
+        )
+        bootstrap_parser.add_argument(
+            "-p", "--platform",
+            choices=SUPPORTED_PLATFORMS,
+            default="web",
+            help="目标平台"
+        )
+        bootstrap_parser.add_argument(
+            "-f", "--frontend",
+            choices=SUPPORTED_INIT_FRONTENDS,
+            default="next",
+            help="前端框架"
+        )
+        bootstrap_parser.add_argument(
+            "--ui-library",
+            choices=[
+                "mui", "ant-design", "chakra-ui", "mantine", "shadcn-ui", "radix-ui",
+                "element-plus", "naive-ui", "vuetify", "primevue", "arco-design",
+                "angular-material", "primeng",
+                "skeleton-ui", "svelte-material-ui",
+                "tailwind", "daisyui"
+            ],
+            help="UI 组件库"
+        )
+        bootstrap_parser.add_argument(
+            "--style",
+            choices=["tailwind", "css-modules", "styled-components", "emotion", "scss", "less", "unocss"],
+            help="样式方案"
+        )
+        bootstrap_parser.add_argument(
+            "--state",
+            choices=["react-query", "swr", "zustand", "redux-toolkit", "jotai", "pinia", "xstate"],
+            action="append",
+            help="状态管理方案 (可多选)"
+        )
+        bootstrap_parser.add_argument(
+            "--testing",
+            choices=["vitest", "jest", "playwright", "cypress", "testing-library"],
+            action="append",
+            help="测试框架 (可多选)"
+        )
+        bootstrap_parser.add_argument(
+            "-b", "--backend",
+            choices=SUPPORTED_PIPELINE_BACKENDS,
+            default="node",
+            help="后端框架"
+        )
+        bootstrap_parser.add_argument(
             "--domain",
             choices=SUPPORTED_DOMAINS,
             default="",
@@ -396,7 +479,7 @@ class SuperDevCLI:
         )
         integrate_parser.add_argument(
             "action",
-            choices=["list", "setup", "matrix", "smoke"],
+            choices=["list", "setup", "matrix", "smoke", "audit", "validate"],
             help="操作类型"
         )
         integrate_parser.add_argument(
@@ -410,6 +493,11 @@ class SuperDevCLI:
             help="对所有平台执行 setup"
         )
         integrate_parser.add_argument(
+            "--auto",
+            action="store_true",
+            help="自动探测本机已安装宿主，仅对检测到的宿主执行审计"
+        )
+        integrate_parser.add_argument(
             "--force",
             action="store_true",
             help="覆盖已存在的配置文件"
@@ -418,6 +506,30 @@ class SuperDevCLI:
             "--json",
             action="store_true",
             help="以 JSON 输出集成矩阵（用于自动化）"
+        )
+        integrate_parser.add_argument(
+            "--repair",
+            action="store_true",
+            help="审计时自动重装缺失或过期的宿主接入面"
+        )
+        integrate_parser.add_argument(
+            "--no-save",
+            action="store_true",
+            help="不将审计结果写入 output 报告"
+        )
+        integrate_parser.add_argument(
+            "--status",
+            choices=["pending", "passed", "failed"],
+            help="用于 validate：写入某个宿主的真人运行时验收状态"
+        )
+        integrate_parser.add_argument(
+            "--comment",
+            help="用于 validate：补充真人运行时验收备注"
+        )
+        integrate_parser.add_argument(
+            "--actor",
+            default="user",
+            help="用于 validate：记录操作者（默认: user）"
         )
 
         # onboard 命令 - 首次安装向导（宿主选择 + 集成 + skill + slash）
@@ -789,6 +901,96 @@ class SuperDevCLI:
             help="以 JSON 格式输出"
         )
 
+        review_ui_parser = review_subparsers.add_parser(
+            "ui",
+            help="查看或更新 UI 改版状态"
+        )
+        review_ui_parser.add_argument(
+            "--status",
+            choices=["pending_review", "revision_requested", "confirmed"],
+            help="要写入的 UI 改版状态；不传则仅查看当前状态"
+        )
+        review_ui_parser.add_argument(
+            "--comment",
+            default="",
+            help="UI 改版意见或确认说明"
+        )
+        review_ui_parser.add_argument(
+            "--run-id",
+            default="",
+            help="关联的运行 ID（可选）"
+        )
+        review_ui_parser.add_argument(
+            "--actor",
+            default="user",
+            help="记录操作者（默认: user）"
+        )
+        review_ui_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 格式输出"
+        )
+
+        review_architecture_parser = review_subparsers.add_parser(
+            "architecture",
+            help="查看或更新架构返工状态"
+        )
+        review_architecture_parser.add_argument(
+            "--status",
+            choices=["pending_review", "revision_requested", "confirmed"],
+            help="要写入的架构返工状态；不传则仅查看当前状态"
+        )
+        review_architecture_parser.add_argument(
+            "--comment",
+            default="",
+            help="架构返工意见或确认说明"
+        )
+        review_architecture_parser.add_argument(
+            "--run-id",
+            default="",
+            help="关联的运行 ID（可选）"
+        )
+        review_architecture_parser.add_argument(
+            "--actor",
+            default="user",
+            help="记录操作者（默认: user）"
+        )
+        review_architecture_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 格式输出"
+        )
+
+        review_quality_parser = review_subparsers.add_parser(
+            "quality",
+            help="查看或更新质量返工状态"
+        )
+        review_quality_parser.add_argument(
+            "--status",
+            choices=["pending_review", "revision_requested", "confirmed"],
+            help="要写入的质量返工状态；不传则仅查看当前状态"
+        )
+        review_quality_parser.add_argument(
+            "--comment",
+            default="",
+            help="质量返工意见或确认说明"
+        )
+        review_quality_parser.add_argument(
+            "--run-id",
+            default="",
+            help="关联的运行 ID（可选）"
+        )
+        review_quality_parser.add_argument(
+            "--actor",
+            default="user",
+            help="记录操作者（默认: user）"
+        )
+        review_quality_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 格式输出"
+        )
+
         release_parser = subparsers.add_parser(
             "release",
             help="发布收尾与就绪度检查",
@@ -806,6 +1008,20 @@ class SuperDevCLI:
             help="执行 pytest -q，并把测试结果纳入发布就绪度评分"
         )
         release_readiness_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 输出结果"
+        )
+        release_proof_pack_parser = release_subparsers.add_parser(
+            "proof-pack",
+            help="生成交付证据包摘要"
+        )
+        release_proof_pack_parser.add_argument(
+            "--verify-tests",
+            action="store_true",
+            help="执行 release readiness 时纳入 pytest -q 结果"
+        )
+        release_proof_pack_parser.add_argument(
             "--json",
             action="store_true",
             help="以 JSON 输出结果"
@@ -1590,6 +1806,10 @@ class SuperDevCLI:
         # 创建输出目录
         output_dir = Path.cwd() / config.output_dir
         output_dir.mkdir(exist_ok=True)
+        workflow_file, summary_file = self._bootstrap_project_contract(
+            project_dir=Path.cwd(),
+            config=config,
+        )
 
         self.console.print(f"[green]✓[/green] 项目已初始化: {config.name}")
         self.console.print(f"  平台: {config.platform}")
@@ -1605,12 +1825,188 @@ class SuperDevCLI:
         self.console.print(f"  后端: {config.backend}")
         if config.domain:
             self.console.print(f"  领域: {config.domain}")
+        self.console.print(f"  工作流契约: {workflow_file}")
+        self.console.print(f"  Bootstrap 摘要: {summary_file}")
 
         self.console.print("\n[dim]下一步:[/dim]")
-        self.console.print("  1. 编辑 super-dev.yaml 配置项目详情")
-        self.console.print("  2. 运行 'super-dev workflow' 开始开发")
+        self.console.print("  1. 查看 output/*-bootstrap.md 确认初始化结果")
+        self.console.print("  2. 运行 'super-dev start --idea \"你的需求\"' 或在宿主中触发 /super-dev")
+        self.console.print("  3. 如需手动管理 SDD，可运行 'super-dev spec init'")
 
         return 0
+
+    def _cmd_bootstrap(self, args) -> int:
+        """显式初始化 bootstrap 契约。"""
+        project_dir = Path.cwd()
+        config_manager = get_config_manager()
+
+        if config_manager.exists():
+            config = config_manager.config
+        else:
+            config = config_manager.create(
+                name=args.name or project_dir.name,
+                description=args.description,
+                platform=args.platform,
+                frontend=args.frontend,
+                backend=args.backend,
+                domain=args.domain,
+                ui_library=getattr(args, "ui_library", None),
+                style_solution=getattr(args, "style", None),
+                state_management=getattr(args, "state", []) or [],
+                testing_frameworks=getattr(args, "testing", []) or [],
+            )
+
+        workflow_file, summary_file = self._bootstrap_project_contract(
+            project_dir=project_dir,
+            config=config,
+        )
+        self.console.print("[green]✓[/green] Bootstrap 已完成")
+        self.console.print(f"  项目配置: {config_manager.config_path}")
+        self.console.print(f"  工作流契约: {workflow_file}")
+        self.console.print(f"  Bootstrap 摘要: {summary_file}")
+        self.console.print("")
+        self.console.print("[cyan]下一步:[/cyan]")
+        self.console.print("  1. 运行 super-dev start --idea \"你的需求\"")
+        self.console.print("  2. 或直接在已接入宿主中触发 /super-dev / super-dev:")
+        return 0
+
+    def _bootstrap_project_contract(self, project_dir: Path, config) -> tuple[Path, Path]:
+        """创建显式 bootstrap 工作流契约与摘要。"""
+        from .specs import SpecGenerator
+
+        output_dir = project_dir / config.output_dir
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        generator = SpecGenerator(project_dir)
+        generator.init_sdd()
+
+        workflow_file = project_dir / ".super-dev" / "WORKFLOW.md"
+        workflow_file.write_text(
+            self._render_workflow_contract_markdown(config=config, project_dir=project_dir),
+            encoding="utf-8",
+        )
+
+        summary_file = output_dir / f"{config.name}-bootstrap.md"
+        summary_file.write_text(
+            self._render_bootstrap_summary_markdown(config=config, project_dir=project_dir),
+            encoding="utf-8",
+        )
+        return workflow_file, summary_file
+
+    def _render_workflow_contract_markdown(self, config, project_dir: Path) -> str:
+        timestamp = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+        return f"""# Super Dev Workflow Contract
+
+> Generated by `super-dev bootstrap`
+> Updated: {timestamp}
+
+## Project
+
+- Name: {config.name}
+- Description: {config.description or "待补充"}
+- Platform: {config.platform}
+- Frontend: {config.frontend}
+- Backend: {config.backend}
+- Domain: {config.domain or "未指定"}
+
+## Bootstrap Outcome
+
+This repository has been explicitly bootstrapped for Super Dev.
+
+The following surfaces are now the project bootstrap contract:
+
+- `super-dev.yaml`
+- `.super-dev/WORKFLOW.md`
+- `.super-dev/project.md`
+- `.super-dev/AGENTS.md`
+- `.super-dev/specs/`
+- `.super-dev/changes/`
+- `output/{config.name}-bootstrap.md`
+
+## Required Pipeline Order
+
+1. research
+2. PRD / Architecture / UIUX
+3. wait for user confirmation
+4. Spec / tasks
+5. frontend first + runtime validation
+6. backend / integration / tests
+7. quality gate
+8. delivery ready + rehearsal passed
+
+## Trigger Rules
+
+- Slash hosts: `/super-dev <需求描述>`
+- Text-trigger hosts: `super-dev: <需求描述>` or `super-dev：<需求描述>`
+
+## Bootstrap Guidance
+
+Use `super-dev start --idea "<需求描述>"` for the shortest guided path.
+
+If the repository already has a host onboarded, trigger Super Dev directly inside the host.
+
+## Project Context File
+
+Fill `.super-dev/project.md` with domain constraints, architecture notes, delivery expectations, and team conventions.
+"""
+
+    def _render_bootstrap_summary_markdown(self, config, project_dir: Path) -> str:
+        timestamp = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+        return f"""# {config.name} Bootstrap Summary
+
+> Generated by `super-dev bootstrap`
+> Updated: {timestamp}
+
+## Result
+
+Super Dev has explicitly initialized this repository.
+
+Generated bootstrap assets:
+
+- `super-dev.yaml`
+- `.super-dev/WORKFLOW.md`
+- `.super-dev/project.md`
+- `.super-dev/AGENTS.md`
+- `.super-dev/specs/`
+- `.super-dev/changes/`
+
+## Current Stack
+
+- Platform: `{config.platform}`
+- Frontend: `{config.frontend}`
+- Backend: `{config.backend}`
+- Domain: `{config.domain or "未指定"}`
+
+## How To Start
+
+### Option 1. Guided bootstrap
+
+```bash
+super-dev start --idea "你的需求"
+```
+
+### Option 2. Host trigger
+
+- Slash hosts: `/super-dev 你的需求`
+- Text-trigger hosts: `super-dev: 你的需求` or `super-dev：你的需求`
+
+## What Happens Next
+
+1. Super Dev enforces `research` first.
+2. The host writes:
+   - `output/*-research.md`
+   - `output/*-prd.md`
+   - `output/*-architecture.md`
+   - `output/*-uiux.md`
+3. The workflow pauses for user confirmation.
+4. Only then can Spec / tasks and implementation continue.
+
+## Notes
+
+- This bootstrap summary is the visible initialization artifact for repository operators.
+- `.super-dev/WORKFLOW.md` is the repository workflow contract for hosts and maintainers.
+- `super-dev spec init` can be used later to reinitialize SDD directories if needed.
+"""
 
     def _cmd_analyze(self, args) -> int:
         """分析现有项目"""
@@ -1754,12 +2150,48 @@ class SuperDevCLI:
 
     def _cmd_review(self, args) -> int:
         """查看或更新评审状态"""
-        if args.review_command != "docs":
-            self.console.print("[yellow]请指定 review 子命令，例如 `super-dev review docs`[/yellow]")
+        review_specs = {
+            "docs": {
+                "title": "三文档确认状态",
+                "load": load_docs_confirmation,
+                "save": save_docs_confirmation,
+                "file": docs_confirmation_file,
+                "type": "docs",
+            },
+            "ui": {
+                "title": "UI 改版状态",
+                "load": load_ui_revision,
+                "save": save_ui_revision,
+                "file": ui_revision_file,
+                "type": "ui",
+            },
+            "architecture": {
+                "title": "架构返工状态",
+                "load": load_architecture_revision,
+                "save": save_architecture_revision,
+                "file": architecture_revision_file,
+                "type": "architecture",
+            },
+            "quality": {
+                "title": "质量返工状态",
+                "load": load_quality_revision,
+                "save": save_quality_revision,
+                "file": quality_revision_file,
+                "type": "quality",
+            },
+        }
+        if args.review_command not in review_specs:
+            self.console.print(
+                "[yellow]请指定 review 子命令，例如 `super-dev review docs`、`super-dev review ui`、`super-dev review architecture` 或 `super-dev review quality`[/yellow]"
+            )
             return 1
 
         project_dir = Path.cwd()
-        current = load_docs_confirmation(project_dir) or {}
+        spec = review_specs[args.review_command]
+        review_type = str(spec["type"])
+        current = cast(Callable[[Path], dict[str, Any] | None], spec["load"])(project_dir) or {}
+        state_file = cast(Callable[[Path], Path], spec["file"])(project_dir)
+        title = str(spec["title"])
 
         if not args.status:
             payload = {
@@ -1769,13 +2201,13 @@ class SuperDevCLI:
                 "run_id": str(current.get("run_id", "")).strip(),
                 "updated_at": str(current.get("updated_at", "")).strip(),
                 "exists": bool(current),
-                "file_path": str(docs_confirmation_file(project_dir)),
+                "file_path": str(state_file),
             }
             if args.json:
                 self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
             else:
-                self.console.print("[cyan]三文档确认状态[/cyan]")
-                self.console.print(f"  状态: {self._docs_confirmation_label(payload['status'])}")
+                self.console.print(f"[cyan]{title}[/cyan]")
+                self.console.print(f"  状态: {self._review_status_label(payload['status'], review_type=review_type)}")
                 self.console.print(f"  备注: {payload['comment'] or '-'}")
                 self.console.print(f"  操作者: {payload['actor'] or '-'}")
                 self.console.print(f"  关联 Run: {payload['run_id'] or '-'}")
@@ -1783,7 +2215,9 @@ class SuperDevCLI:
                 self.console.print(f"  文件: {payload['file_path']}")
             return 0
 
-        file_path = save_docs_confirmation(
+        save_fn = cast(Callable[[Path, dict[str, Any]], Path], spec["save"])
+        load_fn = cast(Callable[[Path], dict[str, Any] | None], spec["load"])
+        file_path = save_fn(
             project_dir,
             {
                 "status": args.status,
@@ -1792,25 +2226,62 @@ class SuperDevCLI:
                 "run_id": args.run_id.strip(),
             },
         )
-        payload = load_docs_confirmation(project_dir) or {}
+        payload = load_fn(project_dir) or {}
         if args.json:
             self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
-            action = "已确认三文档" if args.status == "confirmed" else (
-                "已记录文档修改要求" if args.status == "revision_requested" else "已重置为待确认"
-            )
+            if review_type == "ui":
+                action = "已确认 UI 改版通过" if args.status == "confirmed" else ("已记录 UI 改版请求" if args.status == "revision_requested" else "已重置为待确认")
+            elif review_type == "architecture":
+                action = "已确认架构返工通过" if args.status == "confirmed" else ("已记录架构返工请求" if args.status == "revision_requested" else "已重置为待确认")
+            elif review_type == "quality":
+                action = "已确认质量返工通过" if args.status == "confirmed" else ("已记录质量返工请求" if args.status == "revision_requested" else "已重置为待确认")
+            else:
+                action = "已确认三文档" if args.status == "confirmed" else ("已记录文档修改要求" if args.status == "revision_requested" else "已重置为待确认")
             self.console.print(f"[green]✓[/green] {action}")
-            self.console.print(f"  状态: {self._docs_confirmation_label(args.status)}")
+            self.console.print(f"  状态: {self._review_status_label(args.status, review_type=review_type)}")
             self.console.print(f"  备注: {payload.get('comment', '') or '-'}")
             self.console.print(f"  操作者: {payload.get('actor', '') or '-'}")
             self.console.print(f"  关联 Run: {payload.get('run_id', '') or '-'}")
             self.console.print(f"  文件: {file_path}")
+            if review_type == "ui" and args.status == "revision_requested":
+                self.console.print("[dim]下一步: 先更新 output/*-uiux.md，再重做前端，并重新执行 frontend runtime 与 UI review[/dim]")
+            elif review_type == "architecture" and args.status == "revision_requested":
+                self.console.print("[dim]下一步: 先更新 output/*-architecture.md，再调整技术方案与实现，并重新通过相关质量门禁[/dim]")
+            elif review_type == "quality" and args.status == "revision_requested":
+                self.console.print("[dim]下一步: 先修复质量/安全问题，重新执行 quality gate 与 release proof-pack，再继续后续动作[/dim]")
         return 0
 
     def _cmd_release(self, args) -> int:
         """发布就绪度检查"""
+        if args.release_command == "proof-pack":
+            project_dir = Path.cwd()
+            builder = ProofPackBuilder(project_dir)
+            report = builder.build(verify_tests=bool(args.verify_tests))
+            files = builder.write(report)
+            payload = report.to_dict()
+            payload["report_file"] = str(files["markdown"])
+            payload["json_file"] = str(files["json"])
+
+            if args.json:
+                self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
+                return 0 if report.status == "ready" else 1
+
+            status = "[green]ready[/green]" if report.status == "ready" else "[yellow]incomplete[/yellow]"
+            self.console.print(f"[cyan]Proof Pack[/cyan] {status} 证据就绪: {report.ready_count}/{report.total_count}")
+            self.console.print(f"  [green]✓[/green] Markdown: {files['markdown']}")
+            self.console.print(f"  [green]✓[/green] JSON: {files['json']}")
+            incomplete = [artifact for artifact in report.artifacts if artifact.status != "ready"]
+            if incomplete:
+                self.console.print("  [yellow]待补齐项:[/yellow]")
+                for artifact in incomplete[:8]:
+                    self.console.print(f"    - {artifact.name}: {artifact.summary}")
+            else:
+                self.console.print("  [green]所有关键交付证据均已就绪。[/green]")
+            return 0 if report.status == "ready" else 1
+
         if args.release_command != "readiness":
-            self.console.print("[yellow]请指定 release 子命令，例如 `super-dev release readiness`[/yellow]")
+            self.console.print("[yellow]请指定 release 子命令，例如 `super-dev release readiness` 或 `super-dev release proof-pack`[/yellow]")
             return 1
 
         project_dir = Path.cwd()
@@ -2123,6 +2594,33 @@ class SuperDevCLI:
             if not self._docs_confirmation_is_confirmed(project_dir):
                 self.console.print("[yellow]最近一次 pipeline 已停在文档确认门，请先确认三文档后再恢复[/yellow]")
                 self.console.print("[dim]可执行: super-dev review docs --status confirmed --comment \"三文档已确认\"[/dim]")
+                return 1
+            if not self._ui_revision_is_clear(project_dir):
+                self.console.print("[yellow]最近一次 pipeline 存在待处理 UI 改版请求，请先完成 UI 返工再恢复[/yellow]")
+                self.console.print("[dim]可执行: super-dev review ui --status confirmed --comment \"UI 改版已通过\"[/dim]")
+                return 1
+            if not self._architecture_revision_is_clear(project_dir):
+                self.console.print("[yellow]最近一次 pipeline 存在待处理架构返工请求，请先完成架构修订再恢复[/yellow]")
+                self.console.print("[dim]可执行: super-dev review architecture --status confirmed --comment \"架构返工已通过\"[/dim]")
+                return 1
+            if not self._quality_revision_is_clear(project_dir):
+                self.console.print("[yellow]最近一次 pipeline 存在待处理质量返工请求，请先完成质量整改再恢复[/yellow]")
+                self.console.print("[dim]可执行: super-dev review quality --status confirmed --comment \"质量返工已通过\"[/dim]")
+                return 1
+        elif status == "waiting_ui_revision":
+            if not self._ui_revision_is_clear(project_dir):
+                self.console.print("[yellow]最近一次 pipeline 已停在 UI 改版门，请先完成 UIUX 更新、前端返工与 UI review[/yellow]")
+                self.console.print("[dim]可执行: super-dev review ui --status confirmed --comment \"UI 改版已通过\"[/dim]")
+                return 1
+        elif status == "waiting_architecture_revision":
+            if not self._architecture_revision_is_clear(project_dir):
+                self.console.print("[yellow]最近一次 pipeline 已停在架构返工门，请先完成 output/*-architecture.md 修订和实现同步[/yellow]")
+                self.console.print("[dim]可执行: super-dev review architecture --status confirmed --comment \"架构返工已通过\"[/dim]")
+                return 1
+        elif status == "waiting_quality_revision":
+            if not self._quality_revision_is_clear(project_dir):
+                self.console.print("[yellow]最近一次 pipeline 已停在质量返工门，请先完成质量整改并重新执行 quality gate[/yellow]")
+                self.console.print("[dim]可执行: super-dev review quality --status confirmed --comment \"质量返工已通过\"[/dim]")
                 return 1
         elif status not in {"failed", "running"}:
             self.console.print("[yellow]最近一次 pipeline 状态不支持恢复[/yellow]")
@@ -3427,7 +3925,7 @@ class SuperDevCLI:
                     else ""
                 )
                 fallback_reasons: list[str] = []
-                if run_status == "waiting_confirmation":
+                if run_status in {"waiting_confirmation", "waiting_ui_revision", "waiting_architecture_revision", "waiting_quality_revision"}:
                     failed_stage = None
                     resume_from_stage = None
                     if isinstance(run_state, dict):
@@ -3437,9 +3935,22 @@ class SuperDevCLI:
                     if resume_from_stage is None:
                         resume_from_stage = 2
                     initial_resume_stage = resume_from_stage
-                    self.console.print(
-                        f"[cyan]恢复模式：文档确认已完成，将从第 {resume_from_stage} 阶段继续[/cyan]"
-                    )
+                    if run_status == "waiting_ui_revision":
+                        self.console.print(
+                            f"[cyan]恢复模式：UI 改版门已通过，将从第 {resume_from_stage} 阶段继续[/cyan]"
+                        )
+                    elif run_status == "waiting_architecture_revision":
+                        self.console.print(
+                            f"[cyan]恢复模式：架构返工已通过，将从第 {resume_from_stage} 阶段继续[/cyan]"
+                        )
+                    elif run_status == "waiting_quality_revision":
+                        self.console.print(
+                            f"[cyan]恢复模式：质量返工已通过，将从第 {resume_from_stage} 阶段继续[/cyan]"
+                        )
+                    else:
+                        self.console.print(
+                            f"[cyan]恢复模式：文档确认已完成，将从第 {resume_from_stage} 阶段继续[/cyan]"
+                        )
                 else:
                     failed_stage = None
                     if isinstance(run_state, dict):
@@ -3602,6 +4113,7 @@ class SuperDevCLI:
 
                 parser = RequirementParser()
                 scenario = parser.detect_scenario(project_dir)
+                request_mode = parser.detect_request_mode(enriched_description)
 
                 doc_generator = DocumentGenerator(
                     name=project_name,
@@ -3629,7 +4141,13 @@ class SuperDevCLI:
 
                 plan_file = output_dir / f"{project_name}-execution-plan.md"
                 frontend_blueprint_file = output_dir / f"{project_name}-frontend-blueprint.md"
-                plan_file.write_text(doc_generator.generate_execution_plan(scenario=scenario), encoding="utf-8")
+                plan_file.write_text(
+                    doc_generator.generate_execution_plan(
+                        scenario=scenario,
+                        request_mode=request_mode,
+                    ),
+                    encoding="utf-8",
+                )
                 frontend_blueprint_file.write_text(doc_generator.generate_frontend_blueprint(), encoding="utf-8")
 
                 self.console.print(f"  [green]✓[/green] PRD: {prd_file}")
@@ -3657,9 +4175,10 @@ class SuperDevCLI:
                 self._save_tech_stack_to_config(project_dir, tech_stack, args.description)
 
                 requirements = self._normalize_requirements_payload(doc_generator.extract_requirements())
-                phases = parser.build_execution_phases(scenario, requirements)
+                phases = parser.build_execution_phases(scenario, requirements, request_mode=request_mode)
                 _update_run_context(
                     scenario=scenario,
+                    request_mode=request_mode,
                     requirements=requirements,
                 )
 
@@ -3698,6 +4217,99 @@ class SuperDevCLI:
                     },
                 )
                 _flush_resume_audit(status="waiting_confirmation", failure_reason=waiting_reason)
+                self.console.print(f"[dim]指标报告: {metric_files['json']}[/dim]")
+                self.console.print(f"[dim]契约审计: {contract_files['markdown']}[/dim]")
+                if resume_audit_files:
+                    self.console.print(f"[dim]恢复审计: {resume_audit_files['markdown']}[/dim]")
+                return 0
+
+            ui_revision = self._get_ui_revision_state(project_dir)
+            _update_run_context(ui_revision=ui_revision)
+            if ui_revision["status"] == "revision_requested":
+                self.console.print("[yellow]当前存在 UI 改版请求，必须先完成 UI 返工后才能继续[/yellow]")
+                if ui_revision["comment"]:
+                    self.console.print(f"  [dim]备注: {ui_revision['comment']}[/dim]")
+                self.console.print("[cyan]继续方式:[/cyan]")
+                self.console.print("  1. 先更新 output/*-uiux.md")
+                self.console.print("  2. 重做前端并重新执行 frontend runtime 与 UI review")
+                self.console.print('  3. 终端执行: super-dev review ui --status confirmed --comment "UI 改版已通过"')
+                self.console.print("  4. 然后执行: super-dev run --resume")
+                metric_files = _finalize_metrics(success=False, reason="waiting_ui_revision")
+                contract_files = _finalize_contract(success=False, reason="waiting_ui_revision")
+                _persist_run_state(
+                    "waiting_ui_revision",
+                    {
+                        "failure_reason": "revision_requested",
+                        "failed_stage": "2",
+                        "next_stage": "2",
+                        "resume_from_stage": "2",
+                        "metrics_file": str(metric_files["json"]),
+                        "contract_file": str(contract_files["json"]),
+                    },
+                )
+                _flush_resume_audit(status="waiting_ui_revision", failure_reason="revision_requested")
+                self.console.print(f"[dim]指标报告: {metric_files['json']}[/dim]")
+                self.console.print(f"[dim]契约审计: {contract_files['markdown']}[/dim]")
+                if resume_audit_files:
+                    self.console.print(f"[dim]恢复审计: {resume_audit_files['markdown']}[/dim]")
+                return 0
+
+            architecture_revision = self._get_architecture_revision_state(project_dir)
+            _update_run_context(architecture_revision=architecture_revision)
+            if architecture_revision["status"] == "revision_requested":
+                self.console.print("[yellow]当前存在架构返工请求，必须先完成架构方案修订后才能继续[/yellow]")
+                if architecture_revision["comment"]:
+                    self.console.print(f"  [dim]备注: {architecture_revision['comment']}[/dim]")
+                self.console.print("[cyan]继续方式:[/cyan]")
+                self.console.print("  1. 先更新 output/*-architecture.md")
+                self.console.print("  2. 同步调整任务拆解与相关实现方案")
+                self.console.print('  3. 终端执行: super-dev review architecture --status confirmed --comment "架构返工已通过"')
+                self.console.print("  4. 然后执行: super-dev run --resume")
+                metric_files = _finalize_metrics(success=False, reason="waiting_architecture_revision")
+                contract_files = _finalize_contract(success=False, reason="waiting_architecture_revision")
+                _persist_run_state(
+                    "waiting_architecture_revision",
+                    {
+                        "failure_reason": "revision_requested",
+                        "failed_stage": "2",
+                        "next_stage": "2",
+                        "resume_from_stage": "2",
+                        "metrics_file": str(metric_files["json"]),
+                        "contract_file": str(contract_files["json"]),
+                    },
+                )
+                _flush_resume_audit(status="waiting_architecture_revision", failure_reason="revision_requested")
+                self.console.print(f"[dim]指标报告: {metric_files['json']}[/dim]")
+                self.console.print(f"[dim]契约审计: {contract_files['markdown']}[/dim]")
+                if resume_audit_files:
+                    self.console.print(f"[dim]恢复审计: {resume_audit_files['markdown']}[/dim]")
+                return 0
+
+            quality_revision = self._get_quality_revision_state(project_dir)
+            _update_run_context(quality_revision=quality_revision)
+            if quality_revision["status"] == "revision_requested":
+                self.console.print("[yellow]当前存在质量返工请求，必须先修复质量/安全问题后才能继续[/yellow]")
+                if quality_revision["comment"]:
+                    self.console.print(f"  [dim]备注: {quality_revision['comment']}[/dim]")
+                self.console.print("[cyan]继续方式:[/cyan]")
+                self.console.print("  1. 先修复质量门禁或安全问题")
+                self.console.print("  2. 重新执行 quality gate 与 release proof-pack")
+                self.console.print('  3. 终端执行: super-dev review quality --status confirmed --comment "质量返工已通过"')
+                self.console.print("  4. 然后执行: super-dev run --resume")
+                metric_files = _finalize_metrics(success=False, reason="waiting_quality_revision")
+                contract_files = _finalize_contract(success=False, reason="waiting_quality_revision")
+                _persist_run_state(
+                    "waiting_quality_revision",
+                    {
+                        "failure_reason": "revision_requested",
+                        "failed_stage": "2",
+                        "next_stage": "2",
+                        "resume_from_stage": "2",
+                        "metrics_file": str(metric_files["json"]),
+                        "contract_file": str(contract_files["json"]),
+                    },
+                )
+                _flush_resume_audit(status="waiting_quality_revision", failure_reason="revision_requested")
                 self.console.print(f"[dim]指标报告: {metric_files['json']}[/dim]")
                 self.console.print(f"[dim]契约审计: {contract_files['markdown']}[/dim]")
                 if resume_audit_files:
@@ -4670,6 +5282,253 @@ class SuperDevCLI:
                 self.console.print(f"  通过标准: {profile.smoke_success_signal}")
             return 0
 
+        if args.action == "audit":
+            project_dir = Path.cwd()
+            available_targets = [item.name for item in manager.list_targets()]
+            targets: list[str]
+            detected_meta: dict[str, list[str]] = {}
+            if args.target:
+                targets = [args.target]
+            elif args.all:
+                targets = available_targets
+            else:
+                targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
+                if not targets:
+                    targets = available_targets
+
+            report = self._collect_host_diagnostics(
+                project_dir=project_dir,
+                targets=targets,
+                skill_name="super-dev-core",
+                check_integrate=True,
+                check_skill=True,
+                check_slash=True,
+            )
+            repair_actions: dict[str, dict[str, str]] = {}
+            if args.repair:
+                repair_actions = self._repair_host_diagnostics(
+                    project_dir=project_dir,
+                    report=report,
+                    skill_name="super-dev-core",
+                    force=bool(args.force),
+                    check_integrate=True,
+                    check_skill=True,
+                    check_slash=True,
+                )
+                report = self._collect_host_diagnostics(
+                    project_dir=project_dir,
+                    targets=targets,
+                    skill_name="super-dev-core",
+                    check_integrate=True,
+                    check_skill=True,
+                    check_slash=True,
+                )
+
+            compatibility = self._build_compatibility_summary(
+                report=report,
+                targets=targets,
+                check_integrate=True,
+                check_skill=True,
+                check_slash=True,
+            )
+            usage_profiles = {
+                target: self._build_host_usage_profile(
+                    integration_manager=manager,
+                    target=target,
+                )
+                for target in targets
+            }
+            payload = {
+                "project_dir": str(project_dir),
+                "detected_hosts": targets if not detected_meta else list(detected_meta.keys()),
+                "detection_details": detected_meta,
+                "selected_targets": targets,
+                "report": report,
+                "compatibility": compatibility,
+                "usage_profiles": usage_profiles,
+                "repair_actions": repair_actions,
+            }
+            if not bool(args.no_save):
+                report_files = self._write_host_surface_audit_report(project_dir=project_dir, payload=payload)
+                payload["report_files"] = {name: str(path) for name, path in report_files.items()}
+
+            if args.json:
+                sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+                return 0 if bool(report.get("overall_ready", False)) else 1
+
+            self.console.print("[cyan]Super Dev 宿主 Surface 审计[/cyan]")
+            self.console.print(f"[dim]项目目录: {project_dir}[/dim]")
+            if detected_meta:
+                self.console.print(
+                    f"[cyan]自动检测到 {len(detected_meta)} 个宿主：{', '.join(detected_meta)}[/cyan]"
+                )
+            self.console.print(
+                f"[cyan]兼容性评分: {compatibility['overall_score']:.2f}/100 "
+                f"(ready {compatibility['ready_hosts']}/{compatibility['total_hosts']})[/cyan]"
+            )
+            if args.repair and repair_actions:
+                self.console.print("[cyan]修复动作[/cyan]")
+                for target, actions in repair_actions.items():
+                    action_text = ", ".join(f"{key}={value}" for key, value in actions.items())
+                    self.console.print(f"  - {target}: {action_text}")
+            for target in targets:
+                host = report["hosts"].get(target, {})
+                usage = usage_profiles.get(target, {})
+                ready = bool(host.get("ready", False))
+                self.console.print("")
+                self.console.print(f"[cyan]- {target}[/cyan] {'[green]ready[/green]' if ready else '[yellow]needs repair[/yellow]'}")
+                self.console.print(f"  触发命令: {usage.get('final_trigger', '-')}")
+                self.console.print(f"  宿主协议: {usage.get('host_protocol_summary', '-')}")
+                checks = host.get("checks", {})
+                contract = checks.get("contract", {}) if isinstance(checks, dict) else {}
+                invalid_surfaces = contract.get("invalid_surfaces", {}) if isinstance(contract, dict) else {}
+                if isinstance(invalid_surfaces, dict) and invalid_surfaces:
+                    self.console.print("  [yellow]过期/缺失的接入面[/yellow]:")
+                    for surface_key, surface_info in invalid_surfaces.items():
+                        if not isinstance(surface_info, dict):
+                            continue
+                        missing_markers = surface_info.get("missing_markers", [])
+                        marker_text = ", ".join(str(item) for item in missing_markers) if isinstance(missing_markers, list) else "-"
+                        self.console.print(f"    - {surface_key}")
+                        self.console.print(f"      path: {surface_info.get('path', '-')}")
+                        self.console.print(f"      missing: {marker_text}")
+                else:
+                    self.console.print("  [green]✓[/green] 所有受管接入面契约完整")
+                suggestions = host.get("suggestions", [])
+                if isinstance(suggestions, list) and suggestions:
+                    self.console.print("  建议修复:")
+                    for suggestion in suggestions:
+                        self.console.print(f"    - {suggestion}")
+            if "report_files" in payload:
+                report_files = payload["report_files"]
+                if isinstance(report_files, dict):
+                    self.console.print("")
+                    self.console.print("[cyan]审计报告[/cyan]")
+                    for name, path in report_files.items():
+                        self.console.print(f"  - {name}: {path}")
+            return 0 if bool(report.get("overall_ready", False)) else 1
+
+        if args.action == "validate":
+            project_dir = Path.cwd()
+            available_targets = [item.name for item in manager.list_targets()]
+            detected_meta: dict[str, list[str]] = {}
+            if args.status and not args.target:
+                self.console.print("[red]--status 仅可与 --target 一起使用[/red]")
+                return 1
+            if args.status and args.status not in {"pending", "passed", "failed"}:
+                self.console.print("[red]无效的运行时验收状态[/red]")
+                return 1
+            if args.status and args.target:
+                runtime_state, file_path = self._update_host_runtime_validation_state(
+                    project_dir=project_dir,
+                    target=args.target,
+                    status=args.status,
+                    comment=args.comment or "",
+                    actor=args.actor or "user",
+                )
+                status_label = self._host_runtime_status_label(args.status)
+                if args.json:
+                    sys.stdout.write(
+                        json.dumps(
+                            {
+                                "status": "success",
+                                "host": args.target,
+                                "manual_runtime_status": args.status,
+                                "manual_runtime_status_label": status_label,
+                                "comment": args.comment or "",
+                                "actor": args.actor or "user",
+                                "file_path": str(file_path),
+                                "updated_at": runtime_state.get("updated_at", ""),
+                            },
+                            ensure_ascii=False,
+                            indent=2,
+                        )
+                        + "\n"
+                    )
+                    return 0
+                self.console.print(f"[green]已更新宿主真人验收状态[/green] {args.target}: {status_label}")
+                if args.comment:
+                    self.console.print(f"[dim]备注: {args.comment}[/dim]")
+                self.console.print(f"[dim]状态文件: {file_path}[/dim]")
+                return 0
+
+            if args.target:
+                targets = [args.target]
+            elif args.all:
+                targets = available_targets
+            else:
+                targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
+                if not targets:
+                    targets = available_targets
+
+            report = self._collect_host_diagnostics(
+                project_dir=project_dir,
+                targets=targets,
+                skill_name="super-dev-core",
+                check_integrate=True,
+                check_skill=True,
+                check_slash=True,
+            )
+            usage_profiles = {
+                target: self._build_host_usage_profile(
+                    integration_manager=manager,
+                    target=target,
+                )
+                for target in targets
+            }
+            payload = self._build_host_runtime_validation_payload(
+                project_dir=project_dir,
+                targets=targets,
+                detected_meta=detected_meta,
+                report=report,
+                usage_profiles=usage_profiles,
+            )
+
+            if not bool(args.no_save):
+                report_files = self._write_host_runtime_validation_report(project_dir=project_dir, payload=payload)
+                payload["report_files"] = {name: str(path) for name, path in report_files.items()}
+
+            if args.json:
+                sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+                return 0
+
+            self.console.print("[cyan]Super Dev 宿主运行时验收矩阵[/cyan]")
+            self.console.print(f"[dim]项目目录: {project_dir}[/dim]")
+            if detected_meta:
+                self.console.print(
+                    f"[cyan]自动检测到 {len(detected_meta)} 个宿主：{', '.join(detected_meta)}[/cyan]"
+                )
+            for host in payload.get("hosts", []):
+                if not isinstance(host, dict):
+                    continue
+                ready_badge = "[green]surface-ready[/green]" if bool(host.get("surface_ready", False)) else "[yellow]surface-not-ready[/yellow]"
+                self.console.print("")
+                self.console.print(f"[cyan]- {host.get('host', '-') }[/cyan] {ready_badge}")
+                self.console.print(f"  触发命令: {host.get('final_trigger', '-')}")
+                self.console.print(f"  宿主协议: {host.get('host_protocol_summary', '-')}")
+                self.console.print(f"  人工验收状态: {host.get('manual_runtime_status_label', '-')}")
+                comment = host.get("manual_runtime_comment", "")
+                if isinstance(comment, str) and comment.strip():
+                    self.console.print(f"  验收备注: {comment.strip()}")
+                self.console.print("  运行时检查清单:")
+                checklist = host.get("runtime_checklist", [])
+                if isinstance(checklist, list):
+                    for item in checklist:
+                        self.console.print(f"    - {item}")
+                self.console.print("  通过标准:")
+                criteria = host.get("pass_criteria", [])
+                if isinstance(criteria, list):
+                    for item in criteria:
+                        self.console.print(f"    - {item}")
+            if "report_files" in payload:
+                report_files = payload["report_files"]
+                if isinstance(report_files, dict):
+                    self.console.print("")
+                    self.console.print("[cyan]验收矩阵报告[/cyan]")
+                    for name, path in report_files.items():
+                        self.console.print(f"  - {name}: {path}")
+            return 0
+
         self.console.print("[yellow]未知 integrate 操作[/yellow]")
         return 1
 
@@ -4786,7 +5645,7 @@ class SuperDevCLI:
             subtitle = (
                 "Space 勾选，Enter 安装，↑/↓ 移动，A 全选，C 仅 CLI，I 仅 IDE，R 清空，Esc 取消\n"
                 "[●] 当前光标  [✓] 已选中  [○] 未选中\n"
-                "slash 宿主用 /super-dev；非 slash 宿主用 super-dev:"
+                "slash 宿主用 /super-dev；非 slash 宿主用 super-dev: / super-dev："
             )
             header = Panel(f"{self._super_dev_ascii_banner()}\n\n{subtitle}", title="Super Dev")
 
@@ -4907,7 +5766,7 @@ class SuperDevCLI:
         intro = (
             "安装后直接在宿主里触发。\n"
             "支持 slash 的宿主使用 `/super-dev 你的需求`。\n"
-            "不支持 slash 的宿主使用 `super-dev: 你的需求`。"
+            "不支持 slash 的宿主使用 `super-dev: 你的需求` 或 `super-dev：你的需求`。"
         )
         self.console.print(Panel(intro, title="Super Dev 安装向导", padding=(1, 2)))
 
@@ -4940,7 +5799,7 @@ class SuperDevCLI:
         if not RICH_AVAILABLE:
             self.console.print("[cyan]Super Dev 安装入口[/cyan]")
             self.console.print("宿主负责编码与模型调用；Super Dev 负责流程、门禁、审计与交付标准。")
-            self.console.print("slash 宿主输入 /super-dev；非 slash 宿主输入 super-dev:")
+            self.console.print("slash 宿主输入 /super-dev；非 slash 宿主输入 super-dev: 或 super-dev：")
             return
 
         integration_manager = IntegrationManager(Path.cwd())
@@ -4948,7 +5807,7 @@ class SuperDevCLI:
         lines = [
             "宿主负责编码、工具调用和模型能力。",
             "Super Dev 负责 research → 三文档 → 确认门 → Spec → 前端优先 → 质量门禁 → 交付。",
-            "slash 宿主输入 `/super-dev 你的需求`，非 slash 宿主输入 `super-dev: 你的需求`。",
+            "slash 宿主输入 `/super-dev 你的需求`，非 slash 宿主输入 `super-dev: 你的需求` 或 `super-dev：你的需求`。",
             "",
             self._build_install_summary(available_targets=available_targets),
         ]
@@ -5136,6 +5995,49 @@ class SuperDevCLI:
                 "suggestions": [],
             }
 
+            surface_audit: dict[str, dict[str, Any]] = {}
+            for surface_key, surface_path in integration_manager.collect_managed_surface_paths(
+                target=target,
+                skill_name=skill_name,
+            ).items():
+                exists = surface_path.exists()
+                audit_entry: dict[str, Any] = {
+                    "path": str(surface_path),
+                    "exists": exists,
+                    "missing_markers": [],
+                }
+                if exists:
+                    try:
+                        content = surface_path.read_text(encoding="utf-8")
+                    except Exception as exc:
+                        audit_entry["read_error"] = str(exc)
+                        audit_entry["missing_markers"] = ["unreadable"]
+                    else:
+                        audit_entry["missing_markers"] = integration_manager.audit_surface_contract(
+                            target,
+                            surface_key,
+                            surface_path,
+                            content,
+                        )
+                surface_audit[surface_key] = audit_entry
+
+            invalid_surfaces = {
+                key: value
+                for key, value in surface_audit.items()
+                if value.get("exists") and value.get("missing_markers")
+            }
+            host_report["checks"]["contract"] = {
+                "ok": not invalid_surfaces,
+                "surfaces": surface_audit,
+                "invalid_surfaces": invalid_surfaces,
+            }
+            if invalid_surfaces:
+                host_report["ready"] = False
+                host_report["missing"].append("contract")
+                host_report["suggestions"].append(
+                    f"super-dev onboard --host {target} --force --yes"
+                )
+
             if check_integrate:
                 integrate_files = [project_dir / item for item in integration_targets[target].files]
                 integrate_ok = all(path.exists() for path in integrate_files)
@@ -5208,6 +6110,22 @@ class SuperDevCLI:
                 integration_manager=integration_manager,
                 target=target,
             )
+            usage_profile = host_report["usage_profile"]
+            if isinstance(usage_profile, dict):
+                precondition_status = str(usage_profile.get("precondition_status", "")).strip()
+                precondition_label = str(usage_profile.get("precondition_label", "")).strip()
+                precondition_guidance = usage_profile.get("precondition_guidance", [])
+                precondition_signals = usage_profile.get("precondition_signals", {})
+                host_report["preconditions"] = {
+                    "status": precondition_status,
+                    "label": precondition_label,
+                    "guidance": precondition_guidance if isinstance(precondition_guidance, list) else [],
+                    "signals": precondition_signals if isinstance(precondition_signals, dict) else {},
+                }
+                if precondition_status == "host-auth-required":
+                    host_report["suggestions"].append(
+                        "若宿主报 Invalid API key provided，请先在宿主内完成 /auth 或更新宿主 API key 配置。"
+                    )
             report["hosts"][target] = host_report
             if not host_report["ready"]:
                 report["overall_ready"] = False
@@ -5225,7 +6143,7 @@ class SuperDevCLI:
     ) -> dict[str, Any]:
         from .integrations import IntegrationManager
 
-        enabled_checks = []
+        enabled_checks = ["contract"]
         if check_integrate:
             enabled_checks.append("integrate")
         if check_skill and any(IntegrationManager.requires_skill(target) for target in targets):
@@ -5303,15 +6221,35 @@ class SuperDevCLI:
                 continue
 
             host_actions: dict[str, str] = {}
+            contract_needs_repair = "contract" in missing
+
+            if contract_needs_repair:
+                try:
+                    integration_manager.setup(target=target, force=True)
+                    integration_manager.setup_global_protocol(target=target, force=True)
+                    if integration_manager.supports_slash(target):
+                        integration_manager.setup_slash_command(target=target, force=True)
+                        integration_manager.setup_global_slash_command(target=target, force=True)
+                    if check_skill and IntegrationManager.requires_skill(target) and skill_manager.skill_surface_available(target):
+                        skill_manager.install(
+                            source="super-dev",
+                            target=target,
+                            name=skill_name,
+                            force=True,
+                        )
+                    host_actions["contract"] = "refreshed"
+                except Exception as exc:
+                    host_actions["contract"] = f"failed: {exc}"
+
             try:
-                if check_integrate and "integrate" in missing:
+                if check_integrate and "integrate" in missing and not contract_needs_repair:
                     integration_manager.setup(target=target, force=force)
                     host_actions["integrate"] = "fixed"
             except Exception as exc:
                 host_actions["integrate"] = f"failed: {exc}"
 
             try:
-                if check_skill and IntegrationManager.requires_skill(target) and "skill" in missing:
+                if check_skill and IntegrationManager.requires_skill(target) and "skill" in missing and not contract_needs_repair:
                     skill_manager.install(
                         source="super-dev",
                         target=target,
@@ -5323,7 +6261,7 @@ class SuperDevCLI:
                 host_actions["skill"] = f"failed: {exc}"
 
             try:
-                if check_slash and integration_manager.supports_slash(target):
+                if check_slash and integration_manager.supports_slash(target) and not contract_needs_repair:
                     integration_manager.setup_slash_command(target=target, force=force)
                     integration_manager.setup_global_slash_command(target=target, force=force)
                     if "slash" in missing:
@@ -5460,6 +6398,28 @@ class SuperDevCLI:
                 self.console.print("  [yellow]注意[/yellow]: 接入完成后需要重启宿主")
             for step in profile.post_onboard_steps:
                 self.console.print(f"  [dim]- {step}[/dim]")
+
+            contract_surfaces = integration_manager.collect_managed_surface_paths(target=target, skill_name=args.skill_name)
+            contract_failures: list[str] = []
+            for surface_key, surface_path in contract_surfaces.items():
+                if surface_key.startswith("skill:") and args.skip_skill:
+                    continue
+                if not surface_path.exists():
+                    continue
+                try:
+                    content = surface_path.read_text(encoding="utf-8")
+                except Exception:
+                    contract_failures.append(str(surface_path))
+                    continue
+                if integration_manager.audit_surface_contract(target, surface_key, surface_path, content):
+                    contract_failures.append(str(surface_path))
+            if contract_failures:
+                has_error = True
+                self.console.print("  [red]✗[/red] 宿主契约校验失败:")
+                for item in contract_failures[:6]:
+                    self.console.print(f"  [dim]- {item}[/dim]")
+            else:
+                self.console.print("  [green]✓[/green] 宿主契约校验通过")
 
         self.console.print("")
         if has_error:
@@ -6010,6 +6970,14 @@ class SuperDevCLI:
         self.console.print(f"{indent}触发上下文: {usage['trigger_context']}")
         self.console.print(f"{indent}触发位置: {usage['usage_location']}")
         self.console.print(f"{indent}接入后重启: {usage['restart_required_label']}")
+        precondition_label = usage.get("precondition_label", "")
+        if isinstance(precondition_label, str) and precondition_label.strip():
+            self.console.print(f"{indent}宿主前置条件: {precondition_label}")
+        precondition_guidance = usage.get("precondition_guidance", [])
+        if isinstance(precondition_guidance, list) and precondition_guidance:
+            self.console.print(f"{indent}前置条件说明:")
+            for item in precondition_guidance:
+                self.console.print(f"{indent}  - {item}")
         if usage.get("certification_reason"):
             self.console.print(f"{indent}认证说明: {usage['certification_reason']}")
         official_project = usage.get("official_project_surfaces", [])
@@ -6187,8 +7155,61 @@ class SuperDevCLI:
             "smoke_test_prompt": profile.smoke_test_prompt,
             "smoke_test_steps": list(profile.smoke_test_steps),
             "smoke_success_signal": profile.smoke_success_signal,
+            "precondition_status": profile.precondition_status,
+            "precondition_label": profile.precondition_label,
+            "precondition_guidance": list(profile.precondition_guidance),
+            "precondition_signals": dict(profile.precondition_signals),
             "notes": profile.notes,
         }
+
+    def _load_host_runtime_validation_state(self, *, project_dir: Path) -> dict[str, Any]:
+        payload = load_host_runtime_validation(project_dir) or {}
+        if not isinstance(payload, dict):
+            return {"hosts": {}, "updated_at": ""}
+        hosts = payload.get("hosts", {})
+        if not isinstance(hosts, dict):
+            hosts = {}
+        return {
+            "hosts": hosts,
+            "updated_at": str(payload.get("updated_at", "")).strip(),
+        }
+
+    def _host_runtime_status_label(self, status: str) -> str:
+        mapping = {
+            "pending": "待真人验收",
+            "passed": "已真人通过",
+            "failed": "真人验收失败",
+        }
+        return mapping.get(status, "待真人验收")
+
+    def _update_host_runtime_validation_state(
+        self,
+        *,
+        project_dir: Path,
+        target: str,
+        status: str,
+        comment: str,
+        actor: str,
+    ) -> tuple[dict[str, Any], Path]:
+        payload = self._load_host_runtime_validation_state(project_dir=project_dir)
+        hosts = dict(payload.get("hosts", {}))
+        current = hosts.get(target, {})
+        if not isinstance(current, dict):
+            current = {}
+        hosts[target] = {
+            "status": status,
+            "comment": comment.strip(),
+            "actor": actor.strip() or "user",
+            "updated_at": current.get("updated_at", ""),
+        }
+        file_path = save_host_runtime_validation(
+            project_dir,
+            {
+                "hosts": hosts,
+            },
+        )
+        updated = self._load_host_runtime_validation_state(project_dir=project_dir)
+        return updated, file_path
 
     def _resolve_report_project_name(self, project_dir: Path) -> str:
         try:
@@ -6273,6 +7294,14 @@ class SuperDevCLI:
                 lines.append(f"- Trigger Command: {usage.get('trigger_command', '-')}")
                 lines.append(f"- Trigger Context: {usage.get('trigger_context', '-')}")
                 lines.append(f"- Restart Required: {usage.get('restart_required_label', '-')}")
+                precondition_label = usage.get("precondition_label", "")
+                if isinstance(precondition_label, str) and precondition_label.strip():
+                    lines.append(f"- Host Preconditions: {precondition_label}")
+                precondition_guidance = usage.get("precondition_guidance", [])
+                if isinstance(precondition_guidance, list) and precondition_guidance:
+                    lines.append("- Host Precondition Guidance:")
+                    for item in precondition_guidance:
+                        lines.append(f"  - {item}")
                 steps = usage.get("post_onboard_steps", [])
                 if isinstance(steps, list) and steps:
                     lines.append("- Post Onboard Steps:")
@@ -6302,6 +7331,291 @@ class SuperDevCLI:
                 lines.append("")
 
         return "\n".join(lines).rstrip() + "\n"
+
+    def _render_host_surface_audit_markdown(self, payload: dict[str, Any]) -> str:
+        report = payload.get("report", {})
+        compatibility = payload.get("compatibility", {})
+        selected_targets = payload.get("selected_targets", [])
+        detected_hosts = payload.get("detected_hosts", [])
+        usage_profiles = payload.get("usage_profiles", {})
+        repair_actions = payload.get("repair_actions", {})
+        if not isinstance(report, dict):
+            report = {}
+        if not isinstance(compatibility, dict):
+            compatibility = {}
+        if not isinstance(selected_targets, list):
+            selected_targets = []
+        if not isinstance(detected_hosts, list):
+            detected_hosts = []
+        if not isinstance(usage_profiles, dict):
+            usage_profiles = {}
+        if not isinstance(repair_actions, dict):
+            repair_actions = {}
+
+        lines = [
+            "# Host Surface Audit Report",
+            "",
+            f"- Generated At (UTC): {datetime.now(timezone.utc).isoformat()}",
+            f"- Project Dir: {payload.get('project_dir', '')}",
+            f"- Detected Hosts: {', '.join(str(item) for item in detected_hosts) if detected_hosts else '(none)'}",
+            f"- Selected Targets: {', '.join(str(item) for item in selected_targets) if selected_targets else '(none)'}",
+            f"- Overall Score: {compatibility.get('overall_score', 0)}/100",
+            "",
+        ]
+        if repair_actions:
+            lines.extend(["## Repair Actions", ""])
+            for target, actions in repair_actions.items():
+                if isinstance(actions, dict):
+                    action_text = ", ".join(f"{key}={value}" for key, value in actions.items())
+                    lines.append(f"- {target}: {action_text}")
+            lines.append("")
+
+        hosts = report.get("hosts", {})
+        if not isinstance(hosts, dict):
+            hosts = {}
+
+        for target in selected_targets:
+            host = hosts.get(target, {}) if isinstance(target, str) else {}
+            usage = usage_profiles.get(target, {}) if isinstance(target, str) else {}
+            if not isinstance(host, dict):
+                host = {}
+            if not isinstance(usage, dict):
+                usage = {}
+            checks = host.get("checks", {})
+            contract = checks.get("contract", {}) if isinstance(checks, dict) else {}
+            surfaces = contract.get("surfaces", {}) if isinstance(contract, dict) else {}
+            invalid_surfaces = contract.get("invalid_surfaces", {}) if isinstance(contract, dict) else {}
+            lines.extend(
+                [
+                    f"## {target}",
+                    "",
+                    f"- Ready: {'yes' if bool(host.get('ready', False)) else 'no'}",
+                    f"- Trigger: {usage.get('final_trigger', '-')}",
+                    f"- Protocol: {usage.get('host_protocol_summary', '-')}",
+                    "",
+                    "| Surface | Exists | Missing Markers | Path |",
+                    "|---|---|---|---|",
+                ]
+            )
+            if isinstance(surfaces, dict):
+                for surface_key, surface_info in surfaces.items():
+                    if not isinstance(surface_info, dict):
+                        continue
+                    exists = "yes" if bool(surface_info.get("exists", False)) else "no"
+                    missing = surface_info.get("missing_markers", [])
+                    missing_text = ", ".join(str(item) for item in missing) if isinstance(missing, list) and missing else "-"
+                    lines.append(
+                        f"| {surface_key} | {exists} | {missing_text} | {surface_info.get('path', '-')} |"
+                    )
+            suggestions = host.get("suggestions", [])
+            if isinstance(invalid_surfaces, dict) and invalid_surfaces:
+                lines.extend(["", "### Fix Guidance", ""])
+                for surface_key, surface_info in invalid_surfaces.items():
+                    if not isinstance(surface_info, dict):
+                        continue
+                    missing = surface_info.get("missing_markers", [])
+                    missing_text = ", ".join(str(item) for item in missing) if isinstance(missing, list) and missing else "-"
+                    lines.append(f"- `{surface_key}` -> {missing_text}")
+            if isinstance(suggestions, list) and suggestions:
+                lines.extend(["", "### Suggested Commands", ""])
+                for suggestion in suggestions:
+                    lines.append(f"- `{suggestion}`")
+            lines.append("")
+
+        return "\n".join(lines).rstrip() + "\n"
+
+    def _build_host_runtime_validation_payload(
+        self,
+        *,
+        project_dir: Path,
+        targets: list[str],
+        detected_meta: dict[str, list[str]],
+        report: dict[str, Any],
+        usage_profiles: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        runtime_state = self._load_host_runtime_validation_state(project_dir=project_dir)
+        runtime_hosts = runtime_state.get("hosts", {})
+        if not isinstance(runtime_hosts, dict):
+            runtime_hosts = {}
+        hosts = report.get("hosts", {})
+        if not isinstance(hosts, dict):
+            hosts = {}
+        entries: list[dict[str, Any]] = []
+        for target in targets:
+            host = hosts.get(target, {}) if isinstance(target, str) else {}
+            usage = usage_profiles.get(target, {}) if isinstance(target, str) else {}
+            runtime_entry = runtime_hosts.get(target, {}) if isinstance(target, str) else {}
+            if not isinstance(host, dict):
+                host = {}
+            if not isinstance(usage, dict):
+                usage = {}
+            if not isinstance(runtime_entry, dict):
+                runtime_entry = {}
+            runtime_status = str(runtime_entry.get("status", "")).strip() or "pending"
+            entries.append(
+                {
+                    "host": target,
+                    "surface_ready": bool(host.get("ready", False)),
+                    "manual_runtime_status": runtime_status,
+                    "manual_runtime_status_label": self._host_runtime_status_label(runtime_status),
+                    "manual_runtime_comment": str(runtime_entry.get("comment", "")).strip(),
+                    "manual_runtime_actor": str(runtime_entry.get("actor", "")).strip(),
+                    "manual_runtime_updated_at": str(runtime_entry.get("updated_at", "")).strip(),
+                    "final_trigger": usage.get("final_trigger", "-"),
+                    "host_protocol_mode": usage.get("host_protocol_mode", "-"),
+                    "host_protocol_summary": usage.get("host_protocol_summary", "-"),
+                    "certification_label": usage.get("certification_label", "-"),
+                    "precondition_label": usage.get("precondition_label", "-"),
+                    "precondition_guidance": usage.get("precondition_guidance", []),
+                    "smoke_test_prompt": usage.get("smoke_test_prompt", ""),
+                    "smoke_success_signal": usage.get("smoke_success_signal", ""),
+                    "runtime_checklist": [
+                        "在宿主中使用最终触发命令进入 Super Dev 流水线。",
+                        "确认首轮响应明确进入 research，而不是直接开始编码。",
+                        "确认真实写入 output/*-research.md、output/*-prd.md、output/*-architecture.md、output/*-uiux.md。",
+                        "确认三文档完成后暂停等待用户确认，而不是直接继续实现。",
+                        "确认文档确认后能继续进入 Spec、前端运行验证、后端与交付阶段。",
+                    ],
+                    "pass_criteria": [
+                        "首轮响应符合 Super Dev 首轮契约。",
+                        "关键文档真实落盘到项目目录。",
+                        "确认门真实生效。",
+                        "后续恢复路径可用。",
+                    ],
+                }
+            )
+
+        return {
+            "project_dir": str(project_dir),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "runtime_state_file": str(host_runtime_validation_file(project_dir)),
+            "runtime_state_updated_at": runtime_state.get("updated_at", ""),
+            "detected_hosts": list(detected_meta.keys()),
+            "detection_details": detected_meta,
+            "selected_targets": targets,
+            "hosts": entries,
+        }
+
+    def _render_host_runtime_validation_markdown(self, payload: dict[str, Any]) -> str:
+        hosts = payload.get("hosts", [])
+        if not isinstance(hosts, list):
+            hosts = []
+        lines = [
+            "# Host Runtime Validation Matrix",
+            "",
+            f"- Generated At (UTC): {payload.get('generated_at', '')}",
+            f"- Project Dir: {payload.get('project_dir', '')}",
+            f"- Detected Hosts: {', '.join(str(item) for item in payload.get('detected_hosts', [])) or '(none)'}",
+            "",
+            "| Host | Surface Ready | Trigger | Protocol | Manual Runtime Status |",
+            "|---|---|---|---|---|",
+        ]
+        for host in hosts:
+            if not isinstance(host, dict):
+                continue
+            lines.append(
+                f"| {host.get('host', '-')} | {'yes' if bool(host.get('surface_ready', False)) else 'no'} | "
+                f"{host.get('final_trigger', '-')} | {host.get('host_protocol_summary', '-')} | {host.get('manual_runtime_status_label', '-')} |"
+            )
+
+        for host in hosts:
+            if not isinstance(host, dict):
+                continue
+            lines.extend(
+                [
+                    "",
+                    f"## {host.get('host', '-')}",
+                    "",
+                    f"- Trigger: {host.get('final_trigger', '-')}",
+                    f"- Protocol: {host.get('host_protocol_summary', '-')}",
+                    f"- Surface Ready: {'yes' if bool(host.get('surface_ready', False)) else 'no'}",
+                    f"- Manual Runtime Status: {host.get('manual_runtime_status_label', '-')}",
+                    f"- Host Preconditions: {host.get('precondition_label', '-')}",
+                    f"- Smoke Prompt: {host.get('smoke_test_prompt', '-')}",
+                    f"- Smoke Success Signal: {host.get('smoke_success_signal', '-')}",
+                    "",
+                    "### Runtime Checklist",
+                    "",
+                ]
+            )
+            comment = host.get("manual_runtime_comment", "")
+            if isinstance(comment, str) and comment.strip():
+                lines.extend(["### Runtime Validation Note", "", f"- {comment.strip()}", ""])
+            preconditions = host.get("precondition_guidance", [])
+            if isinstance(preconditions, list) and preconditions:
+                lines.extend(["", "### Host Precondition Guidance", ""])
+                for item in preconditions:
+                    lines.append(f"- {item}")
+            checklist = host.get("runtime_checklist", [])
+            if isinstance(checklist, list):
+                for item in checklist:
+                    lines.append(f"- {item}")
+            lines.extend(["", "### Pass Criteria", ""])
+            criteria = host.get("pass_criteria", [])
+            if isinstance(criteria, list):
+                for item in criteria:
+                    lines.append(f"- {item}")
+        return "\n".join(lines).rstrip() + "\n"
+
+    def _write_host_surface_audit_report(
+        self,
+        *,
+        project_dir: Path,
+        payload: dict[str, Any],
+    ) -> dict[str, Path]:
+        project_name = self._resolve_report_project_name(project_dir)
+        output_dir = project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        json_file = output_dir / f"{project_name}-host-surface-audit.json"
+        md_file = output_dir / f"{project_name}-host-surface-audit.md"
+        json_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        md_file.write_text(self._render_host_surface_audit_markdown(payload), encoding="utf-8")
+
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        history_dir = output_dir / "host-surface-audit-history"
+        history_dir.mkdir(parents=True, exist_ok=True)
+        history_json = history_dir / f"{project_name}-host-surface-audit-{stamp}.json"
+        history_md = history_dir / f"{project_name}-host-surface-audit-{stamp}.md"
+        history_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        history_md.write_text(self._render_host_surface_audit_markdown(payload), encoding="utf-8")
+
+        return {
+            "json": json_file,
+            "markdown": md_file,
+            "history_json": history_json,
+            "history_markdown": history_md,
+        }
+
+    def _write_host_runtime_validation_report(
+        self,
+        *,
+        project_dir: Path,
+        payload: dict[str, Any],
+    ) -> dict[str, Path]:
+        project_name = self._resolve_report_project_name(project_dir)
+        output_dir = project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        json_file = output_dir / f"{project_name}-host-runtime-validation.json"
+        md_file = output_dir / f"{project_name}-host-runtime-validation.md"
+        json_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        md_file.write_text(self._render_host_runtime_validation_markdown(payload), encoding="utf-8")
+
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        history_dir = output_dir / "host-runtime-validation-history"
+        history_dir.mkdir(parents=True, exist_ok=True)
+        history_json = history_dir / f"{project_name}-host-runtime-validation-{stamp}.json"
+        history_md = history_dir / f"{project_name}-host-runtime-validation-{stamp}.md"
+        history_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        history_md.write_text(self._render_host_runtime_validation_markdown(payload), encoding="utf-8")
+
+        return {
+            "json": json_file,
+            "markdown": md_file,
+            "history_json": history_json,
+            "history_markdown": history_md,
+        }
 
     def _write_host_compatibility_report(
         self,
@@ -6344,15 +7658,23 @@ class SuperDevCLI:
             # 初始化 SDD 目录结构
             generator = SpecGenerator(project_dir)
             agents_path, project_path = generator.init_sdd()
+            config = get_config_manager(project_dir).config
+            workflow_file, summary_file = self._bootstrap_project_contract(
+                project_dir=project_dir,
+                config=config,
+            )
 
             self.console.print("[green]✓[/green] SDD 目录结构已初始化")
             self.console.print("  [dim].super-dev/specs/[/dim] - 当前规范")
             self.console.print("  [dim].super-dev/changes/[/dim] - 变更提案")
             self.console.print("  [dim].super-dev/archive/[/dim] - 已归档变更")
+            self.console.print(f"  [dim]{workflow_file}[/dim] - 工作流契约")
+            self.console.print(f"  [dim]{summary_file}[/dim] - Bootstrap 摘要")
             self.console.print("")
             self.console.print("[cyan]下一步:[/cyan]")
             self.console.print("  1. 编辑 .super-dev/project.md 填写项目上下文")
-            self.console.print("  2. 运行 'super-dev spec propose <id>' 创建变更提案")
+            self.console.print("  2. 查看 output/*-bootstrap.md 确认初始化结果")
+            self.console.print("  3. 运行 'super-dev spec propose <id>' 创建变更提案")
 
         elif args.spec_action == "list":
             # 列出所有变更
@@ -6421,7 +7743,7 @@ class SuperDevCLI:
                     self.console.print(f"  - {delta.spec_name} ({delta.delta_type.value})")
 
         elif args.spec_action == "propose":
-            if not self._ensure_docs_confirmation_for_execution(project_dir, action_label="创建 Spec 变更"):
+            if not self._ensure_execution_gates(project_dir, action_label="创建 Spec 变更"):
                 return 1
             # 创建变更提案
             generator = SpecGenerator(project_dir)
@@ -6610,7 +7932,7 @@ class SuperDevCLI:
         known_commands = {
             "init", "analyze", "workflow", "studio", "expert", "quality", "metrics", "preview",
             "deploy", "create", "wizard", "design", "spec", "task", "pipeline", "run", "config", "skill", "integrate",
-            "onboard", "doctor", "setup", "install", "start", "detect", "policy", "update", "review", "release",
+            "onboard", "doctor", "setup", "install", "start", "bootstrap", "detect", "policy", "update", "review", "release",
         }
         return first not in known_commands
 
@@ -6676,12 +7998,21 @@ class SuperDevCLI:
             raise ValueError("请提供需求描述")
         return description, overrides
 
-    def _docs_confirmation_label(self, status: str) -> str:
+    def _review_status_label(self, status: str, *, review_type: str = "docs") -> str:
         if status == "confirmed":
-            return "已确认"
+            return "已通过" if review_type in {"ui", "architecture", "quality"} else "已确认"
         if status == "revision_requested":
+            if review_type == "ui":
+                return "需改版"
+            if review_type == "architecture":
+                return "需返工"
+            if review_type == "quality":
+                return "需整改"
             return "需修改"
         return "待确认"
+
+    def _docs_confirmation_label(self, status: str) -> str:
+        return self._review_status_label(status, review_type="docs")
 
     def _get_docs_confirmation_state(self, project_dir: Path) -> dict[str, Any]:
         payload = load_docs_confirmation(project_dir) or {}
@@ -6697,6 +8028,51 @@ class SuperDevCLI:
 
     def _docs_confirmation_is_confirmed(self, project_dir: Path) -> bool:
         return self._get_docs_confirmation_state(project_dir)["status"] == "confirmed"
+
+    def _get_ui_revision_state(self, project_dir: Path) -> dict[str, Any]:
+        payload = load_ui_revision(project_dir) or {}
+        return {
+            "status": str(payload.get("status", "")).strip() or "pending_review",
+            "comment": str(payload.get("comment", "")).strip(),
+            "actor": str(payload.get("actor", "")).strip(),
+            "run_id": str(payload.get("run_id", "")).strip(),
+            "updated_at": str(payload.get("updated_at", "")).strip(),
+            "exists": bool(payload),
+            "file_path": str(ui_revision_file(project_dir)),
+        }
+
+    def _ui_revision_is_clear(self, project_dir: Path) -> bool:
+        return self._get_ui_revision_state(project_dir)["status"] != "revision_requested"
+
+    def _get_architecture_revision_state(self, project_dir: Path) -> dict[str, Any]:
+        payload = load_architecture_revision(project_dir) or {}
+        return {
+            "status": str(payload.get("status", "")).strip() or "pending_review",
+            "comment": str(payload.get("comment", "")).strip(),
+            "actor": str(payload.get("actor", "")).strip(),
+            "run_id": str(payload.get("run_id", "")).strip(),
+            "updated_at": str(payload.get("updated_at", "")).strip(),
+            "exists": bool(payload),
+            "file_path": str(architecture_revision_file(project_dir)),
+        }
+
+    def _architecture_revision_is_clear(self, project_dir: Path) -> bool:
+        return self._get_architecture_revision_state(project_dir)["status"] != "revision_requested"
+
+    def _get_quality_revision_state(self, project_dir: Path) -> dict[str, Any]:
+        payload = load_quality_revision(project_dir) or {}
+        return {
+            "status": str(payload.get("status", "")).strip() or "pending_review",
+            "comment": str(payload.get("comment", "")).strip(),
+            "actor": str(payload.get("actor", "")).strip(),
+            "run_id": str(payload.get("run_id", "")).strip(),
+            "updated_at": str(payload.get("updated_at", "")).strip(),
+            "exists": bool(payload),
+            "file_path": str(quality_revision_file(project_dir)),
+        }
+
+    def _quality_revision_is_clear(self, project_dir: Path) -> bool:
+        return self._get_quality_revision_state(project_dir)["status"] != "revision_requested"
 
     def _has_core_docs(self, project_dir: Path) -> bool:
         output_dir = project_dir / "output"
@@ -6722,6 +8098,56 @@ class SuperDevCLI:
         self.console.print("[dim]先查看 output/*-prd.md、*-architecture.md、*-uiux.md[/dim]")
         self.console.print('[dim]然后执行: super-dev review docs --status confirmed --comment "三文档已确认"[/dim]')
         return False
+
+    def _ensure_ui_revision_clear_for_execution(self, project_dir: Path, *, action_label: str) -> bool:
+        current = self._get_ui_revision_state(project_dir)
+        if current["status"] != "revision_requested":
+            return True
+
+        self.console.print(f"[red]{action_label}前，必须先完成 UI 改版返工[/red]")
+        self.console.print(f"[dim]当前状态: {self._review_status_label(current['status'], review_type='ui')}[/dim]")
+        if current["comment"]:
+            self.console.print(f"[dim]备注: {current['comment']}[/dim]")
+        self.console.print("[dim]先更新 output/*-uiux.md，再重做前端，并重新执行 frontend runtime 与 UI review[/dim]")
+        self.console.print('[dim]完成后执行: super-dev review ui --status confirmed --comment "UI 改版已通过"[/dim]')
+        return False
+
+    def _ensure_architecture_revision_clear_for_execution(self, project_dir: Path, *, action_label: str) -> bool:
+        current = self._get_architecture_revision_state(project_dir)
+        if current["status"] != "revision_requested":
+            return True
+
+        self.console.print(f"[red]{action_label}前，必须先完成架构返工[/red]")
+        self.console.print(f"[dim]当前状态: {self._review_status_label(current['status'], review_type='architecture')}[/dim]")
+        if current["comment"]:
+            self.console.print(f"[dim]备注: {current['comment']}[/dim]")
+        self.console.print("[dim]先更新 output/*-architecture.md，再同步调整实现方案与相关任务拆解[/dim]")
+        self.console.print('[dim]完成后执行: super-dev review architecture --status confirmed --comment "架构返工已通过"[/dim]')
+        return False
+
+    def _ensure_quality_revision_clear_for_execution(self, project_dir: Path, *, action_label: str) -> bool:
+        current = self._get_quality_revision_state(project_dir)
+        if current["status"] != "revision_requested":
+            return True
+
+        self.console.print(f"[red]{action_label}前，必须先完成质量返工[/red]")
+        self.console.print(f"[dim]当前状态: {self._review_status_label(current['status'], review_type='quality')}[/dim]")
+        if current["comment"]:
+            self.console.print(f"[dim]备注: {current['comment']}[/dim]")
+        self.console.print("[dim]先修复质量/安全问题，重新执行 quality gate 与 release proof-pack[/dim]")
+        self.console.print('[dim]完成后执行: super-dev review quality --status confirmed --comment "质量返工已通过"[/dim]')
+        return False
+
+    def _ensure_execution_gates(self, project_dir: Path, *, action_label: str) -> bool:
+        return self._ensure_docs_confirmation_for_execution(
+            project_dir, action_label=action_label
+        ) and self._ensure_ui_revision_clear_for_execution(
+            project_dir, action_label=action_label
+        ) and self._ensure_architecture_revision_clear_for_execution(
+            project_dir, action_label=action_label
+        ) and self._ensure_quality_revision_clear_for_execution(
+            project_dir, action_label=action_label
+        )
 
     def _cmd_task(self, args) -> int:
         """Spec 任务执行与状态查看"""
@@ -6785,7 +8211,7 @@ class SuperDevCLI:
             or (config.name if config_exists and config.name else args.change_id)
         )
 
-        if not self._ensure_docs_confirmation_for_execution(project_dir, action_label="执行 Spec 任务"):
+        if not self._ensure_execution_gates(project_dir, action_label="执行 Spec 任务"):
             return 1
 
         executor = SpecTaskExecutor(project_dir=project_dir, project_name=project_name)

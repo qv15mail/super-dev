@@ -39,6 +39,32 @@ class RequirementBlueprint:
 class RequirementParser:
     """将一句话需求解析为规范、阶段和前端模块"""
 
+    _BUGFIX_KEYWORDS = (
+        "bug",
+        "bugfix",
+        "fix",
+        "hotfix",
+        "回归",
+        "修bug",
+        "修复",
+        "报错",
+        "错误",
+        "异常",
+        "崩溃",
+        "故障",
+        "问题",
+        "失效",
+        "无法",
+        "不生效",
+        "不工作",
+        "不对",
+        "失败",
+        "crash",
+        "error",
+        "exception",
+        "regression",
+    )
+
     _KEYWORD_RULES: list[KeywordRule] = [
         {
             "spec_name": "auth",
@@ -218,6 +244,11 @@ class RequirementParser:
 
         return self._deduplicate_requirements(parsed)
 
+    def detect_request_mode(self, description: str) -> str:
+        """检测当前请求是 feature 还是 bugfix。"""
+        lowered = (description or "").strip().lower()
+        return "bugfix" if any(keyword in lowered for keyword in self._BUGFIX_KEYWORDS) else "feature"
+
     def detect_scenario(self, project_dir: Path) -> str:
         """检测 0-1 / 1-N+1 场景"""
         path = Path(project_dir).resolve()
@@ -225,12 +256,45 @@ class RequirementParser:
         has_project_file = any((path / item).exists() for item in self._PROJECT_FILES)
         return "1-N+1" if (has_source or has_project_file) else "0-1"
 
-    def build_execution_phases(self, scenario: str, requirements: list[dict]) -> list[dict]:
+    def build_execution_phases(
+        self,
+        scenario: str,
+        requirements: list[dict],
+        request_mode: str = "feature",
+    ) -> list[dict]:
         """生成执行阶段计划"""
         req_titles = [req.get("req_name", "requirement") for req in requirements]
         focus = ", ".join(req_titles[:4])
         if len(req_titles) > 4:
             focus += " ..."
+
+        if request_mode == "bugfix":
+            return [
+                {
+                    "id": "phase-1",
+                    "title": "问题复现与影响分析",
+                    "objective": "先锁定错误现象、复现步骤、影响范围与回归风险。",
+                    "deliverables": ["问题摘要", "复现步骤", "影响范围清单", "回归风险说明"],
+                },
+                {
+                    "id": "phase-2",
+                    "title": "轻量文档冻结",
+                    "objective": "以补丁方式更新 PRD / Architecture / UIUX，记录根因与修复边界。",
+                    "deliverables": ["补丁 PRD", "补丁架构说明", "补丁 UIUX", "确认门状态"],
+                },
+                {
+                    "id": "phase-3",
+                    "title": "定点修复与回归验证",
+                    "objective": "完成最小必要修复，并覆盖主路径与回归风险。",
+                    "deliverables": ["修复实现", "前端运行验证", "回归测试结果"],
+                },
+                {
+                    "id": "phase-4",
+                    "title": "质量门禁与交付",
+                    "objective": "重新通过 quality gate、proof pack 与发布检查。",
+                    "deliverables": ["质量门禁报告", "Proof Pack", "交付说明"],
+                },
+            ]
 
         if scenario == "0-1":
             return [

@@ -486,7 +486,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             <div className="max-w-[860px]">
               <div className="mb-5 flex flex-wrap items-center gap-2">
                 <Badge variant="version">{content.heroKicker}</Badge>
-                <Badge variant="certified">v2.0.8</Badge>
+                <Badge variant="certified">v2.0.9</Badge>
                 <Badge variant="compatible">{locale === 'en' ? 'Bilingual' : '中英双语'}</Badge>
               </div>
               <h1 className="max-w-[900px] text-4xl font-bold leading-[1.08] tracking-tight text-text-primary sm:text-5xl lg:text-[3.5rem]">

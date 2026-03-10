@@ -24,7 +24,10 @@ class TestSkillManager:
         assert SkillManager.TARGET_PATHS["windsurf"] == "~/.codeium/windsurf/skills"
         assert SkillManager.TARGET_PATHS["opencode"] == "~/.config/opencode/skills"
 
-    def test_install_from_directory_and_uninstall(self, temp_project_dir: Path):
+    def test_install_from_directory_and_uninstall(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
         source_skill = temp_project_dir / "my-skill"
         source_skill.mkdir(parents=True, exist_ok=True)
         (source_skill / "SKILL.md").write_text("# My Skill", encoding="utf-8")
@@ -66,6 +69,7 @@ class TestSkillManager:
         assert "本地知识库契约（强制）" in skill_content
         assert "output/knowledge-cache/*-knowledge-bundle.json" in skill_content
         assert "未经用户明确确认，禁止创建 `.super-dev/changes/*`" in skill_content
+        assert "super-dev：" in skill_content
         assert "super-dev-core" in manager.list_installed(target)
 
         removed = manager.uninstall("super-dev-core", target)

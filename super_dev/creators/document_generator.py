@@ -195,7 +195,7 @@ class DocumentGenerator:
         return f"""# {self.name} - 产品需求文档 (PRD)
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.0.8
+> **版本**: v2.0.9
 > **状态**: 草稿
 
 ---
@@ -233,6 +233,10 @@ class DocumentGenerator:
 ### 1.5 用户分层与使用场景
 
 {self._generate_user_segment_matrix()}
+
+### 1.6 需求澄清问题
+
+{self._generate_clarification_questions()}
 
 ---
 
@@ -417,7 +421,7 @@ class DocumentGenerator:
 
 | 版本 | 日期 | 变更内容 | 作者 |
 |:---|:---|:---|:---|
-| v2.0.8 | {datetime.now().strftime('%Y-%m-%d')} | 初始版本 | Super Dev |
+| v2.0.9 | {datetime.now().strftime('%Y-%m-%d')} | 初始版本 | Super Dev |
 """
 
     def generate_architecture(self) -> str:
@@ -425,7 +429,7 @@ class DocumentGenerator:
         return f"""# {self.name} - 架构设计文档
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.0.8
+> **版本**: v2.0.9
 > **架构师**: Super Dev ARCHITECT 专家
 
 ---
@@ -588,7 +592,11 @@ class DocumentGenerator:
   - Repository
   - DAO
   - Cache Manager
-  - Transaction Manager
+- Transaction Manager
+
+### 3.3 关键时序图
+
+{self._generate_sequence_diagram()}
 
 ---
 
@@ -837,7 +845,7 @@ jobs:
         doc_parts.append(f"""# {self.name} - UI/UX 设计文档
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.0.8
+> **版本**: v2.0.9
 > **设计师**: Super Dev UI/UX 专家
 
 ---
@@ -2623,16 +2631,18 @@ spec:
         """从描述提取需求列表"""
         return self.requirement_parser.parse_requirements(self.description)
 
-    def generate_execution_plan(self, scenario: str = "0-1") -> str:
+    def generate_execution_plan(self, scenario: str = "0-1", request_mode: str | None = None) -> str:
         """生成分阶段执行路线图（支持 0-1 / 1-N+1）"""
         requirements = self.extract_requirements()
-        phases = self.requirement_parser.build_execution_phases(scenario, requirements)
+        mode = request_mode or self.requirement_parser.detect_request_mode(self.description)
+        phases = self.requirement_parser.build_execution_phases(scenario, requirements, request_mode=mode)
 
         lines = [
             f"# {self.name} - 执行路线图",
             "",
             f"> **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
             f"> **场景**: {scenario}",
+            f"> **请求模式**: {mode}",
             "> **策略**: 先前端可视化，再系统能力闭环",
             "",
             "---",
@@ -2754,6 +2764,24 @@ spec:
             "- 对标研究更应关注流程、交互密度、信任表达和交付成熟度，而不是只模仿视觉表面。"
         )
 
+    def _generate_clarification_questions(self) -> str:
+        mode = self.requirement_parser.detect_request_mode(self.description)
+        if mode == "bugfix":
+            return (
+                "1. **实际症状**：当前报错、异常现象或错误行为是什么？\n"
+                "2. **复现条件**：在哪个页面、接口、角色或环境下可以稳定复现？\n"
+                "3. **期望行为**：修复后应该恢复成什么结果，是否有历史正确行为可对照？\n"
+                "4. **影响范围**：受影响的是单一路径还是多个模块，是否涉及数据修复或兼容性问题？\n"
+                "5. **回归风险**：这次修复最需要补哪类验证，避免把别的链路一起带坏？"
+            )
+        return (
+            "1. **核心用户**：第一批真正会使用这个产品的人是谁？\n"
+            "2. **主任务路径**：用户进入后最重要的一条路径是什么，需要几步完成？\n"
+            "3. **范围边界**：MVP 必须交付什么，哪些能力明确不进入第一阶段？\n"
+            "4. **依赖约束**：是否依赖现有系统、第三方服务、数据源、权限体系或组织流程？\n"
+            "5. **成功标准**：上线后用什么结果判断这次开发是有效的？"
+        )
+
     def _generate_user_segment_matrix(self) -> str:
         return (
             "| 用户分层 | 主要目标 | 关键诉求 | 设计重点 |\n"
@@ -2821,6 +2849,43 @@ spec:
             "- 技术选型应优先服务于当前阶段交付速度、稳定性、可维护性和团队认知成本。\n"
             "- 对高频路径优先做低延迟设计，对高风险路径优先做权限、审计、幂等和回滚设计。\n"
             "- 前后端契约应围绕页面与任务流定义，而不是围绕数据库表结构反推。"
+        )
+
+    def _generate_sequence_diagram(self) -> str:
+        mode = self.requirement_parser.detect_request_mode(self.description)
+        if mode == "bugfix":
+            return (
+                "```mermaid\n"
+                "sequenceDiagram\n"
+                '    participant U as "User"\n'
+                '    participant H as "Host AI"\n'
+                '    participant R as "Research & Docs"\n'
+                '    participant C as "Code / Tests"\n'
+                "    U->>H: 提交缺陷修复需求\n"
+                "    H->>R: 先复现问题并更新补丁文档\n"
+                "    R-->>U: 输出轻量 PRD / Architecture / UIUX 补丁说明\n"
+                "    U->>H: 确认修复边界\n"
+                "    H->>C: 实施定点修复与回归测试\n"
+                "    C-->>U: 返回修复结果、验证证据与剩余风险\n"
+                "```\n"
+            )
+        return (
+            "```mermaid\n"
+            "sequenceDiagram\n"
+            '    participant U as "User"\n'
+            '    participant F as "Frontend"\n'
+            '    participant A as "API Gateway"\n'
+            '    participant S as "Service"\n'
+            '    participant D as "Database"\n'
+            "    U->>F: 发起核心业务操作\n"
+            "    F->>A: 提交请求与上下文\n"
+            "    A->>S: 路由、鉴权、校验\n"
+            "    S->>D: 读取 / 写入业务数据\n"
+            "    D-->>S: 返回结果\n"
+            "    S-->>A: 产出稳定 DTO 与状态\n"
+            "    A-->>F: 返回业务结果\n"
+            "    F-->>U: 展示反馈、下一步动作与状态变化\n"
+            "```\n"
         )
 
     def _generate_domain_boundaries(self) -> str:

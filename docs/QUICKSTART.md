@@ -1,6 +1,6 @@
 # Super Dev 快速开始
 
-> 面向 `2.0.8` 版本，5-10 分钟完成从安装到首次流水线运行。
+> 面向 `2.0.9` 版本，5-10 分钟完成从安装到首次流水线运行。
 
 ## 1. 环境要求
 
@@ -22,7 +22,7 @@ pip install -U super-dev
 ### 方式 B：安装指定版本（复现/回滚）
 
 ```bash
-pip install super-dev==2.0.8
+pip install super-dev==2.0.9
 ```
 
 ## 3. 启动方式（推荐）
@@ -37,6 +37,12 @@ pip install super-dev==2.0.8
 
 ```bash
 super-dev start --idea "构建一个电商后台，包含登录、订单、支付"
+```
+
+如果你想先显式初始化项目契约，再进入宿主：
+
+```bash
+super-dev bootstrap --name my-project --platform web --frontend next --backend node
 ```
 
 终端直达只负责本地治理产物编排，不替代宿主编码：

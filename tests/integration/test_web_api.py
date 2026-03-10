@@ -3,6 +3,7 @@ Super Dev Web API 集成测试
 """
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -10,8 +11,10 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 import super_dev.web.api as web_api
+from super_dev.cli import SuperDevCLI
+from super_dev.integrations import IntegrationManager
 from super_dev.orchestrator import Phase, PhaseResult
-from super_dev.review_state import save_docs_confirmation
+from super_dev.review_state import save_docs_confirmation, save_ui_revision
 
 
 @pytest.fixture(autouse=True)
@@ -28,23 +31,90 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         parents=True,
         exist_ok=True,
     )
-    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.8"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
-    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.8"\n', encoding="utf-8")
+    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.9"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
+    (project_dir / ".gitignore").write_text(
+        "\n".join(
+            [
+                "output/",
+                "artifacts/",
+                ".super-dev/runs/",
+                ".super-dev/review-state/",
+                "/.agent/",
+                "/.claude/",
+                "/.codebuddy/",
+                "/.cursor/",
+                "/.gemini/",
+                "/.iflow/",
+                "/.kimi/",
+                "/.kiro/",
+                "/.opencode/",
+                "/.qoder/",
+                "/.trae/",
+                "/.windsurf/",
+                "/GEMINI.md",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.9"\n', encoding="utf-8")
     (project_dir / "README.md").write_text(
-        "当前版本：`2.0.8`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "当前版本：`2.0.9`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "README_EN.md").write_text(
-        "Current version: `2.0.8`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "Current version: `2.0.9`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "docs" / "HOST_USAGE_GUIDE.md").write_text("Smoke\n/super-dev\nsuper-dev:\n", encoding="utf-8")
     (project_dir / "docs" / "HOST_CAPABILITY_AUDIT.md").write_text("官方依据\nsuper-dev integrate smoke\n", encoding="utf-8")
+    (project_dir / "docs" / "PRODUCT_AUDIT.md").write_text("P0\nP1\nP2\n", encoding="utf-8")
     (project_dir / "docs" / "WORKFLOW_GUIDE.md").write_text("super-dev review docs\nsuper-dev run --resume\n", encoding="utf-8")
     (project_dir / "docs" / "WORKFLOW_GUIDE_EN.md").write_text("super-dev review docs\nsuper-dev run --resume\n", encoding="utf-8")
     (project_dir / "install.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
     for name in ("change.yaml", "proposal.md", "tasks.md"):
         (project_dir / ".super-dev" / "changes" / "release-hardening-finalization" / name).write_text("ok\n", encoding="utf-8")
+
+
+def _prepare_proof_pack_project(project_dir: Path) -> None:
+    _prepare_release_ready_project(project_dir)
+    output_dir = project_dir / "output"
+    (output_dir / "delivery").mkdir(parents=True, exist_ok=True)
+    (output_dir / "rehearsal").mkdir(parents=True, exist_ok=True)
+    for suffix in ("research", "prd", "architecture", "uiux"):
+        (output_dir / f"{project_dir.name}-{suffix}.md").write_text("# ok\n", encoding="utf-8")
+    (output_dir / f"{project_dir.name}-frontend-runtime.json").write_text('{"passed": true}', encoding="utf-8")
+    (output_dir / f"{project_dir.name}-ui-review.json").write_text(
+        json.dumps({"score": 91, "critical_count": 0}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (output_dir / f"{project_dir.name}-quality-gate.md").write_text("# quality gate\npassed\n", encoding="utf-8")
+    (output_dir / "delivery" / f"{project_dir.name}-delivery-manifest.json").write_text(
+        json.dumps({"status": "ready"}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (output_dir / "rehearsal" / f"{project_dir.name}-rehearsal-report.json").write_text(
+        json.dumps({"passed": True, "score": 94}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    save_docs_confirmation(
+        project_dir,
+        {
+            "status": "confirmed",
+            "comment": "proof pack docs confirmed",
+            "actor": "pytest",
+            "run_id": "proof-pack-run",
+        },
+    )
+    save_ui_revision(
+        project_dir,
+        {
+            "status": "confirmed",
+            "comment": "ui revision closed",
+            "actor": "pytest",
+            "run_id": "proof-pack-run",
+        },
+    )
 
 
 class TestWebAPI:
@@ -469,6 +539,142 @@ class TestWebAPI:
         assert summary["docs_confirmation"]["status"] == "confirmed"
         confirmation_stage = next(item for item in summary["stages"] if item["id"] == "confirmation_gate")
         assert confirmation_stage["status"] == "completed"
+
+    def test_workflow_ui_revision_roundtrip(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-prd.md").write_text("# prd", encoding="utf-8")
+        (output_dir / "demo-architecture.md").write_text("# architecture", encoding="utf-8")
+        (output_dir / "demo-uiux.md").write_text("# uiux", encoding="utf-8")
+        (output_dir / "demo-quality-gate.md").write_text("# quality", encoding="utf-8")
+
+        web_api._store_run_state(
+            "ui-revision01",
+            persist_dir=temp_project_dir,
+            status="running",
+            message="quality ready",
+            requested_phases=["qa"],
+            completed_phases=["drafting", "qa"],
+            progress=75,
+            project_dir=str(temp_project_dir),
+            results=[],
+        )
+
+        update_resp = client.post(
+            "/api/workflow/ui-revision",
+            params={"project_dir": str(temp_project_dir), "run_id": "ui-revision01"},
+            json={"status": "revision_requested", "comment": "Hero 太空，需要重做", "actor": "user"},
+        )
+        assert update_resp.status_code == 200
+        assert update_resp.json()["status"] == "revision_requested"
+
+        get_resp = client.get(
+            "/api/workflow/ui-revision",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert get_resp.status_code == 200
+        assert get_resp.json()["status"] == "revision_requested"
+        assert get_resp.json()["comment"] == "Hero 太空，需要重做"
+
+        status_resp = client.get(
+            "/api/workflow/status/ui-revision01",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert status_resp.status_code == 200
+        summary = status_resp.json()["pipeline_summary"]
+        assert summary["ui_revision"]["status"] == "revision_requested"
+        assert "UI 改版请求" in summary["blocker"]
+
+    def test_workflow_architecture_revision_roundtrip(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-prd.md").write_text("# prd", encoding="utf-8")
+        (output_dir / "demo-architecture.md").write_text("# architecture", encoding="utf-8")
+        (output_dir / "demo-uiux.md").write_text("# uiux", encoding="utf-8")
+
+        web_api._store_run_state(
+            "architecture-revision01",
+            persist_dir=temp_project_dir,
+            status="running",
+            message="drafting ready",
+            requested_phases=["drafting"],
+            completed_phases=["drafting"],
+            progress=55,
+            project_dir=str(temp_project_dir),
+            results=[],
+        )
+
+        update_resp = client.post(
+            "/api/workflow/architecture-revision",
+            params={"project_dir": str(temp_project_dir), "run_id": "architecture-revision01"},
+            json={"status": "revision_requested", "comment": "架构分层不清晰，需要重构模块边界", "actor": "user"},
+        )
+        assert update_resp.status_code == 200
+
+        get_resp = client.get(
+            "/api/workflow/architecture-revision",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert get_resp.status_code == 200
+        assert get_resp.json()["status"] == "revision_requested"
+
+        status_resp = client.get(
+            "/api/workflow/status/architecture-revision01",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert status_resp.status_code == 200
+        summary = status_resp.json()["pipeline_summary"]
+        assert summary["architecture_revision"]["status"] == "revision_requested"
+        assert "架构返工请求" in summary["blocker"]
+
+    def test_workflow_quality_revision_roundtrip(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-prd.md").write_text("# prd", encoding="utf-8")
+        (output_dir / "demo-architecture.md").write_text("# architecture", encoding="utf-8")
+        (output_dir / "demo-uiux.md").write_text("# uiux", encoding="utf-8")
+        (output_dir / "demo-quality-gate.md").write_text("# quality", encoding="utf-8")
+
+        web_api._store_run_state(
+            "quality-revision01",
+            persist_dir=temp_project_dir,
+            status="running",
+            message="qa ready",
+            requested_phases=["qa"],
+            completed_phases=["drafting", "qa"],
+            progress=78,
+            project_dir=str(temp_project_dir),
+            results=[],
+        )
+
+        update_resp = client.post(
+            "/api/workflow/quality-revision",
+            params={"project_dir": str(temp_project_dir), "run_id": "quality-revision01"},
+            json={"status": "revision_requested", "comment": "质量门禁未通过，需要修复安全问题", "actor": "user"},
+        )
+        assert update_resp.status_code == 200
+
+        get_resp = client.get(
+            "/api/workflow/quality-revision",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert get_resp.status_code == 200
+        assert get_resp.json()["status"] == "revision_requested"
+
+        status_resp = client.get(
+            "/api/workflow/status/quality-revision01",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert status_resp.status_code == 200
+        summary = status_resp.json()["pipeline_summary"]
+        assert summary["quality_revision"]["status"] == "revision_requested"
+        assert "质量返工请求" in summary["blocker"]
 
     def test_workflow_run_passes_request_context(self, temp_project_dir: Path, monkeypatch):
         client = TestClient(web_api.app)
@@ -1018,6 +1224,7 @@ class TestWebAPI:
         assert claude_host["usage_mode"] == "native-slash"
         assert claude_host["commands"]["trigger"].startswith("/super-dev")
         assert claude_host["commands"]["setup"].startswith("super-dev setup --host claude-code")
+        assert claude_host["commands"]["audit"] == "super-dev integrate audit --target claude-code"
         assert claude_host["commands"]["smoke"] == "super-dev integrate smoke --target claude-code"
 
         language_ids = {item["id"] for item in payload["languages"]}
@@ -1050,9 +1257,31 @@ class TestWebAPI:
         host = payload["report"]["hosts"]["claude-code"]
         assert host["ready"] is False
         assert {"integrate", "slash"}.issubset(set(host["missing"]))
+        assert host["checks"]["contract"]["ok"] is True
+        assert host["checks"]["contract"]["surfaces"]
+        assert host["checks"]["contract"]["invalid_surfaces"] == {}
         assert host["usage_profile"]["usage_mode"] == "native-slash"
         assert host["usage_profile"]["certification_label"] == "Certified"
         assert host["usage_profile"]["requires_restart_after_onboard"] is False
+
+    def test_hosts_doctor_iflow_exposes_host_preconditions(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+        resp = client.get(
+            "/api/hosts/doctor",
+            params={
+                "project_dir": str(temp_project_dir),
+                "host": "iflow",
+            },
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        usage = payload["usage_profiles"]["iflow"]
+        assert usage["precondition_status"] == "host-auth-required"
+        assert usage["precondition_label"] in {"需宿主鉴权", "已检测到鉴权配置"}
+        assert any("/auth" in item for item in usage["precondition_guidance"])
+        host = payload["report"]["hosts"]["iflow"]
+        assert host["preconditions"]["status"] == "host-auth-required"
+        assert any("Invalid API key provided" in item for item in host["suggestions"])
 
     def test_detect_host_targets_uses_windows_env_candidates(self, temp_project_dir: Path, monkeypatch):
         localapp = temp_project_dir / "LocalAppData"
@@ -1088,10 +1317,12 @@ class TestWebAPI:
         payload = resp.json()
         host = payload["report"]["hosts"]["trae"]
         assert host["ready"] is False
+        assert "contract" in host["missing"]
         assert "skill" in host["missing"]
         assert "slash" not in host["missing"]
         assert host["checks"]["slash"]["ok"] is True
         assert host["checks"]["slash"]["mode"] == "rules-only"
+        assert host["checks"]["contract"]["ok"] is False
         assert payload["usage_profiles"]["trae"]["usage_mode"] == "rules-and-skill"
         assert payload["usage_profiles"]["trae"]["certification_level"] == "compatible"
         assert host["usage_profile"]["trigger_command"] == "super-dev: <需求描述>"
@@ -1122,6 +1353,7 @@ class TestWebAPI:
         assert resp.status_code == 200
         payload = resp.json()
         host = payload["report"]["hosts"]["trae"]
+        assert "contract" in host["missing"]
         assert "skill" not in host["missing"]
         assert host["checks"]["skill"]["surface_available"] is False
         assert host["checks"]["skill"]["mode"] == "compatibility-surface-unavailable"
@@ -1267,12 +1499,9 @@ class TestWebAPI:
 
     def test_hosts_doctor_endpoint_ready_after_files_present(self, temp_project_dir: Path):
         client = TestClient(web_api.app)
-        (temp_project_dir / ".claude" / "CLAUDE.md").parent.mkdir(parents=True, exist_ok=True)
-        (temp_project_dir / ".claude" / "CLAUDE.md").write_text("ok", encoding="utf-8")
-        (temp_project_dir / ".claude" / "commands").mkdir(parents=True, exist_ok=True)
-        (temp_project_dir / ".claude" / "commands" / "super-dev.md").write_text("ok", encoding="utf-8")
-        (temp_project_dir / ".claude" / "agents").mkdir(parents=True, exist_ok=True)
-        (temp_project_dir / ".claude" / "agents" / "super-dev-core.md").write_text("ok", encoding="utf-8")
+        manager = IntegrationManager(temp_project_dir)
+        manager.setup("claude-code", force=True)
+        manager.setup_slash_command("claude-code", force=True)
 
         resp = client.get(
             "/api/hosts/doctor",
@@ -1284,7 +1513,36 @@ class TestWebAPI:
         assert resp.status_code == 200
         payload = resp.json()
         assert payload["report"]["hosts"]["claude-code"]["ready"] is True
+        assert payload["report"]["hosts"]["claude-code"]["checks"]["contract"]["ok"] is True
         assert payload["compatibility"]["hosts"]["claude-code"]["score"] == 100.0
+
+    def test_hosts_doctor_endpoint_flags_stale_contract(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+        manager = IntegrationManager(temp_project_dir)
+        manager.setup("claude-code", force=True)
+        manager.setup_slash_command("claude-code", force=True)
+        stale_file = temp_project_dir / ".claude" / "commands" / "super-dev.md"
+        stale_file.write_text("# stale\n/super-dev\n", encoding="utf-8")
+
+        resp = client.get(
+            "/api/hosts/doctor",
+            params={
+                "project_dir": str(temp_project_dir),
+                "host": "claude-code",
+            },
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        host = payload["report"]["hosts"]["claude-code"]
+        assert host["ready"] is False
+        assert "contract" in host["missing"]
+        assert host["checks"]["contract"]["ok"] is False
+        invalid_surfaces = host["checks"]["contract"]["invalid_surfaces"]
+        assert invalid_surfaces
+        assert any(
+            ".claude/commands/super-dev.md" in str(item.get("path", ""))
+            for item in invalid_surfaces.values()
+        )
 
     def test_deploy_precheck_github(self, temp_project_dir: Path, monkeypatch):
         client = TestClient(web_api.app)
@@ -1531,3 +1789,74 @@ class TestWebAPI:
         assert payload["score"] == 100
         assert Path(payload["report_file"]).exists()
         assert Path(payload["json_file"]).exists()
+
+    def test_release_proof_pack_endpoint(self, temp_project_dir: Path):
+        _prepare_proof_pack_project(temp_project_dir)
+        client = TestClient(web_api.app)
+
+        resp = client.get(
+            "/api/release/proof-pack",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["status"] == "ready"
+        assert payload["ready_count"] == payload["total_count"]
+        assert Path(payload["report_file"]).exists()
+        assert Path(payload["json_file"]).exists()
+
+    def test_hosts_validate_endpoint(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+
+        resp = client.get(
+            "/api/hosts/validate",
+            params={"project_dir": str(temp_project_dir), "host": "iflow"},
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["selected_targets"] == ["iflow"]
+        assert payload["report"]["hosts"][0]["host"] == "iflow"
+        assert payload["report"]["hosts"][0]["manual_runtime_status_label"] == "待真人验收"
+        assert payload["report"]["hosts"][0]["precondition_label"] in {"需宿主鉴权", "已检测到鉴权配置"}
+
+    def test_hosts_runtime_validation_roundtrip(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        (fake_home / ".codex").mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+
+        cli = SuperDevCLI()
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            assert cli.run(["onboard", "--host", "codex-cli", "--force", "--yes"]) == 0
+        finally:
+            os.chdir(original_cwd)
+
+        client = TestClient(web_api.app)
+
+        update = client.post(
+            "/api/hosts/runtime-validation",
+            params={"project_dir": str(temp_project_dir)},
+            json={
+                "host": "codex-cli",
+                "status": "passed",
+                "comment": "首轮先进入 research，三文档已真实落盘",
+                "actor": "user",
+            },
+        )
+        assert update.status_code == 200
+        update_payload = update.json()
+        assert update_payload["manual_runtime_status"] == "passed"
+        assert update_payload["manual_runtime_status_label"] == "已真人通过"
+
+        resp = client.get(
+            "/api/hosts/runtime-validation",
+            params={"project_dir": str(temp_project_dir), "host": "codex-cli"},
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        host = payload["report"]["hosts"][0]
+        assert host["manual_runtime_status"] == "passed"
+        assert host["manual_runtime_status_label"] == "已真人通过"
+        assert host["manual_runtime_comment"] == "首轮先进入 research，三文档已真实落盘"

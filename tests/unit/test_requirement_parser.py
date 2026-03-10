@@ -35,6 +35,12 @@ class TestRequirementParser:
         (temp_project_dir / "src").mkdir()
         assert parser.detect_scenario(temp_project_dir) == "1-N+1"
 
+    def test_detect_request_mode(self):
+        parser = RequirementParser()
+
+        assert parser.detect_request_mode("修复登录接口报错并补充回归验证") == "bugfix"
+        assert parser.detect_request_mode("开发一个新的商业官网") == "feature"
+
 
 class TestDocumentGeneratorIntegration:
     def test_document_generator_extracts_dynamic_requirements(self):
@@ -77,9 +83,11 @@ class TestDocumentGeneratorIntegration:
         uiux = generator.generate_uiux()
 
         assert "### 1.4 市场与对标结论" in prd
+        assert "### 1.6 需求澄清问题" in prd
         assert "### 2.4 功能优先级与范围边界" in prd
         assert "### 7.4 业务验收矩阵" in prd
         assert "### 1.3 需求到架构的落地映射" in architecture
+        assert "### 3.3 关键时序图" in architecture
         assert "### 8.3 容错与降级策略" in architecture
         assert "### 1.4 商业级体验目标" in uiux
         assert "### 1.5 设计 Intelligence 结论" in uiux
@@ -101,6 +109,20 @@ class TestDocumentGeneratorIntegration:
         assert "shadcn/ui + Radix UI + Tailwind CSS" in uiux
         assert "表单与验证" in uiux
         assert "图标体系" in uiux
+
+    def test_execution_plan_switches_to_bugfix_mode(self):
+        generator = DocumentGenerator(
+            name="hotfix-patch",
+            description="修复支付回调重复扣款 bug，并补充回归验证",
+            frontend="react",
+            backend="python",
+        )
+
+        plan = generator.generate_execution_plan(scenario="1-N+1")
+
+        assert "> **请求模式**: bugfix" in plan
+        assert "问题复现与影响分析" in plan
+        assert "轻量文档冻结" in plan
 
 
 class TestFrontendScaffoldBuilder:

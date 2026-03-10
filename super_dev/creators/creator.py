@@ -98,8 +98,12 @@ class ProjectCreator:
 
         # 4. 执行路线图
         scenario = self.doc_generator.requirement_parser.detect_scenario(self.project_dir)
+        request_mode = self.doc_generator.requirement_parser.detect_request_mode(self.description)
         plan_path = self.output_dir / f"{self.name}-execution-plan.md"
-        plan_content = self.doc_generator.generate_execution_plan(scenario=scenario)
+        plan_content = self.doc_generator.generate_execution_plan(
+            scenario=scenario,
+            request_mode=request_mode,
+        )
         plan_path.write_text(plan_content, encoding="utf-8")
         docs['plan'] = str(plan_path)
 

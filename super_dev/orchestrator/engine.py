@@ -324,7 +324,9 @@ class WorkflowEngine:
         parser = RequirementParser()
         requirements = parser.parse_requirements(description)
         scenario = parser.detect_scenario(self.project_dir)
+        request_mode = parser.detect_request_mode(description)
         context.user_input["scenario"] = scenario
+        context.user_input["request_mode"] = request_mode
         context.user_input["requirements"] = requirements
 
         # 2. 需求知识增强（本地知识库 + 联网检索）
@@ -343,6 +345,7 @@ class WorkflowEngine:
         return {
             "status": "discovery_complete",
             "scenario": scenario,
+            "request_mode": request_mode,
             "requirements_count": len(requirements),
             "knowledge_enhanced": context.user_input.get("knowledge_enhanced"),
             "web_research": context.user_input.get("web_research"),

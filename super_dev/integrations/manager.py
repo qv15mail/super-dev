@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import os
 from pathlib import Path
 
 from ..catalogs import HOST_TOOL_CATEGORY_MAP, HOST_TOOL_IDS
@@ -48,6 +49,10 @@ class HostAdapterProfile:
     smoke_test_prompt: str
     smoke_test_steps: list[str]
     smoke_success_signal: str
+    precondition_status: str
+    precondition_label: str
+    precondition_guidance: list[str]
+    precondition_signals: dict[str, bool]
     host_protocol_mode: str
     host_protocol_summary: str
     official_project_surfaces: list[str]
@@ -62,6 +67,9 @@ class IntegrationManager:
     """为不同 AI Coding 平台生成集成配置"""
 
     TEXT_TRIGGER_PREFIX = "super-dev:"
+    TEXT_TRIGGER_PREFIX_FULLWIDTH = "super-dev："
+    CODEX_AGENTS_BEGIN = "<!-- BEGIN SUPER DEV CODEX -->"
+    CODEX_AGENTS_END = "<!-- END SUPER DEV CODEX -->"
     NO_SKILL_TARGETS: set[str] = {"claude-code", "kiro"}
     HOST_USAGE_LOCATIONS: dict[str, str] = {
         "antigravity": "打开 Antigravity 的 Agent Chat / Prompt 面板，并确保当前工作区就是目标项目。",
@@ -106,7 +114,7 @@ class IntegrationManager:
         ],
         "codex-cli": [
             "不要输入 /super-dev，Codex 当前不走自定义 slash。",
-            "实际依赖 .codex/AGENTS.md 和 .codex/skills/super-dev-core/SKILL.md。",
+            "实际依赖项目根 AGENTS.md 和 ~/.codex/skills/super-dev-core/SKILL.md。",
             "如果旧会话没加载新 Skill，重启 codex 再试。",
         ],
         "cursor-cli": [
@@ -130,6 +138,7 @@ class IntegrationManager:
             "当前按 slash 宿主适配。",
             "如果 slash 未出现，先检查项目级命令文件是否已写入。",
             "官方文档已公开 .iflow/skills 与 ~/.iflow/skills。",
+            "如果宿主报 `Invalid API key provided`，先在 iFlow 会话内执行 `/auth`，或更新 IFLOW_API_KEY / settings.json 后重启宿主。",
         ],
         "kimi-cli": [
             "Kimi CLI 当前优先按 AGENTS.md + 宿主级 Skill / 自然语言触发，不走 `/super-dev`。",
@@ -167,6 +176,13 @@ class IntegrationManager:
             "随后按 output/* 与 .super-dev/changes/*/tasks.md 推进开发。",
         ],
     }
+    HOST_PRECONDITION_GUIDANCE: dict[str, list[str]] = {
+        "iflow": [
+            "iFlow 的模型鉴权由宿主自身管理，不由 Super Dev 接管。",
+            "若宿主返回 `Invalid API key provided`，先在 iFlow 会话内执行 `/auth` 重新登录。",
+            "若使用 API key 模式，更新 `IFLOW_API_KEY`，或写入 `~/.iflow/settings.json` / `./.iflow/settings.json` 后重启 iFlow 会话。",
+        ],
+    }
 
     TARGETS: dict[str, IntegrationTarget] = {
         "antigravity": IntegrationTarget(
@@ -196,7 +212,7 @@ class IntegrationManager:
         "codex-cli": IntegrationTarget(
             name="codex-cli",
             description="Codex CLI 项目上下文注入",
-            files=[".codex/AGENTS.md"],
+            files=["AGENTS.md"],
         ),
         "cursor-cli": IntegrationTarget(
             name="cursor-cli",
@@ -449,6 +465,50 @@ class IntegrationManager:
         "compatible": "Compatible",
         "experimental": "Experimental",
     }
+    TEXT_TRIGGER_PREFIXES: tuple[str, str] = (TEXT_TRIGGER_PREFIX, TEXT_TRIGGER_PREFIX_FULLWIDTH)
+    CONTRACT_TRIGGER_GROUPS: dict[str, tuple[str, ...]] = {
+        "slash": ("/super-dev",),
+        "text": TEXT_TRIGGER_PREFIXES,
+    }
+    CONTRACT_DOC_GROUP: tuple[str, ...] = (
+        "output/*-research.md",
+        "output/*-prd.md",
+        "output/*-architecture.md",
+        "output/*-uiux.md",
+        "three core documents",
+        "three core docs",
+        "三份核心文档",
+        "PRD, architecture, and UIUX",
+        "PRD / Architecture / UIUX",
+        "PRD / 架构 / UIUX",
+        "Draft PRD, architecture, and UIUX",
+    )
+    CONTRACT_CONFIRMATION_GROUP: tuple[str, ...] = (
+        "wait for explicit confirmation",
+        "wait for approval",
+        "wait for user confirmation",
+        "for user confirmation",
+        "Stop for user confirmation",
+        "Create Spec/tasks only after confirmation",
+        "先向用户汇报文档摘要与路径，等待明确确认",
+        "等待确认",
+        "用户未确认前禁止创建 Spec",
+        "未经确认不得创建 Spec",
+        "暂停等待用户确认",
+        "等待用户确认",
+        "stop after the three core documents",
+    )
+    CONTRACT_ARTIFACT_GROUP: tuple[str, ...] = (
+        "workspace files",
+        "project files",
+        "repository workspace",
+        "project workspace",
+        "项目文件",
+        "真实写入项目文件",
+        "chat-only summaries do not count",
+        "只在聊天里总结不算完成",
+        "instead of only replying in chat",
+    )
 
     def __init__(self, project_dir: Path):
         self.project_dir = Path(project_dir).resolve()
@@ -457,7 +517,8 @@ class IntegrationManager:
     def _first_response_contract_zh(self) -> str:
         return (
             "## 首轮响应契约（首次触发必须执行）\n"
-            "- 当用户输入 `/super-dev ...` 或 `super-dev: ...` 后，第一轮回复必须明确：已进入 Super Dev 流水线，而不是普通聊天。\n"
+            "- 当用户输入 `/super-dev ...`、`super-dev: ...` 或 `super-dev：...` 后，第一轮回复必须明确：已进入 Super Dev 流水线，而不是普通聊天。\n"
+            "- 第一轮回复前，优先读取 `.super-dev/WORKFLOW.md` 与 `output/*-bootstrap.md`（若存在），把其中的初始化契约视为当前仓库的显式 bootstrap 规则。\n"
             "- 第一轮回复必须明确当前阶段是 `research`，会先读取 `knowledge/` 与 `output/knowledge-cache/*-knowledge-bundle.json`（若存在），再用宿主原生联网研究同类产品。\n"
             "- 第一轮回复必须明确后续顺序：research -> 三份核心文档 -> 等待用户确认 -> Spec / tasks -> 前端优先并运行验证 -> 后端 / 测试 / 交付。\n"
             "- 第一轮回复必须明确承诺：三份核心文档完成后会暂停并等待用户确认；未经确认不会创建 Spec，也不会开始编码。\n\n"
@@ -466,7 +527,8 @@ class IntegrationManager:
     def _first_response_contract_en(self) -> str:
         return (
             "## First-Response Contract\n"
-            "- On the first reply after `/super-dev ...` or `super-dev: ...`, explicitly state that Super Dev pipeline mode is now active rather than normal chat mode.\n"
+            "- On the first reply after `/super-dev ...`, `super-dev: ...`, or `super-dev：...`, explicitly state that Super Dev pipeline mode is now active rather than normal chat mode.\n"
+            "- Before the first reply, read `.super-dev/WORKFLOW.md` and `output/*-bootstrap.md` when present, and treat them as the explicit bootstrap contract for this repository.\n"
             "- The first reply must explicitly state that the current phase is `research`, and that you will read `knowledge/` plus `output/knowledge-cache/*-knowledge-bundle.json` first when available before similar-product research.\n"
             "- The first reply must explicitly state the next sequence: research -> three core documents -> wait for user confirmation -> Spec / tasks -> frontend first with runtime verification -> backend / tests / delivery.\n"
             "- The first reply must explicitly promise that you will stop after the three core documents and wait for approval before creating Spec or writing code.\n\n"
@@ -512,6 +574,7 @@ class IntegrationManager:
         usage = self._usage_profile(target=target, category=category)
         certification = self._certification_profile(target)
         smoke = self._smoke_profile(target=target, category=category)
+        preconditions = self._precondition_profile(target=target)
         surfaces = self._install_surfaces(target=target)
         protocol = self._protocol_profile(target=target)
 
@@ -545,6 +608,10 @@ class IntegrationManager:
             smoke_test_prompt=str(smoke["smoke_test_prompt"]),
             smoke_test_steps=list(smoke["smoke_test_steps"]),
             smoke_success_signal=str(smoke["smoke_success_signal"]),
+            precondition_status=str(preconditions["status"]),
+            precondition_label=str(preconditions["label"]),
+            precondition_guidance=list(preconditions["guidance"]),
+            precondition_signals=dict(preconditions["signals"]),
             host_protocol_mode=str(protocol["mode"]),
             host_protocol_summary=str(protocol["summary"]),
             official_project_surfaces=list(surfaces["official_project_surfaces"]),
@@ -574,6 +641,142 @@ class IntegrationManager:
         selected = targets or sorted(self.TARGETS.keys())
         return [self.get_adapter_profile(target) for target in selected]
 
+    @classmethod
+    def resolve_global_protocol_path(cls, target: str) -> Path | None:
+        mapping = {
+            "claude-code": Path.home() / ".claude" / "agents" / "super-dev-core.md",
+            "codebuddy": Path.home() / ".codebuddy" / "agents" / "super-dev-core.md",
+            "kiro": Path.home() / ".kiro" / "steering" / "AGENTS.md",
+            "gemini-cli": Path.home() / ".gemini" / "GEMINI.md",
+            "antigravity": Path.home() / ".gemini" / "GEMINI.md",
+            "trae": Path.home() / ".trae" / "user_rules.md",
+        }
+        return mapping.get(target)
+
+    @classmethod
+    def resolve_compatibility_protocol_path(cls, target: str) -> Path | None:
+        if target == "trae":
+            return Path.home() / ".trae" / "rules.md"
+        return None
+
+    @classmethod
+    def expected_skill_path(cls, target: str, skill_name: str = "super-dev-core") -> Path | None:
+        from ..skills import SkillManager
+
+        if not cls.requires_skill(target):
+            return None
+        if target not in SkillManager.TARGET_PATHS:
+            return None
+        return Path(SkillManager.TARGET_PATHS[target]).expanduser() / skill_name / "SKILL.md"
+
+    @classmethod
+    def contract_validation_groups(cls, target: str) -> list[tuple[str, tuple[str, ...]]]:
+        trigger_group = cls.CONTRACT_TRIGGER_GROUPS["slash" if cls.supports_slash(target) else "text"]
+        return [
+            ("trigger", trigger_group),
+            ("documents", cls.CONTRACT_DOC_GROUP),
+            ("confirmation", cls.CONTRACT_CONFIRMATION_GROUP),
+            ("artifacts", cls.CONTRACT_ARTIFACT_GROUP),
+        ]
+
+    @classmethod
+    def audit_contract_text(cls, target: str, content: str) -> list[str]:
+        normalized = content or ""
+        missing: list[str] = []
+        for label, options in cls.contract_validation_groups(target):
+            if not any(option in normalized for option in options):
+                missing.append(label)
+        return missing
+
+    @classmethod
+    def contract_validation_groups_for_surface(
+        cls,
+        target: str,
+        surface_key: str,
+        surface_path: Path,
+    ) -> list[tuple[str, tuple[str, ...]]]:
+        groups = cls.contract_validation_groups(target)
+        trigger_group = groups[0]
+        documents_group = groups[1]
+        confirmation_group = groups[2]
+        artifacts_group = groups[3]
+
+        normalized = surface_path.as_posix()
+
+        if surface_key.startswith("project-slash:") or surface_key.startswith("global-slash:"):
+            return [trigger_group, documents_group, confirmation_group]
+
+        if surface_key.startswith("skill:"):
+            return [trigger_group, documents_group, confirmation_group, artifacts_group]
+
+        if surface_key.startswith("compatibility-protocol:"):
+            return [trigger_group, documents_group, confirmation_group]
+
+        if normalized.endswith(".agent/workflows/super-dev.md"):
+            return [documents_group, confirmation_group]
+
+        if normalized.endswith("/agents/super-dev-core.md"):
+            return [trigger_group, documents_group, confirmation_group, artifacts_group]
+
+        if normalized.endswith("AGENTS.md") and target == "codex-cli":
+            return [trigger_group, documents_group, confirmation_group, artifacts_group]
+
+        if normalized.endswith("GEMINI.md"):
+            return [trigger_group, documents_group, confirmation_group]
+
+        if normalized.endswith("/steering/AGENTS.md") or normalized.endswith("/steering/super-dev.md"):
+            return [trigger_group, documents_group, confirmation_group]
+
+        if normalized.endswith("/rules.md") or normalized.endswith("/project_rules.md"):
+            return [trigger_group, documents_group, confirmation_group]
+
+        return [documents_group, confirmation_group]
+
+    @classmethod
+    def audit_surface_contract(
+        cls,
+        target: str,
+        surface_key: str,
+        surface_path: Path,
+        content: str,
+    ) -> list[str]:
+        normalized = content or ""
+        missing: list[str] = []
+        for label, options in cls.contract_validation_groups_for_surface(target, surface_key, surface_path):
+            if not any(option in normalized for option in options):
+                missing.append(label)
+        return missing
+
+    def collect_managed_surface_paths(self, target: str, skill_name: str = "super-dev-core") -> dict[str, Path]:
+        if target not in self.TARGETS:
+            raise ValueError(f"Unsupported target: {target}")
+
+        surfaces: dict[str, Path] = {}
+        for relative in self.TARGETS[target].files:
+            surfaces[f"project:{relative}"] = self.project_dir / relative
+
+        protocol_path = self.resolve_global_protocol_path(target)
+        if protocol_path is not None:
+            surfaces[f"global-protocol:{protocol_path}"] = protocol_path
+
+        compatibility_protocol_path = self.resolve_compatibility_protocol_path(target)
+        if compatibility_protocol_path is not None:
+            surfaces[f"compatibility-protocol:{compatibility_protocol_path}"] = compatibility_protocol_path
+
+        if self.supports_slash(target):
+            project_slash = self.resolve_slash_command_path(target=target, scope="project", project_dir=self.project_dir)
+            if project_slash is not None:
+                surfaces[f"project-slash:{project_slash}"] = project_slash
+            global_slash = self.resolve_slash_command_path(target=target, scope="global")
+            if global_slash is not None and global_slash != project_slash:
+                surfaces[f"global-slash:{global_slash}"] = global_slash
+
+        skill_path = self.expected_skill_path(target=target, skill_name=skill_name)
+        if skill_path is not None:
+            surfaces[f"skill:{skill_path}"] = skill_path
+
+        return surfaces
+
     def _adapter_mode(self, *, target: str, category: str, integration_files: list[str]) -> str:
         first_file = integration_files[0] if integration_files else ""
         if category == "cli":
@@ -592,17 +795,17 @@ class IntegrationManager:
         if target == "codex-cli":
             return {
                 "usage_mode": "agents-and-skill",
-                "primary_entry": '在 Codex CLI 会话输入 `super-dev: <需求描述>`（由 .codex/AGENTS.md + ~/.codex/skills/super-dev-core/SKILL.md 生效）',
+                "primary_entry": '在 Codex CLI 会话输入 `super-dev: <需求描述>`（由项目根 AGENTS.md + ~/.codex/skills/super-dev-core/SKILL.md 生效）',
                 "trigger_command": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
                 "trigger_context": "Codex CLI 当前会话",
                 "usage_location": usage_location,
                 "requires_restart_after_onboard": True,
                 "post_onboard_steps": [
-                    "完成接入后重启 codex，使 AGENTS.md 与 ~/.codex/skills/super-dev-core/SKILL.md 生效。",
+                    "完成接入后重启 codex，使项目根 AGENTS.md 与 ~/.codex/skills/super-dev-core/SKILL.md 生效。",
                     "不要输入 /super-dev，在 Codex 会话里输入 `super-dev: <需求描述>`。",
                 ],
                 "usage_notes": usage_notes,
-                "notes": "该 CLI 宿主当前不走自定义 slash，使用项目级 .codex/AGENTS.md 作为核心约束，并通过官方用户级 Skills 目录 ~/.codex/skills 安装 super-dev-core。",
+                "notes": "该 CLI 宿主当前不走自定义 slash，使用项目根 AGENTS.md 作为核心约束，并通过官方用户级 Skills 目录 ~/.codex/skills 安装 super-dev-core。",
             }
         if target == "antigravity":
             return {
@@ -748,6 +951,33 @@ class IntegrationManager:
             "smoke_success_signal": "宿主回复 SMOKE_OK，并明确表示已读取当前项目内的 Super Dev 规则/AGENTS/命令映射，且没有直接开始编码。",
         }
 
+    def _precondition_profile(self, *, target: str) -> dict[str, object]:
+        guidance = list(self.HOST_PRECONDITION_GUIDANCE.get(target, []))
+        if target == "iflow":
+            project_settings = self.project_dir / ".iflow" / "settings.json"
+            user_settings = Path.home() / ".iflow" / "settings.json"
+            env_key = bool(os.getenv("IFLOW_API_KEY", "").strip())
+            project_cfg = project_settings.exists()
+            user_cfg = user_settings.exists()
+            any_signal = env_key or project_cfg or user_cfg
+            return {
+                "status": "host-auth-required",
+                "label": "已检测到鉴权配置" if any_signal else "需宿主鉴权",
+                "guidance": guidance,
+                "signals": {
+                    "env_iflow_api_key": env_key,
+                    "project_settings_json": project_cfg,
+                    "user_settings_json": user_cfg,
+                },
+            }
+
+        return {
+            "status": "none",
+            "label": "无额外前置条件",
+            "guidance": guidance,
+            "signals": {},
+        }
+
     def _protocol_profile(self, *, target: str) -> dict[str, str]:
         mapping = {
             "claude-code": {
@@ -872,7 +1102,7 @@ class IntegrationManager:
                 "observed_compatibility_surfaces": [],
             },
             "codex-cli": {
-                "official_project_surfaces": [".codex/AGENTS.md"],
+                "official_project_surfaces": ["AGENTS.md"],
                 "official_user_surfaces": ["~/.codex/skills/super-dev-core/SKILL.md"],
                 "observed_compatibility_surfaces": [],
             },
@@ -987,6 +1217,16 @@ class IntegrationManager:
         integration = self.TARGETS[target]
         for relative in integration.files:
             file_path = self.project_dir / relative
+            if target == "codex-cli" and relative == "AGENTS.md":
+                updated = self._upsert_managed_block(
+                    file_path=file_path,
+                    begin=self.CODEX_AGENTS_BEGIN,
+                    end=self.CODEX_AGENTS_END,
+                    block_content=self._build_file_content(target=target, relative=relative),
+                )
+                if updated:
+                    written_files.append(file_path)
+                continue
             if file_path.exists() and not force:
                 continue
             file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -997,59 +1237,56 @@ class IntegrationManager:
         return written_files
 
     def setup_global_protocol(self, target: str, force: bool = False) -> Path | None:
-        if target == "claude-code":
-            protocol_file = Path.home() / ".claude" / "agents" / "super-dev-core.md"
+        protocol_file = self.resolve_global_protocol_path(target)
+
+        if target == "claude-code" and protocol_file is not None:
             if protocol_file.exists() and not force:
                 return None
             protocol_file.parent.mkdir(parents=True, exist_ok=True)
             protocol_file.write_text(self._build_claude_agent_content(), encoding="utf-8")
             return protocol_file
 
-        if target == "codebuddy":
-            protocol_file = Path.home() / ".codebuddy" / "agents" / "super-dev-core.md"
+        if target == "codebuddy" and protocol_file is not None:
             if protocol_file.exists() and not force:
                 return None
             protocol_file.parent.mkdir(parents=True, exist_ok=True)
             protocol_file.write_text(self._build_codebuddy_agent_content(), encoding="utf-8")
             return protocol_file
 
-        if target == "kiro":
-            protocol_file = Path.home() / ".kiro" / "steering" / "AGENTS.md"
+        if target == "kiro" and protocol_file is not None:
             if protocol_file.exists() and not force:
                 return None
             protocol_file.parent.mkdir(parents=True, exist_ok=True)
             protocol_file.write_text(self._build_kiro_global_steering_content(), encoding="utf-8")
             return protocol_file
 
-        if target == "gemini-cli":
-            protocol_file = Path.home() / ".gemini" / "GEMINI.md"
+        if target == "gemini-cli" and protocol_file is not None:
             if protocol_file.exists() and not force:
                 return None
             protocol_file.parent.mkdir(parents=True, exist_ok=True)
             protocol_file.write_text(self._build_content(target), encoding="utf-8")
             return protocol_file
 
-        if target == "antigravity":
-            protocol_file = Path.home() / ".gemini" / "GEMINI.md"
+        if target == "antigravity" and protocol_file is not None:
             if protocol_file.exists() and not force:
                 return None
             protocol_file.parent.mkdir(parents=True, exist_ok=True)
             protocol_file.write_text(self._build_antigravity_context_content(), encoding="utf-8")
             return protocol_file
 
-        if target == "trae":
-            protocol_file = Path.home() / ".trae" / "user_rules.md"
-            compatibility_file = Path.home() / ".trae" / "rules.md"
+        if target == "trae" and protocol_file is not None:
+            compatibility_file = self.resolve_compatibility_protocol_path(target)
             content = self._build_content(target)
             if protocol_file.exists() and not force:
-                if not compatibility_file.exists():
+                if compatibility_file is not None and not compatibility_file.exists():
                     compatibility_file.parent.mkdir(parents=True, exist_ok=True)
                     compatibility_file.write_text(content, encoding="utf-8")
                 return None
             protocol_file.parent.mkdir(parents=True, exist_ok=True)
             protocol_file.write_text(content, encoding="utf-8")
-            compatibility_file.parent.mkdir(parents=True, exist_ok=True)
-            compatibility_file.write_text(content, encoding="utf-8")
+            if compatibility_file is not None:
+                compatibility_file.parent.mkdir(parents=True, exist_ok=True)
+                compatibility_file.write_text(content, encoding="utf-8")
             return protocol_file
 
         return None
@@ -1077,6 +1314,31 @@ class IntegrationManager:
         for target in self.TARGETS:
             result[target] = self.setup(target=target, force=force)
         return result
+
+    def _upsert_managed_block(
+        self,
+        *,
+        file_path: Path,
+        begin: str,
+        end: str,
+        block_content: str,
+    ) -> bool:
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        existing = file_path.read_text(encoding="utf-8") if file_path.exists() else ""
+        managed = f"{begin}\n{block_content.rstrip()}\n{end}\n"
+        if begin in existing and end in existing:
+            start = existing.index(begin)
+            stop = existing.index(end, start) + len(end)
+            updated = f"{existing[:start]}{managed}{existing[stop:]}"
+        elif existing.strip():
+            spacer = "" if existing.endswith("\n\n") else ("\n" if existing.endswith("\n") else "\n\n")
+            updated = f"{existing}{spacer}{managed}"
+        else:
+            updated = managed
+        if updated == existing:
+            return False
+        file_path.write_text(updated, encoding="utf-8")
+        return True
 
     def setup_slash_command(self, target: str, force: bool = False) -> Path | None:
         return self.setup_slash_command_for_scope(target=target, force=force, scope="project")
@@ -1139,6 +1401,9 @@ class IntegrationManager:
         return self._build_file_content(target=target, relative="")
 
     def _build_file_content(self, target: str, relative: str) -> str:
+        if target == "codex-cli" and relative == "AGENTS.md":
+            return self._build_codex_agents_content()
+
         if target == "claude-code" and relative.endswith(".claude/agents/super-dev-core.md"):
             return self._build_claude_agent_content()
 
@@ -1151,16 +1416,19 @@ class IntegrationManager:
         if relative.endswith("/skills/super-dev-core/SKILL.md"):
             return self._build_embedded_skill_content()
 
-        if target == "cursor":
+        if target in {"cursor", "cursor-cli"}:
             cursor_template = self.templates_dir / ".cursorrules.template"
             if cursor_template.exists():
                 body = cursor_template.read_text(encoding="utf-8")
                 return (
                     f"{body}\n\n"
                     "# Super Dev Pipeline Rules\n"
-                    "- Always read output/*-prd.md, output/*-architecture.md, output/*-uiux.md first.\n"
-                    "- Execute frontend-first delivery before backend/database tasks.\n"
-                    "- Meet the active quality gate threshold before release.\n"
+                    "- When the user triggers `/super-dev ...`, enter Super Dev pipeline mode immediately.\n"
+                    "- Start with research and write output/*-research.md as a real file in the repository.\n"
+                    "- Always read and maintain output/*-prd.md, output/*-architecture.md, and output/*-uiux.md as source-of-truth project files.\n"
+                    "- Summarize the three core documents to the user and wait for user confirmation before creating Spec/tasks or writing code.\n"
+                    "- Create Spec/tasks only after confirmation.\n"
+                    "- Execute frontend-first delivery before backend/database tasks, then run quality gate before release.\n"
                 )
 
         if target == "antigravity":
@@ -1204,6 +1472,27 @@ class IntegrationManager:
 
         return self._generic_cli_rules(target)
 
+    def _build_codex_agents_content(self) -> str:
+        return (
+            "# Super Dev for Codex CLI\n\n"
+            "When a user message starts with `super-dev:` or `super-dev：`, enter Super Dev pipeline mode immediately.\n\n"
+            "## Required execution\n"
+            "1. First reply: state that Super Dev pipeline mode is active and the current phase is `research`.\n"
+            "2. Read `knowledge/` and `output/knowledge-cache/*-knowledge-bundle.json` when available.\n"
+            "3. Use Codex native web/search/edit/terminal capabilities to perform similar-product research and write `output/*-research.md` into the repository workspace.\n"
+            "4. Draft `output/*-prd.md`, `output/*-architecture.md`, and `output/*-uiux.md` in the same Codex session and save them as actual project files.\n"
+            "5. Stop after the three core documents, summarize them, and wait for explicit confirmation.\n"
+            "6. Only after confirmation, create `.super-dev/changes/*/proposal.md` and `.super-dev/changes/*/tasks.md`, then continue with frontend-first implementation.\n\n"
+            "## Constraints\n"
+            "- Do not start coding directly after `super-dev:` or `super-dev：`.\n"
+            "- Do not create Spec before document confirmation.\n"
+            "- If the user requests architecture changes, first update `output/*-architecture.md`, then realign Spec/tasks and implementation.\n"
+            "- If the user requests quality or security remediation, first fix the issues, rerun quality gate and `super-dev release proof-pack`, and only then continue.\n"
+            "- If a required artifact is only described in chat and not written into the repository, treat the step as incomplete.\n"
+            "- Codex remains the execution host; Super Dev is the local governance workflow.\n"
+            "- Use local `super-dev` CLI only for governance actions such as doctor, review, quality, release readiness, or update; do not outsource the main coding workflow to the CLI.\n"
+        )
+
     def _build_claude_agent_content(self) -> str:
         return (
             "---\n"
@@ -1222,6 +1511,14 @@ class IntegrationManager:
             "- Explicitly say the current phase is `research`.\n"
             "- Explicitly state that you will read `knowledge/` and `output/knowledge-cache/*-knowledge-bundle.json` first when present.\n"
             "- Explicitly promise that you will stop after PRD, architecture, and UIUX for user confirmation before creating Spec or writing code.\n\n"
+            "## Artifact Contract\n"
+            "- Write `output/*-research.md`, `output/*-prd.md`, `output/*-architecture.md`, and `output/*-uiux.md` as workspace files.\n"
+            "- chat-only summaries do not count as completion.\n"
+            "- If a required artifact is missing from the workspace, keep working until it is written.\n\n"
+            "## Revision Contract\n"
+            "- If the user requests UI changes, first update `output/*-uiux.md`, then redo the frontend and rerun frontend runtime plus UI review.\n"
+            "- If the user requests architecture changes, first update `output/*-architecture.md`, then realign Spec/tasks and implementation.\n"
+            "- If the user requests quality or security remediation, fix the issues first and rerun quality gate plus `super-dev release proof-pack` before continuing.\n\n"
             "## Boundary\n"
             "- Claude Code remains the execution host.\n"
             "- Super Dev is the governance layer, not a separate model platform.\n"
@@ -1246,6 +1543,14 @@ class IntegrationManager:
             "- Explicitly say the current phase is `research`.\n"
             "- Explicitly state that you will read `knowledge/` and `output/knowledge-cache/*-knowledge-bundle.json` first when present.\n"
             "- Explicitly promise that you will stop after PRD, architecture, and UIUX for user confirmation before creating Spec or writing code.\n\n"
+            "## Artifact Contract\n"
+            "- Write `output/*-research.md`, `output/*-prd.md`, `output/*-architecture.md`, and `output/*-uiux.md` as real workspace files.\n"
+            "- Do not treat chat-only explanations as completed deliverables.\n"
+            "- If a required artifact is not present in the repository, continue until it is written.\n\n"
+            "## Revision Contract\n"
+            "- If the user requests UI changes, first update `output/*-uiux.md`, then redo the frontend and rerun frontend runtime plus UI review.\n"
+            "- If the user requests architecture changes, first update `output/*-architecture.md`, then realign Spec/tasks and implementation.\n"
+            "- If the user requests quality or security remediation, fix the issues first and rerun quality gate plus `super-dev release proof-pack` before continuing.\n\n"
             "## Boundary\n"
             "- CodeBuddy remains the execution host.\n"
             "- Super Dev is the governance layer, not a separate model platform.\n"
@@ -1263,6 +1568,9 @@ class IntegrationManager:
             "- 当前宿主负责调用模型、工具、终端与实际代码修改。\n"
             "- Super Dev 不是大模型平台，也不提供自己的代码生成 API。\n"
             "- 你的职责是利用宿主现有能力，严格执行 Super Dev 的流程规范、设计约束、质量门禁与交付标准。\n\n"
+            "## 触发方式（强制）\n"
+            "- 支持 slash 的宿主：`/super-dev <需求描述>`。\n"
+            "- 非 slash 宿主：`super-dev: <需求描述>` 与 `super-dev：<需求描述>` 等效。\n\n"
             "## 首轮响应契约（强制）\n"
             "- 第一轮回复必须明确说明当前阶段是 `research`。\n"
             "- 第一轮回复必须说明会先读取 `knowledge/` 与 `output/knowledge-cache/*-knowledge-bundle.json`。\n"
@@ -1270,6 +1578,10 @@ class IntegrationManager:
             "## 本地知识库契约（强制）\n"
             "- 先读 `knowledge/`。\n"
             "- 若存在 `output/knowledge-cache/*-knowledge-bundle.json`，必须先读取并把命中的本地知识带入三文档、Spec 与实现。\n"
+            "- research、PRD、架构、UIUX、Spec、质量报告等要求中的产物，必须真实写入项目文件，不能只在聊天里口头描述。\n"
+            "- 用户要求 UI 改版时，先更新 `output/*-uiux.md`，再重做前端并重新执行 frontend runtime 与 UI review。\n"
+            "- 用户要求架构返工时，先更新 `output/*-architecture.md`，再同步调整 Spec / tasks 与实现方案。\n"
+            "- 用户要求质量整改时，先修复问题，再重新执行 quality gate 与 `super-dev release proof-pack`。\n"
         )
 
     def _build_slash_command_content(self, target: str) -> str:
@@ -1430,7 +1742,7 @@ class IntegrationManager:
         else:
             trigger_lines = (
                 "## Trigger\n"
-                '- Preferred: say `super-dev: <需求描述>` in the host chat so AGENTS.md + super-dev-core Skill can govern the workflow.\n'
+                '- Preferred: say `super-dev: <需求描述>` or `super-dev：<需求描述>` in the host chat so AGENTS.md + super-dev-core Skill can govern the workflow.\n'
                 '- Local orchestration fallback: `super-dev "<需求描述>"`\n'
                 "- Do not rely on `/super-dev` in this host.\n\n"
             )
@@ -1459,12 +1771,15 @@ class IntegrationManager:
             "- output/*-execution-plan.md\n"
             "- .super-dev/changes/*/tasks.md\n\n"
             "## Execution Order\n"
-            "1. Use the host's native browse/search/web capability to research similar products first and produce output/*-research.md\n"
-            "2. Freeze PRD, architecture and UIUX documents\n"
+            "1. Use the host's native browse/search/web capability to research similar products first and produce output/*-research.md as a real repository file\n"
+            "2. Freeze PRD, architecture and UIUX documents and write them into output/* files rather than only describing them in chat\n"
             "3. Stop after the three core documents, summarize them to the user, and wait for explicit confirmation before creating Spec or coding\n"
             "4. Create Spec proposal/tasks only after the user confirms the documents\n"
             "5. Implement and run the frontend first so it becomes demonstrable before backend-heavy work\n"
             "6. Implement backend APIs and data layer, then run tests, quality gate, and release preparation\n"
+            "7. If the user says the UI is unsatisfactory, asks for a redesign, or says the page looks AI-generated, first update `output/*-uiux.md`, then redo frontend implementation, rerun frontend runtime and UI review, and only then continue.\n"
+            "8. If the user says the architecture is wrong or the technical plan must change, first update `output/*-architecture.md`, then realign tasks and implementation before continuing.\n"
+            "9. If the user says quality or security is not acceptable, first fix the issues, rerun quality gate and `super-dev release proof-pack`, and only then continue.\n"
         )
 
     def _generic_ide_rules(self, target: str) -> str:
@@ -1476,7 +1791,7 @@ class IntegrationManager:
             "- The host remains responsible for actual coding, tool execution, and file changes.\n\n"
             "## Runtime Contract\n"
             "- Treat Super Dev as the local Python workflow tool plus this host rule file, not as a separate coding engine.\n"
-            "- When the user says `/super-dev ...` or `super-dev: ...`, immediately enter the Super Dev pipeline.\n"
+            "- When the user says `/super-dev ...`, `super-dev: ...`, or `super-dev：...`, immediately enter the Super Dev pipeline.\n"
             "- Use host-native browse/search/web for research and host-native editing/terminal for implementation.\n"
             "- Use local `super-dev` commands when you need to generate or refresh documents, spec artifacts, quality reports, or delivery manifests.\n\n"
             f"{self._first_response_contract_en()}"
@@ -1485,9 +1800,12 @@ class IntegrationManager:
             "- If `output/knowledge-cache/*-knowledge-bundle.json` exists, read it first and inherit its matched local knowledge into PRD, architecture, UIUX, Spec, and execution.\n"
             "- Treat local knowledge hits as hard project constraints, especially for standards, anti-patterns, checklists, and scenario packs.\n\n"
             "## Working Agreement\n"
-            "- If the host supports browse/search/web, research similar products first and summarize the findings in output/*-research.md.\n"
-            "- Generate PRD, architecture and UIUX documents before coding, then pause and ask the user to confirm the three documents.\n"
+            "- If the host supports browse/search/web, research similar products first and write the findings into output/*-research.md.\n"
+            "- Generate PRD, architecture and UIUX documents before coding, write them into output/* files, then pause and ask the user to confirm the three documents.\n"
             "- If the user requests revisions, update the documents first and ask again; do not create Spec or code before confirmation.\n"
+            "- If the user requests a UI redesign or says the UI is unsatisfactory, first update `output/*-uiux.md`, then redo the frontend, and rerun frontend runtime + UI review before continuing.\n"
+            "- If the user requests architecture changes, first update `output/*-architecture.md`, then realign tasks and implementation before continuing.\n"
+            "- If the user requests quality or security remediation, first fix the issues, rerun quality gate plus `super-dev release proof-pack`, and only then continue.\n"
             "- Respect Spec tasks sequence.\n"
             "- Implement and run the frontend before moving into backend-heavy work.\n"
             "- Keep architecture and UIUX consistency.\n\n"
@@ -1505,9 +1823,9 @@ class IntegrationManager:
         return (
             "# Super Dev Trae Rules\n\n"
             "## Critical Trigger Switch\n"
-            "- If a user message starts with `super-dev:`, immediately switch into Super Dev pipeline mode.\n"
-            "- Do not treat `super-dev:` as normal chat, brainstorming, or generic coding mode.\n"
-            "- After `super-dev:` is seen, do not start implementation directly.\n"
+            "- If a user message starts with `super-dev:` or `super-dev：`, immediately switch into Super Dev pipeline mode.\n"
+            "- Do not treat `super-dev:` or `super-dev：` as normal chat, brainstorming, or generic coding mode.\n"
+            "- After `super-dev:` or `super-dev：` is seen, do not start implementation directly.\n"
             "- Your first reply must say `SMOKE_OK` when the user is smoke-testing, or explicitly say Super Dev pipeline mode is active.\n"
             "- Your first reply must explicitly say the current phase is `research`.\n"
             "- Your first reply must explicitly promise the sequence: research -> three core documents -> wait for user confirmation -> Spec/tasks -> frontend runtime verification -> backend/tests/delivery.\n"
@@ -1522,9 +1840,13 @@ class IntegrationManager:
             "- If `output/knowledge-cache/*-knowledge-bundle.json` exists, read it first and carry its matched local knowledge into PRD, architecture, UIUX, Spec, and execution.\n"
             "- Treat matched standards, anti-patterns, checklists, baselines, and scenario packs as hard constraints.\n\n"
             "## Working Agreement\n"
-            "- If browse/search/web is available, research similar products first and write `output/*-research.md`.\n"
-            "- Generate PRD, architecture, and UIUX before coding.\n"
+            "- If browse/search/web is available, research similar products first and write `output/*-research.md` into the project workspace.\n"
+            "- Generate PRD, architecture, and UIUX before coding and save them as `output/*-prd.md`, `output/*-architecture.md`, and `output/*-uiux.md` instead of only replying in chat.\n"
             "- Ask the user to confirm or revise the three documents before creating Spec or code.\n"
+            "- If a document is mentioned in chat but not written to the repository, treat the step as incomplete and keep working until the file exists.\n"
+            "- If the user requests a UI redesign or says the UI is unsatisfactory, first update `output/*-uiux.md`, then redo the frontend, and rerun frontend runtime + UI review before continuing.\n"
+            "- If the user requests architecture changes, first update `output/*-architecture.md`, then realign tasks and implementation before continuing.\n"
+            "- If the user requests quality or security remediation, first fix the issues, rerun quality gate plus `super-dev release proof-pack`, and only then continue.\n"
             "- Implement frontend first and verify runtime before moving into backend-heavy work.\n"
             "- Keep UI implementation consistent with `output/*-uiux.md` and avoid AI-looking templates.\n"
         )
@@ -1539,7 +1861,7 @@ class IntegrationManager:
             "- Super Dev provides governance: protocol, gates, and audit artifacts.\n\n"
             "## Runtime Contract\n"
             "- Treat Super Dev as the local Python workflow tool plus Claude Code command/rule integration.\n"
-            "- When the user triggers `/super-dev`, enter the Super Dev pipeline immediately rather than handling it like casual chat.\n"
+            "- When the user triggers `/super-dev`, `super-dev:`, or `super-dev：`, enter the Super Dev pipeline immediately rather than handling it like casual chat.\n"
             "- Use Claude Code browse/search for research and Claude Code terminal/editing for implementation.\n"
             "- Use local `super-dev` commands whenever you need to generate/update docs, spec artifacts, quality reports, and delivery outputs.\n\n"
             f"{self._first_response_contract_en()}"
@@ -1548,13 +1870,15 @@ class IntegrationManager:
             "- If `output/knowledge-cache/*-knowledge-bundle.json` exists, read it first and inherit its local knowledge hits into later stages.\n"
             "- Treat matched local standards, scenario packs, and checklists as hard constraints, not optional hints.\n\n"
             "## Before coding\n"
-            "1. If Claude Code browse/search is available, research similar products first and write output/*-research.md\n"
+            "1. If Claude Code browse/search is available, research similar products first and write output/*-research.md as a real repository file\n"
             "2. Read output/*-prd.md\n"
             "3. Read output/*-architecture.md\n"
             "4. Read output/*-uiux.md\n"
             "5. Summarize the three core documents to the user and wait for explicit confirmation before creating Spec or coding\n"
-            "6. Read output/*-execution-plan.md\n"
-            "7. Follow .super-dev/changes/*/tasks.md after confirmation, with frontend-first implementation and runtime verification\n\n"
+            "6. Chat-only summaries do not count as completion; the required artifacts must exist in the workspace\n"
+            "7. Read output/*-execution-plan.md\n"
+            "8. Follow .super-dev/changes/*/tasks.md after confirmation, with frontend-first implementation and runtime verification\n\n"
+            "9. If the user requests a UI redesign or says the UI is unsatisfactory, first update `output/*-uiux.md`, then redo the frontend, and rerun frontend runtime + UI review before continuing.\n\n"
             "## Output Quality\n"
             "- Keep security/performance constraints from red-team report.\n"
             "- Ensure quality gate threshold is met before merge.\n"
@@ -1622,6 +1946,7 @@ super-dev "你的需求描述"
 - `output/*-prd.md` — PRD（产品需求文档）
 - `output/*-architecture.md` — 架构设计文档
 - `output/*-uiux.md` — UI/UX 设计文档
+- 以上产物必须真实写入项目工作区；只在聊天里总结不算完成
 
 ### 第 2-4 阶段：骨架构建
 
@@ -1647,6 +1972,9 @@ super-dev "你的需求描述"
 
 ## 执行规则
 
+- 进入 Super Dev 流程后，第一轮必须明确当前阶段是 `research`
+- 三份核心文档完成后，必须暂停等待用户确认
+- 未经用户确认，不得创建 `.super-dev/changes/*` 或开始编码
 - **前端先行**：先完成可演示前端，再实现后端 API
 - **禁止 emoji 图标**：使用 Lucide/Heroicons/Tabler Icons
 - **参数化查询**：禁止字符串拼接 SQL
@@ -1679,11 +2007,18 @@ super-dev skill install super-dev --target antigravity  # 安装 Skill
             "## Local Knowledge Contract\n"
             "- Read `knowledge/` first when relevant.\n"
             "- If `output/knowledge-cache/*-knowledge-bundle.json` exists, inherit its local knowledge hits into research, PRD, architecture, UIUX, Spec, and implementation.\n\n"
+            "## Artifact Contract\n"
+            "- Write `output/*-research.md`, `output/*-prd.md`, `output/*-architecture.md`, and `output/*-uiux.md` into the repository workspace.\n"
+            "- Chat-only summaries do not count as finished artifacts.\n"
+            "- If a required artifact is missing from the workspace, continue until it exists.\n\n"
             "## Required Execution Order\n"
             "1. Research similar products first using host-native browse/search and write `output/*-research.md`\n"
-            "2. Generate PRD, architecture, and UIUX\n"
+            "2. Generate PRD, architecture, and UIUX and write them as project files\n"
             "3. Stop and wait for explicit user confirmation before Spec or coding\n"
             "4. Create Spec/tasks only after confirmation\n"
             "5. Implement and run the frontend first\n"
             "6. Continue with backend, tests, quality gate, and delivery\n"
+            "7. If the user requests a UI redesign, first update `output/*-uiux.md`, then redo the frontend and rerun frontend runtime + UI review\n"
+            "8. If the user requests architecture changes, first update `output/*-architecture.md`, then realign tasks and implementation\n"
+            "9. If the user requests quality remediation, first fix the issues, rerun quality gate and `super-dev release proof-pack`, and only then continue\n"
         )

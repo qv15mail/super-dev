@@ -1,4 +1,4 @@
-# Super Dev 宿主能力审计（2.0.8）
+# Super Dev 宿主能力审计（2.0.9）
 
 这份文档记录当前宿主矩阵的能力依据，只回答四件事：
 
@@ -18,7 +18,7 @@
 | Cursor CLI | native slash | `/super-dev 你的需求` | [Cursor CLI slash commands](https://docs.cursor.com/en/cli/reference/slash-commands) | slash 模式成立 |
 | Cursor IDE | native slash | `/super-dev 你的需求` | [Cursor Agent commands](https://docs.cursor.com/en/agent/chat/commands) | Agent Chat 命令模式可用，持续验证中 |
 | Gemini CLI | native slash + official commands/GEMINI.md | `/super-dev 你的需求` | [Gemini CLI docs](https://google-gemini.github.io/gemini-cli/docs/) | 维持 slash 模式，项目级 `GEMINI.md` + `.gemini/commands/super-dev.md` 为官方接入面，宿主级 skill 仍按兼容增强处理 |
-| iFlow CLI | native slash + official skills | `/super-dev 你的需求` | [iFlow slash commands](https://platform.iflow.cn/en/cli/examples/slash-commands) / [iFlow skills](https://platform.iflow.cn/en/cli/examples/skill) | slash 模式成立，skills 面已公开 |
+| iFlow CLI | native slash + official skills | `/super-dev 你的需求` | [iFlow slash commands](https://platform.iflow.cn/en/cli/examples/slash-commands) / [iFlow skills](https://platform.iflow.cn/en/cli/examples/skill) | slash 模式成立，skills 面已公开；宿主鉴权仍需用户在 iFlow 内完成 |
 | Kimi CLI | official AGENTS.md + text trigger | `super-dev: 你的需求` | [Kimi CLI interaction](https://www.kimi.com/code/docs/en/kimi-cli/guides/interaction.html) / [Kimi CLI agents](https://www.kimi.com/code/docs/en/kimi-cli/guides/agents.html) | 当前更适合 `/init` 生成 AGENTS.md + 文本触发，不再按自定义 slash 建模 |
 | Kiro CLI | native slash + official commands/AGENTS.md | `/super-dev 你的需求` | [Kiro CLI](https://kiro.dev/docs/cli/) | CLI 模式可用，项目级 `.kiro/AGENTS.md` + `.kiro/commands/super-dev.md` 为正式接入面 |
 | Kiro IDE | rules-first + official global steering | `super-dev: 你的需求` | [Kiro steering](https://kiro.dev/docs/steering/) | 不再按 slash 建模，改为 project steering + `~/.kiro/steering/AGENTS.md` |

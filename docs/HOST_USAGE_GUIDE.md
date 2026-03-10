@@ -1,4 +1,4 @@
-# Super Dev 宿主使用指南（2.0.8）
+# Super Dev 宿主使用指南（2.0.9）
 
 ## 目标
 
@@ -35,7 +35,7 @@
 | Qoder CLI | CLI | Compatible | 支持 | 在 Qoder CLI 会话中输入 `/super-dev 你的需求`（由 `.qoder/commands/super-dev.md` + `.qoder/skills/` / `~/.qoder/skills/` 生效） | 否 |
 | Qoder IDE | IDE | Experimental | 支持 | 在 Qoder IDE Agent Chat 中输入 `/super-dev 你的需求`（由 `.qoder/commands/super-dev.md` + `.qoder/rules.md` + `.qoder/skills/` / `~/.qoderwork/skills/` 生效） | 否 |
 | Windsurf | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求`（由 `.windsurf/workflows/super-dev.md` + `.windsurf/skills/` / `~/.codeium/windsurf/skills/` 生效） | 否 |
-| Codex CLI | CLI | Certified | 不支持 | 重启 Codex 后输入 `super-dev: 你的需求`，由 `.codex/AGENTS.md` + 兼容 Skill 生效 | 是 |
+| Codex CLI | CLI | Certified | 不支持 | 重启 Codex 后输入 `super-dev: 你的需求`，由 `AGENTS.md` + 兼容 Skill 生效 | 是 |
 | Trae | IDE | Compatible | 不支持 | 在 Trae Agent Chat 中输入 `super-dev: 你的需求`（由 `.trae/project_rules.md` + `~/.trae/user_rules.md` 生效；同时兼容写入 `.trae/rules.md` + `~/.trae/rules.md`，若检测到兼容 Skill `~/.trae/skills/super-dev-core/SKILL.md` 会额外增强） | 是 |
 
 ### 最简判断
@@ -108,6 +108,17 @@ super-dev integrate smoke --target <host_id>
 1. 该宿主的标准验收语句
 2. 该宿主的验收步骤
 3. 看到什么结果才算接入真正生效
+
+如果你要记录真人会话验收结果，再执行：
+
+```bash
+super-dev integrate validate --target <host_id>
+super-dev integrate validate --target <host_id> --status passed --comment "首轮先进入 research，三文档已真实落盘"
+```
+
+这样会把该宿主的真人验收状态写入：
+
+- `.super-dev/review-state/host-runtime-validation.json`
 
 ---
 
@@ -286,6 +297,7 @@ super-dev onboard --host iflow --force --yes
 补充说明：
 1. 当前按 slash 宿主适配。
 2. 如果 slash 未出现，先检查项目级命令文件是否已写入。
+3. 如果 iFlow 返回 `Invalid API key provided`，先在 iFlow 会话内执行 `/auth`，或更新 `IFLOW_API_KEY`、`~/.iflow/settings.json`、`./.iflow/settings.json` 后重启宿主会话。
 
 #### 10. Kimi CLI
 
@@ -458,7 +470,7 @@ super-dev: 你的需求
 
 补充说明：
 1. 不要输入 `/super-dev`，Codex 当前不走自定义 slash。
-2. 实际依赖 `.codex/AGENTS.md` 和 `.codex/skills/super-dev-core/SKILL.md`。
+2. 实际依赖 `AGENTS.md` 和 `.codex/skills/super-dev-core/SKILL.md`。
 3. 如果旧会话没加载新 Skill，重启 `codex` 再试。
 
 #### 18. Trae
@@ -483,5 +495,3 @@ super-dev: 你的需求
 2. 接入一定会写入项目级 `.trae/project_rules.md`、`.trae/rules.md` 和用户级 `~/.trae/user_rules.md`、`~/.trae/rules.md`；如果检测到兼容技能目录，也会增强安装 `~/.trae/skills/super-dev-core/SKILL.md`。
 3. 完成接入后建议重开 Trae 或至少新开一个 Agent Chat，使规则生效；如果兼容 Skill 已安装，也会一起生效。
 4. 随后按 `output/*` 与 `.super-dev/changes/*/tasks.md` 推进开发。
-
-

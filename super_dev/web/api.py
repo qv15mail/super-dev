@@ -56,11 +56,24 @@ from super_dev.experts import (
 from super_dev.integrations.manager import IntegrationManager
 from super_dev.orchestrator import Phase, WorkflowContext, WorkflowEngine
 from super_dev.policy import PipelinePolicy, PipelinePolicyManager
+from super_dev.proof_pack import ProofPackBuilder
 from super_dev.release_readiness import ReleaseReadinessEvaluator
 from super_dev.review_state import (
+    architecture_revision_file,
     docs_confirmation_file,
+    host_runtime_validation_file,
+    load_architecture_revision,
     load_docs_confirmation,
+    load_host_runtime_validation,
+    load_quality_revision,
+    load_ui_revision,
+    quality_revision_file,
+    save_architecture_revision,
     save_docs_confirmation,
+    save_host_runtime_validation,
+    save_quality_revision,
+    save_ui_revision,
+    ui_revision_file,
 )
 from super_dev.skills import SkillManager
 
@@ -131,6 +144,35 @@ class WorkflowRunResponse(BaseModel):
 class WorkflowDocsConfirmationRequest(BaseModel):
     """文档确认状态更新请求"""
     status: Literal["pending_review", "revision_requested", "confirmed"]
+    comment: str = ""
+    actor: str = "user"
+
+
+class WorkflowUIRevisionRequest(BaseModel):
+    """UI 改版状态更新请求"""
+    status: Literal["pending_review", "revision_requested", "confirmed"]
+    comment: str = ""
+    actor: str = "user"
+
+
+class WorkflowArchitectureRevisionRequest(BaseModel):
+    """架构返工状态更新请求"""
+    status: Literal["pending_review", "revision_requested", "confirmed"]
+    comment: str = ""
+    actor: str = "user"
+
+
+class WorkflowQualityRevisionRequest(BaseModel):
+    """质量返工状态更新请求"""
+    status: Literal["pending_review", "revision_requested", "confirmed"]
+    comment: str = ""
+    actor: str = "user"
+
+
+class HostRuntimeValidationRequest(BaseModel):
+    """宿主真人验收状态更新请求"""
+    host: str
+    status: Literal["pending", "passed", "failed"]
     comment: str = ""
     actor: str = "user"
 
@@ -485,6 +527,21 @@ def _detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = Non
     explicit_confirmed = docs_confirmation_status == "confirmed"
     explicit_revision_requested = docs_confirmation_status == "revision_requested"
     explicit_waiting_review = docs_confirmation_status == "pending_review"
+    ui_revision = load_ui_revision(project_dir) or {}
+    ui_revision_status = str(ui_revision.get("status", "")).strip() or "pending_review"
+    ui_revision_comment = str(ui_revision.get("comment", "")).strip()
+    ui_revision_run_id = str(ui_revision.get("run_id", "")).strip()
+    explicit_ui_revision_requested = ui_revision_status == "revision_requested"
+    architecture_revision = load_architecture_revision(project_dir) or {}
+    architecture_revision_status = str(architecture_revision.get("status", "")).strip() or "pending_review"
+    architecture_revision_comment = str(architecture_revision.get("comment", "")).strip()
+    architecture_revision_run_id = str(architecture_revision.get("run_id", "")).strip()
+    explicit_architecture_revision_requested = architecture_revision_status == "revision_requested"
+    quality_revision = load_quality_revision(project_dir) or {}
+    quality_revision_status = str(quality_revision.get("status", "")).strip() or "pending_review"
+    quality_revision_comment = str(quality_revision.get("comment", "")).strip()
+    quality_revision_run_id = str(quality_revision.get("run_id", "")).strip()
+    explicit_quality_revision_requested = quality_revision_status == "revision_requested"
 
     run_status = str((run or {}).get("status", "unknown"))
     run_results = cast(list[dict[str, Any]], (run or {}).get("results") or [])
@@ -574,6 +631,12 @@ def _detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = Non
     blocker = ""
     if explicit_revision_requested:
         blocker = "用户已要求修改三份核心文档，当前应先修正文档并再次提交确认。"
+    elif explicit_ui_revision_requested:
+        blocker = "当前存在 UI 改版请求，应先更新 output/*-uiux.md，并重新执行前端运行验证与 UI review。"
+    elif explicit_architecture_revision_requested:
+        blocker = "当前存在架构返工请求，应先更新 output/*-architecture.md，并同步调整实现方案与任务拆解。"
+    elif explicit_quality_revision_requested:
+        blocker = "当前存在质量返工请求，应先修复质量/安全问题，并重新执行 quality gate 与 release proof-pack。"
     elif confirmation_waiting:
         blocker = "三份核心文档已生成，当前必须等待用户确认或提出修改意见。"
     elif not research_done:
@@ -628,6 +691,30 @@ def _detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = Non
             "updated_at": docs_confirmation.get("updated_at", ""),
             "actor": docs_confirmation.get("actor", ""),
             "exists": bool(docs_confirmation),
+        },
+        "ui_revision": {
+            "status": ui_revision_status,
+            "comment": ui_revision_comment,
+            "run_id": ui_revision_run_id,
+            "updated_at": ui_revision.get("updated_at", ""),
+            "actor": ui_revision.get("actor", ""),
+            "exists": bool(ui_revision),
+        },
+        "architecture_revision": {
+            "status": architecture_revision_status,
+            "comment": architecture_revision_comment,
+            "run_id": architecture_revision_run_id,
+            "updated_at": architecture_revision.get("updated_at", ""),
+            "actor": architecture_revision.get("actor", ""),
+            "exists": bool(architecture_revision),
+        },
+        "quality_revision": {
+            "status": quality_revision_status,
+            "comment": quality_revision_comment,
+            "run_id": quality_revision_run_id,
+            "updated_at": quality_revision.get("updated_at", ""),
+            "actor": quality_revision.get("actor", ""),
+            "exists": bool(quality_revision),
         },
     }
 
@@ -695,6 +782,7 @@ def _default_host_commands(host_id: str, *, supports_slash: bool) -> dict[str, s
         "setup": f"super-dev setup --host {host_id} --force --yes",
         "onboard": f"super-dev onboard --host {host_id} --force --yes",
         "doctor": f"super-dev doctor --host {host_id} --repair --force",
+        "audit": f"super-dev integrate audit --target {host_id}",
         "smoke": f"super-dev integrate smoke --target {host_id}",
         "run": 'super-dev "你的需求"',
         "slash": '/super-dev "你的需求"' if supports_slash else "",
@@ -792,6 +880,49 @@ def _collect_host_diagnostics(
             "suggestions": [],
         }
 
+        surface_audit: dict[str, dict[str, Any]] = {}
+        for surface_key, surface_path in integration_manager.collect_managed_surface_paths(
+            target=target,
+            skill_name=skill_name,
+        ).items():
+            exists = surface_path.exists()
+            audit_entry: dict[str, Any] = {
+                "path": str(surface_path),
+                "exists": exists,
+                "missing_markers": [],
+            }
+            if exists:
+                try:
+                    content = surface_path.read_text(encoding="utf-8")
+                except Exception as exc:
+                    audit_entry["read_error"] = str(exc)
+                    audit_entry["missing_markers"] = ["unreadable"]
+                else:
+                    audit_entry["missing_markers"] = integration_manager.audit_surface_contract(
+                        target,
+                        surface_key,
+                        surface_path,
+                        content,
+                    )
+            surface_audit[surface_key] = audit_entry
+
+        invalid_surfaces = {
+            key: value
+            for key, value in surface_audit.items()
+            if value.get("exists") and value.get("missing_markers")
+        }
+        host_report["checks"]["contract"] = {
+            "ok": not invalid_surfaces,
+            "surfaces": surface_audit,
+            "invalid_surfaces": invalid_surfaces,
+        }
+        if invalid_surfaces:
+            host_report["ready"] = False
+            host_report["missing"].append("contract")
+            host_report["suggestions"].append(
+                f"super-dev onboard --host {target} --force --yes"
+            )
+
         if check_integrate:
             integration_target = integration_targets.get(target)
             integrate_files = [project_dir / item for item in integration_target.files] if integration_target else []
@@ -866,6 +997,22 @@ def _collect_host_diagnostics(
             integration_manager=integration_manager,
             target=target,
         )
+        usage_profile = host_report["usage_profile"]
+        if isinstance(usage_profile, dict):
+            precondition_status = str(usage_profile.get("precondition_status", "")).strip()
+            precondition_label = str(usage_profile.get("precondition_label", "")).strip()
+            precondition_guidance = usage_profile.get("precondition_guidance", [])
+            precondition_signals = usage_profile.get("precondition_signals", {})
+            host_report["preconditions"] = {
+                "status": precondition_status,
+                "label": precondition_label,
+                "guidance": precondition_guidance if isinstance(precondition_guidance, list) else [],
+                "signals": precondition_signals if isinstance(precondition_signals, dict) else {},
+            }
+            if precondition_status == "host-auth-required":
+                host_report["suggestions"].append(
+                    "若宿主报 Invalid API key provided，请先在宿主内完成 /auth 或更新宿主 API key 配置。"
+                )
         report["hosts"][target] = host_report
         if not host_report["ready"]:
             report["overall_ready"] = False
@@ -905,7 +1052,129 @@ def _serialize_host_usage_profile(
         "smoke_test_prompt": profile.smoke_test_prompt,
         "smoke_test_steps": list(profile.smoke_test_steps),
         "smoke_success_signal": profile.smoke_success_signal,
+        "precondition_status": profile.precondition_status,
+        "precondition_label": profile.precondition_label,
+        "precondition_guidance": list(profile.precondition_guidance),
+        "precondition_signals": dict(profile.precondition_signals),
         "notes": profile.notes,
+    }
+
+
+def _load_host_runtime_validation_state(*, project_dir: Path) -> dict[str, Any]:
+    payload = load_host_runtime_validation(project_dir) or {}
+    if not isinstance(payload, dict):
+        return {"hosts": {}, "updated_at": ""}
+    hosts = payload.get("hosts", {})
+    if not isinstance(hosts, dict):
+        hosts = {}
+    return {
+        "hosts": hosts,
+        "updated_at": str(payload.get("updated_at", "")).strip(),
+    }
+
+
+def _host_runtime_status_label(status: str) -> str:
+    mapping = {
+        "pending": "待真人验收",
+        "passed": "已真人通过",
+        "failed": "真人验收失败",
+    }
+    return mapping.get(status, "待真人验收")
+
+
+def _update_host_runtime_validation_state(
+    *,
+    project_dir: Path,
+    host: str,
+    status: str,
+    comment: str,
+    actor: str,
+) -> tuple[dict[str, Any], Path]:
+    payload = _load_host_runtime_validation_state(project_dir=project_dir)
+    hosts = dict(payload.get("hosts", {}))
+    current = hosts.get(host, {})
+    if not isinstance(current, dict):
+        current = {}
+    hosts[host] = {
+        "status": status,
+        "comment": comment.strip(),
+        "actor": actor.strip() or "user",
+        "updated_at": current.get("updated_at", ""),
+    }
+    file_path = save_host_runtime_validation(project_dir, {"hosts": hosts})
+    updated = _load_host_runtime_validation_state(project_dir=project_dir)
+    return updated, file_path
+
+
+def _build_host_runtime_validation_payload(
+    *,
+    project_dir: Path,
+    targets: list[str],
+    detected_meta: dict[str, list[str]],
+    report: dict[str, Any],
+    usage_profiles: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    runtime_state = _load_host_runtime_validation_state(project_dir=project_dir)
+    runtime_hosts = runtime_state.get("hosts", {})
+    if not isinstance(runtime_hosts, dict):
+        runtime_hosts = {}
+    hosts = report.get("hosts", {})
+    if not isinstance(hosts, dict):
+        hosts = {}
+    entries: list[dict[str, Any]] = []
+    for target in targets:
+        host = hosts.get(target, {}) if isinstance(target, str) else {}
+        usage = usage_profiles.get(target, {}) if isinstance(target, str) else {}
+        runtime_entry = runtime_hosts.get(target, {}) if isinstance(target, str) else {}
+        if not isinstance(host, dict):
+            host = {}
+        if not isinstance(usage, dict):
+            usage = {}
+        if not isinstance(runtime_entry, dict):
+            runtime_entry = {}
+        runtime_status = str(runtime_entry.get("status", "")).strip() or "pending"
+        entries.append(
+            {
+                "host": target,
+                "surface_ready": bool(host.get("ready", False)),
+                "manual_runtime_status": runtime_status,
+                "manual_runtime_status_label": _host_runtime_status_label(runtime_status),
+                "manual_runtime_comment": str(runtime_entry.get("comment", "")).strip(),
+                "manual_runtime_actor": str(runtime_entry.get("actor", "")).strip(),
+                "manual_runtime_updated_at": str(runtime_entry.get("updated_at", "")).strip(),
+                "final_trigger": usage.get("final_trigger", "-"),
+                "host_protocol_mode": usage.get("host_protocol_mode", "-"),
+                "host_protocol_summary": usage.get("host_protocol_summary", "-"),
+                "certification_label": usage.get("certification_label", "-"),
+                "precondition_label": usage.get("precondition_label", "-"),
+                "precondition_guidance": usage.get("precondition_guidance", []),
+                "smoke_test_prompt": usage.get("smoke_test_prompt", ""),
+                "smoke_success_signal": usage.get("smoke_success_signal", ""),
+                "runtime_checklist": [
+                    "在宿主中使用最终触发命令进入 Super Dev 流水线。",
+                    "确认首轮响应明确进入 research，而不是直接开始编码。",
+                    "确认真实写入 output/*-research.md、output/*-prd.md、output/*-architecture.md、output/*-uiux.md。",
+                    "确认三文档完成后暂停等待用户确认，而不是直接继续实现。",
+                    "确认文档确认后能继续进入 Spec、前端运行验证、后端与交付阶段。",
+                ],
+                "pass_criteria": [
+                    "首轮响应符合 Super Dev 首轮契约。",
+                    "关键文档真实落盘到项目目录。",
+                    "确认门真实生效。",
+                    "后续恢复路径可用。",
+                ],
+            }
+        )
+
+    return {
+        "project_dir": str(project_dir),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "runtime_state_file": str(host_runtime_validation_file(project_dir)),
+        "runtime_state_updated_at": runtime_state.get("updated_at", ""),
+        "detected_hosts": list(detected_meta.keys()),
+        "detection_details": detected_meta,
+        "selected_targets": targets,
+        "hosts": entries,
     }
 
 
@@ -917,7 +1186,7 @@ def _build_host_compatibility_summary(
     check_skill: bool,
     check_slash: bool,
 ) -> dict[str, Any]:
-    enabled_checks = []
+    enabled_checks = ["contract"]
     if check_integrate:
         enabled_checks.append("integrate")
     if check_skill and any(IntegrationManager.requires_skill(target) for target in targets):
@@ -1850,6 +2119,132 @@ async def update_workflow_docs_confirmation(
     }
 
 
+@app.get("/api/workflow/ui-revision")
+async def get_workflow_ui_revision(project_dir: str = ".") -> dict:
+    """获取 UI 改版状态。"""
+    project_dir_path = Path(project_dir).resolve()
+    payload = load_ui_revision(project_dir_path) or {}
+    return {
+        "project_dir": str(project_dir_path),
+        "status": str(payload.get("status", "")).strip() or "pending_review",
+        "comment": str(payload.get("comment", "")).strip(),
+        "actor": str(payload.get("actor", "")).strip(),
+        "run_id": str(payload.get("run_id", "")).strip(),
+        "updated_at": str(payload.get("updated_at", "")).strip(),
+        "exists": bool(payload),
+        "file_path": str(ui_revision_file(project_dir_path)),
+    }
+
+
+@app.post("/api/workflow/ui-revision")
+async def update_workflow_ui_revision(
+    request: WorkflowUIRevisionRequest,
+    project_dir: str = ".",
+    run_id: str = "",
+) -> dict:
+    """更新 UI 改版状态。"""
+    project_dir_path = Path(project_dir).resolve()
+    payload = {
+        "status": request.status,
+        "comment": request.comment.strip(),
+        "actor": request.actor.strip() or "user",
+        "run_id": run_id.strip(),
+    }
+    file_path = save_ui_revision(project_dir_path, payload)
+    return {
+        "status": request.status,
+        "comment": payload["comment"],
+        "actor": payload["actor"],
+        "run_id": payload["run_id"],
+        "updated_at": (load_ui_revision(project_dir_path) or {}).get("updated_at", ""),
+        "file_path": str(file_path),
+    }
+
+
+@app.get("/api/workflow/architecture-revision")
+async def get_workflow_architecture_revision(project_dir: str = ".") -> dict:
+    """获取架构返工状态。"""
+    project_dir_path = Path(project_dir).resolve()
+    payload = load_architecture_revision(project_dir_path) or {}
+    return {
+        "project_dir": str(project_dir_path),
+        "status": str(payload.get("status", "")).strip() or "pending_review",
+        "comment": str(payload.get("comment", "")).strip(),
+        "actor": str(payload.get("actor", "")).strip(),
+        "run_id": str(payload.get("run_id", "")).strip(),
+        "updated_at": str(payload.get("updated_at", "")).strip(),
+        "exists": bool(payload),
+        "file_path": str(architecture_revision_file(project_dir_path)),
+    }
+
+
+@app.post("/api/workflow/architecture-revision")
+async def update_workflow_architecture_revision(
+    request: WorkflowArchitectureRevisionRequest,
+    project_dir: str = ".",
+    run_id: str = "",
+) -> dict:
+    """更新架构返工状态。"""
+    project_dir_path = Path(project_dir).resolve()
+    payload = {
+        "status": request.status,
+        "comment": request.comment.strip(),
+        "actor": request.actor.strip() or "user",
+        "run_id": run_id.strip(),
+    }
+    file_path = save_architecture_revision(project_dir_path, payload)
+    return {
+        "status": request.status,
+        "comment": payload["comment"],
+        "actor": payload["actor"],
+        "run_id": payload["run_id"],
+        "updated_at": (load_architecture_revision(project_dir_path) or {}).get("updated_at", ""),
+        "file_path": str(file_path),
+    }
+
+
+@app.get("/api/workflow/quality-revision")
+async def get_workflow_quality_revision(project_dir: str = ".") -> dict:
+    """获取质量返工状态。"""
+    project_dir_path = Path(project_dir).resolve()
+    payload = load_quality_revision(project_dir_path) or {}
+    return {
+        "project_dir": str(project_dir_path),
+        "status": str(payload.get("status", "")).strip() or "pending_review",
+        "comment": str(payload.get("comment", "")).strip(),
+        "actor": str(payload.get("actor", "")).strip(),
+        "run_id": str(payload.get("run_id", "")).strip(),
+        "updated_at": str(payload.get("updated_at", "")).strip(),
+        "exists": bool(payload),
+        "file_path": str(quality_revision_file(project_dir_path)),
+    }
+
+
+@app.post("/api/workflow/quality-revision")
+async def update_workflow_quality_revision(
+    request: WorkflowQualityRevisionRequest,
+    project_dir: str = ".",
+    run_id: str = "",
+) -> dict:
+    """更新质量返工状态。"""
+    project_dir_path = Path(project_dir).resolve()
+    payload = {
+        "status": request.status,
+        "comment": request.comment.strip(),
+        "actor": request.actor.strip() or "user",
+        "run_id": run_id.strip(),
+    }
+    file_path = save_quality_revision(project_dir_path, payload)
+    return {
+        "status": request.status,
+        "comment": payload["comment"],
+        "actor": payload["actor"],
+        "run_id": payload["run_id"],
+        "updated_at": (load_quality_revision(project_dir_path) or {}).get("updated_at", ""),
+        "file_path": str(file_path),
+    }
+
+
 @app.post("/api/workflow/cancel/{run_id}")
 async def cancel_workflow(run_id: str, project_dir: str = ".") -> dict:
     """取消工作流运行"""
@@ -2204,6 +2599,107 @@ async def doctor_hosts(
     }
 
 
+@app.get("/api/hosts/validate")
+async def validate_hosts(
+    project_dir: str = ".",
+    host: str | None = None,
+    auto: bool = False,
+    skill_name: str = "super-dev-core",
+) -> dict[str, Any]:
+    project_dir_path = Path(project_dir).resolve()
+    integration_manager = IntegrationManager(project_dir_path)
+    available_targets = [item.name for item in integration_manager.list_targets()]
+    detected_targets, detected_meta = _detect_host_targets(available_targets)
+
+    if host:
+        if host not in available_targets:
+            raise HTTPException(status_code=400, detail=f"不支持的 host: {host}")
+        targets = [host]
+    elif auto:
+        targets = detected_targets or available_targets
+    else:
+        targets = available_targets
+
+    report = _collect_host_diagnostics(
+        project_dir=project_dir_path,
+        targets=targets,
+        skill_name=skill_name,
+        check_integrate=True,
+        check_skill=True,
+        check_slash=True,
+    )
+    usage_profiles = {
+        target: _serialize_host_usage_profile(
+            integration_manager=integration_manager,
+            target=target,
+        )
+        for target in targets
+    }
+    payload = _build_host_runtime_validation_payload(
+        project_dir=project_dir_path,
+        targets=targets,
+        detected_meta=detected_meta,
+        report=report,
+        usage_profiles=usage_profiles,
+    )
+
+    return {
+        "status": "success",
+        "project_dir": str(project_dir_path),
+        "selected_targets": targets,
+        "detected_targets": detected_targets,
+        "detection_details": detected_meta,
+        "report": payload,
+        "usage_profiles": usage_profiles,
+        "auto": auto,
+    }
+
+
+@app.get("/api/hosts/runtime-validation")
+async def get_hosts_runtime_validation(
+    project_dir: str = ".",
+    host: str | None = None,
+    auto: bool = False,
+    skill_name: str = "super-dev-core",
+) -> dict[str, Any]:
+    """读取宿主真人运行时验收状态。"""
+    return await validate_hosts(project_dir=project_dir, host=host, auto=auto, skill_name=skill_name)
+
+
+@app.post("/api/hosts/runtime-validation")
+async def update_hosts_runtime_validation(
+    request: HostRuntimeValidationRequest,
+    project_dir: str = ".",
+) -> dict[str, Any]:
+    """更新宿主真人运行时验收状态。"""
+    project_dir_path = Path(project_dir).resolve()
+    integration_manager = IntegrationManager(project_dir_path)
+    available_targets = [item.name for item in integration_manager.list_targets()]
+    if request.host not in available_targets:
+        raise HTTPException(status_code=400, detail=f"不支持的 host: {request.host}")
+
+    runtime_state, file_path = _update_host_runtime_validation_state(
+        project_dir=project_dir_path,
+        host=request.host,
+        status=request.status,
+        comment=request.comment,
+        actor=request.actor,
+    )
+    host_entry = runtime_state.get("hosts", {}).get(request.host, {})
+    if not isinstance(host_entry, dict):
+        host_entry = {}
+    return {
+        "status": "success",
+        "host": request.host,
+        "manual_runtime_status": request.status,
+        "manual_runtime_status_label": _host_runtime_status_label(request.status),
+        "comment": str(host_entry.get("comment", "")).strip(),
+        "actor": str(host_entry.get("actor", "")).strip(),
+        "updated_at": str(host_entry.get("updated_at", "")).strip(),
+        "file_path": str(file_path),
+    }
+
+
 @app.get("/api/deploy/platforms")
 async def list_deploy_platforms() -> dict:
     """列出支持的 CI/CD 平台"""
@@ -2467,6 +2963,21 @@ async def get_release_readiness(
     evaluator = ReleaseReadinessEvaluator(project_dir_path)
     report = evaluator.evaluate(verify_tests=verify_tests)
     files = evaluator.write(report)
+    payload = report.to_dict()
+    payload["report_file"] = str(files["markdown"])
+    payload["json_file"] = str(files["json"])
+    return payload
+
+
+@app.get("/api/release/proof-pack")
+async def get_release_proof_pack(
+    project_dir: str = ".",
+    verify_tests: bool = False,
+) -> dict[str, Any]:
+    project_dir_path = Path(project_dir).resolve()
+    builder = ProofPackBuilder(project_dir_path)
+    report = builder.build(verify_tests=verify_tests)
+    files = builder.write(report)
     payload = report.to_dict()
     payload["report_file"] = str(files["markdown"])
     payload["json_file"] = str(files["json"])

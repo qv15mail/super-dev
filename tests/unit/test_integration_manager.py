@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from super_dev.integrations import IntegrationManager
+from super_dev.skills import SkillManager
 
 
 class TestIntegrationManager:
@@ -45,6 +46,22 @@ class TestIntegrationManager:
                 full_path = temp_project_dir / file_path
                 assert full_path.exists()
                 assert "Super Dev" in full_path.read_text(encoding="utf-8")
+
+    def test_codex_setup_upserts_root_agents_without_clobbering_existing_content(self, temp_project_dir: Path):
+        agents = temp_project_dir / "AGENTS.md"
+        agents.write_text("# Existing Project Rules\n\n- Keep current behavior.\n", encoding="utf-8")
+
+        manager = IntegrationManager(temp_project_dir)
+        files = manager.setup("codex-cli", force=True)
+
+        assert [item.resolve() for item in files] == [agents.resolve()]
+        content = agents.read_text(encoding="utf-8")
+        assert "# Existing Project Rules" in content
+        assert "BEGIN SUPER DEV CODEX" in content
+        assert "super-dev:" in content
+        assert "super-dev：" in content
+        assert "output/*-prd.md" in content
+        assert "actual project files" in content or "repository workspace" in content
 
     def test_adapter_profiles_cover_all_targets(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)
@@ -121,6 +138,12 @@ class TestIntegrationManager:
         assert "GEMINI.md" in gemini.official_project_surfaces
         assert "~/.gemini/GEMINI.md" in gemini.official_user_surfaces
 
+        iflow = by_host["iflow"]
+        assert iflow.precondition_status == "host-auth-required"
+        assert iflow.precondition_guidance
+        assert any("/auth" in item for item in iflow.precondition_guidance)
+        assert iflow.precondition_label in {"需宿主鉴权", "已检测到鉴权配置"}
+
         kimi = by_host["kimi-cli"]
         assert kimi.category == "cli"
         assert kimi.host_protocol_mode == "official-context"
@@ -170,6 +193,64 @@ class TestIntegrationManager:
         assert "三份核心文档完成后会暂停并等待用户确认" in content
         assert "未经用户明确确认，不得进入 Spec 或编码" in content
         assert "先按 `tasks.md` 实现并运行前端" in content
+
+    def test_trae_rules_require_workspace_artifacts_and_fullwidth_trigger(self, temp_project_dir: Path):
+        manager = IntegrationManager(temp_project_dir)
+        content = manager._trae_rules()
+
+        assert "super-dev：" in content
+        assert "project workspace" in content
+        assert "instead of only replying in chat" in content
+        assert "treat the step as incomplete" in content
+
+    def test_embedded_skill_and_host_specific_surfaces_require_written_artifacts(self, temp_project_dir: Path):
+        manager = IntegrationManager(temp_project_dir)
+
+        embedded = manager._build_embedded_skill_content()
+        antigravity = manager._build_antigravity_context_content()
+        claude_agent = manager._build_claude_agent_content()
+        codebuddy_agent = manager._build_codebuddy_agent_content()
+        workflow = manager._antigravity_workflow_rules()
+
+        assert "super-dev：" in embedded
+        assert "必须真实写入项目文件" in embedded
+        assert "Chat-only summaries do not count" in antigravity
+        assert "write them as project files" in antigravity
+        assert "workspace files" in claude_agent
+        assert "chat-only summaries" in claude_agent
+        assert "workspace files" in codebuddy_agent
+        assert "chat-only explanations" in codebuddy_agent
+        assert "只在聊天里总结不算完成" in workflow
+        assert "必须暂停等待用户确认" in workflow
+
+    def test_managed_surfaces_all_pass_contract_audit(self, temp_project_dir: Path, monkeypatch: pytest.MonkeyPatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+
+        manager = IntegrationManager(temp_project_dir)
+        skill_manager = SkillManager(temp_project_dir)
+
+        for target in IntegrationManager.TARGETS:
+            manager.setup(target, force=True)
+            manager.setup_global_protocol(target, force=True)
+            if manager.supports_slash(target):
+                manager.setup_slash_command(target, force=True)
+                manager.setup_global_slash_command(target, force=True)
+            if IntegrationManager.requires_skill(target):
+                skill_root = skill_manager._target_dir(target)
+                if skill_manager.target_path_kind(target) == "observed-compatibility-surface":
+                    skill_root.mkdir(parents=True, exist_ok=True)
+                if skill_manager.skill_surface_available(target):
+                    skill_manager.install("super-dev", target=target, name="super-dev-core", force=True)
+
+            surfaces = manager.collect_managed_surface_paths(target)
+            for _, path in surfaces.items():
+                if not path.exists():
+                    continue
+                content = path.read_text(encoding="utf-8")
+                missing = manager.audit_surface_contract(target, _, path, content)
+                assert missing == [], f"{target} surface {path} missing contract markers: {missing}"
 
     def test_generic_rules_emphasize_host_governance_boundary(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)
