@@ -305,7 +305,7 @@ description: Super Dev pipeline governance for research-first, commercial-grade 
 ---
 # {skill_name} - Super Dev AI Coding Skill
 
-> 版本: 2.0.9 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
+> 版本: 2.0.10 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
 
 ---
 

@@ -20,6 +20,7 @@ class DocumentGenerator:
         self,
         name: str,
         description: str,
+        request_mode: str = "feature",
         platform: str = "web",
         frontend: str = "next",
         backend: str = "node",
@@ -33,6 +34,7 @@ class DocumentGenerator:
         """初始化文档生成器"""
         self.name = name
         self.description = description
+        self.request_mode = request_mode if request_mode in {"feature", "bugfix"} else "feature"
         self.platform = platform
         self.frontend = frontend
         self.backend = backend
@@ -43,6 +45,11 @@ class DocumentGenerator:
         self.testing_frameworks = testing_frameworks or []
         self.language_preferences = self._normalize_language_preferences(language_preferences)
         self.requirement_parser = RequirementParser()
+
+    def _request_mode(self) -> str:
+        if self.request_mode in {"feature", "bugfix"}:
+            return self.request_mode
+        return self.requirement_parser.detect_request_mode(self.description)
 
     def _normalize_language_preferences(self, values: list[str] | None) -> list[str]:
         normalized: list[str] = []
@@ -195,7 +202,7 @@ class DocumentGenerator:
         return f"""# {self.name} - 产品需求文档 (PRD)
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.0.9
+> **版本**: v2.0.10
 > **状态**: 草稿
 
 ---
@@ -421,7 +428,7 @@ class DocumentGenerator:
 
 | 版本 | 日期 | 变更内容 | 作者 |
 |:---|:---|:---|:---|
-| v2.0.9 | {datetime.now().strftime('%Y-%m-%d')} | 初始版本 | Super Dev |
+| v2.0.10 | {datetime.now().strftime('%Y-%m-%d')} | 初始版本 | Super Dev |
 """
 
     def generate_architecture(self) -> str:
@@ -429,7 +436,7 @@ class DocumentGenerator:
         return f"""# {self.name} - 架构设计文档
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.0.9
+> **版本**: v2.0.10
 > **架构师**: Super Dev ARCHITECT 专家
 
 ---
@@ -845,7 +852,7 @@ jobs:
         doc_parts.append(f"""# {self.name} - UI/UX 设计文档
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.0.9
+> **版本**: v2.0.10
 > **设计师**: Super Dev UI/UX 专家
 
 ---
@@ -2765,7 +2772,7 @@ spec:
         )
 
     def _generate_clarification_questions(self) -> str:
-        mode = self.requirement_parser.detect_request_mode(self.description)
+        mode = self._request_mode()
         if mode == "bugfix":
             return (
                 "1. **实际症状**：当前报错、异常现象或错误行为是什么？\n"
@@ -2852,7 +2859,7 @@ spec:
         )
 
     def _generate_sequence_diagram(self) -> str:
-        mode = self.requirement_parser.detect_request_mode(self.description)
+        mode = self._request_mode()
         if mode == "bugfix":
             return (
                 "```mermaid\n"

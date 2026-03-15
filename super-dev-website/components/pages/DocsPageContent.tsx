@@ -214,6 +214,11 @@ const zhContent: Content = {
       bullets: ['research 前置知识读取', 'PRD / Architecture / UI/UX 阶段化映射', 'quality / delivery 继续复用基线'],
     },
     {
+      title: '改动前先看影响范围',
+      body: '接手旧仓库、修改登录流、重构 API 或动关键状态流前，先跑 impact，把受影响模块和回归重点确认清楚。',
+      bullets: ['super-dev repo-map', 'super-dev impact "变更描述" --files ...', '先看 blast radius 再动手'],
+    },
+    {
       title: '前端运行验证门',
       body: '必须有 frontend-runtime 报告通过，中后段才允许继续。',
       bullets: ['preview.html', 'frontend-runtime.json', '运行通过后再进后端'],
@@ -225,7 +230,7 @@ const zhContent: Content = {
     },
   ],
   commandsTitle: '常用命令',
-  commandsBody: '这里整理最常用的命令组：安装与引导、宿主接入、文档确认、质量检查、发布检查和更新。',
+  commandsBody: '这里整理最常用的命令组：安装与引导、宿主接入、代码库理解、影响分析、确认门、质量检查、发布检查和更新。',
   commands: [
     {
       title: '安装与引导',
@@ -236,6 +241,11 @@ const zhContent: Content = {
       title: '宿主接入与修复',
       code: 'super-dev onboard --host claude-code --force --yes\nsuper-dev doctor --host trae --repair --force\nsuper-dev detect --json',
       filename: 'Host Operations',
+    },
+    {
+      title: '代码库理解与影响分析',
+      code: 'super-dev repo-map\nsuper-dev impact "修改登录流程" --files services/auth.py',
+      filename: 'Codebase Intelligence',
     },
     {
       title: '确认与恢复',
@@ -392,6 +402,11 @@ const enContent: Content = {
       bullets: ['knowledge before research', 'phase-based mapping into PRD / Architecture / UI/UX', 'continued reuse in quality and delivery'],
     },
     {
+      title: 'Inspect impact before changing critical flows',
+      body: 'Before refactoring a mature repo, changing auth, reshaping APIs, or touching major state flows, run impact analysis so the host starts with the likely blast radius.',
+      bullets: ['super-dev repo-map', 'super-dev impact "change description" --files ...', 'review scope before coding'],
+    },
+    {
       title: 'Frontend runtime gate',
       body: 'A page file existing is not enough. A passing frontend runtime report is required before later stages continue.',
       bullets: ['preview.html', 'frontend-runtime.json', 'backend starts after runtime verification'],
@@ -403,7 +418,7 @@ const enContent: Content = {
     },
   ],
   commandsTitle: 'Commands',
-  commandsBody: 'Keep the critical commands visible: install, onboarding, approval, quality, release checks, and update.',
+  commandsBody: 'Keep the critical commands visible: install, onboarding, codebase intelligence, impact analysis, approval, quality, release checks, and update.',
   commands: [
     {
       title: 'Install & bootstrap',
@@ -414,6 +429,11 @@ const enContent: Content = {
       title: 'Onboarding & repair',
       code: 'super-dev onboard --host claude-code --force --yes\nsuper-dev doctor --host trae --repair --force\nsuper-dev detect --json',
       filename: 'Host Operations',
+    },
+    {
+      title: 'Codebase intelligence & impact',
+      code: 'super-dev repo-map\nsuper-dev impact "Change the login flow" --files services/auth.py',
+      filename: 'Codebase Intelligence',
     },
     {
       title: 'Approve & resume',
@@ -486,7 +506,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             <div className="max-w-[860px]">
               <div className="mb-5 flex flex-wrap items-center gap-2">
                 <Badge variant="version">{content.heroKicker}</Badge>
-                <Badge variant="certified">v2.0.9</Badge>
+                <Badge variant="certified">v2.0.10</Badge>
                 <Badge variant="compatible">{locale === 'en' ? 'Bilingual' : '中英双语'}</Badge>
               </div>
               <h1 className="max-w-[900px] text-4xl font-bold leading-[1.08] tracking-tight text-text-primary sm:text-5xl lg:text-[3.5rem]">

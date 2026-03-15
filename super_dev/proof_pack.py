@@ -46,6 +46,71 @@ class ProofPackReport:
     def status(self) -> str:
         return "ready" if self.ready_count == self.total_count and self.total_count > 0 else "incomplete"
 
+    @property
+    def completion_percent(self) -> int:
+        if self.total_count <= 0:
+            return 0
+        return int(round((self.ready_count / self.total_count) * 100))
+
+    @property
+    def blockers(self) -> list[ProofPackArtifact]:
+        return [artifact for artifact in self.artifacts if artifact.status != "ready"]
+
+    @property
+    def key_artifacts(self) -> list[ProofPackArtifact]:
+        preferred = {
+            "Docs Confirmation",
+            "Frontend Runtime",
+            "UI Review",
+            "Delivery Manifest",
+            "Release Readiness",
+        }
+        prioritized = [artifact for artifact in self.artifacts if artifact.name in preferred]
+        return prioritized or self.artifacts[:5]
+
+    @property
+    def next_actions(self) -> list[str]:
+        actions: list[str] = []
+        artifact_names = {artifact.name: artifact for artifact in self.artifacts}
+        docs = artifact_names.get("Docs Confirmation")
+        if docs and docs.status != "ready":
+            actions.append('先执行 `super-dev review docs --status confirmed --comment "三文档已确认"`。')
+        ui_revision = artifact_names.get("UI Revision State")
+        if ui_revision and ui_revision.status != "ready":
+            actions.append("先完成 UI 改版闭环：更新 UIUX 文档、重做前端、重新执行 frontend runtime 与 UI review。")
+        frontend = artifact_names.get("Frontend Runtime")
+        if frontend and frontend.status != "ready":
+            actions.append("重新执行前端运行验证，确认前端可真实运行而不是只生成页面文件。")
+        quality = artifact_names.get("Quality Gate")
+        if quality and quality.status != "ready":
+            actions.append("先修复质量或安全问题，再重新执行 quality gate。")
+        delivery = artifact_names.get("Delivery Manifest")
+        if delivery and delivery.status != "ready":
+            actions.append("补齐交付包并确认 delivery manifest 状态为 ready。")
+        rehearsal = artifact_names.get("Release Rehearsal")
+        if rehearsal and rehearsal.status != "ready":
+            actions.append("重新执行发布演练，确认 rehearsal passed。")
+        readiness = artifact_names.get("Release Readiness")
+        if readiness and readiness.status != "ready":
+            actions.append("重新执行 `super-dev release readiness --verify-tests`，确认当前仓库达到发布阈值。")
+        if not actions:
+            actions.append("当前关键交付证据已经齐全，可以直接对外交付或发布。")
+        return actions
+
+    @property
+    def executive_summary(self) -> str:
+        if self.status == "ready":
+            return (
+                f"当前交付证据包已完成，{self.ready_count}/{self.total_count} 项关键证据就绪，"
+                "可以作为当前 run 的正式交付证明。"
+            )
+        missing = [artifact.name for artifact in self.blockers[:3]]
+        missing_text = "、".join(missing) if missing else "关键交付证据"
+        return (
+            f"当前交付证据包尚未完成，已就绪 {self.ready_count}/{self.total_count} 项。"
+            f"优先补齐：{missing_text}。"
+        )
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "project_name": self.project_name,
@@ -53,6 +118,15 @@ class ProofPackReport:
             "status": self.status,
             "ready_count": self.ready_count,
             "total_count": self.total_count,
+            "completion_percent": self.completion_percent,
+            "summary": {
+                "executive_summary": self.executive_summary,
+                "blocking_count": len(self.blockers),
+                "key_artifact_count": len(self.key_artifacts),
+                "next_actions": list(self.next_actions),
+            },
+            "blocking_artifacts": [artifact.to_dict() for artifact in self.blockers],
+            "key_artifacts": [artifact.to_dict() for artifact in self.key_artifacts],
             "artifacts": [artifact.to_dict() for artifact in self.artifacts],
         }
 
@@ -64,14 +138,76 @@ class ProofPackReport:
             f"- Generated at (UTC): {self.generated_at}",
             f"- Status: `{self.status}`",
             f"- Ready artifacts: {self.ready_count}/{self.total_count}",
+            f"- Completion: {self.completion_percent}%",
             "",
-            "| Artifact | Status | Summary | Path |",
-            "|:---|:---:|:---|:---|",
+            "## Executive Summary",
+            "",
+            self.executive_summary,
+            "",
+            "## Blockers",
+            "",
         ]
+        if self.blockers:
+            for artifact in self.blockers:
+                lines.append(f"- **{artifact.name}**: {artifact.summary}")
+        else:
+            lines.append("- 当前没有阻塞项。")
+        lines.extend(
+            [
+                "",
+                "## Next Actions",
+                "",
+            ]
+        )
+        for action in self.next_actions:
+            lines.append(f"- {action}")
+        lines.extend(
+            [
+                "",
+                "## Key Artifacts",
+                "",
+            ]
+        )
+        for artifact in self.key_artifacts:
+            lines.append(f"- **{artifact.name}**: {artifact.summary} ({artifact.status})")
+        lines.extend(
+            [
+                "",
+                "## Full Artifact Matrix",
+                "",
+                "| Artifact | Status | Summary | Path |",
+                "|:---|:---:|:---|:---|",
+            ]
+        )
         for artifact in self.artifacts:
             lines.append(
                 f"| {artifact.name} | {artifact.status} | {artifact.summary} | {artifact.path or '-'} |"
             )
+        lines.append("")
+        return "\n".join(lines)
+
+    def to_executive_markdown(self) -> str:
+        lines = [
+            "# Delivery Evidence Pack Summary",
+            "",
+            f"- Project: `{self.project_name}`",
+            f"- Generated at (UTC): {self.generated_at}",
+            f"- Status: `{self.status}`",
+            f"- Completion: {self.completion_percent}%",
+            "",
+            self.executive_summary,
+            "",
+            "## Current Blockers",
+            "",
+        ]
+        if self.blockers:
+            for artifact in self.blockers:
+                lines.append(f"- **{artifact.name}**: {artifact.summary}")
+        else:
+            lines.append("- None")
+        lines.extend(["", "## Recommended Next Actions", ""])
+        for action in self.next_actions:
+            lines.append(f"- {action}")
         lines.append("")
         return "\n".join(lines)
 
@@ -89,6 +225,8 @@ class ProofPackBuilder:
             [
                 self._docs_confirmation_artifact(),
                 self._ui_revision_artifact(),
+                self._repo_map_artifact(),
+                self._impact_analysis_artifact(),
                 self._document_artifact("Research", "*-research.md"),
                 self._document_artifact("PRD", "*-prd.md"),
                 self._document_artifact("Architecture", "*-architecture.md"),
@@ -107,9 +245,11 @@ class ProofPackBuilder:
         base = self.output_dir / f"{self.project_name}-proof-pack"
         md_path = base.with_suffix(".md")
         json_path = base.with_suffix(".json")
+        summary_path = self.output_dir / f"{self.project_name}-proof-pack-summary.md"
         md_path.write_text(report.to_markdown(), encoding="utf-8")
         json_path.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
-        return {"markdown": md_path, "json": json_path}
+        summary_path.write_text(report.to_executive_markdown(), encoding="utf-8")
+        return {"markdown": md_path, "json": json_path, "summary": summary_path}
 
     def _latest(self, pattern: str, base_dir: Path | None = None) -> Path | None:
         directory = base_dir or self.output_dir
@@ -176,6 +316,42 @@ class ProofPackBuilder:
             summary=summary,
             path=str(file_path),
             details=payload,
+        )
+
+    def _repo_map_artifact(self) -> ProofPackArtifact:
+        markdown_path = self._latest("*-repo-map.md")
+        json_path = self._latest("*-repo-map.json")
+        if markdown_path is None and json_path is None:
+            return ProofPackArtifact(
+                name="Repo Map",
+                status="missing",
+                summary="repo map has not been generated",
+            )
+        chosen = markdown_path or json_path
+        return ProofPackArtifact(
+            name="Repo Map",
+            status="ready",
+            summary="codebase intelligence artifact available",
+            path=str(chosen) if chosen else "",
+            details={"json_path": str(json_path) if json_path else ""},
+        )
+
+    def _impact_analysis_artifact(self) -> ProofPackArtifact:
+        markdown_path = self._latest("*-impact-analysis.md")
+        json_path = self._latest("*-impact-analysis.json")
+        if markdown_path is None and json_path is None:
+            return ProofPackArtifact(
+                name="Impact Analysis",
+                status="missing",
+                summary="impact analysis has not been generated",
+            )
+        chosen = markdown_path or json_path
+        return ProofPackArtifact(
+            name="Impact Analysis",
+            status="ready",
+            summary="change impact analysis artifact available",
+            path=str(chosen) if chosen else "",
+            details={"json_path": str(json_path) if json_path else ""},
         )
 
     def _frontend_runtime_artifact(self) -> ProofPackArtifact:

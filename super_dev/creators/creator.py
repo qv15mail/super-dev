@@ -22,6 +22,7 @@ class ProjectCreator:
         project_dir: Path,
         name: str,
         description: str,
+        request_mode: str = "feature",
         platform: str = "web",
         frontend: str = "next",
         backend: str = "node",
@@ -36,6 +37,7 @@ class ProjectCreator:
         self.project_dir = Path(project_dir).resolve()
         self.name = name
         self.description = description
+        self.request_mode = request_mode if request_mode in {"feature", "bugfix"} else "feature"
         self.platform = platform
         self.frontend = frontend
         self.backend = backend
@@ -54,6 +56,7 @@ class ProjectCreator:
         self.doc_generator = DocumentGenerator(
             name=name,
             description=description,
+            request_mode=self.request_mode,
             platform=platform,
             frontend=frontend,
             backend=backend,
@@ -98,7 +101,7 @@ class ProjectCreator:
 
         # 4. 执行路线图
         scenario = self.doc_generator.requirement_parser.detect_scenario(self.project_dir)
-        request_mode = self.doc_generator.requirement_parser.detect_request_mode(self.description)
+        request_mode = self.request_mode or self.doc_generator.requirement_parser.detect_request_mode(self.description)
         plan_path = self.output_dir / f"{self.name}-execution-plan.md"
         plan_content = self.doc_generator.generate_execution_plan(
             scenario=scenario,

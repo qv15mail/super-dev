@@ -21,7 +21,7 @@ from typing import Any, Literal, cast
 from urllib.parse import urlencode
 
 import uvicorn
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -42,6 +42,7 @@ from super_dev.catalogs import (
     PLATFORM_CATALOG,
     host_path_candidates,
 )
+from super_dev.analyzer import ImpactAnalyzer, RepoMapBuilder
 from super_dev.config import ConfigManager
 from super_dev.deployers import CICDGenerator
 from super_dev.experts import (
@@ -784,6 +785,7 @@ def _default_host_commands(host_id: str, *, supports_slash: bool) -> dict[str, s
         "doctor": f"super-dev doctor --host {host_id} --repair --force",
         "audit": f"super-dev integrate audit --target {host_id}",
         "smoke": f"super-dev integrate smoke --target {host_id}",
+        "bugfix": 'super-dev fix "修复当前项目中的关键问题并补充回归验证"',
         "run": 'super-dev "你的需求"',
         "slash": '/super-dev "你的需求"' if supports_slash else "",
         "trigger": trigger,
@@ -1122,6 +1124,8 @@ def _build_host_runtime_validation_payload(
     if not isinstance(hosts, dict):
         hosts = {}
     entries: list[dict[str, Any]] = []
+    blockers: list[dict[str, Any]] = []
+    next_actions: list[str] = []
     for target in targets:
         host = hosts.get(target, {}) if isinstance(target, str) else {}
         usage = usage_profiles.get(target, {}) if isinstance(target, str) else {}
@@ -1133,10 +1137,51 @@ def _build_host_runtime_validation_payload(
         if not isinstance(runtime_entry, dict):
             runtime_entry = {}
         runtime_status = str(runtime_entry.get("status", "")).strip() or "pending"
+        surface_ready = bool(host.get("ready", False))
+        precondition_label = usage.get("precondition_label", "-")
+        precondition_guidance = usage.get("precondition_guidance", [])
+        blocking_reason = ""
+        recommended_action = ""
+        blocker_type = ""
+        if not surface_ready:
+            blocking_reason = "宿主接入面仍存在 contract 缺口"
+            recommended_action = f"super-dev integrate audit --target {target} --repair --force"
+            blocker_type = "surface"
+        elif runtime_status == "failed":
+            blocking_reason = "宿主真人运行时验收失败"
+            recommended_action = f"super-dev integrate audit --target {target} --repair --force"
+            blocker_type = "runtime"
+        elif runtime_status != "passed":
+            blocking_reason = "宿主尚未完成真人运行时验收"
+            recommended_action = (
+                f"super-dev integrate validate --target {target} --status passed --comment \"首轮先进入 research，三文档已真实落盘\""
+            )
+            blocker_type = "validation"
+
+        if not surface_ready or runtime_status != "passed":
+            blockers.append(
+                {
+                    "host": target,
+                    "type": blocker_type or "runtime",
+                    "summary": blocking_reason,
+                    "next_action": recommended_action,
+                }
+            )
+            if recommended_action and recommended_action not in next_actions:
+                next_actions.append(recommended_action)
+
+        if isinstance(precondition_guidance, list):
+            for item in precondition_guidance[:2]:
+                if isinstance(item, str) and item.strip() and item not in next_actions and runtime_status != "passed":
+                    next_actions.append(item.strip())
+
         entries.append(
             {
                 "host": target,
-                "surface_ready": bool(host.get("ready", False)),
+                "surface_ready": surface_ready,
+                "ready_for_delivery": surface_ready and runtime_status == "passed",
+                "blocking_reason": blocking_reason,
+                "recommended_action": recommended_action,
                 "manual_runtime_status": runtime_status,
                 "manual_runtime_status_label": _host_runtime_status_label(runtime_status),
                 "manual_runtime_comment": str(runtime_entry.get("comment", "")).strip(),
@@ -1146,8 +1191,8 @@ def _build_host_runtime_validation_payload(
                 "host_protocol_mode": usage.get("host_protocol_mode", "-"),
                 "host_protocol_summary": usage.get("host_protocol_summary", "-"),
                 "certification_label": usage.get("certification_label", "-"),
-                "precondition_label": usage.get("precondition_label", "-"),
-                "precondition_guidance": usage.get("precondition_guidance", []),
+                "precondition_label": precondition_label,
+                "precondition_guidance": precondition_guidance,
                 "smoke_test_prompt": usage.get("smoke_test_prompt", ""),
                 "smoke_success_signal": usage.get("smoke_success_signal", ""),
                 "runtime_checklist": [
@@ -1166,6 +1211,13 @@ def _build_host_runtime_validation_payload(
             }
         )
 
+    total_hosts = len(entries)
+    surface_ready_count = sum(1 for item in entries if bool(item.get("surface_ready", False)))
+    runtime_passed_count = sum(1 for item in entries if item.get("manual_runtime_status") == "passed")
+    runtime_failed_count = sum(1 for item in entries if item.get("manual_runtime_status") == "failed")
+    runtime_pending_count = sum(1 for item in entries if item.get("manual_runtime_status") == "pending")
+    fully_ready_count = sum(1 for item in entries if bool(item.get("ready_for_delivery", False)))
+
     return {
         "project_dir": str(project_dir),
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -1174,6 +1226,18 @@ def _build_host_runtime_validation_payload(
         "detected_hosts": list(detected_meta.keys()),
         "detection_details": detected_meta,
         "selected_targets": targets,
+        "summary": {
+            "overall_status": "ready" if total_hosts > 0 and fully_ready_count == total_hosts else "attention",
+            "total_hosts": total_hosts,
+            "surface_ready_count": surface_ready_count,
+            "runtime_passed_count": runtime_passed_count,
+            "runtime_failed_count": runtime_failed_count,
+            "runtime_pending_count": runtime_pending_count,
+            "fully_ready_count": fully_ready_count,
+            "blocking_count": len(blockers),
+            "next_actions": next_actions,
+        },
+        "blockers": blockers,
         "hosts": entries,
     }
 
@@ -2981,6 +3045,35 @@ async def get_release_proof_pack(
     payload = report.to_dict()
     payload["report_file"] = str(files["markdown"])
     payload["json_file"] = str(files["json"])
+    payload["summary_file"] = str(files["summary"])
+    return payload
+
+
+@app.get("/api/analyze/repo-map")
+async def get_repo_map(project_dir: str = ".") -> dict[str, Any]:
+    project_dir_path = Path(project_dir).resolve()
+    builder = RepoMapBuilder(project_dir_path)
+    report = builder.build()
+    files = builder.write(report)
+    payload = report.to_dict()
+    payload["report_file"] = str(files["markdown"])
+    payload["json_file"] = str(files["json"])
+    return payload
+
+
+@app.get("/api/analyze/impact")
+async def get_impact_analysis(
+    project_dir: str = ".",
+    description: str = "",
+    files: list[str] | None = Query(default=None),
+) -> dict[str, Any]:
+    project_dir_path = Path(project_dir).resolve()
+    analyzer = ImpactAnalyzer(project_dir_path)
+    report = analyzer.build(description=description, files=files or [])
+    written = analyzer.write(report)
+    payload = report.to_dict()
+    payload["report_file"] = str(written["markdown"])
+    payload["json_file"] = str(written["json"])
     return payload
 
 

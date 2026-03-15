@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.0.9] - 2026-03-11
+## [2.0.10] - 2026-03-11
 
 ### Added
 
@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Unified the active project version to `2.0.9` across package metadata, runtime metadata, docs, examples, release scripts, tests, and website copy.
+- Unified the active project version to `2.0.10` across package metadata, runtime metadata, docs, examples, release scripts, tests, and website copy.
 - Strengthened host contracts so non-slash hosts must also落盘 research / PRD / architecture / UIUX artifacts instead of only describing the workflow in chat.
 - Improved website structure and docs center, including bilingual routes and a simplified documentation layout.
 

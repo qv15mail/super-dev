@@ -36,7 +36,7 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         parents=True,
         exist_ok=True,
     )
-    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.9"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
+    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.10"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
     (project_dir / ".gitignore").write_text(
         "\n".join(
             [
@@ -62,13 +62,13 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
-    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.9"\n', encoding="utf-8")
+    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.10"\n', encoding="utf-8")
     (project_dir / "README.md").write_text(
-        "当前版本：`2.0.9`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "当前版本：`2.0.10`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "README_EN.md").write_text(
-        "Current version: `2.0.9`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "Current version: `2.0.10`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "docs" / "HOST_USAGE_GUIDE.md").write_text("Smoke\n/super-dev\nsuper-dev:\n", encoding="utf-8")
@@ -94,6 +94,16 @@ def _prepare_proof_pack_project(project_dir: Path) -> None:
         encoding="utf-8",
     )
     (output_dir / f"{project_dir.name}-quality-gate.md").write_text("# quality gate\npassed\n", encoding="utf-8")
+    (output_dir / f"{project_dir.name}-repo-map.md").write_text("# Repo Map\n\nok\n", encoding="utf-8")
+    (output_dir / f"{project_dir.name}-repo-map.json").write_text(
+        json.dumps({"project_name": project_dir.name}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (output_dir / f"{project_dir.name}-impact-analysis.md").write_text("# Change Impact Analysis\n\nok\n", encoding="utf-8")
+    (output_dir / f"{project_dir.name}-impact-analysis.json").write_text(
+        json.dumps({"project_name": project_dir.name, "risk_level": "medium"}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     (output_dir / "delivery" / f"{project_dir.name}-delivery-manifest.json").write_text(
         json.dumps({"status": "ready"}, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -1506,7 +1516,7 @@ class TestCLISkillAndIntegrate:
                 return None
 
             def json(self):
-                return {"info": {"version": "2.0.9"}}
+                return {"info": {"version": "2.0.10"}}
 
         monkeypatch.setattr("super_dev.cli.requests.get", lambda *args, **kwargs: DummyResponse())
 
@@ -1515,7 +1525,7 @@ class TestCLISkillAndIntegrate:
         output = capsys.readouterr().out
         assert "当前版本" in output
         assert "PyPI 最新版本" in output
-        assert "2.0.9" in output
+        assert "2.0.10" in output
 
     def test_update_uses_uv_when_requested(self, capsys, monkeypatch):
         cli = SuperDevCLI()
@@ -1526,7 +1536,7 @@ class TestCLISkillAndIntegrate:
                 return None
 
             def json(self):
-                return {"info": {"version": "2.0.9"}}
+                return {"info": {"version": "2.0.10"}}
 
         monkeypatch.setattr("super_dev.cli.requests.get", lambda *args, **kwargs: DummyResponse())
 
@@ -1552,7 +1562,7 @@ class TestCLISkillAndIntegrate:
                 return None
 
             def json(self):
-                return {"info": {"version": "2.0.9"}}
+                return {"info": {"version": "2.0.10"}}
 
         monkeypatch.setattr("super_dev.cli.requests.get", lambda *args, **kwargs: DummyResponse())
 
@@ -1671,6 +1681,48 @@ class TestCLITask:
 
 class TestCLIPipeline:
     """测试完整流水线关键产物"""
+
+    def test_repo_map_command_generates_artifacts(self, temp_project_dir: Path):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            (temp_project_dir / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+            (temp_project_dir / "main.py").write_text("print('hello')\n", encoding="utf-8")
+            (temp_project_dir / "services").mkdir(parents=True, exist_ok=True)
+            (temp_project_dir / "services" / "billing.py").write_text(
+                "class BillingService:\n    pass\n",
+                encoding="utf-8",
+            )
+
+            cli = SuperDevCLI()
+            result = cli.run(["repo-map"])
+
+            assert result == 0
+            assert (temp_project_dir / "output" / f"{temp_project_dir.name}-repo-map.md").exists()
+            assert (temp_project_dir / "output" / f"{temp_project_dir.name}-repo-map.json").exists()
+        finally:
+            os.chdir(original_cwd)
+
+    def test_impact_command_generates_artifacts(self, temp_project_dir: Path):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            (temp_project_dir / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+            (temp_project_dir / "main.py").write_text("print('hello')\n", encoding="utf-8")
+            (temp_project_dir / "services").mkdir(parents=True, exist_ok=True)
+            (temp_project_dir / "services" / "auth.py").write_text(
+                "class AuthService:\n    def login(self):\n        return True\n",
+                encoding="utf-8",
+            )
+
+            cli = SuperDevCLI()
+            result = cli.run(["impact", "修改登录流程", "--files", "services/auth.py"])
+
+            assert result == 0
+            assert (temp_project_dir / "output" / f"{temp_project_dir.name}-impact-analysis.md").exists()
+            assert (temp_project_dir / "output" / f"{temp_project_dir.name}-impact-analysis.json").exists()
+        finally:
+            os.chdir(original_cwd)
 
     def test_no_args_enters_install_guide(self, temp_project_dir: Path, monkeypatch):
         original_cwd = os.getcwd()
@@ -1918,6 +1970,26 @@ class TestCLIPipeline:
             assert any((temp_project_dir / "output" / "rehearsal").glob("*-smoke-checklist.md"))
             assert any((temp_project_dir / "output" / "rehearsal").glob("*-rehearsal-report.md"))
             assert any((temp_project_dir / "output" / "rehearsal").glob("*-rehearsal-report.json"))
+        finally:
+            os.chdir(original_cwd)
+
+    def test_fix_command_runs_explicit_bugfix_mode(self, temp_project_dir: Path, monkeypatch):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        monkeypatch.setenv("SUPER_DEV_DISABLE_WEB", "1")
+
+        try:
+            _confirm_docs(temp_project_dir)
+            cli = SuperDevCLI()
+            result = cli.run(["fix", "优化登录体验并补充回归验证"])
+            assert result == 0
+
+            output_dir = temp_project_dir / "output"
+            plan_files = list(output_dir.glob("*-execution-plan.md"))
+            assert plan_files
+            plan = max(plan_files, key=lambda item: item.stat().st_mtime).read_text(encoding="utf-8")
+            assert "> **请求模式**: bugfix" in plan
+            assert "问题复现与影响分析" in plan
         finally:
             os.chdir(original_cwd)
 
@@ -2469,5 +2541,9 @@ class TestCLIRunControl:
             )
             assert payload["status"] == "ready"
             assert payload["ready_count"] == payload["total_count"]
+            assert payload["summary"]["blocking_count"] == 0
+            assert any(artifact["name"] == "Repo Map" for artifact in payload["artifacts"])
+            assert any(artifact["name"] == "Impact Analysis" for artifact in payload["artifacts"])
+            assert (temp_project_dir / "output" / f"{temp_project_dir.name}-proof-pack-summary.md").exists()
         finally:
             os.chdir(original_cwd)

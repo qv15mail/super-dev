@@ -8,7 +8,7 @@ const COPY = {
     body: '下面这些场景最能体现它的价值。',
     cards: [
       { icon: Rocket, title: '从 0 到 1 做 MVP', body: '输入需求后，先研究同类产品，再生成三文档、Spec 和前端验证，快速做出可演示、可验证的 MVP。'},
-      { icon: RefreshCw, title: '接手已有项目继续开发', body: '先理解现有项目和相似产品，再补文档和约束，让宿主按流水线接手。'},
+      { icon: RefreshCw, title: '接手已有项目继续开发', body: '先生成代码库地图，再分析改动影响范围，然后补文档和约束，让宿主按流水线接手。'},
       { icon: Boxes, title: '统一团队里的 AI 开发流程', body: '不同成员可以继续使用各自习惯的宿主，但 Super Dev 统一触发方式、协议面、质量门禁和交付产物。'},
       { icon: ShieldAlert, title: '把宿主从直接写代码拉回商业交付路径', body: '当宿主倾向于直接开始开发时，Super Dev 强制它先 research、先三文档、先确认，再进入实现。'},
     ],
@@ -19,7 +19,7 @@ const COPY = {
     body: 'Super Dev fits real project execution more than one-off demos. These scenarios show where it adds the most value.',
     cards: [
       { icon: Rocket, title: 'Build an MVP from zero to one', body: 'Start with similar-product research, then generate the three core docs, the spec, and frontend validation to ship a demoable MVP fast.'},
-      { icon: RefreshCw, title: 'Take over an existing project', body: 'Understand the existing codebase and comparable products first, then rebuild constraints and docs before the host starts changing code.'},
+      { icon: RefreshCw, title: 'Take over an existing project', body: 'Generate a repo map, inspect the likely impact radius, then rebuild constraints and docs before the host starts changing code.'},
       { icon: Boxes, title: 'Standardize AI development across a team', body: 'Different members can keep their preferred hosts while Super Dev standardizes triggers, protocol surfaces, quality gates, and delivery outputs.'},
       { icon: ShieldAlert, title: 'Pull the host back from direct coding into a delivery path', body: 'When the host wants to jump into implementation, Super Dev forces research, the three core docs, approval, and only then implementation.'},
     ],

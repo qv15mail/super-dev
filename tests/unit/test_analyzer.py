@@ -11,9 +11,11 @@ from super_dev.analyzer import (
     ArchitectureReport,
     Dependency,
     DesignPattern,
+    ImpactAnalyzer,
     PatternType,
     ProjectAnalyzer,
     ProjectCategory,
+    RepoMapBuilder,
     TechStack,
     detect_project_type,
     detect_tech_stack,
@@ -487,3 +489,55 @@ def read_root():
         locations = {str(pattern.location) for pattern in report.design_patterns}
         assert any("event_publisher.py" in location for location in locations)
         assert not any("site-packages" in location or ".venv" in location for location in locations)
+
+
+class TestRepoMapBuilder:
+    def test_build_repo_map_for_python_project(self, temp_project_dir: Path):
+        (temp_project_dir / "app").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / "services").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / "tests").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+        (temp_project_dir / "main.py").write_text("print('hello')\n", encoding="utf-8")
+        (temp_project_dir / "app" / "server.py").write_text("def run():\n    return True\n", encoding="utf-8")
+        (temp_project_dir / "services" / "billing.py").write_text("class BillingService:\n    pass\n", encoding="utf-8")
+        (temp_project_dir / "tests" / "test_main.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+
+        builder = RepoMapBuilder(temp_project_dir)
+        report = builder.build()
+        files = builder.write(report)
+
+        assert report.project_name == temp_project_dir.name
+        assert any(item.path == "main.py" for item in report.entry_points)
+        assert any(item.path == "app" for item in report.top_modules)
+        assert files["markdown"].exists()
+        assert files["json"].exists()
+        markdown = files["markdown"].read_text(encoding="utf-8")
+        assert "# Repo Map" in markdown
+        assert "Likely Entry Points" in markdown
+
+
+class TestImpactAnalyzer:
+    def test_build_impact_analysis_from_description_and_files(self, temp_project_dir: Path):
+        (temp_project_dir / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+        (temp_project_dir / "main.py").write_text("print('hello')\n", encoding="utf-8")
+        (temp_project_dir / "services").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / "services" / "auth.py").write_text(
+            "class AuthService:\n    def login(self):\n        return True\n",
+            encoding="utf-8",
+        )
+        (temp_project_dir / "api").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / "api" / "routes.py").write_text(
+            "def login_route():\n    return {'ok': True}\n",
+            encoding="utf-8",
+        )
+
+        analyzer = ImpactAnalyzer(temp_project_dir)
+        report = analyzer.build(description="修改登录流程", files=["services/auth.py"])
+        files = analyzer.write(report)
+
+        assert report.risk_level in {"medium", "high"}
+        assert report.affected_modules
+        assert any(item.path.lower() in {"services", "services/auth.py"} or "auth" in item.path.lower() for item in report.affected_modules)
+        assert any("Authentication" in item for item in report.regression_focus)
+        assert files["markdown"].exists()
+        assert files["json"].exists()

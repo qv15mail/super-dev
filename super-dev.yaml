@@ -46,4 +46,4 @@ phases:
 - deployment
 platform: web
 quality_gate: 90
-version: 2.0.9
+version: 2.0.10

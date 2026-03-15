@@ -19,7 +19,7 @@
 
 ## 版本
 
-当前版本：`2.0.9`
+当前版本：`2.0.10`
 
 ---
 
@@ -136,6 +136,9 @@ super-dev
 ```bash
 super-dev integrate audit --auto --repair --force
 super-dev integrate validate --auto
+super-dev repo-map
+super-dev impact "修改登录流程" --files services/auth.py
+super-dev fix "修复登录接口 500 并补充回归验证"
 super-dev release proof-pack
 super-dev release readiness
 super-dev review architecture --status revision_requested --comment "技术方案需要重构"
@@ -175,13 +178,13 @@ super-dev bootstrap --name my-project --platform web --frontend next --backend n
 ### 3. 指定版本安装
 
 ```bash
-pip install super-dev==2.0.9
+pip install super-dev==2.0.10
 ```
 
 ### 4. GitHub 指定标签安装
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.9
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.10
 ```
 
 ### 5. 源码开发安装
@@ -304,6 +307,9 @@ uv tool install super-dev
 2. Claude Code / Gemini CLI / Kiro CLI / Qoder CLI / CodeBuddy CLI 等支持原生映射的宿主，可直接输入：`/super-dev 你的需求`。
 3. Codex CLI、Kimi CLI 当前不使用 `/super-dev`；在宿主会话里输入 `super-dev: 你的需求`。
 4. 宿主会先被约束执行“同类产品研究 -> 三文档 -> 等待用户确认 -> Spec -> 前端运行验证 -> 后端/测试/交付”，不会直接跳到写代码。
+5. 如果是缺陷修复，优先使用 `super-dev fix "缺陷描述"`，走轻量 bugfix 路径，而不是完整功能开发路径。
+6. 接手已有项目或复杂仓库时，优先执行 `super-dev repo-map` 生成代码库地图，再让宿主进入开发。
+7. 如果准备重构、改接口、修登录流或修改关键状态流，先执行 `super-dev impact "变更描述" --files ...` 评估影响范围，再动手。
 
 ### 宿主如何理解 Super Dev
 

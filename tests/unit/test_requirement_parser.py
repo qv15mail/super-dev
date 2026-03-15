@@ -124,6 +124,23 @@ class TestDocumentGeneratorIntegration:
         assert "问题复现与影响分析" in plan
         assert "轻量文档冻结" in plan
 
+    def test_document_generator_respects_explicit_bugfix_mode(self):
+        generator = DocumentGenerator(
+            name="explicit-hotfix",
+            description="优化登录体验",
+            request_mode="bugfix",
+            frontend="react",
+            backend="python",
+        )
+
+        prd = generator.generate_prd()
+        architecture = generator.generate_architecture()
+
+        assert "### 1.6 需求澄清问题" in prd
+        assert "实际症状" in prd
+        assert "### 3.3 关键时序图" in architecture
+        assert "提交缺陷修复需求" in architecture
+
 
 class TestFrontendScaffoldBuilder:
     def test_generate_frontend_scaffold(self, temp_project_dir: Path):

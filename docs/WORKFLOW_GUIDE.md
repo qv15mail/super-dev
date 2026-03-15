@@ -1,4 +1,4 @@
-# Super Dev 详细使用指南（2.0.9）
+# Super Dev 详细使用指南（2.0.10）
 
 > 宿主详细试用方式、是否支持 `/super-dev`、各宿主正确入口，请优先查看：
 > [HOST_USAGE_GUIDE.md](/Users/weiyou/Documents/kaifa/super-dev/docs/HOST_USAGE_GUIDE.md)
@@ -136,7 +136,7 @@ pip install -U super-dev
 指定版本：
 
 ```bash
-pip install super-dev==2.0.9
+pip install super-dev==2.0.10
 ```
 
 ### 2.2 Bootstrap（推荐）
@@ -263,6 +263,9 @@ python scripts/audit_ai_kb.py
 super-dev start --idea "需求描述"      # 推荐：自动选宿主并给出试用步骤
 super-dev "需求描述"                   # 本地治理流水线入口，不替代宿主编码
 super-dev pipeline "需求描述" ...       # 高级：显式参数模式
+super-dev repo-map                      # 生成代码库地图，适合接手老项目或复杂仓库
+super-dev impact "修改登录流程" --files services/auth.py  # 先评估改动影响范围
+super-dev fix "缺陷描述"                # 显式缺陷修复路径
 super-dev create "需求描述"             # 快速生成文档 + Spec
 ```
 
@@ -587,7 +590,7 @@ super-dev quality --type all
 
 ```bash
 ./scripts/preflight.sh
-bash scripts/release.sh --version 2.0.9 --no-publish
+bash scripts/release.sh --version 2.0.10 --no-publish
 bash scripts/publish.sh --repository pypi
 ```
 

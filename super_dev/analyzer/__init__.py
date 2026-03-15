@@ -15,6 +15,8 @@ from .models import (
     ProjectType,
     TechStack,
 )
+from .repo_map import RepoMapBuilder, RepoMapItem, RepoMapReport
+from .impact import ImpactAnalyzer, ImpactAnalysisReport, ImpactItem
 
 __all__ = [
     "ProjectAnalyzer",
@@ -27,8 +29,12 @@ __all__ = [
     "TechStack",
     "FrameworkType",
     "ArchitecturePattern",
+    "RepoMapBuilder",
+    "RepoMapItem",
+    "RepoMapReport",
+    "ImpactAnalyzer",
+    "ImpactAnalysisReport",
+    "ImpactItem",
     "detect_project_type",
     "detect_tech_stack",
 ]
-
-

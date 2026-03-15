@@ -65,6 +65,13 @@ from .review_state import (
     save_ui_revision,
     ui_revision_file,
 )
+from .terminal import (
+    create_console,
+    normalize_terminal_text,
+    output_mode_label,
+    output_mode_reason,
+    symbol,
+)
 from .utils import get_logger
 
 CICDPlatform = Literal["github", "gitlab", "jenkins", "azure", "bitbucket", "all"]
@@ -82,7 +89,7 @@ class SuperDevCLI:
     """Super Dev 命令行接口"""
 
     def __init__(self):
-        self.console = Console() if RICH_AVAILABLE else None
+        self.console = create_console() if RICH_AVAILABLE else None
         self.parser = self._create_parser()
         self.logger = get_logger('cli', level='WARNING')  # CLI只记录WARNING及以上级别
 
@@ -277,6 +284,71 @@ class SuperDevCLI:
             "--json",
             action="store_true",
             help="以 JSON 格式输出"
+        )
+
+        repo_map_parser = subparsers.add_parser(
+            "repo-map",
+            help="生成代码库地图",
+            description="输出项目级代码库地图，帮助宿主和开发者先理解代码结构再进入实现",
+        )
+        repo_map_parser.add_argument(
+            "path",
+            nargs="?",
+            default=".",
+            help="项目路径 (默认为当前目录)",
+        )
+        repo_map_parser.add_argument(
+            "-o", "--output",
+            help="输出报告路径（默认为 output/<project>-repo-map.md 或 .json）",
+        )
+        repo_map_parser.add_argument(
+            "-f", "--format",
+            choices=["json", "markdown", "text"],
+            default="text",
+            help="输出格式",
+        )
+        repo_map_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 格式输出",
+        )
+
+        impact_parser = subparsers.add_parser(
+            "impact",
+            help="分析变更影响范围",
+            description="基于 Repo Map 推断变更会影响的模块、入口、集成面和回归重点",
+        )
+        impact_parser.add_argument(
+            "description",
+            nargs="?",
+            default="",
+            help="变更描述，例如“修改登录流程”",
+        )
+        impact_parser.add_argument(
+            "--files",
+            nargs="*",
+            default=[],
+            help="已知会修改的文件列表，用于提升影响分析准确度",
+        )
+        impact_parser.add_argument(
+            "--path",
+            default=".",
+            help="项目路径 (默认为当前目录)",
+        )
+        impact_parser.add_argument(
+            "-o", "--output",
+            help="输出报告路径（默认为 output/<project>-impact-analysis.md 或 .json）",
+        )
+        impact_parser.add_argument(
+            "-f", "--format",
+            choices=["json", "markdown", "text"],
+            default="text",
+            help="输出格式",
+        )
+        impact_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 格式输出",
         )
 
         # workflow 命令
@@ -1038,6 +1110,12 @@ class SuperDevCLI:
             help="功能描述 (如 '用户认证系统')"
         )
         create_parser.add_argument(
+            "--mode",
+            choices=["feature", "bugfix"],
+            default="feature",
+            help="请求模式（默认 feature；bugfix 会生成轻量补丁文档）",
+        )
+        create_parser.add_argument(
             "-p", "--platform",
             choices=SUPPORTED_PLATFORMS,
             default="web",
@@ -1584,6 +1662,12 @@ class SuperDevCLI:
             help="功能描述 (如 '用户认证系统')"
         )
         pipeline_parser.add_argument(
+            "--mode",
+            choices=["feature", "bugfix"],
+            default="feature",
+            help="请求模式（默认 feature；bugfix 会启用轻量缺陷修复路径）",
+        )
+        pipeline_parser.add_argument(
             "-p", "--platform",
             choices=SUPPORTED_PLATFORMS,
             default="web",
@@ -1652,6 +1736,81 @@ class SuperDevCLI:
             "--resume",
             action="store_true",
             help="恢复模式：优先复用上次已完成阶段产物（含自动降级与审计报告）",
+        )
+
+        fix_parser = subparsers.add_parser(
+            "fix",
+            help="显式缺陷修复模式",
+            description="以轻量 bugfix 路径执行问题复现、补丁文档、修复与回归验证",
+        )
+        fix_parser.add_argument(
+            "description",
+            help="缺陷描述 (如 '修复登录接口 500 并补充回归验证')",
+        )
+        fix_parser.add_argument(
+            "-p", "--platform",
+            choices=SUPPORTED_PLATFORMS,
+            default="web",
+            help="目标平台"
+        )
+        fix_parser.add_argument(
+            "-f", "--frontend",
+            choices=SUPPORTED_PIPELINE_FRONTENDS,
+            default="react",
+            help="前端框架"
+        )
+        fix_parser.add_argument(
+            "-b", "--backend",
+            choices=SUPPORTED_PIPELINE_BACKENDS,
+            default="node",
+            help="后端框架"
+        )
+        fix_parser.add_argument(
+            "-d", "--domain",
+            choices=SUPPORTED_DOMAINS,
+            default="",
+            help="业务领域"
+        )
+        fix_parser.add_argument(
+            "--name",
+            help="项目名称 (默认根据描述生成)"
+        )
+        fix_parser.add_argument(
+            "--cicd",
+            choices=SUPPORTED_CICD,
+            default="all",
+            help="CI/CD 平台"
+        )
+        fix_parser.add_argument(
+            "--skip-redteam",
+            action="store_true",
+            help="跳过红队审查"
+        )
+        fix_parser.add_argument(
+            "--skip-scaffold",
+            action="store_true",
+            help="跳过前后端实现骨架生成"
+        )
+        fix_parser.add_argument(
+            "--skip-quality-gate",
+            action="store_true",
+            help="跳过质量门禁检查"
+        )
+        fix_parser.add_argument(
+            "--offline",
+            action="store_true",
+            help="离线模式（禁用联网检索）"
+        )
+        fix_parser.add_argument(
+            "--quality-threshold",
+            type=int,
+            default=None,
+            help="质量门禁阈值（可选；默认按场景自动判定）"
+        )
+        fix_parser.add_argument(
+            "--skip-rehearsal-verify",
+            action="store_true",
+            help="跳过发布演练验证（默认执行）",
         )
 
         # run 命令 - 运行控制（如失败恢复）
@@ -1737,7 +1896,8 @@ class SuperDevCLI:
             return self._cmd_install(install_args)
 
         # 路由到对应命令
-        command_handler = getattr(self, f"_cmd_{parsed_args.command}", None)
+        command_name = str(parsed_args.command).replace("-", "_")
+        command_handler = getattr(self, f"_cmd_{command_name}", None)
         if command_handler is None or not callable(command_handler):
             self.console.print(f"[red]未知命令: {parsed_args.command}[/red]")
             return 1
@@ -2096,6 +2256,148 @@ super-dev start --idea "你的需求"
 
             return 1
 
+    def _cmd_repo_map(self, args) -> int:
+        """生成代码库地图。"""
+        from .analyzer import RepoMapBuilder
+
+        project_path = Path(args.path).resolve()
+        if not project_path.exists():
+            self.console.print(f"[red]项目不存在: {project_path}[/red]")
+            return 1
+
+        self.console.print(f"[cyan]正在生成 Repo Map: {project_path}[/cyan]")
+
+        try:
+            builder = RepoMapBuilder(project_path)
+            report = builder.build()
+            output_format = "json" if args.json else args.format
+
+            if output_format == "json":
+                output = json.dumps(report.to_dict(), ensure_ascii=False, indent=2)
+                if args.output:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                    self.console.print(f"[green]Repo Map 已保存到: {args.output}[/green]")
+                else:
+                    paths = builder.write(report)
+                    self.console.print(f"[green]Repo Map 已生成[/green]")
+                    self.console.print(f"  Markdown: {paths['markdown']}")
+                    self.console.print(f"  JSON: {paths['json']}")
+                    self.console.print(output)
+                return 0
+
+            if output_format == "markdown":
+                output = report.to_markdown()
+                if args.output:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                    self.console.print(f"[green]Repo Map 已保存到: {args.output}[/green]")
+                else:
+                    paths = builder.write(report)
+                    self.console.print(f"[green]Repo Map 已生成[/green]")
+                    self.console.print(f"  Markdown: {paths['markdown']}")
+                    self.console.print(f"  JSON: {paths['json']}")
+                return 0
+
+            paths = builder.write(report)
+            self.console.print("[green]Repo Map 已生成[/green]")
+            self.console.print(f"  项目: {report.project_name}")
+            self.console.print(f"  Markdown: {paths['markdown']}")
+            self.console.print(f"  JSON: {paths['json']}")
+            self.console.print(f"  入口文件: {len(report.entry_points)}")
+            self.console.print(f"  核心模块: {len(report.top_modules)}")
+            self.console.print(f"  集成面: {len(report.integration_surfaces)}")
+            self.console.print(f"  风险点: {len(report.risk_points)}")
+            self.console.print("")
+            self.console.print("[cyan]建议阅读顺序:[/cyan]")
+            for item in report.recommended_reading_order[:5]:
+                self.console.print(f"  - {item.path}: {item.summary}")
+            return 0
+
+        except Exception as e:
+            self.console.print(f"[red]生成 Repo Map 失败: {e}[/red]")
+            self.logger.error(
+                "Repo Map 生成失败",
+                extra={"error_type": type(e).__name__, "error_message": str(e), "traceback": traceback.format_exc()},
+            )
+            if '--debug' in sys.argv or '-d' in sys.argv:
+                self.console.print(traceback.format_exc())
+            return 1
+
+    def _cmd_impact(self, args) -> int:
+        """分析变更影响范围。"""
+        from .analyzer import ImpactAnalyzer
+
+        project_path = Path(args.path).resolve()
+        if not project_path.exists():
+            self.console.print(f"[red]项目不存在: {project_path}[/red]")
+            return 1
+
+        if not args.description and not args.files:
+            self.console.print("[yellow]请提供变更描述或 --files 列表，例如 `super-dev impact \"修改登录流程\" --files services/auth.py`[/yellow]")
+            return 1
+
+        self.console.print(f"[cyan]正在分析变更影响范围: {project_path}[/cyan]")
+
+        try:
+            analyzer = ImpactAnalyzer(project_path)
+            report = analyzer.build(description=args.description, files=list(args.files or []))
+            output_format = "json" if args.json else args.format
+
+            if output_format == "json":
+                output = json.dumps(report.to_dict(), ensure_ascii=False, indent=2)
+                if args.output:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                    self.console.print(f"[green]Impact Analysis 已保存到: {args.output}[/green]")
+                else:
+                    paths = analyzer.write(report)
+                    self.console.print("[green]Impact Analysis 已生成[/green]")
+                    self.console.print(f"  Markdown: {paths['markdown']}")
+                    self.console.print(f"  JSON: {paths['json']}")
+                    self.console.print(output)
+                return 0
+
+            if output_format == "markdown":
+                output = report.to_markdown()
+                if args.output:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                    self.console.print(f"[green]Impact Analysis 已保存到: {args.output}[/green]")
+                else:
+                    paths = analyzer.write(report)
+                    self.console.print("[green]Impact Analysis 已生成[/green]")
+                    self.console.print(f"  Markdown: {paths['markdown']}")
+                    self.console.print(f"  JSON: {paths['json']}")
+                return 0
+
+            paths = analyzer.write(report)
+            self.console.print("[green]Impact Analysis 已生成[/green]")
+            self.console.print(f"  项目: {report.project_name}")
+            self.console.print(f"  风险等级: {report.risk_level}")
+            self.console.print(f"  Markdown: {paths['markdown']}")
+            self.console.print(f"  JSON: {paths['json']}")
+            self.console.print(f"  受影响模块: {len(report.affected_modules)}")
+            self.console.print(f"  受影响入口: {len(report.affected_entry_points)}")
+            self.console.print(f"  受影响集成面: {len(report.affected_integration_surfaces)}")
+            self.console.print("")
+            self.console.print(f"[cyan]{report.summary}[/cyan]")
+            self.console.print("")
+            self.console.print("[cyan]回归重点:[/cyan]")
+            for item in report.regression_focus:
+                self.console.print(f"  - {item}")
+            self.console.print("")
+            self.console.print("[cyan]建议动作:[/cyan]")
+            for item in report.recommended_steps:
+                self.console.print(f"  - {item}")
+            return 0
+
+        except Exception as e:
+            self.console.print(f"[red]Impact Analysis 生成失败: {e}[/red]")
+            self.logger.error(
+                "Impact Analysis 生成失败",
+                extra={"error_type": type(e).__name__, "error_message": str(e), "traceback": traceback.format_exc()},
+            )
+            if '--debug' in sys.argv or '-d' in sys.argv:
+                self.console.print(traceback.format_exc())
+            return 1
+
     def _cmd_workflow(self, args) -> int:
         """运行工作流"""
         project_dir = Path.cwd()
@@ -2262,6 +2564,7 @@ super-dev start --idea "你的需求"
             payload = report.to_dict()
             payload["report_file"] = str(files["markdown"])
             payload["json_file"] = str(files["json"])
+            payload["summary_file"] = str(files["summary"])
 
             if args.json:
                 self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -2271,11 +2574,15 @@ super-dev start --idea "你的需求"
             self.console.print(f"[cyan]Proof Pack[/cyan] {status} 证据就绪: {report.ready_count}/{report.total_count}")
             self.console.print(f"  [green]✓[/green] Markdown: {files['markdown']}")
             self.console.print(f"  [green]✓[/green] JSON: {files['json']}")
-            incomplete = [artifact for artifact in report.artifacts if artifact.status != "ready"]
-            if incomplete:
+            self.console.print(f"  [green]✓[/green] Summary: {files['summary']}")
+            self.console.print(f"  [dim]{report.executive_summary}[/dim]")
+            if report.blockers:
                 self.console.print("  [yellow]待补齐项:[/yellow]")
-                for artifact in incomplete[:8]:
+                for artifact in report.blockers[:8]:
                     self.console.print(f"    - {artifact.name}: {artifact.summary}")
+                self.console.print("  [cyan]推荐动作:[/cyan]")
+                for action in report.next_actions[:5]:
+                    self.console.print(f"    - {action}")
             else:
                 self.console.print("  [green]所有关键交付证据均已就绪。[/green]")
             return 0 if report.status == "ready" else 1
@@ -2995,6 +3302,7 @@ super-dev start --idea "你的需求"
 
         pipeline_args = argparse.Namespace(
             description=idea,
+            mode="feature",
             platform=platform,
             frontend=frontend,
             backend=backend,
@@ -3011,6 +3319,30 @@ super-dev start --idea "你的需求"
         )
         return self._cmd_pipeline(pipeline_args)
 
+    def _cmd_fix(self, args) -> int:
+        """显式缺陷修复模式。"""
+        self.console.print("[cyan]Super Dev Bugfix Mode[/cyan]")
+        self.console.print("[dim]将执行：问题复现与影响分析 -> 轻量补丁文档 -> 定点修复与回归验证 -> 质量门禁与交付[/dim]")
+        self.console.print("")
+        pipeline_args = argparse.Namespace(
+            description=args.description,
+            mode="bugfix",
+            platform=args.platform,
+            frontend=args.frontend,
+            backend=args.backend,
+            domain=args.domain,
+            name=args.name,
+            cicd=args.cicd,
+            skip_redteam=bool(args.skip_redteam),
+            skip_scaffold=bool(args.skip_scaffold),
+            skip_quality_gate=bool(args.skip_quality_gate),
+            skip_rehearsal_verify=bool(args.skip_rehearsal_verify),
+            offline=bool(args.offline),
+            quality_threshold=args.quality_threshold,
+            resume=False,
+        )
+        return self._cmd_pipeline(pipeline_args)
+
     def _cmd_create(self, args) -> int:
         """一键创建项目 - 从想法到规范"""
         from .creators import ProjectCreator
@@ -3020,6 +3352,7 @@ super-dev start --idea "你的需求"
             "当前命令生成治理产物与执行提示，不替代宿主 AI 的实际编码。"
         )
         self.console.print(f"[dim]描述: {args.description}[/dim]")
+        self.console.print(f"[dim]请求模式: {args.mode}[/dim]")
         self.console.print(f"[dim]平台: {args.platform} | 前端: {args.frontend} | 后端: {args.backend}[/dim]")
         self.console.print("")
 
@@ -3044,6 +3377,7 @@ super-dev start --idea "你的需求"
                 project_dir=project_dir,
                 name=project_name,
                 description=args.description,
+                request_mode=args.mode,
                 platform=args.platform,
                 frontend=args.frontend,
                 backend=args.backend,
@@ -3717,6 +4051,9 @@ super-dev start --idea "你的需求"
         self._print_governance_boundary_notice(
             "流水线负责生成研究、文档、门禁与交付产物；实际编码能力仍由宿主 AI 提供。"
         )
+        request_mode_override = getattr(args, "mode", "feature")
+        if request_mode_override not in {"feature", "bugfix"}:
+            request_mode_override = "feature"
         # 确定项目名称
         project_name = args.name
         if not project_name:
@@ -3756,6 +4093,7 @@ super-dev start --idea "你的需求"
 
         pipeline_args_snapshot: dict[str, Any] = {
             "description": args.description,
+            "mode": request_mode_override,
             "platform": args.platform,
             "frontend": args.frontend,
             "backend": args.backend,
@@ -3775,6 +4113,7 @@ super-dev start --idea "你的需求"
         self.console.print("[cyan]Super Dev 完整流水线[/cyan]")
         self.console.print(f"[cyan]{'=' * 60}[/cyan]")
         self.console.print(f"[dim]项目: {project_name}[/dim]")
+        self.console.print(f"[dim]请求模式: {request_mode_override}[/dim]")
         self.console.print(f"[dim]技术栈: {args.platform} | {args.frontend} | {args.backend}[/dim]")
         self.console.print("")
 
@@ -4113,11 +4452,12 @@ super-dev start --idea "你的需求"
 
                 parser = RequirementParser()
                 scenario = parser.detect_scenario(project_dir)
-                request_mode = parser.detect_request_mode(enriched_description)
+                request_mode = request_mode_override or parser.detect_request_mode(enriched_description)
 
                 doc_generator = DocumentGenerator(
                     name=project_name,
                     description=enriched_description,
+                    request_mode=request_mode,
                     platform=args.platform,
                     frontend=args.frontend,
                     backend=args.backend,
@@ -5498,6 +5838,24 @@ super-dev start --idea "你的需求"
                 self.console.print(
                     f"[cyan]自动检测到 {len(detected_meta)} 个宿主：{', '.join(detected_meta)}[/cyan]"
                 )
+            summary = payload.get("summary", {})
+            if isinstance(summary, dict):
+                self.console.print(
+                    f"[cyan]中心摘要: fully-ready {summary.get('fully_ready_count', 0)}/{summary.get('total_hosts', 0)} "
+                    f"| surface-ready {summary.get('surface_ready_count', 0)}/{summary.get('total_hosts', 0)} "
+                    f"| passed {summary.get('runtime_passed_count', 0)} "
+                    f"| pending {summary.get('runtime_pending_count', 0)} "
+                    f"| failed {summary.get('runtime_failed_count', 0)}[/cyan]"
+                )
+            blockers = payload.get("blockers", [])
+            if isinstance(blockers, list) and blockers:
+                self.console.print("[yellow]当前阻塞项[/yellow]")
+                for item in blockers[:8]:
+                    if not isinstance(item, dict):
+                        continue
+                    self.console.print(
+                        f"  - {item.get('host', '-')}: {item.get('summary', '-')}"
+                    )
             for host in payload.get("hosts", []):
                 if not isinstance(host, dict):
                     continue
@@ -5507,6 +5865,10 @@ super-dev start --idea "你的需求"
                 self.console.print(f"  触发命令: {host.get('final_trigger', '-')}")
                 self.console.print(f"  宿主协议: {host.get('host_protocol_summary', '-')}")
                 self.console.print(f"  人工验收状态: {host.get('manual_runtime_status_label', '-')}")
+                if host.get("blocking_reason"):
+                    self.console.print(f"  阻塞原因: {host.get('blocking_reason')}")
+                if host.get("recommended_action"):
+                    self.console.print(f"  建议动作: {host.get('recommended_action')}")
                 comment = host.get("manual_runtime_comment", "")
                 if isinstance(comment, str) and comment.strip():
                     self.console.print(f"  验收备注: {comment.strip()}")
@@ -5527,6 +5889,13 @@ super-dev start --idea "你的需求"
                     self.console.print("[cyan]验收矩阵报告[/cyan]")
                     for name, path in report_files.items():
                         self.console.print(f"  - {name}: {path}")
+            if isinstance(summary, dict):
+                next_actions = summary.get("next_actions", [])
+                if isinstance(next_actions, list) and next_actions:
+                    self.console.print("")
+                    self.console.print("[cyan]推荐动作[/cyan]")
+                    for item in next_actions[:8]:
+                        self.console.print(f"  - {item}")
             return 0
 
         self.console.print("[yellow]未知 integrate 操作[/yellow]")
@@ -5644,10 +6013,10 @@ super-dev start --idea "你的需求"
         def renderable() -> Group:
             subtitle = (
                 "Space 勾选，Enter 安装，↑/↓ 移动，A 全选，C 仅 CLI，I 仅 IDE，R 清空，Esc 取消\n"
-                "[●] 当前光标  [✓] 已选中  [○] 未选中\n"
+                f"[{symbol('cursor')}] 当前光标  [{symbol('selected')}] 已选中  [{symbol('unselected')}] 未选中\n"
                 "slash 宿主用 /super-dev；非 slash 宿主用 super-dev: / super-dev："
             )
-            header = Panel(f"{self._super_dev_ascii_banner()}\n\n{subtitle}", title="Super Dev")
+            header = Panel(f"{self._super_dev_ascii_banner()}\n\n{normalize_terminal_text(subtitle)}", title="Super Dev")
 
             table = Table(title="选择宿主工具", show_header=True, header_style="bold cyan")
             table.add_column("当前", width=6)
@@ -5660,8 +6029,8 @@ super-dev start --idea "你的需求"
 
             for idx, target in enumerate(available_targets, 1):
                 profile = integration_manager.get_adapter_profile(target)
-                selected_mark = "[✓]" if target in selected else "[○]"
-                pointer = "[●]" if idx - 1 == cursor else "   "
+                selected_mark = f"[{symbol('selected')}]" if target in selected else f"[{symbol('unselected')}]"
+                pointer = f"[{symbol('cursor')}]" if idx - 1 == cursor else "   "
                 trigger = "/super-dev" if integration_manager.supports_slash(target) else "super-dev:"
                 detected = "已检测" if target in detected_targets else ""
                 host_label = Text()
@@ -6514,6 +6883,9 @@ super-dev start --idea "你的需求"
 
         self.console.print("[cyan]Super Dev Doctor[/cyan]")
         self.console.print(f"[dim]项目目录: {project_dir}[/dim]")
+        self.console.print(
+            f"[dim]终端输出: {output_mode_label()} ({output_mode_reason()})[/dim]"
+        )
         self.console.print(
             f"[cyan]兼容性评分: {compatibility['overall_score']:.2f}/100 "
             f"(ready {compatibility['ready_hosts']}/{compatibility['total_hosts']})[/cyan]"
@@ -7441,6 +7813,8 @@ super-dev start --idea "你的需求"
         if not isinstance(hosts, dict):
             hosts = {}
         entries: list[dict[str, Any]] = []
+        blockers: list[dict[str, Any]] = []
+        next_actions: list[str] = []
         for target in targets:
             host = hosts.get(target, {}) if isinstance(target, str) else {}
             usage = usage_profiles.get(target, {}) if isinstance(target, str) else {}
@@ -7452,10 +7826,50 @@ super-dev start --idea "你的需求"
             if not isinstance(runtime_entry, dict):
                 runtime_entry = {}
             runtime_status = str(runtime_entry.get("status", "")).strip() or "pending"
+            surface_ready = bool(host.get("ready", False))
+            precondition_label = usage.get("precondition_label", "-")
+            precondition_guidance = usage.get("precondition_guidance", [])
+            blocking_reason = ""
+            recommended_action = ""
+            blocker_type = ""
+            if not surface_ready:
+                blocking_reason = "宿主接入面仍存在 contract 缺口"
+                recommended_action = f"super-dev integrate audit --target {target} --repair --force"
+                blocker_type = "surface"
+            elif runtime_status == "failed":
+                blocking_reason = "宿主真人运行时验收失败"
+                recommended_action = f"super-dev integrate audit --target {target} --repair --force"
+                blocker_type = "runtime"
+            elif runtime_status != "passed":
+                blocking_reason = "宿主尚未完成真人运行时验收"
+                recommended_action = (
+                    f"super-dev integrate validate --target {target} --status passed --comment \"首轮先进入 research，三文档已真实落盘\""
+                )
+                blocker_type = "validation"
+
+            if not surface_ready or runtime_status != "passed":
+                blocker_entry = {
+                    "host": target,
+                    "type": blocker_type or "runtime",
+                    "summary": blocking_reason,
+                    "next_action": recommended_action,
+                }
+                blockers.append(blocker_entry)
+                if recommended_action and recommended_action not in next_actions:
+                    next_actions.append(recommended_action)
+
+            if isinstance(precondition_guidance, list):
+                for item in precondition_guidance[:2]:
+                    if isinstance(item, str) and item.strip() and item not in next_actions and runtime_status != "passed":
+                        next_actions.append(item.strip())
+
             entries.append(
                 {
                     "host": target,
-                    "surface_ready": bool(host.get("ready", False)),
+                    "surface_ready": surface_ready,
+                    "ready_for_delivery": surface_ready and runtime_status == "passed",
+                    "blocking_reason": blocking_reason,
+                    "recommended_action": recommended_action,
                     "manual_runtime_status": runtime_status,
                     "manual_runtime_status_label": self._host_runtime_status_label(runtime_status),
                     "manual_runtime_comment": str(runtime_entry.get("comment", "")).strip(),
@@ -7465,8 +7879,8 @@ super-dev start --idea "你的需求"
                     "host_protocol_mode": usage.get("host_protocol_mode", "-"),
                     "host_protocol_summary": usage.get("host_protocol_summary", "-"),
                     "certification_label": usage.get("certification_label", "-"),
-                    "precondition_label": usage.get("precondition_label", "-"),
-                    "precondition_guidance": usage.get("precondition_guidance", []),
+                    "precondition_label": precondition_label,
+                    "precondition_guidance": precondition_guidance,
                     "smoke_test_prompt": usage.get("smoke_test_prompt", ""),
                     "smoke_success_signal": usage.get("smoke_success_signal", ""),
                     "runtime_checklist": [
@@ -7485,6 +7899,13 @@ super-dev start --idea "你的需求"
                 }
             )
 
+        total_hosts = len(entries)
+        surface_ready_count = sum(1 for item in entries if bool(item.get("surface_ready", False)))
+        runtime_passed_count = sum(1 for item in entries if item.get("manual_runtime_status") == "passed")
+        runtime_failed_count = sum(1 for item in entries if item.get("manual_runtime_status") == "failed")
+        runtime_pending_count = sum(1 for item in entries if item.get("manual_runtime_status") == "pending")
+        fully_ready_count = sum(1 for item in entries if bool(item.get("ready_for_delivery", False)))
+
         return {
             "project_dir": str(project_dir),
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -7493,6 +7914,18 @@ super-dev start --idea "你的需求"
             "detected_hosts": list(detected_meta.keys()),
             "detection_details": detected_meta,
             "selected_targets": targets,
+            "summary": {
+                "overall_status": "ready" if total_hosts > 0 and fully_ready_count == total_hosts else "attention",
+                "total_hosts": total_hosts,
+                "surface_ready_count": surface_ready_count,
+                "runtime_passed_count": runtime_passed_count,
+                "runtime_failed_count": runtime_failed_count,
+                "runtime_pending_count": runtime_pending_count,
+                "fully_ready_count": fully_ready_count,
+                "blocking_count": len(blockers),
+                "next_actions": next_actions,
+            },
+            "blockers": blockers,
             "hosts": entries,
         }
 
@@ -7507,9 +7940,48 @@ super-dev start --idea "你的需求"
             f"- Project Dir: {payload.get('project_dir', '')}",
             f"- Detected Hosts: {', '.join(str(item) for item in payload.get('detected_hosts', [])) or '(none)'}",
             "",
+        ]
+        summary = payload.get("summary", {})
+        if isinstance(summary, dict):
+            lines.extend(
+                [
+                    "## Summary",
+                    "",
+                    f"- Overall Status: {summary.get('overall_status', '-')}",
+                    f"- Fully Ready: {summary.get('fully_ready_count', 0)}/{summary.get('total_hosts', 0)}",
+                    f"- Surface Ready: {summary.get('surface_ready_count', 0)}/{summary.get('total_hosts', 0)}",
+                    f"- Runtime Passed: {summary.get('runtime_passed_count', 0)}",
+                    f"- Runtime Failed: {summary.get('runtime_failed_count', 0)}",
+                    f"- Runtime Pending: {summary.get('runtime_pending_count', 0)}",
+                    "",
+                ]
+            )
+        blockers = payload.get("blockers", [])
+        if isinstance(blockers, list):
+            lines.extend(["## Current Blockers", ""])
+            if blockers:
+                for item in blockers:
+                    if not isinstance(item, dict):
+                        continue
+                    lines.append(
+                        f"- **{item.get('host', '-')}** ({item.get('type', '-')}) {item.get('summary', '-')}"
+                    )
+            else:
+                lines.append("- 当前没有阻塞项。")
+            lines.extend(["", "## Recommended Next Actions", ""])
+            next_actions = summary.get("next_actions", []) if isinstance(summary, dict) else []
+            if isinstance(next_actions, list) and next_actions:
+                for item in next_actions:
+                    lines.append(f"- {item}")
+            else:
+                lines.append("- 当前宿主验收中心没有额外动作。")
+            lines.append("")
+        lines.extend(
+            [
             "| Host | Surface Ready | Trigger | Protocol | Manual Runtime Status |",
             "|---|---|---|---|---|",
-        ]
+            ]
+        )
         for host in hosts:
             if not isinstance(host, dict):
                 continue
@@ -7841,12 +8313,11 @@ super-dev start --idea "你的需求"
 
         elif args.spec_action == "view":
             # 交互式仪表板
-            from rich.console import Console
             from rich.panel import Panel
             from rich.table import Table
             from rich.text import Text
 
-            console = Console()
+            console = create_console()
             change_manager = ChangeManager(project_dir)
             spec_manager = SpecManager(project_dir)
 
@@ -7933,6 +8404,7 @@ super-dev start --idea "你的需求"
             "init", "analyze", "workflow", "studio", "expert", "quality", "metrics", "preview",
             "deploy", "create", "wizard", "design", "spec", "task", "pipeline", "run", "config", "skill", "integrate",
             "onboard", "doctor", "setup", "install", "start", "bootstrap", "detect", "policy", "update", "review", "release",
+            "fix", "repo-map", "impact",
         }
         return first not in known_commands
 

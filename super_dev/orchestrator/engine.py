@@ -27,6 +27,7 @@ except ImportError:
 from ..config.manager import ConfigManager, get_config_manager
 from ..exceptions import PhaseExecutionError, QualityGateError
 from ..utils import get_logger
+from ..terminal import create_console
 
 
 class Phase(Enum):
@@ -72,7 +73,7 @@ class WorkflowEngine:
     def __init__(self, project_dir: Path | None = None):
         self.project_dir = Path.cwd() if project_dir is None else project_dir
         self.config_manager = get_config_manager(self.project_dir)
-        self.console = Console() if RICH_AVAILABLE else None
+        self.console = create_console() if RICH_AVAILABLE else None
         self.logger = get_logger(
             'workflow_engine',
             level='INFO',

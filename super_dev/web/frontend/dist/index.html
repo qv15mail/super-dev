@@ -1689,10 +1689,13 @@
                                     · 生成于 {{ formatTime(selectedRunProofPack.generated_at) }}
                                 </span>
                             </div>
-                            <div v-if="selectedRunProofPack.report_file" style="margin-top:4px;color:#666;">
-                                报告: {{ selectedRunProofPack.report_file }}
-                            </div>
+                        <div v-if="selectedRunProofPack.report_file" style="margin-top:4px;color:#666;">
+                            报告: {{ selectedRunProofPack.report_file }}
                         </div>
+                        <div v-if="selectedRunProofPack.summary_file" style="margin-top:4px;color:#666;">
+                            摘要: {{ selectedRunProofPack.summary_file }}
+                        </div>
+                    </div>
                         <div class="ui-review-meta">
                             <span class="ui-review-pill">完成率 {{ proofPackCompletionPercent }}%</span>
                             <span class="ui-review-pill">Ready {{ proofPackReadyArtifacts.length }}</span>
@@ -1705,6 +1708,9 @@
                             <span class="ui-review-pill">Readiness {{ proofPackArtifactStatus('Release Readiness') }}</span>
                         </div>
                         <div style="margin-top:12px;">
+                            <div style="font-size:13px;color:#334155;margin-bottom:8px;">
+                                {{ proofPackExecutiveSummary }}
+                            </div>
                             <div style="display:flex;justify-content:space-between;font-size:12px;color:#5c7084;margin-bottom:6px;">
                                 <span>交付证据完整度</span>
                                 <span>{{ selectedRunProofPack.ready_count }}/{{ selectedRunProofPack.total_count }}</span>
@@ -1752,6 +1758,12 @@
                                     <strong>{{ artifact.name }}</strong> · {{ artifact.status }} · {{ artifact.summary }}
                                     <span v-if="artifact.path"> · {{ artifact.path }}</span>
                                 </li>
+                            </ul>
+                        </div>
+                        <div class="artifact-list" v-if="proofPackNextActions.length">
+                            <div style="font-size:13px;color:#333;"><strong>推荐动作</strong></div>
+                            <ul>
+                                <li v-for="(action, idx) in proofPackNextActions" :key="'proof-next-' + idx">{{ action }}</li>
                             </ul>
                         </div>
                     </div>
@@ -2020,6 +2032,25 @@
                         <span>{{ selectedHostRuntimeValidation.host }}</span>
                         <span>{{ selectedHostRuntimeValidation.manual_runtime_status_label }}</span>
                     </div>
+                    <div class="artifact-list" style="margin-top:12px;">
+                        <div style="font-size:13px;color:#333;"><strong>Host Validation Center</strong></div>
+                        <div style="margin-top:6px;color:#555;">
+                            fully-ready {{ hostValidationSummary.fully_ready_count || 0 }}/{{ hostValidationSummary.total_hosts || 0 }}
+                            · surface-ready {{ hostValidationSummary.surface_ready_count || 0 }}/{{ hostValidationSummary.total_hosts || 0 }}
+                            · passed {{ hostValidationSummary.runtime_passed_count || 0 }}
+                            · pending {{ hostValidationSummary.runtime_pending_count || 0 }}
+                            · failed {{ hostValidationSummary.runtime_failed_count || 0 }}
+                        </div>
+                        <ul v-if="hostValidationBlockers.length" style="margin-top:8px;">
+                            <li v-for="item in hostValidationBlockers.slice(0, 6)" :key="'runtime-blocker-' + item.host + '-' + item.type">
+                                <strong>{{ item.host }}</strong> · {{ item.summary }}
+                                <div v-if="item.next_action" style="color:#666;margin-top:4px;">{{ item.next_action }}</div>
+                            </li>
+                        </ul>
+                        <div v-else style="margin-top:8px;color:#16a34a;">
+                            当前所选宿主集合没有运行时阻塞项。
+                        </div>
+                    </div>
                     <div style="font-size:13px;color:#555;margin-top:10px;">
                         触发方式：<code>{{ selectedHostRuntimeValidation.final_trigger }}</code>
                     </div>
@@ -2045,6 +2076,9 @@
                         <button class="btn btn-secondary" :disabled="loading" @click="updateHostRuntimeValidation('pending')">标记待验收</button>
                         <button class="btn btn-primary" :disabled="loading" @click="updateHostRuntimeValidation('passed')">标记通过</button>
                         <button class="btn btn-secondary" :disabled="loading" @click="updateHostRuntimeValidation('failed')">标记失败</button>
+                    </div>
+                    <div class="form-hint" v-if="hostValidationNextActions.length" style="margin-top:10px;">
+                        推荐动作：{{ hostValidationNextActions.slice(0, 3).join(' | ') }}
                     </div>
                 </div>
             </div>
@@ -2471,6 +2505,7 @@
                         { key: 'doctor', label: '修复诊断', description: '检查接入状态并自动修复常见问题', command: this.selectedHostTool.commands.doctor || '' },
                         { key: 'audit', label: 'Surface 审计', description: '检查 rules / commands / AGENTS / skills 等接入面是否完整', command: this.selectedHostTool.commands.audit || '' },
                         { key: 'smoke', label: 'Smoke 验收', description: '输出该宿主的标准验收语句与通过标准', command: this.selectedHostTool.commands.smoke || '' },
+                        { key: 'bugfix', label: 'Bugfix 模式', description: '显式进入轻量缺陷修复路径，而不是走完整功能开发流程', command: this.selectedHostTool.commands.bugfix || '' },
                         { key: 'trigger', label: '宿主主入口', description: host.trigger_context || '在宿主当前上下文触发', command: host.commands.trigger || '' },
                         {
                             key: 'slash',
@@ -2496,6 +2531,17 @@
                     const hosts = this.hostValidationResult?.report?.hosts;
                     if (!Array.isArray(hosts)) return null;
                     return hosts.find((item) => item.host === this.selectedHostTool.id) || null;
+                },
+                hostValidationSummary() {
+                    return this.hostValidationResult?.report?.summary || {};
+                },
+                hostValidationBlockers() {
+                    const blockers = this.hostValidationResult?.report?.blockers;
+                    return Array.isArray(blockers) ? blockers : [];
+                },
+                hostValidationNextActions() {
+                    const actions = this.hostValidationSummary.next_actions;
+                    return Array.isArray(actions) ? actions : [];
                 },
                 proofPackArtifacts() {
                     return Array.isArray(this.selectedRunProofPack?.artifacts)
@@ -2534,6 +2580,13 @@
                     const ready = Number(this.selectedRunProofPack?.ready_count || 0);
                     if (!total) return 0;
                     return Math.round((ready / total) * 100);
+                },
+                proofPackExecutiveSummary() {
+                    return this.selectedRunProofPack?.summary?.executive_summary || '';
+                },
+                proofPackNextActions() {
+                    const actions = this.selectedRunProofPack?.summary?.next_actions;
+                    return Array.isArray(actions) ? actions : [];
                 }
             },
             methods: {

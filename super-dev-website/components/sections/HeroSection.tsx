@@ -17,7 +17,7 @@ const COPY = {
   zh: {
     openSource: 'MIT 开源',
     title: 'AI 能写代码，Super Dev 让项目能交付。',
-    body: '辅助用户在 Claude Code、Cursor、Codex、Trae 等开发工具中，更标准地完成商业交付。需求进入后，宿主会按 research、三文档、确认门、Spec、前端验证、质量门禁和交付标准推进。',
+    body: '辅助用户在 Claude Code、Cursor、Codex、Trae 等开发工具中，更标准地完成商业交付。接手项目时先看代码库地图和改动影响范围，再按 research、三文档、确认门、Spec、前端验证、质量门禁和交付标准推进。',
     points: ['适配主流 CLI 与 IDE 宿主', '把 AI 开发过程拉回标准流水线', '输出可审计的工程交付资产'],
     docs: '查看文档',
     installNote: '支持 pip 或 uv 安装，安装后终端输入 super-dev 进入宿主接入引导。',
@@ -25,7 +25,7 @@ const COPY = {
   en: {
     openSource: 'MIT Open Source',
     title: 'AI can write code. Super Dev helps teams ship it properly.',
-    body: 'Use Super Dev inside Claude Code, Cursor, Codex, Trae, and similar tools to move from requirement to delivery through one governed path: research, the three core docs, approval, spec, frontend validation, quality gates, and delivery standards.',
+    body: 'Use Super Dev inside Claude Code, Cursor, Codex, Trae, and similar tools to move from requirement to delivery through one governed path: repo map, impact analysis, research, the three core docs, approval, spec, frontend validation, quality gates, and delivery standards.',
     points: ['Works across major CLI and IDE hosts', 'Pulls AI coding back into a governed workflow', 'Produces auditable engineering delivery assets'],
     docs: 'Read Docs',
     installNote: 'Install with pip or uv, then run super-dev in the terminal to open the host onboarding flow.',
@@ -46,7 +46,7 @@ export function HeroSection({ locale = 'zh' }: { locale?: SiteLocale }) {
       <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-14 px-4 pb-20 sm:px-6 lg:grid lg:grid-cols-[minmax(0,1fr)_520px] lg:items-center lg:gap-16 lg:pb-24">
         <div className="flex flex-col gap-7">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="version">v2.0.9</Badge>
+            <Badge variant="version">v2.0.10</Badge>
             <Badge variant="certified">{copy.openSource}</Badge>
             <a
               href={GITHUB_REPO_URL}

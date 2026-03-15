@@ -1,4 +1,4 @@
-# Super Dev Workflow Guide (2.0.9)
+# Super Dev Workflow Guide (2.0.10)
 
 This is the practical handbook for running Super Dev in real projects. It covers:
 
@@ -155,6 +155,9 @@ so the initialization contract remains visible before host execution begins.
 super-dev start --idea "<requirement>"  # recommended machine-side bootstrap
 super-dev "<requirement>"               # local governance entry, not host replacement
 super-dev pipeline "<requirement>"      # advanced explicit mode
+super-dev repo-map                      # generate a codebase map before working on an existing repo
+super-dev impact "Change the login flow" --files services/auth.py   # inspect impact before touching critical flows
+super-dev fix "<bug description>"       # explicit bugfix path
 super-dev create "<requirement>"        # docs + spec focused path
 ```
 

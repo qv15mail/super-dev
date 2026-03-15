@@ -19,7 +19,7 @@
 
 ## Version
 
-Current version: `2.0.9`
+Current version: `2.0.10`
 
 ---
 
@@ -136,6 +136,9 @@ Common delivery-evidence commands:
 ```bash
 super-dev integrate audit --auto --repair --force
 super-dev integrate validate --auto
+super-dev repo-map
+super-dev impact "Change the login flow" --files services/auth.py
+super-dev fix "Fix login 500 and add regression verification"
 super-dev release proof-pack
 super-dev release readiness
 super-dev review architecture --status revision_requested --comment "The technical plan must be redesigned"
@@ -175,13 +178,13 @@ These files make the initialization contract, trigger model, and pipeline order 
 ### 3. Pin a specific version
 
 ```bash
-pip install super-dev==2.0.9
+pip install super-dev==2.0.10
 ```
 
 ### 4. Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.9
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.10
 ```
 
 ### 5. Source install for development
@@ -304,6 +307,9 @@ This view shows the main source directories under `super_dev` and their dependen
 2. Hosts with native mapping support can run `/super-dev your requirement`.
 3. Codex CLI and Kimi CLI currently do not use `/super-dev`; type `super-dev: your requirement` inside the host session.
 4. The host is constrained to execute `research -> docs -> user confirmation -> spec -> frontend runtime validation -> backend/testing/delivery`, not jump straight into implementation.
+5. For defect remediation, prefer `super-dev fix "bug description"` so the host follows the lighter bugfix path instead of the full feature-delivery path.
+6. For an existing or complex repository, run `super-dev repo-map` first so the host starts from an explicit codebase map instead of guessing structure at runtime.
+7. Before refactoring, API changes, auth-flow edits, or major state changes, run `super-dev impact "change description" --files ...` to see the likely blast radius first.
 
 ### How the Host Should Understand Super Dev
 
