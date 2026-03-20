@@ -57,3 +57,12 @@
 - 将本文件与 `high-quality-engineering-playbook.md` 一起长期维护，确保知识增强命中稳定。
 - 每周审查失效链接并替换，确保联网检索能命中官方域名。
 - 新增来源必须优先官方文档或标准组织，避免低可信博客污染知识池。
+
+### 9) UI 设计与多端体验（官方优先）
+- Material Design 3: https://m3.material.io/
+- Apple Human Interface Guidelines: https://developer.apple.com/design/human-interface-guidelines/
+- Microsoft Fluent 2: https://fluent2.microsoft.design/
+- WCAG: https://www.w3.org/WAI/standards-guidelines/wcag/
+- 腾讯 TDesign: https://tdesign.tencent.com/
+- TDesign 小程序: https://tdesign.tencent.com/miniprogram/
+- 微信开发者资源（含 TDesign）: https://developers.weixin.qq.com/miniprogram/dev/devtools/other-resource.html

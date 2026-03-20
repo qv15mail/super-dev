@@ -1,18 +1,27 @@
 const express = require('express');
 const service = require('../services/core.service');
+const { validateBody } = require('../middleware/validate');
 
 const router = express.Router();
 
-router.get('/', (_req, res) => {
-  res.json({
-    module: 'core',
-    items: service.listCoreItems()
-  });
+router.get('/', (_req, res, next) => {
+  try {
+    res.json({
+      module: 'core',
+      items: service.listCoreItems(),
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
-router.post('/', (req, res) => {
-  const item = service.createCoreItem(req.body || { module: 'core' });
-  res.status(201).json(item);
+router.post('/', validateBody(['module']), (req, res, next) => {
+  try {
+    const item = service.createCoreItem(req.body);
+    res.status(201).json(item);
+  } catch (err) {
+    next(err);
+  }
 });
 
 module.exports = router;

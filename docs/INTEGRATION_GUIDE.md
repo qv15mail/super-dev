@@ -1,4 +1,4 @@
-# Super Dev 集成指南（2.0.10）
+# Super Dev 集成指南（2.0.11）
 
 > 宿主详细试用方式、是否支持 `/super-dev`、各宿主的正确入口，请优先查看：
 > [HOST_USAGE_GUIDE.md](/Users/weiyou/Documents/kaifa/super-dev/docs/HOST_USAGE_GUIDE.md)
@@ -18,6 +18,8 @@ super-dev start --idea "你的功能需求"
 ```
 
 注意：默认启用宿主硬门禁。若没有 `ready` 宿主，流水线会阻断并提示先完成接入。
+
+本指南只覆盖当前对外主推的 `16` 个热门宿主。实验性或实验室适配器仍保留在代码中用于内部验证，但不作为默认推荐入口。
 
 该入口会自动执行完整流水线：
 
@@ -61,13 +63,15 @@ super-dev integrate matrix --json
 # 生成全部平台规则
 super-dev integrate setup --all --force
 
-# 给每个平台安装内置 Skill
+# 给主推平台安装内置 Skill
 super-dev skill install super-dev --target claude-code --name super-dev-core --force
 super-dev skill install super-dev --target codex-cli --name super-dev-core --force
 super-dev skill install super-dev --target gemini-cli --name super-dev-core --force
-super-dev skill install super-dev --target kimi-cli --name super-dev-core --force
 super-dev skill install super-dev --target kiro-cli --name super-dev-core --force
 super-dev skill install super-dev --target qoder-cli --name super-dev-core --force
+super-dev skill install super-dev --target cursor-cli --name super-dev-core --force
+super-dev skill install super-dev --target codebuddy-cli --name super-dev-core --force
+super-dev skill install super-dev --target opencode --name super-dev-core --force
 ```
 
 ---
@@ -79,14 +83,23 @@ super-dev skill install super-dev --target qoder-cli --name super-dev-core --for
 | claude-code | `.claude/CLAUDE.md` |
 | codex-cli | `AGENTS.md` |
 | gemini-cli | `GEMINI.md` |
-| kimi-cli | `.kimi/AGENTS.md` |
 | kiro-cli | `.kiro/AGENTS.md` |
-| qoder-cli | `.qoder/AGENTS.md` |
+| cursor-cli | `.cursor/rules/super-dev.mdc` |
+| qoder-cli | `.qoder/commands/super-dev.md` + `.qoder/rules.md` |
+| codebuddy-cli | `.codebuddy/commands/super-dev.md` + `.codebuddy/agents/super-dev-core.md` |
+| opencode | `.opencode/commands/super-dev.md` + `.opencode/AGENTS.md` |
 | qoder | `.qoder/rules.md` + `.qoder/commands/super-dev.md` |
+| antigravity | `GEMINI.md` + `.gemini/commands/super-dev.md` + `.agent/workflows/super-dev.md` |
+| cursor | `.cursor/rules/super-dev.mdc` |
+| windsurf | `.windsurf/rules.md` + `.windsurf/workflows/super-dev.md` |
+| kiro | `.kiro/AGENTS.md` + `.kiro/steering/super-dev.md` |
+| codebuddy | `.codebuddy/commands/super-dev.md` + `.codebuddy/agents/super-dev-core.md` |
+| trae | `.trae/project_rules.md` + `.trae/rules.md` |
+| vscode-copilot | `.github/copilot-instructions.md` + `AGENTS.md` |
 
-Skill 安装目录（按 target）由 `super-dev skill` 自动处理。官方路径与兼容增强路径的边界见：
+Skill 安装目录（按 target）由 `super-dev skill` 自动处理。
 
-- `docs/HOST_INSTALL_SURFACES.md`
+实验室适配器（例如已停服或不稳定宿主）不再在本指南中给出默认安装步骤。
 
 ---
 
@@ -136,7 +149,7 @@ super-dev task run <change_id>
 
 ### 1. 我只想用“super-dev 需求”模式
 
-可以，`2.0.10` 默认就是该模式。只要第一个参数不是子命令，就会自动进入完整流水线。
+可以，`2.0.11` 默认就是该模式。只要第一个参数不是子命令，就会自动进入完整流水线。
 
 ### 2. 我要给特定平台补装 Skill
 

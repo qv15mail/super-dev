@@ -48,6 +48,27 @@ class TestKnowledgeAugmenter:
         assert "prd" in application_plan["stage_guidance"]
         assert any("payment.md" in item for item in application_plan["stage_guidance"]["prd"])
 
+    def test_augment_prioritizes_knowledge_over_docs_when_scores_equal(self, temp_project_dir: Path):
+        docs_dir = temp_project_dir / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        (docs_dir / "policy.md").write_text(
+            "支付链路必须支持限流策略和二次验证。",
+            encoding="utf-8",
+        )
+        knowledge_dir = temp_project_dir / "knowledge"
+        knowledge_dir.mkdir(parents=True, exist_ok=True)
+        (knowledge_dir / "policy.md").write_text(
+            "支付链路必须支持限流策略和二次验证。",
+            encoding="utf-8",
+        )
+
+        augmenter = KnowledgeAugmenter(project_dir=temp_project_dir, web_enabled=False)
+        bundle = augmenter.augment("实现支付限流与二次验证", domain="payment")
+        local_items = bundle.get("local_knowledge", [])
+
+        assert len(local_items) >= 2
+        assert local_items[0]["source"] == "knowledge/policy.md"
+
     def test_augment_scans_knowledge_yaml_and_txt(self, temp_project_dir: Path):
         knowledge_dir = temp_project_dir / "knowledge" / "security"
         knowledge_dir.mkdir(parents=True, exist_ok=True)
@@ -91,6 +112,26 @@ class TestKnowledgeAugmenter:
                 "trust_signals": ["Trust A"],
                 "differentiation_opportunities": ["Differentiation A"],
                 "delivery_recommendations": ["Delivery A"],
+                "evidence_distribution": {"official": 2, "industry": 1, "community": 0},
+                "research_confidence": "high",
+                "implementation_options": [
+                    {
+                        "name": "稳健商业方案",
+                        "fit": "企业级交付",
+                        "strategy": "质量门禁",
+                        "tradeoff": "前期成本",
+                    }
+                ],
+                "primary_sources": [("openai.com", 2)],
+                "competitor_matrix": [
+                    {
+                        "product": "Product A",
+                        "capability": "工作台/协作",
+                        "pricing_signal": "已提及",
+                        "trust_signal": "较强",
+                        "evidence_level": "official",
+                    }
+                ],
             },
             "enriched_requirement": "构建管理后台。",
         }
@@ -101,6 +142,10 @@ class TestKnowledgeAugmenter:
         assert "### Research / 同类产品研究" in markdown
         assert "## 同类产品研究与机会洞察" in markdown
         assert "### 1. 对标产品" in markdown
+        assert "### 7. 研究证据与可信度" in markdown
+        assert "### 8. 实施策略对比" in markdown
+        assert "### 9. 核心来源域名" in markdown
+        assert "### 10. 竞品能力矩阵（自动提取）" in markdown
 
     def test_web_fallback_when_ddgs_unavailable(self, temp_project_dir: Path, monkeypatch):
         augmenter = KnowledgeAugmenter(project_dir=temp_project_dir, web_enabled=True)
@@ -156,6 +201,7 @@ class TestKnowledgeAugmenter:
 
         assert len(bundle["web_knowledge"]) == 1
         assert bundle["web_knowledge"][0]["title"] == "DDGS Result"
+        assert "evidence_level" in bundle["web_knowledge"][0]
         assert fallback_called["value"] is False
 
     def test_save_bundle_cache_file(self, temp_project_dir: Path):

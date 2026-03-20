@@ -210,6 +210,14 @@ class QualityGateChecker:
             "weight": 1.0,
             "required": False,
         },
+        "accessibility": {
+            "weight": 0.8,
+            "required": False,
+        },
+        "ui_quality": {
+            "weight": 1.2,
+            "required": True,
+        },
     }
 
     def __init__(
@@ -348,6 +356,12 @@ class QualityGateChecker:
         # 5. 代码质量检查
         checks.extend(self._check_code_quality())
 
+        # 5.5 无障碍性检查
+        checks.extend(self._check_accessibility())
+
+        # 5.6 性能预算检查
+        checks.extend(self._check_performance_budget())
+
         # 6. UI 审查
         checks.append(self._check_ui_review())
 
@@ -472,11 +486,283 @@ class QualityGateChecker:
                 name="UI/UX 文档",
                 category="documentation",
                 description="UI/UX 设计文档存在性",
-                status=CheckStatus.WARNING,
-                score=50,
+                status=CheckStatus.FAILED,
+                score=0,
                 weight=self.CHECKS_CONFIG["documentation"]["weight"],
-                details="UI/UX 文档不存在（可选）",
+                details="UI/UX 文档不存在（必需）",
             ))
+
+        checks.append(self._check_document_consistency(prd_path=prd_path, arch_path=arch_path, uiux_path=uiux_path))
+
+        return checks
+
+    def _check_document_consistency(self, *, prd_path: Path, arch_path: Path, uiux_path: Path) -> QualityCheck:
+        if not (prd_path.exists() and arch_path.exists() and uiux_path.exists()):
+            return QualityCheck(
+                name="三文档一致性",
+                category="documentation",
+                description="PRD/Architecture/UIUX 决策与证据闭环",
+                status=CheckStatus.WARNING,
+                score=60,
+                weight=self.CHECKS_CONFIG["documentation"]["weight"],
+                details="三文档未全部存在，无法进行一致性检查",
+            )
+
+        prd_content = prd_path.read_text(encoding="utf-8", errors="ignore")
+        arch_content = arch_path.read_text(encoding="utf-8", errors="ignore")
+        uiux_content = uiux_path.read_text(encoding="utf-8", errors="ignore")
+        requirements = [
+            ("PRD 证据章节", "联网研究证据与方案对比" in prd_content),
+            ("PRD 决策账本", "关键决策账本" in prd_content),
+            ("PRD 用户统一协议", "用户到专业交付统一协议" in prd_content),
+            ("架构证据链", "架构选型取舍与证据链" in arch_content),
+            ("架构决策账本", "架构决策账本" in arch_content),
+            ("架构全端流水线", "Agent 执行流水线（全端）" in arch_content),
+            ("UI 多端策略", "多端适配与平台化设计策略" in uiux_content),
+            ("UI 质量门禁", "商业级设计质量门禁" in uiux_content),
+            (
+                "UI 五端覆盖",
+                all(
+                    term in uiux_content
+                    for term in ("WEB", "H5", "微信小程序", "APP", "桌面端")
+                ),
+            ),
+        ]
+        passed_count = sum(1 for _, ok in requirements if ok)
+        total = len(requirements)
+        missing = [name for name, ok in requirements if not ok]
+        score = int((passed_count / total) * 100) if total else 100
+        if "UI 五端覆盖" in missing:
+            status = CheckStatus.FAILED
+            score = min(score, 59)
+        elif score >= 85:
+            status = CheckStatus.PASSED
+        elif score >= 60:
+            status = CheckStatus.WARNING
+        else:
+            status = CheckStatus.FAILED
+        detail = f"命中 {passed_count}/{total}"
+        if missing:
+            detail += f"，缺失: {', '.join(missing)}"
+        return QualityCheck(
+            name="三文档一致性",
+            category="documentation",
+            description="PRD/Architecture/UIUX 决策与证据闭环",
+            status=status,
+            score=score,
+            weight=self.CHECKS_CONFIG["documentation"]["weight"],
+            details=detail,
+        )
+
+    def _check_accessibility(self) -> list[QualityCheck]:
+        """检查前端无障碍性（A11y / WCAG 2.1）"""
+        checks: list[QualityCheck] = []
+
+        # 扫描前端源文件
+        source_dirs = ["frontend", "src", "app", "client", "pages", "components"]
+        extensions = {".html", ".tsx", ".jsx", ".vue", ".svelte"}
+        skip_dirs = {"node_modules", ".git", "dist", "build", "__pycache__", ".next", ".nuxt"}
+
+        files_scanned = 0
+        issues: dict[str, int] = {
+            "missing_alt": 0,
+            "missing_label": 0,
+            "click_no_keyboard": 0,
+            "div_click_handler": 0,
+        }
+        has_landmarks = False
+
+        for src_dir_name in source_dirs:
+            src_dir = self.project_dir / src_dir_name
+            if not src_dir.exists():
+                continue
+            for file_path in src_dir.rglob("*"):
+                if file_path.suffix not in extensions:
+                    continue
+                if any(skip in file_path.parts for skip in skip_dirs):
+                    continue
+                files_scanned += 1
+                try:
+                    content = file_path.read_text(encoding="utf-8", errors="ignore")
+                except OSError:
+                    continue
+
+                # 检查图片是否缺少 alt 属性
+                img_tags = re.findall(r'<img\b[^>]*>', content, re.IGNORECASE)
+                for tag in img_tags:
+                    if 'alt=' not in tag.lower() and 'alt =' not in tag.lower():
+                        issues["missing_alt"] += 1
+
+                # 检查输入框是否缺少 label 关联
+                input_tags = re.findall(r'<input\b[^>]*>', content, re.IGNORECASE)
+                for tag in input_tags:
+                    tag_lower = tag.lower()
+                    if ('aria-label' not in tag_lower
+                            and 'aria-labelledby' not in tag_lower
+                            and 'id=' not in tag_lower):
+                        issues["missing_label"] += 1
+
+                # 检查 onClick 是否缺少键盘事件处理
+                onclick_count = len(re.findall(r'onClick\s*[={]', content))
+                keyboard_count = len(re.findall(
+                    r'on(?:Key(?:Down|Up|Press)|keydown|keyup|keypress)\s*[={]', content,
+                ))
+                if onclick_count > keyboard_count:
+                    issues["click_no_keyboard"] += onclick_count - keyboard_count
+
+                # 检查 div 是否使用了 click handler（应使用 button）
+                div_clicks = len(re.findall(r'<div\b[^>]*onClick', content))
+                issues["div_click_handler"] += div_clicks
+
+                # 检查 ARIA landmarks 或语义化标签
+                if re.search(r'(?:role\s*=|<(?:main|nav|header|footer|aside)\b)', content):
+                    has_landmarks = True
+
+        if files_scanned == 0:
+            checks.append(QualityCheck(
+                name="无障碍性检查",
+                category="accessibility",
+                description="前端文件无障碍性 (WCAG 2.1)",
+                status=CheckStatus.WARNING,
+                score=80,
+                weight=0.8,
+                details="未找到前端源文件，跳过无障碍性检查",
+            ))
+            return checks
+
+        score = 100
+        details_parts: list[str] = []
+
+        if issues["missing_alt"] > 0:
+            score -= 15
+            details_parts.append(f"发现 {issues['missing_alt']} 个 <img> 缺少 alt 属性")
+
+        if issues["missing_label"] > 0:
+            score -= 15
+            details_parts.append(f"发现 {issues['missing_label']} 个 <input> 缺少 label/aria-label")
+
+        if issues["click_no_keyboard"] > 0:
+            score -= 15
+            details_parts.append(f"发现 {issues['click_no_keyboard']} 个 onClick 缺少键盘事件处理")
+
+        if issues["div_click_handler"] > 0:
+            score -= 15
+            details_parts.append(f"发现 {issues['div_click_handler']} 个 <div> 使用 onClick（应使用 <button>）")
+
+        if not has_landmarks:
+            score -= 10
+            details_parts.append("未检测到 ARIA landmarks 或语义化标签")
+
+        score = max(0, score)
+
+        if score >= 80:
+            status = CheckStatus.PASSED
+        elif score >= 60:
+            status = CheckStatus.WARNING
+        else:
+            status = CheckStatus.FAILED
+
+        details = "; ".join(details_parts) if details_parts else "无障碍性检查通过"
+
+        checks.append(QualityCheck(
+            name="无障碍性检查",
+            category="accessibility",
+            description="前端文件无障碍性 (WCAG 2.1)",
+            status=status,
+            score=score,
+            weight=0.8,
+            details=f"扫描 {files_scanned} 个文件 - {details}",
+        ))
+
+        return checks
+
+    def _check_performance_budget(self) -> list[QualityCheck]:
+        """检查性能预算（bundle size、依赖数量）"""
+        checks: list[QualityCheck] = []
+        score = 100
+        details_parts: list[str] = []
+
+        # 检查前端 bundle 产物大小
+        dist_dirs = ["dist", "build", ".next", ".output", "out"]
+        total_bundle_kb = 0
+        bundle_dir_found = False
+
+        for dist_name in dist_dirs:
+            dist_dir = self.project_dir / "frontend" / dist_name
+            if not dist_dir.exists():
+                dist_dir = self.project_dir / dist_name
+            if not dist_dir.exists():
+                continue
+            bundle_dir_found = True
+            for f in dist_dir.rglob("*"):
+                if f.is_file() and f.suffix in {".js", ".css", ".mjs"}:
+                    total_bundle_kb += f.stat().st_size / 1024
+
+        if bundle_dir_found:
+            if total_bundle_kb > 2048:  # > 2MB
+                score -= 25
+                details_parts.append(f"前端 bundle 总量 {total_bundle_kb:.0f}KB（超过 2MB 预算）")
+            elif total_bundle_kb > 1024:  # > 1MB
+                score -= 10
+                details_parts.append(f"前端 bundle 总量 {total_bundle_kb:.0f}KB（接近 1MB 预算）")
+            else:
+                details_parts.append(f"前端 bundle 总量 {total_bundle_kb:.0f}KB（在预算内）")
+
+        # 检查 npm 依赖数量
+        pkg_json = self.project_dir / "frontend" / "package.json"
+        if not pkg_json.exists():
+            pkg_json = self.project_dir / "package.json"
+
+        if pkg_json.exists():
+            try:
+                pkg = json.loads(pkg_json.read_text(encoding="utf-8"))
+                dep_count = len(pkg.get("dependencies", {}))
+
+                if dep_count > 40:
+                    score -= 15
+                    details_parts.append(f"生产依赖 {dep_count} 个（超过 40 个上限）")
+                elif dep_count > 25:
+                    score -= 5
+                    details_parts.append(f"生产依赖 {dep_count} 个（较多）")
+                else:
+                    details_parts.append(f"生产依赖 {dep_count} 个")
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        # 检查大文件（潜在性能问题）
+        large_files = 0
+        for src_dir_name in ["frontend/src", "src", "app"]:
+            src_dir = self.project_dir / src_dir_name
+            if not src_dir.exists():
+                continue
+            for f in src_dir.rglob("*"):
+                if f.is_file() and f.suffix in {".ts", ".tsx", ".js", ".jsx", ".vue"} and f.stat().st_size > 50 * 1024:
+                    large_files += 1
+
+        if large_files > 0:
+            score -= min(15, large_files * 5)
+            details_parts.append(f"{large_files} 个前端文件超过 50KB（影响代码分割）")
+
+        score = max(0, score)
+
+        if score >= 80:
+            status = CheckStatus.PASSED
+        elif score >= 60:
+            status = CheckStatus.WARNING
+        else:
+            status = CheckStatus.FAILED
+
+        details = "; ".join(details_parts) if details_parts else "未检测到前端构建产物"
+
+        checks.append(QualityCheck(
+            name="性能预算检查",
+            category="performance",
+            description="前端性能预算（bundle size、依赖数量）",
+            status=status,
+            score=score,
+            weight=1.0,
+            details=details,
+        ))
 
         return checks
 
@@ -510,11 +796,11 @@ class QualityGateChecker:
 
         return QualityCheck(
             name="UI 商业完成度",
-            category="code_quality",
+            category="ui_quality",
             description="UI 设计基线、实现一致性与反模式扫描",
             status=status,
             score=report.score,
-            weight=self.CHECKS_CONFIG["code_quality"]["weight"],
+            weight=self.CHECKS_CONFIG["ui_quality"]["weight"],
             details=details,
         )
 
@@ -823,22 +1109,22 @@ class QualityGateChecker:
                 details="未发现 .super-dev/changes/*/tasks.md",
             )
 
+        latest_task_file = max(task_files, key=lambda path: path.stat().st_mtime)
         total = 0
         completed = 0
         in_progress = 0
-        for task_file in task_files:
-            for line in task_file.read_text(encoding="utf-8", errors="ignore").splitlines():
-                stripped = line.strip()
-                if not stripped.startswith("- ["):
-                    continue
-                marker = stripped[2:5]
-                if not re.match(r"^\[[ x~_]\]$", marker):
-                    continue
-                total += 1
-                if marker == "[x]":
-                    completed += 1
-                elif marker == "[~]":
-                    in_progress += 1
+        for line in latest_task_file.read_text(encoding="utf-8", errors="ignore").splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("- ["):
+                continue
+            marker = stripped[2:5]
+            if not re.match(r"^\[[ x~_]\]$", marker):
+                continue
+            total += 1
+            if marker == "[x]":
+                completed += 1
+            elif marker == "[~]":
+                in_progress += 1
 
         if total == 0:
             warning_score = 70 if self.is_zero_to_one else 50
@@ -862,7 +1148,7 @@ class QualityGateChecker:
                 status=CheckStatus.PASSED,
                 score=100,
                 weight=self.CHECKS_CONFIG["testing"]["weight"],
-                details=f"任务完成 {completed}/{total}",
+                details=f"任务完成 {completed}/{total}（{latest_task_file.parent.name}）",
             )
 
         score = max(20, completion_rate)
@@ -874,7 +1160,7 @@ class QualityGateChecker:
             status=check_status,
             score=score,
             weight=self.CHECKS_CONFIG["testing"]["weight"],
-            details=f"任务完成 {completed}/{total}，未完成 {pending}",
+            details=f"任务完成 {completed}/{total}，未完成 {pending}（{latest_task_file.parent.name}）",
         )
 
     def _check_code_quality(self) -> list[QualityCheck]:

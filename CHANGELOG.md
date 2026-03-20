@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.11] - 2026-03-20
+
+### Added
+
+- Focused the public host matrix on 16 primary hosts while retaining a larger internal lab adapter set.
+- Added `super-dev fix` as an explicit Bugfix Mode entry point with a lightweight patch workflow.
+- Added `repo-map`, `impact`, `regression-guard`, and `dependency-graph` as a full codebase-intelligence chain for existing repositories and risky changes.
+- Added Host Validation Center capabilities through `integrate validate`, host prerequisite diagnostics, runtime-validation state, and delivery-readiness summaries.
+- Added deeper workflow-control commands including `integrate harden`, `spec scaffold`, `spec quality`, and `run --status/--phase/--jump/--confirm`.
+- Added richer Proof Pack outputs, including executive summary, blockers, next actions, key artifacts, and summary markdown output.
+
+### Changed
+
+- Unified the active project version to `2.0.11` across package metadata, runtime metadata, docs, examples, release scripts, tests, and website copy.
+- Extended the website and documentation so the new codebase-intelligence, host-validation, bugfix, and release-scoring features are visible from the public product surface.
+- Split host messaging into `primary public matrix` vs `internal lab adapters` so documentation no longer over-promises unstable hosts.
+- Added `Spec Quality` into both `release proof-pack` and `release readiness` so proposal/spec/plan/tasks/checklist/validation maturity is shown in one unified release panel.
+
+### Fixed
+
+- Fixed CLI terminal output strategy so macOS, Linux, and UTF-8 terminals keep full Unicode output while non-UTF-8 Windows consoles fall back safely instead of rendering mojibake.
+- Fixed release-boundary drift around change-spec assets and release scoring so the current release panel matches the actual repository contract.
+
 ## [2.0.10] - 2026-03-11
 
 ### Added

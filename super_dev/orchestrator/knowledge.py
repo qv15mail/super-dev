@@ -29,6 +29,8 @@ class KnowledgeItem:
     snippet: str
     link: str = ""
     score: float = 0.0
+    evidence_level: str = "community"
+    source_domain: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -37,6 +39,8 @@ class KnowledgeItem:
             "snippet": self.snippet,
             "link": self.link,
             "score": self.score,
+            "evidence_level": self.evidence_level,
+            "source_domain": self.source_domain,
         }
 
 
@@ -240,6 +244,59 @@ class KnowledgeAugmenter:
         lines.extend(self._render_summary_section("### 4. 信任与商业化信号", research_summary.get("trust_signals", [])))
         lines.extend(self._render_summary_section("### 5. 差异化机会", research_summary.get("differentiation_opportunities", [])))
         lines.extend(self._render_summary_section("### 6. 交付建议", research_summary.get("delivery_recommendations", [])))
+        evidence_distribution = research_summary.get("evidence_distribution", {}) or {}
+        lines.extend(
+            [
+                "### 7. 研究证据与可信度",
+                "",
+                f"- **研究可信度**: {research_summary.get('research_confidence', 'baseline')}",
+                f"- **官方来源**: {evidence_distribution.get('official', 0)} 条",
+                f"- **行业来源**: {evidence_distribution.get('industry', 0)} 条",
+                f"- **社区来源**: {evidence_distribution.get('community', 0)} 条",
+                "",
+                "### 8. 实施策略对比",
+                "",
+                "| 方案 | 适用场景 | 核心策略 | 关键权衡 |",
+                "|:---|:---|:---|:---|",
+            ]
+        )
+        implementation_options = research_summary.get("implementation_options", [])
+        if isinstance(implementation_options, list) and implementation_options:
+            for option in implementation_options:
+                if not isinstance(option, dict):
+                    continue
+                lines.append(
+                    f"| {option.get('name', '-')} | {option.get('fit', '-')} | {option.get('strategy', '-')} | {option.get('tradeoff', '-')} |"
+                )
+        else:
+            lines.append("| 稳健商业方案 | 企业级交付 | 组件标准化 + 质量门禁 | 前期规范成本 |")
+        lines.extend(["", "### 9. 核心来源域名", ""])
+        primary_sources = research_summary.get("primary_sources", [])
+        if isinstance(primary_sources, list) and primary_sources:
+            for item in primary_sources:
+                if isinstance(item, (list, tuple)) and len(item) >= 2:
+                    lines.append(f"- {item[0]}: {item[1]} 次引用")
+        else:
+            lines.append("- 当前未识别到可统计域名")
+        lines.extend(
+            [
+                "",
+                "### 10. 竞品能力矩阵（自动提取）",
+                "",
+                "| 产品 | 核心能力定位 | 定价信号 | 信任信号 | 证据等级 |",
+                "|:---|:---|:---|:---|:---|",
+            ]
+        )
+        competitor_matrix = research_summary.get("competitor_matrix", [])
+        if isinstance(competitor_matrix, list) and competitor_matrix:
+            for row in competitor_matrix:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    f"| {row.get('product', '-')} | {row.get('capability', '-')} | {row.get('pricing_signal', '-')} | {row.get('trust_signal', '-')} | {row.get('evidence_level', '-')} |"
+                )
+        else:
+            lines.append("| - | - | - | - | - |")
         lines.append("")
 
         lines.extend(
@@ -372,6 +429,7 @@ class KnowledgeAugmenter:
                     score += 1.0
             if score <= 0:
                 continue
+            score += self._local_source_boost(file_path)
 
             snippet = self._first_matching_snippet(content, keywords)
             items.append(
@@ -385,6 +443,18 @@ class KnowledgeAugmenter:
 
         items.sort(key=lambda item: item.score, reverse=True)
         return items[:max_results]
+
+    def _local_source_boost(self, file_path: Path) -> float:
+        source = self._format_source_path(file_path)
+        if source.startswith("knowledge/"):
+            return 1.2
+        if source.startswith(".super-dev/specs/"):
+            return 0.8
+        if source.startswith("docs/"):
+            return 0.2
+        if source.startswith("super_dev/data/") or source.startswith("builtin/"):
+            return 0.1
+        return 0.0
 
     def _first_matching_snippet(self, content: str, keywords: list[str]) -> str:
         lines = [line.strip() for line in content.splitlines() if line.strip()]
@@ -460,6 +530,32 @@ class KnowledgeAugmenter:
                 filtered.append(item)
         return filtered
 
+    def _extract_domain(self, link: str) -> str:
+        if not link:
+            return ""
+        try:
+            parsed = urllib.parse.urlparse(link)
+        except Exception:
+            return ""
+        host = (parsed.netloc or "").lower()
+        if host.startswith("www."):
+            host = host[4:]
+        return host
+
+    def _infer_evidence_level(self, title: str, snippet: str, link: str) -> str:
+        domain = self._extract_domain(link)
+        text = f"{title} {snippet} {domain}".lower()
+        if any(token in domain for token in ("docs.", "developer.", "api.", "platform.")):
+            return "official"
+        if any(token in text for token in ("official", "documentation", "developer", "changelog", "release notes", "pricing")):
+            return "official"
+        if any(
+            token in domain
+            for token in ("github.com", "gitlab.com", "stackshare.io", "g2.com", "capterra.com", "producthunt.com")
+        ):
+            return "industry"
+        return "community"
+
     def _collect_web_items_ddgs(self, query: str, max_results: int) -> list[KnowledgeItem]:
         try:
             from ddgs import DDGS  # type: ignore
@@ -473,13 +569,20 @@ class KnowledgeAugmenter:
                 for index, entry in enumerate(entries):
                     if not isinstance(entry, dict):
                         continue
+                    link = str(entry.get("href", "")).strip()
                     results.append(
                         KnowledgeItem(
                             source="web",
                             title=str(entry.get("title", "web-result")).strip(),
                             snippet=str(entry.get("body", "")).strip()[:220],
-                            link=str(entry.get("href", "")).strip(),
+                            link=link,
                             score=float(max_results - index),
+                            evidence_level=self._infer_evidence_level(
+                                str(entry.get("title", "web-result")),
+                                str(entry.get("body", "")),
+                                link,
+                            ),
+                            source_domain=self._extract_domain(link),
                         )
                     )
         except Exception:
@@ -506,13 +609,20 @@ class KnowledgeAugmenter:
         results: list[KnowledgeItem] = []
         abstract = str(data.get("Abstract", "")).strip()
         if abstract:
+            abstract_url = str(data.get("AbstractURL", "")).strip()
             results.append(
                 KnowledgeItem(
                     source="web",
                     title=str(data.get("Heading", "DuckDuckGo Result")).strip() or "DuckDuckGo Result",
                     snippet=abstract[:220],
-                    link=str(data.get("AbstractURL", "")).strip(),
+                    link=abstract_url,
                     score=float(max_results),
+                    evidence_level=self._infer_evidence_level(
+                        str(data.get("Heading", "DuckDuckGo Result")),
+                        abstract,
+                        abstract_url,
+                    ),
+                    source_domain=self._extract_domain(abstract_url),
                 )
             )
 
@@ -535,13 +645,16 @@ class KnowledgeAugmenter:
                 text = str(topic.get("Text", "")).strip()
                 if not text:
                     continue
+                first_url = str(topic.get("FirstURL", "")).strip()
                 results.append(
                     KnowledgeItem(
                         source="web",
                         title=text[:80],
                         snippet=text[:220],
-                        link=str(topic.get("FirstURL", "")).strip(),
+                        link=first_url,
                         score=float(max_results - len(results)),
+                        evidence_level=self._infer_evidence_level(text[:80], text[:220], first_url),
+                        source_domain=self._extract_domain(first_url),
                     )
                 )
 
@@ -572,11 +685,16 @@ class KnowledgeAugmenter:
         keywords: list[str],
         local_items: list[KnowledgeItem],
         web_items: list[KnowledgeItem],
-    ) -> dict[str, list[str]]:
-        benchmark_products = [
-            self._format_research_item(item, include_link=True)
-            for item in web_items[:5]
-        ]
+    ) -> dict[str, Any]:
+        benchmark_products = []
+        evidence_distribution = {"official": 0, "industry": 0, "community": 0}
+        source_domains: dict[str, int] = {}
+        for item in web_items[:5]:
+            benchmark_products.append(self._format_research_item(item, include_link=True))
+            level = item.evidence_level if item.evidence_level in evidence_distribution else "community"
+            evidence_distribution[level] += 1
+            if item.source_domain:
+                source_domains[item.source_domain] = source_domains.get(item.source_domain, 0) + 1
 
         feature_patterns = self._unique_preserve_order(
             [
@@ -624,6 +742,46 @@ class KnowledgeAugmenter:
         if not benchmark_products:
             benchmark_products.append("未获取到可靠联网结果时，应由宿主继续使用原生联网能力补充同类产品研究。")
 
+        implementation_options = [
+            {
+                "name": "稳健商业方案",
+                "fit": "企业级交付、审计与可维护优先",
+                "strategy": "组件库标准化 + 证据驱动文档 + 质量门禁",
+                "tradeoff": "前期规范成本较高，但长期稳定",
+            },
+            {
+                "name": "快速验证方案",
+                "fit": "MVP 快速上线、验证 PMF",
+                "strategy": "核心路径最小集 + UI 基础组件复用 + 指标埋点先行",
+                "tradeoff": "视觉深度与扩展性需要二次迭代",
+            },
+            {
+                "name": "品牌差异化方案",
+                "fit": "竞争激烈、强调品牌识别与转化",
+                "strategy": "品牌 token 系统 + 页面叙事结构 + 转化实验框架",
+                "tradeoff": "设计与内容投入更高",
+            },
+        ]
+        primary_sources = sorted(source_domains.items(), key=lambda item: item[1], reverse=True)[:6]
+        competitor_matrix = []
+        for item in web_items[:5]:
+            content = f"{item.title} {item.snippet}".lower()
+            capability = "工作台/协作" if any(token in content for token in ("dashboard", "workspace", "platform", "workflow")) else "垂直功能"
+            pricing_signal = "已提及" if any(token in content for token in ("pricing", "price", "plan", "套餐")) else "未提及"
+            trust_signal = "较强" if item.evidence_level in {"official", "industry"} else "基础"
+            competitor_matrix.append(
+                {
+                    "product": item.title or "unknown",
+                    "capability": capability,
+                    "pricing_signal": pricing_signal,
+                    "trust_signal": trust_signal,
+                    "evidence_level": item.evidence_level,
+                }
+            )
+        research_confidence = "high" if evidence_distribution["official"] >= 2 else "medium"
+        if evidence_distribution["official"] == 0 and evidence_distribution["industry"] <= 1:
+            research_confidence = "baseline"
+
         return {
             "benchmark_products": benchmark_products,
             "feature_patterns": feature_patterns[:6],
@@ -631,6 +789,11 @@ class KnowledgeAugmenter:
             "trust_signals": trust_signals[:5],
             "differentiation_opportunities": differentiation_opportunities[:5],
             "delivery_recommendations": delivery_recommendations[:5],
+            "implementation_options": implementation_options,
+            "evidence_distribution": evidence_distribution,
+            "primary_sources": primary_sources,
+            "competitor_matrix": competitor_matrix,
+            "research_confidence": research_confidence,
         }
 
     def _format_research_item(self, item: KnowledgeItem, include_link: bool = False) -> str:

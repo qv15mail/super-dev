@@ -1,7 +1,9 @@
 """
-Pipeline policy manager.
-
-用于定义和校验“流水线式 AIcoding 辅助工具”的治理规则。
+开发：Excellent（11964948@qq.com）
+功能：流水线策略管理器
+作用：管理治理策略（default/balanced/enterprise 预设）
+创建时间：2025-12-30
+最后修改：2026-03-20
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ class PipelinePolicy:
 
     require_redteam: bool = True
     require_quality_gate: bool = True
+    require_rehearsal_verify: bool = True
     min_quality_threshold: int = 80
     allowed_cicd_platforms: list[str] = field(default_factory=lambda: list(CICD_PLATFORM_IDS))
     require_host_profile: bool = False
@@ -107,6 +110,9 @@ class PipelinePolicyManager:
         if policy.require_quality_gate and bool(getattr(args, "skip_quality_gate", False)):
             violations.append("policy.require_quality_gate=true，不允许使用 --skip-quality-gate")
 
+        if policy.require_rehearsal_verify and bool(getattr(args, "skip_rehearsal_verify", False)):
+            violations.append("policy.require_rehearsal_verify=true，不允许使用 --skip-rehearsal-verify")
+
         requested_threshold = getattr(args, "quality_threshold", None)
         effective_threshold = (
             int(requested_threshold)
@@ -158,6 +164,7 @@ class PipelinePolicyManager:
     def _from_raw(self, raw: dict[str, Any]) -> PipelinePolicy:
         require_redteam = bool(raw.get("require_redteam", True))
         require_quality_gate = bool(raw.get("require_quality_gate", True))
+        require_rehearsal_verify = bool(raw.get("require_rehearsal_verify", True))
         min_quality_threshold = self._coerce_int(raw.get("min_quality_threshold"), default=80)
         min_quality_threshold = max(0, min(100, min_quality_threshold))
         allowed_cicd = self._normalize_list(raw.get("allowed_cicd_platforms"))
@@ -174,6 +181,7 @@ class PipelinePolicyManager:
         return PipelinePolicy(
             require_redteam=require_redteam,
             require_quality_gate=require_quality_gate,
+            require_rehearsal_verify=require_rehearsal_verify,
             min_quality_threshold=min_quality_threshold,
             allowed_cicd_platforms=allowed_cicd,
             require_host_profile=require_host_profile,

@@ -1,4 +1,4 @@
-# Super Dev Workflow Guide (2.0.10)
+# Super Dev Workflow Guide (2.0.11)
 
 This is the practical handbook for running Super Dev in real projects. It covers:
 
@@ -156,7 +156,9 @@ super-dev start --idea "<requirement>"  # recommended machine-side bootstrap
 super-dev "<requirement>"               # local governance entry, not host replacement
 super-dev pipeline "<requirement>"      # advanced explicit mode
 super-dev repo-map                      # generate a codebase map before working on an existing repo
+super-dev dependency-graph              # generate the dependency graph and critical paths before large refactors
 super-dev impact "Change the login flow" --files services/auth.py   # inspect impact before touching critical flows
+super-dev regression-guard "Change the login flow" --files services/auth.py   # turn impact into an executable regression checklist
 super-dev fix "<bug description>"       # explicit bugfix path
 super-dev create "<requirement>"        # docs + spec focused path
 ```
@@ -168,13 +170,39 @@ super-dev spec init
 super-dev spec list
 super-dev spec show <change_id>
 super-dev spec propose <change_id> --title "<title>" --description "<description>"
+super-dev spec propose <change_id> --title "<title>" --description "<description>" --no-scaffold
 super-dev spec add-req <change_id> <spec_name> <req_name> "<requirement text>"
+super-dev spec scaffold <change_id>
 super-dev spec validate
+super-dev spec quality <change_id>
+super-dev spec quality <change_id> --json
 super-dev spec archive <change_id>
 
 super-dev task list
 super-dev task status <change_id>
 super-dev task run <change_id>
+```
+
+#### Spec quality score and remediation plan
+
+`spec quality` evaluates six dimensions (proposal/spec/plan/tasks/checklist/validation) and returns an `action_plan` with priority and executable commands.
+
+```bash
+super-dev spec quality add-billing
+super-dev spec quality add-billing --json > output/add-billing-spec-quality.json
+```
+
+Recommended CI gate:
+
+```bash
+super-dev spec quality add-billing --json > /tmp/spec-quality.json
+python - <<'PY'
+import json,sys
+p=json.load(open('/tmp/spec-quality.json'))
+ok = p.get('score', 0) >= 75
+print('spec_quality_score=', p.get('score'), 'ok=', ok)
+sys.exit(0 if ok else 1)
+PY
 ```
 
 ### Quality, risk, and release prep
@@ -291,6 +319,14 @@ A change is considered release-ready only if all are true:
 5. Delivery manifest reports `ready`.
 6. `super-dev release proof-pack` aggregates the delivery evidence set.
 
+`release proof-pack` and `release readiness` also ingest the active change's `spec quality` result so the unified release panel includes proposal/spec/plan/tasks/checklist/validation maturity.
+
+To confirm that a host really completed research, wrote the three core docs to disk, and stopped at the confirmation gate, run:
+
+```bash
+super-dev integrate validate --auto
+```
+
 Run full preflight before tagging:
 
 ```bash
@@ -309,8 +345,8 @@ If you need a local constrained run:
 
 Supported AI coding environments:
 
-- CLI: `claude-code`, `codebuddy-cli`, `codex-cli`, `cursor-cli`, `gemini-cli`, `iflow`, `kimi-cli`, `kiro-cli`, `opencode`, `qoder-cli`
-- IDE: `codebuddy`, `cursor`, `kiro`, `qoder`, `trae`, `windsurf`
+- CLI: `claude-code`, `codebuddy-cli`, `codex-cli`, `cursor-cli`, `gemini-cli`, `kiro-cli`, `opencode`, `qoder-cli`
+- IDE: `antigravity`, `codebuddy`, `cursor`, `kiro`, `qoder`, `trae`, `vscode-copilot`, `windsurf`
 
 Recommended auto-detect flow:
 

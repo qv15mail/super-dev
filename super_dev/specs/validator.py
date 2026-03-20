@@ -49,6 +49,34 @@ class ValidationResult:
         return "\n".join(lines)
 
 
+@dataclass
+class SpecQualityReport:
+    change_id: str
+    score: float
+    level: str
+    checks: dict[str, dict[str, object]]
+    blockers: list[str] = field(default_factory=list)
+    suggestions: list[str] = field(default_factory=list)
+    action_plan: list[dict[str, str]] = field(default_factory=list)
+
+    @property
+    def passed(self) -> bool:
+        return self.score >= 75 and bool(self.checks.get("spec", {}).get("passed", False)) and bool(
+            self.checks.get("validation", {}).get("passed", False)
+        ) and bool(self.checks.get("placeholder_free", {}).get("passed", False))
+
+    def to_dict(self) -> dict:
+        return {
+            "change_id": self.change_id,
+            "score": self.score,
+            "level": self.level,
+            "checks": self.checks,
+            "blockers": self.blockers,
+            "suggestions": self.suggestions,
+            "action_plan": self.action_plan,
+        }
+
+
 class SpecValidator:
     """规格验证器"""
 
@@ -57,6 +85,11 @@ class SpecValidator:
 
     # Delta 类型
     DELTA_TYPES = ["ADDED", "MODIFIED", "REMOVED"]
+    PLACEHOLDER_PATTERNS = [
+        re.compile(r"\bTBD\b", re.IGNORECASE),
+        re.compile(r"\bDETAIL REQUIRED\b", re.IGNORECASE),
+        re.compile(r"\bPENDING CLARIFICATION\b", re.IGNORECASE),
+    ]
 
     def __init__(self, project_dir: Path | str):
         """初始化验证器"""
@@ -104,6 +137,30 @@ class SpecValidator:
                 message="缺少 tasks.md"
             ))
 
+        plan_file = change_dir / "plan.md"
+        if plan_file.exists():
+            result = self._validate_plan(plan_file)
+            errors.extend(result.errors)
+            warnings.extend(result.warnings)
+        else:
+            warnings.append(ValidationError(
+                file=str(plan_file),
+                severity="warning",
+                message="缺少 plan.md"
+            ))
+
+        checklist_file = change_dir / "checklist.md"
+        if checklist_file.exists():
+            result = self._validate_checklist(checklist_file)
+            errors.extend(result.errors)
+            warnings.extend(result.warnings)
+        else:
+            warnings.append(ValidationError(
+                file=str(checklist_file),
+                severity="warning",
+                message="缺少 checklist.md"
+            ))
+
         # 验证 design.md (可选)
         design_file = change_dir / "design.md"
         if design_file.exists():
@@ -131,6 +188,239 @@ class SpecValidator:
             warnings=warnings,
             info=info
         )
+
+    def assess_change_quality(self, change_id: str) -> SpecQualityReport:
+        change_dir = self.changes_dir / change_id
+        if not change_dir.exists():
+            return SpecQualityReport(
+                change_id=change_id,
+                score=0.0,
+                level="critical",
+                checks={},
+                blockers=[f"变更目录不存在: {change_id}"],
+                suggestions=["先运行 super-dev spec propose <change_id> 创建变更。"],
+                action_plan=[
+                    {
+                        "step": "创建变更提案",
+                        "command": f"super-dev spec propose {change_id} --title \"<标题>\" --description \"<描述>\"",
+                        "priority": "P0",
+                    }
+                ],
+            )
+
+        checks: dict[str, dict[str, object]] = {}
+        blockers: list[str] = []
+        suggestions: list[str] = []
+        action_plan: list[dict[str, str]] = []
+
+        proposal_file = change_dir / "proposal.md"
+        proposal_ok = proposal_file.exists() and proposal_file.read_text(encoding="utf-8").strip() != ""
+        checks["proposal"] = {"passed": proposal_ok, "weight": 10, "reason": "" if proposal_ok else "缺少或空内容"}
+
+        specs_dir = change_dir / "specs"
+        spec_files = list(specs_dir.rglob("spec.md")) if specs_dir.exists() else []
+        total_requirements = 0
+        total_scenarios = 0
+        for spec_file in spec_files:
+            content = spec_file.read_text(encoding="utf-8")
+            total_requirements += len(re.findall(r"^###\s+Requirement:", content, flags=re.MULTILINE))
+            total_scenarios += len(re.findall(r"^####\s+Scenario", content, flags=re.MULTILINE))
+        spec_ok = len(spec_files) > 0 and total_requirements > 0
+        checks["spec"] = {
+            "passed": spec_ok,
+            "weight": 30,
+            "reason": "" if spec_ok else "缺少 spec.md 或未定义 Requirement",
+            "spec_files": len(spec_files),
+            "requirements": total_requirements,
+            "scenarios": total_scenarios,
+        }
+
+        plan_file = change_dir / "plan.md"
+        plan_ok = plan_file.exists() and ("## " in plan_file.read_text(encoding="utf-8"))
+        checks["plan"] = {"passed": plan_ok, "weight": 15, "reason": "" if plan_ok else "缺少 plan.md 或结构过弱"}
+
+        tasks_file = change_dir / "tasks.md"
+        completed_tasks = 0
+        total_tasks = 0
+        tasks_ok = False
+        if tasks_file.exists():
+            text = tasks_file.read_text(encoding="utf-8")
+            total_tasks = len(re.findall(r"^-\s*\[[ xX~_]\]", text, flags=re.MULTILINE))
+            completed_tasks = len(re.findall(r"^-\s*\[[xX]\]", text, flags=re.MULTILINE))
+            tasks_ok = total_tasks > 0
+        checks["tasks"] = {
+            "passed": tasks_ok,
+            "weight": 20,
+            "reason": "" if tasks_ok else "缺少 tasks.md 或无任务项",
+            "total": total_tasks,
+            "completed": completed_tasks,
+        }
+
+        checklist_file = change_dir / "checklist.md"
+        checklist_ok = False
+        checklist_total = 0
+        checklist_done = 0
+        if checklist_file.exists():
+            text = checklist_file.read_text(encoding="utf-8")
+            checklist_total = len(re.findall(r"^-\s*\[[ xX]\]", text, flags=re.MULTILINE))
+            checklist_done = len(re.findall(r"^-\s*\[[xX]\]", text, flags=re.MULTILINE))
+            checklist_ok = checklist_total > 0
+        checks["checklist"] = {
+            "passed": checklist_ok,
+            "weight": 15,
+            "reason": "" if checklist_ok else "缺少 checklist.md 或无勾选项",
+            "total": checklist_total,
+            "completed": checklist_done,
+        }
+
+        placeholder_hits = self._collect_placeholder_hits(change_dir)
+        placeholder_free = len(placeholder_hits) == 0
+        checks["placeholder_free"] = {
+            "passed": placeholder_free,
+            "weight": 10,
+            "reason": "" if placeholder_free else f"发现 {len(placeholder_hits)} 处占位符",
+            "hits": placeholder_hits[:10],
+        }
+
+        quality_validation = self.validate_change(change_id)
+        validation_ok = quality_validation.is_valid
+        checks["validation"] = {
+            "passed": validation_ok,
+            "weight": 10,
+            "reason": "" if validation_ok else f"存在 {len(quality_validation.errors)} 个结构错误",
+            "errors": len(quality_validation.errors),
+            "warnings": len(quality_validation.warnings),
+        }
+
+        total_weight = sum(int(item.get("weight", 0)) for item in checks.values())
+        earned = sum(int(item.get("weight", 0)) for item in checks.values() if bool(item.get("passed", False)))
+        score = (earned / total_weight * 100) if total_weight > 0 else 0.0
+
+        if score >= 90:
+            level = "excellent"
+        elif score >= 75:
+            level = "good"
+        elif score >= 60:
+            level = "fair"
+        else:
+            level = "critical"
+
+        for key, item in checks.items():
+            if not bool(item.get("passed", False)):
+                reason = str(item.get("reason", "")).strip()
+                blockers.append(f"{key}: {reason}")
+
+        if not spec_ok:
+            suggestions.append("先补齐至少一个 spec.md，且每个 spec 至少包含 1 个 Requirement。")
+            action_plan.append({
+                "step": "补齐规范主体",
+                "command": f"super-dev spec scaffold {change_id}",
+                "priority": "P0",
+            })
+        if total_scenarios <= 0:
+            suggestions.append("为关键 Requirement 补充 Scenario，保证可验收。")
+            action_plan.append({
+                "step": "补充关键场景",
+                "command": f"super-dev spec add-req {change_id} <spec> <req> \"<包含场景的描述>\"",
+                "priority": "P1",
+            })
+        if not tasks_ok:
+            suggestions.append("补齐 tasks.md 并拆分可执行任务项。")
+            action_plan.append({
+                "step": "补齐任务分解",
+                "command": f"super-dev spec scaffold {change_id} --force",
+                "priority": "P0",
+            })
+        if checklist_total <= 0:
+            suggestions.append("补齐 checklist.md 并设置发布前检查项。")
+            action_plan.append({
+                "step": "补齐交付清单",
+                "command": f"super-dev spec scaffold {change_id} --force",
+                "priority": "P1",
+            })
+        if validation_ok is False:
+            suggestions.append("执行 super-dev spec validate <change_id> -v 并修复结构错误。")
+            action_plan.append({
+                "step": "修复结构错误",
+                "command": f"super-dev spec validate {change_id} -v",
+                "priority": "P0",
+            })
+        if not placeholder_free:
+            suggestions.append("移除 proposal/spec/plan/tasks/checklist 中的占位符内容，补齐真实需求与场景。")
+            action_plan.append({
+                "step": "补齐占位内容",
+                "command": f"super-dev spec quality {change_id}",
+                "priority": "P0",
+            })
+        if not action_plan and score >= 90:
+            action_plan.append({
+                "step": "进入实现闭环",
+                "command": f"super-dev task run {change_id}",
+                "priority": "P2",
+            })
+
+        return SpecQualityReport(
+            change_id=change_id,
+            score=round(score, 1),
+            level=level,
+            checks=checks,
+            blockers=blockers,
+            suggestions=suggestions,
+            action_plan=action_plan,
+        )
+
+    def latest_change_id(self, *, exclude_ids: set[str] | None = None) -> str | None:
+        exclude_ids = exclude_ids or set()
+        if not self.changes_dir.exists():
+            return None
+        candidates: list[tuple[float, str]] = []
+        for change_dir in self.changes_dir.iterdir():
+            if not change_dir.is_dir() or change_dir.name.startswith(".") or change_dir.name in exclude_ids:
+                continue
+            try:
+                timestamp = change_dir.stat().st_mtime
+            except OSError:
+                timestamp = 0.0
+            candidates.append((timestamp, change_dir.name))
+        if not candidates:
+            return None
+        candidates.sort(key=lambda item: item[0], reverse=True)
+        return candidates[0][1]
+
+    def assess_latest_change_quality(self, *, exclude_ids: set[str] | None = None) -> SpecQualityReport | None:
+        latest_change_id = self.latest_change_id(exclude_ids=exclude_ids)
+        if not latest_change_id:
+            return None
+        return self.assess_change_quality(latest_change_id)
+
+    def _collect_placeholder_hits(self, change_dir: Path) -> list[dict[str, object]]:
+        files: list[Path] = []
+        for name in ("proposal.md", "plan.md", "tasks.md", "checklist.md"):
+            path = change_dir / name
+            if path.exists():
+                files.append(path)
+        specs_dir = change_dir / "specs"
+        if specs_dir.exists():
+            files.extend(sorted(specs_dir.rglob("spec.md")))
+
+        hits: list[dict[str, object]] = []
+        for file_path in files:
+            try:
+                lines = file_path.read_text(encoding="utf-8").splitlines()
+            except Exception:
+                continue
+            for line_number, line in enumerate(lines, 1):
+                for pattern in self.PLACEHOLDER_PATTERNS:
+                    if pattern.search(line):
+                        hits.append(
+                            {
+                                "file": str(file_path.relative_to(self.project_dir)),
+                                "line": line_number,
+                                "text": line.strip(),
+                            }
+                        )
+                        break
+        return hits
 
     def validate_spec(self, spec_name: str) -> ValidationResult:
         """验证规范"""
@@ -277,13 +567,16 @@ class SpecValidator:
         content = tasks_file.read_text(encoding="utf-8")
         lines = content.split("\n")
 
-        task_pattern = re.compile(r'^-\s*\[([ x~_])\]\s*\*\*([\d.]+):\s*([^*]+)\*\*')
+        task_pattern = re.compile(
+            r"^-\s*\[(?P<marker>[ xX~_])\]\s*(?:\*\*(?P<id1>[\d.]+):\s*(?P<title1>[^*]+)\*\*|(?P<id2>[\d.]+)\s*:?\s*(?P<title2>.+))\s*$"
+        )
 
         task_ids = []
         for i, line in enumerate(lines, 1):
             match = task_pattern.match(line)
             if match:
-                status_char, task_id, title = match.groups()
+                task_id = (match.group("id1") or match.group("id2") or "").strip()
+                title = (match.group("title1") or match.group("title2") or "").strip()
                 task_ids.append(task_id)
 
                 # 检查任务标题
@@ -315,6 +608,31 @@ class SpecValidator:
             errors=errors,
             warnings=warnings
         )
+
+    def _validate_plan(self, plan_file: Path) -> ValidationResult:
+        errors: list[ValidationError] = []
+        warnings: list[ValidationError] = []
+        content = plan_file.read_text(encoding="utf-8")
+        lowered = content.lower()
+        if "# plan" not in lowered and "## context" not in lowered:
+            warnings.append(ValidationError(
+                file=str(plan_file),
+                severity="warning",
+                message="plan.md 建议包含 Plan/Context 章节"
+            ))
+        return ValidationResult(is_valid=len(errors) == 0, errors=errors, warnings=warnings)
+
+    def _validate_checklist(self, checklist_file: Path) -> ValidationResult:
+        errors: list[ValidationError] = []
+        warnings: list[ValidationError] = []
+        content = checklist_file.read_text(encoding="utf-8")
+        if "- [ ]" not in content and "- [x]" not in content and "- [X]" not in content:
+            warnings.append(ValidationError(
+                file=str(checklist_file),
+                severity="warning",
+                message="checklist.md 建议包含可勾选项"
+            ))
+        return ValidationResult(is_valid=len(errors) == 0, errors=errors, warnings=warnings)
 
     def _validate_design(self, design_file: Path) -> ValidationResult:
         """验证设计文件"""

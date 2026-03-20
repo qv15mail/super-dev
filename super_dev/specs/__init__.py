@@ -22,7 +22,7 @@ from .models import (
     Task,
     TaskStatus,
 )
-from .validator import SpecValidator, ValidationError, ValidationResult
+from .validator import SpecQualityReport, SpecValidator, ValidationError, ValidationResult
 
 __all__ = [
     "Spec",
@@ -39,6 +39,7 @@ __all__ = [
     "ChangeManager",
     "SpecGenerator",
     "SpecValidator",
+    "SpecQualityReport",
     "ValidationResult",
     "ValidationError",
 ]

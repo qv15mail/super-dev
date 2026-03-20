@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: 用户认证系统
+  name: super-dev
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
@@ -10,16 +10,16 @@ spec:
   ingressClassName: nginx
   tls:
   - hosts:
-    - 用户认证系统.example.com
-    secretName: 用户认证系统-tls
+    - super-dev.example.com
+    secretName: super-dev-tls
   rules:
-  - host: 用户认证系统.example.com
+  - host: super-dev.example.com
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: 用户认证系统
+            name: super-dev
             port:
               number: 80

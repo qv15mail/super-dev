@@ -1,0 +1,197 @@
+---
+title: 云原生领域索引
+version: 1.0.0
+last_updated: 2025-03-20
+owner: platform-team
+tags: [cloud-native, domain-index, knowledge-map]
+status: production
+---
+
+# 云原生领域知识索引
+
+## 领域定位
+
+云原生（Cloud Native）是一种构建和运行应用程序的方法，充分利用云计算模型的优势。本领域知识库涵盖容器编排、服务网格、GitOps、Serverless 等核心技术。
+
+## 知识结构
+
+### 01-standards（技术标准）
+
+| 文件 | 说明 | 优先级 |
+|------|------|--------|
+| [kubernetes-complete.md](01-standards/kubernetes-complete.md) | K8s 集群管理、应用部署、安全治理完整标准 | P0 |
+| [container-security.md](01-standards/container-security.md) | 容器镜像、运行时、网络安全完整标准 | P0 |
+
+### 02-playbooks（作战手册）
+
+| 文件 | 说明 | 优先级 |
+|------|------|--------|
+| [service-mesh-playbook.md](02-playbooks/service-mesh-playbook.md) | Istio/Linkerd 服务网格实施指南 | P0 |
+| [gitops-with-argocd.md](02-playbooks/gitops-with-argocd.md) | ArgoCD GitOps 持续部署实践 | P0 |
+| [serverless-patterns.md](02-playbooks/serverless-patterns.md) | Knative/云函数 Serverless 架构模式 | P1 |
+| [multicloud-governance.md](02-playbooks/multicloud-governance.md) | 多云架构统一治理策略 | P1 |
+
+### 03-checklists（检查清单）
+
+| 文件 | 说明 | 优先级 |
+|------|------|--------|
+| [k8s-production-readiness-checklist.md](03-checklists/k8s-production-readiness-checklist.md) | K8s 生产环境部署前检查 | P0 |
+| [container-security-checklist.md](03-checklists/container-security-checklist.md) | 容器安全全面检查清单 | P0 |
+
+### 04-antipatterns（反模式）
+
+| 文件 | 说明 | 优先级 |
+|------|------|--------|
+| [k8s-antipatterns.md](04-antipatterns/k8s-antipatterns.md) | K8s 常见错误实践识别与修正 | P0 |
+| [container-antipatterns.md](04-antipatterns/container-antipatterns.md) | 容器化常见错误实践识别与修正 | P0 |
+
+### 05-cases（实战案例）
+
+| 文件 | 说明 | 优先级 |
+|------|------|--------|
+| [case-k8s-migration.md](05-cases/case-k8s-migration.md) | 传统应用到 K8s 的迁移经验 | P0 |
+| [case-k8s-scaling.md](05-cases/case-k8s-scaling.md) | K8s 自动扩展实践经验 | P0 |
+| [case-k8s-security-incident.md](05-cases/case-k8s-security-incident.md) | K8s 安全事件响应实践 | P0 |
+
+### 06-glossary（术语表）
+
+| 文件 | 说明 | 优先级 |
+|------|------|--------|
+| [cloud-native-glossary.md](06-glossary/cloud-native-glossary.md) | 云原生核心术语定义 | P1 |
+
+## 核心能力矩阵
+
+### 角色映射
+
+| 角色 | 核心知识 | 辅助知识 |
+|------|----------|----------|
+| 平台工程师 | K8s 标准、服务网格、GitOps | 安全、监控、多云 |
+| DevOps 工程师 | GitOps、部署清单、自动化 | 容器、监控 |
+| 安全工程师 | 容器安全、网络策略、审计 | K8s 标准、反模式 |
+| SRE | 扩展、监控、事件响应 | 运维手册、案例 |
+
+### 场景映射
+
+| 场景 | 推荐知识 |
+|------|----------|
+| 新集群建设 | kubernetes-complete.md、container-security.md |
+| 应用容器化 | container-antipatterns.md、k8s-production-readiness-checklist.md |
+| 生产部署 | k8s-production-readiness-checklist.md、container-security-checklist.md |
+| 流量管理 | service-mesh-playbook.md |
+| 持续部署 | gitops-with-argocd.md |
+| 弹性扩展 | case-k8s-scaling.md |
+| 安全加固 | container-security.md、case-k8s-security-incident.md |
+| 多云部署 | multicloud-governance.md |
+
+## 依赖关系
+
+```
+云原生基础
+├── 容器技术
+│   ├── Docker
+│   └── Container Runtime
+├── Kubernetes
+│   ├── 核心概念
+│   ├── 网络模型
+│   └── 存储模型
+└── 云原生安全
+    ├── 容器安全
+    ├── K8s 安全
+    └── 网络安全
+
+进阶技术
+├── 服务网格（Istio/Linkerd）
+├── GitOps（ArgoCD）
+├── Serverless（Knative）
+└── 多云管理
+```
+
+## 质量指标
+
+### 完整度评估
+
+| 类别 | 文件数 | 平均完整度 | 目标 |
+|------|--------|-----------|------|
+| 标准 | 2 | 9.0/10 | 8.5 |
+| 作战手册 | 4 | 9.0/10 | 8.5 |
+| 检查清单 | 2 | 9.5/10 | 8.5 |
+| 反模式 | 2 | 9.0/10 | 8.5 |
+| 案例 | 3 | 9.0/10 | 8.5 |
+| 词汇表 | 1 | 8.5/10 | 8.5 |
+
+### 质量检查清单
+
+- [x] 所有文件包含 YAML frontmatter
+- [x] 所有文件包含目标、适用场景、执行清单
+- [x] 代码示例完整可运行
+- [x] 检查清单项 >= 10
+- [x] 代码示例 >= 4
+- [x] 参考资料链接有效
+- [x] 无 emoji 使用
+
+## 使用指南
+
+### 快速开始
+
+1. **新用户**：从词汇表开始，理解核心概念
+2. **实践者**：参考标准和检查清单
+3. **故障排查**：查看反模式和案例
+
+### 学习路径
+
+**入门路径（30 天）**：
+1. Week 1：kubernetes-complete.md + 词汇表
+2. Week 2：container-security.md + 检查清单
+3. Week 3：服务网格 + GitOps
+4. Week 4：案例学习
+
+**进阶路径（60 天）**：
+1. Week 1-2：深入 K8s 标准和安全
+2. Week 3-4：服务网格和 GitOps 实践
+3. Week 5-6：Serverless 和多云
+4. Week 7-8：案例复盘和实战
+
+### 检索关键词
+
+**高频关键词**：
+- Kubernetes、K8s、容器、Docker
+- 服务网格、Istio、流量管理、mTLS
+- GitOps、ArgoCD、持续部署
+- Serverless、Knative、函数计算
+- 安全、RBAC、NetworkPolicy、审计
+- 扩展、HPA、VPA、Cluster Autoscaler
+- 监控、Prometheus、日志、追踪
+
+## 维护计划
+
+### 更新频率
+
+| 类型 | 频率 | 责任人 |
+|------|------|--------|
+| 标准文档 | 季度 | 平台团队 |
+| 作战手册 | 月度 | 平台团队 |
+| 检查清单 | 月度 | 安全团队 |
+| 反模式 | 季度 | 全体 |
+| 案例 | 按需 | 全体 |
+
+### 审核流程
+
+1. **技术审核**：技术准确性
+2. **实践验证**：可操作性验证
+3. **安全审核**：安全合规性
+4. **最终发布**：版本控制
+
+## 相关领域
+
+- **开发**：应用容器化、微服务开发
+- **安全**：云安全、零信任架构
+- **运维**：SRE、可观测性
+- **架构**：分布式系统、高可用设计
+
+## 参考资料
+
+- [CNCF 云原生定义](https://github.com/cncf/toc/blob/main/DEFINITION.md)
+- [CNCF Landscape](https://landscape.cncf.io/)
+- [Kubernetes 官方文档](https://kubernetes.io/docs/)
+- [Istio 官方文档](https://istio.io/latest/docs/)
+- [ArgoCD 官方文档](https://argo-cd.readthedocs.io/)

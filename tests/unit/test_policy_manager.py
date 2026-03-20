@@ -11,11 +11,13 @@ class _Args:
         *,
         skip_redteam: bool = False,
         skip_quality_gate: bool = False,
+        skip_rehearsal_verify: bool = False,
         quality_threshold: int | None = None,
         cicd: str = "all",
     ) -> None:
         self.skip_redteam = skip_redteam
         self.skip_quality_gate = skip_quality_gate
+        self.skip_rehearsal_verify = skip_rehearsal_verify
         self.quality_threshold = quality_threshold
         self.cicd = cicd
 
@@ -25,6 +27,7 @@ def test_policy_manager_returns_default_when_missing(temp_project_dir: Path) -> 
     policy = manager.load()
     assert policy.require_redteam is True
     assert policy.require_quality_gate is True
+    assert policy.require_rehearsal_verify is True
     assert policy.min_quality_threshold == 80
     assert policy.enforce_required_hosts_ready is False
     assert policy.min_required_host_score == 80
@@ -54,11 +57,12 @@ def test_validate_pipeline_args_blocks_skip_flags(temp_project_dir: Path) -> Non
     config = ConfigManager(temp_project_dir).create(name="demo")
 
     violations = manager.validate_pipeline_args(
-        args=_Args(skip_redteam=True, skip_quality_gate=True),
+        args=_Args(skip_redteam=True, skip_quality_gate=True, skip_rehearsal_verify=True),
         config=config,
     )
     assert any("skip-redteam" in item for item in violations)
     assert any("skip-quality-gate" in item for item in violations)
+    assert any("skip-rehearsal-verify" in item for item in violations)
 
 
 def test_validate_pipeline_args_checks_min_quality_threshold(temp_project_dir: Path) -> None:

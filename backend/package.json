@@ -1,5 +1,5 @@
 {
-  "name": "update-method-pip-backend",
+  "name": "super-dev-backend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,6 +8,9 @@
     "test": "node --test"
   },
   "dependencies": {
-    "express": "^4.19.0"
+    "cors": "^2.8.6",
+    "express": "^4.19.0",
+    "express-rate-limit": "^8.3.1",
+    "helmet": "^8.1.0"
   }
 }

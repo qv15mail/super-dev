@@ -13,6 +13,7 @@ import json
 import os
 import re
 import shutil
+import tempfile
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,7 +43,7 @@ from super_dev.catalogs import (
     PLATFORM_CATALOG,
     host_path_candidates,
 )
-from super_dev.analyzer import ImpactAnalyzer, RepoMapBuilder
+from super_dev.analyzer import DependencyGraphBuilder, ImpactAnalyzer, RegressionGuardBuilder, RepoMapBuilder
 from super_dev.config import ConfigManager
 from super_dev.deployers import CICDGenerator
 from super_dev.experts import (
@@ -77,6 +78,11 @@ from super_dev.review_state import (
     ui_revision_file,
 )
 from super_dev.skills import SkillManager
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 
 # ==================== 数据模型 ====================
 
@@ -207,6 +213,7 @@ class DeployRemediationExportRequest(BaseModel):
 class PipelinePolicyResponse(BaseModel):
     require_redteam: bool
     require_quality_gate: bool
+    require_rehearsal_verify: bool
     min_quality_threshold: int
     allowed_cicd_platforms: list[str]
     require_host_profile: bool
@@ -221,6 +228,7 @@ class PipelinePolicyUpdateRequest(BaseModel):
     preset: str | None = None
     require_redteam: bool | None = None
     require_quality_gate: bool | None = None
+    require_rehearsal_verify: bool | None = None
     min_quality_threshold: int | None = None
     allowed_cicd_platforms: list[str] | None = None
     require_host_profile: bool | None = None
@@ -238,12 +246,17 @@ app = FastAPI(
 )
 
 # CORS 配置
+_CORS_ORIGINS = os.getenv(
+    "CORS_ALLOWED_ORIGINS",
+    "http://localhost:3000,http://localhost:5173,http://localhost:8080",
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境应限制域名
+    allow_origins=[o.strip() for o in _CORS_ORIGINS if o.strip()],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
 )
 
 # ==================== 工作流运行状态 ====================
@@ -360,10 +373,27 @@ def _run_state_file(project_dir: Path, run_id: str) -> Path:
 def _persist_run_state(project_dir: Path, run_id: str, run: dict[str, Any]) -> None:
     state_dir = _run_state_dir(project_dir)
     state_dir.mkdir(parents=True, exist_ok=True)
-    _run_state_file(project_dir, run_id).write_text(
-        json.dumps(run, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    target_file = _run_state_file(project_dir, run_id)
+    lock_file = state_dir / ".runs.lock"
+    lock_handle = lock_file.open("a+", encoding="utf-8")
+    try:
+        if fcntl is not None:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=state_dir,
+            prefix=f".{run_id}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temp_file:
+            temp_file.write(json.dumps(run, ensure_ascii=False, indent=2))
+            temp_path = Path(temp_file.name)
+        os.replace(temp_path, target_file)
+    finally:
+        if fcntl is not None:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+        lock_handle.close()
 
 
 def _load_persisted_run_state(project_dir: Path, run_id: str) -> dict[str, Any] | None:
@@ -383,6 +413,7 @@ def _store_run_state(run_id: str, persist_dir: Path | None = None, **fields: Any
         run.update(fields)
         run["run_id"] = run_id
         run["updated_at"] = _utc_now()
+        run["status_normalized"] = _normalize_run_status(run.get("status"))
         if persist_dir is not None:
             _persist_run_state(persist_dir, run_id, run)
 
@@ -726,6 +757,7 @@ def _detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = Non
 
 def _with_pipeline_summary(run: dict[str, Any], project_dir: Path) -> dict[str, Any]:
     enriched = dict(run)
+    enriched["status_normalized"] = _normalize_run_status(enriched.get("status"))
     enriched["pipeline_summary"] = _detect_pipeline_summary(project_dir, run)
     return enriched
 
@@ -734,6 +766,21 @@ def _is_cancel_requested(run_id: str) -> bool:
     with _RUN_STORE_LOCK:
         run = _RUN_STORE.get(run_id)
         return bool(run and run.get("cancel_requested"))
+
+
+def _normalize_run_status(status: Any) -> str:
+    normalized = str(status or "").strip().lower()
+    if normalized in {"success", "completed"}:
+        return "completed"
+    if normalized in {"failed"}:
+        return "failed"
+    if normalized in {"cancelled"}:
+        return "cancelled"
+    if normalized in {"running", "cancelling", "waiting_confirmation", "waiting_ui_revision", "waiting_architecture_revision", "waiting_quality_revision"}:
+        return "running"
+    if normalized in {"queued"}:
+        return "queued"
+    return "unknown"
 
 
 def _sanitize_run_payload(value: Any, depth: int = 0) -> Any:
@@ -1005,16 +1052,22 @@ def _collect_host_diagnostics(
             precondition_label = str(usage_profile.get("precondition_label", "")).strip()
             precondition_guidance = usage_profile.get("precondition_guidance", [])
             precondition_signals = usage_profile.get("precondition_signals", {})
+            precondition_items = usage_profile.get("precondition_items", [])
             host_report["preconditions"] = {
                 "status": precondition_status,
                 "label": precondition_label,
                 "guidance": precondition_guidance if isinstance(precondition_guidance, list) else [],
                 "signals": precondition_signals if isinstance(precondition_signals, dict) else {},
+                "items": precondition_items if isinstance(precondition_items, list) else [],
             }
             if precondition_status == "host-auth-required":
                 host_report["suggestions"].append(
                     "若宿主报 Invalid API key provided，请先在宿主内完成 /auth 或更新宿主 API key 配置。"
                 )
+            if precondition_status == "session-restart-required":
+                host_report["suggestions"].append("接入后先关闭旧宿主会话，再开一个新会话后重试。")
+            if precondition_status == "project-context-required":
+                host_report["suggestions"].append("确认当前聊天/终端绑定的是目标项目，再重新触发 Super Dev。")
         report["hosts"][target] = host_report
         if not host_report["ready"]:
             report["overall_ready"] = False
@@ -1058,6 +1111,7 @@ def _serialize_host_usage_profile(
         "precondition_label": profile.precondition_label,
         "precondition_guidance": list(profile.precondition_guidance),
         "precondition_signals": dict(profile.precondition_signals),
+        "precondition_items": list(profile.precondition_items),
         "notes": profile.notes,
     }
 
@@ -1140,6 +1194,7 @@ def _build_host_runtime_validation_payload(
         surface_ready = bool(host.get("ready", False))
         precondition_label = usage.get("precondition_label", "-")
         precondition_guidance = usage.get("precondition_guidance", [])
+        precondition_items = usage.get("precondition_items", [])
         blocking_reason = ""
         recommended_action = ""
         blocker_type = ""
@@ -1193,6 +1248,7 @@ def _build_host_runtime_validation_payload(
                 "certification_label": usage.get("certification_label", "-"),
                 "precondition_label": precondition_label,
                 "precondition_guidance": precondition_guidance,
+                "precondition_items": precondition_items if isinstance(precondition_items, list) else [],
                 "smoke_test_prompt": usage.get("smoke_test_prompt", ""),
                 "smoke_success_signal": usage.get("smoke_success_signal", ""),
                 "runtime_checklist": [
@@ -1688,6 +1744,7 @@ def _build_policy_response(policy: PipelinePolicy, manager: PipelinePolicyManage
     return {
         "require_redteam": policy.require_redteam,
         "require_quality_gate": policy.require_quality_gate,
+        "require_rehearsal_verify": policy.require_rehearsal_verify,
         "min_quality_threshold": policy.min_quality_threshold,
         "allowed_cicd_platforms": policy.allowed_cicd_platforms,
         "require_host_profile": policy.require_host_profile,
@@ -1834,6 +1891,11 @@ async def update_policy(
                 request.require_quality_gate
                 if request.require_quality_gate is not None
                 else current.require_quality_gate
+            ),
+            require_rehearsal_verify=(
+                request.require_rehearsal_verify
+                if request.require_rehearsal_verify is not None
+                else current.require_rehearsal_verify
             ),
             min_quality_threshold=min_quality_threshold,
             allowed_cicd_platforms=allowed_cicd_platforms,
@@ -2101,11 +2163,15 @@ async def run_workflow(
                     finished_at=_utc_now(),
                 )
             except Exception as e:
+                cancel_requested = _is_cancel_requested(run_id)
+                status = "cancelled" if cancel_requested else "failed"
+                message = "工作流已取消" if cancel_requested else "工作流执行异常"
                 _store_run_state(
                     run_id,
                     persist_dir=project_dir_path,
-                    status="failed",
-                    message="工作流执行异常",
+                    status=status,
+                    message=message,
+                    cancel_requested=cancel_requested,
                     error=str(e),
                     finished_at=_utc_now(),
                 )
@@ -3071,6 +3137,34 @@ async def get_impact_analysis(
     analyzer = ImpactAnalyzer(project_dir_path)
     report = analyzer.build(description=description, files=files or [])
     written = analyzer.write(report)
+    payload = report.to_dict()
+    payload["report_file"] = str(written["markdown"])
+    payload["json_file"] = str(written["json"])
+    return payload
+
+
+@app.get("/api/analyze/regression-guard")
+async def get_regression_guard(
+    project_dir: str = ".",
+    description: str = "",
+    files: list[str] | None = Query(default=None),
+) -> dict[str, Any]:
+    project_dir_path = Path(project_dir).resolve()
+    builder = RegressionGuardBuilder(project_dir_path)
+    report = builder.build(description=description, files=files or [])
+    written = builder.write(report)
+    payload = report.to_dict()
+    payload["report_file"] = str(written["markdown"])
+    payload["json_file"] = str(written["json"])
+    return payload
+
+
+@app.get("/api/analyze/dependency-graph")
+async def get_dependency_graph(project_dir: str = ".") -> dict[str, Any]:
+    project_dir_path = Path(project_dir).resolve()
+    builder = DependencyGraphBuilder(project_dir_path)
+    report = builder.build()
+    written = builder.write(report)
     payload = report.to_dict()
     payload["report_file"] = str(written["markdown"])
     payload["json_file"] = str(written["json"])

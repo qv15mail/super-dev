@@ -53,7 +53,7 @@ class Scenario:
             lines.append(f"- WHEN {self.when}")
         if self.then:
             lines.append(f"- THEN {self.then}")
-        return "\n".join(lines) if lines else "- (TBD)"
+        return "\n".join(lines) if lines else "- DETAIL REQUIRED"
 
 
 @dataclass
@@ -76,7 +76,8 @@ class Requirement:
 
         if self.scenarios:
             for i, scenario in enumerate(self.scenarios, 1):
-                lines.append(f"#### Scenario {i}: {scenario.when or 'TBD'}")
+                scenario_title = scenario.when.strip() if scenario.when.strip() else f"Scenario {i}"
+                lines.append(f"#### Scenario {i}: {scenario_title}")
                 lines.append(scenario.to_markdown())
                 lines.append("")
 

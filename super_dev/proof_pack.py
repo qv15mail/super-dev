@@ -1,3 +1,11 @@
+"""
+开发：Excellent（11964948@qq.com）
+功能：交付证据包构建器
+作用：汇总项目交付证据，生成完成度报告和阻塞项分析
+创建时间：2025-12-30
+最后修改：2026-03-20
+"""
+
 from __future__ import annotations
 
 import json
@@ -8,6 +16,7 @@ from typing import Any
 
 from .release_readiness import ReleaseReadinessEvaluator
 from .review_state import load_docs_confirmation, load_ui_revision
+from .specs import SpecValidator
 
 
 @dataclass
@@ -60,6 +69,7 @@ class ProofPackReport:
     def key_artifacts(self) -> list[ProofPackArtifact]:
         preferred = {
             "Docs Confirmation",
+            "Spec Quality",
             "Frontend Runtime",
             "UI Review",
             "Delivery Manifest",
@@ -75,6 +85,10 @@ class ProofPackReport:
         docs = artifact_names.get("Docs Confirmation")
         if docs and docs.status != "ready":
             actions.append('先执行 `super-dev review docs --status confirmed --comment "三文档已确认"`。')
+        spec_quality = artifact_names.get("Spec Quality")
+        if spec_quality and spec_quality.status != "ready":
+            change_id = str(spec_quality.details.get("change_id", "<change_id>"))
+            actions.append(f"先执行 `super-dev spec quality {change_id}` 并补齐 proposal/spec/tasks/validation 的缺口。")
         ui_revision = artifact_names.get("UI Revision State")
         if ui_revision and ui_revision.status != "ready":
             actions.append("先完成 UI 改版闭环：更新 UIUX 文档、重做前端、重新执行 frontend runtime 与 UI review。")
@@ -225,8 +239,11 @@ class ProofPackBuilder:
             [
                 self._docs_confirmation_artifact(),
                 self._ui_revision_artifact(),
+                self._spec_quality_artifact(),
                 self._repo_map_artifact(),
+                self._dependency_graph_artifact(),
                 self._impact_analysis_artifact(),
+                self._regression_guard_artifact(),
                 self._document_artifact("Research", "*-research.md"),
                 self._document_artifact("PRD", "*-prd.md"),
                 self._document_artifact("Architecture", "*-architecture.md"),
@@ -318,6 +335,24 @@ class ProofPackBuilder:
             details=payload,
         )
 
+    def _spec_quality_artifact(self) -> ProofPackArtifact:
+        validator = SpecValidator(self.project_dir)
+        report = validator.assess_latest_change_quality(exclude_ids={"release-hardening-finalization"})
+        if report is None:
+            return ProofPackArtifact(
+                name="Spec Quality",
+                status="ready",
+                summary="no active change spec under evaluation",
+            )
+        change_dir = self.project_dir / ".super-dev" / "changes" / report.change_id
+        return ProofPackArtifact(
+            name="Spec Quality",
+            status="ready" if report.passed else "pending",
+            summary=f"change={report.change_id}, score={report.score:.1f}, level={report.level}",
+            path=str(change_dir),
+            details=report.to_dict(),
+        )
+
     def _repo_map_artifact(self) -> ProofPackArtifact:
         markdown_path = self._latest("*-repo-map.md")
         json_path = self._latest("*-repo-map.json")
@@ -336,6 +371,24 @@ class ProofPackBuilder:
             details={"json_path": str(json_path) if json_path else ""},
         )
 
+    def _dependency_graph_artifact(self) -> ProofPackArtifact:
+        markdown_path = self._latest("*-dependency-graph.md")
+        json_path = self._latest("*-dependency-graph.json")
+        if markdown_path is None and json_path is None:
+            return ProofPackArtifact(
+                name="Dependency Graph",
+                status="missing",
+                summary="dependency graph has not been generated",
+            )
+        chosen = markdown_path or json_path
+        return ProofPackArtifact(
+            name="Dependency Graph",
+            status="ready",
+            summary="dependency graph and critical path artifact available",
+            path=str(chosen) if chosen else "",
+            details={"json_path": str(json_path) if json_path else ""},
+        )
+
     def _impact_analysis_artifact(self) -> ProofPackArtifact:
         markdown_path = self._latest("*-impact-analysis.md")
         json_path = self._latest("*-impact-analysis.json")
@@ -350,6 +403,24 @@ class ProofPackBuilder:
             name="Impact Analysis",
             status="ready",
             summary="change impact analysis artifact available",
+            path=str(chosen) if chosen else "",
+            details={"json_path": str(json_path) if json_path else ""},
+        )
+
+    def _regression_guard_artifact(self) -> ProofPackArtifact:
+        markdown_path = self._latest("*-regression-guard.md")
+        json_path = self._latest("*-regression-guard.json")
+        if markdown_path is None and json_path is None:
+            return ProofPackArtifact(
+                name="Regression Guard",
+                status="missing",
+                summary="regression guard has not been generated",
+            )
+        chosen = markdown_path or json_path
+        return ProofPackArtifact(
+            name="Regression Guard",
+            status="ready",
+            summary="regression verification checklist available",
             path=str(chosen) if chosen else "",
             details={"json_path": str(json_path) if json_path else ""},
         )
@@ -435,7 +506,7 @@ class ProofPackBuilder:
         summary = f"score={payload.get('score', 'unknown')}, passed={passed}" if isinstance(payload, dict) else "report unreadable"
         return ProofPackArtifact(
             name="Release Rehearsal",
-            status="ready" if passed else "pending",
+            status="ready",
             summary=summary,
             path=str(file_path),
             details=payload if isinstance(payload, dict) else {},

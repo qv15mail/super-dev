@@ -8,6 +8,7 @@
 - `00-governance/`：知识分类、维护规范、评审机制
 - `product/`：需求洞察、PRD方法、业务闭环
 - `design/`：信息架构、交互原则、状态矩阵
+  - `design/ui-full-lifecycle-cross-platform-playbook.md`：UI 全流程与五端落地手册
 - `architecture/`：系统架构、演进路线、技术决策
 - `development/`：工程规范、模块边界、实现基线
 - `testing/`：测试策略、质量门禁、风险模型

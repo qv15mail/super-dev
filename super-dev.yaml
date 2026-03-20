@@ -2,8 +2,8 @@ author: ''
 backend: node
 cli: {}
 database: postgresql
-description: release readiness --json
-domain: saas
+description: 发布前证据闭环收口
+domain: ''
 experts:
 - PM
 - ARCHITECT
@@ -34,7 +34,7 @@ knowledge_allowed_domains:
 - docs.anthropic.com
 - docs.vllm.ai
 license: MIT
-name: test-project
+name: super-dev
 output_dir: output
 phases:
 - discovery
@@ -46,4 +46,4 @@ phases:
 - deployment
 platform: web
 quality_gate: 90
-version: 2.0.10
+version: 2.0.11

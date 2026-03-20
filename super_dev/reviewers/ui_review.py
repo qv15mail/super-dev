@@ -230,6 +230,41 @@ class UIReviewReviewer:
                 score -= 18
             else:
                 strengths.append("UI/UX 文档已覆盖组件生态、页面骨架与信任设计关键章节。")
+            advanced_sections = [
+                "多端适配与平台化设计策略",
+                "商业级设计质量门禁",
+                "精美 UI 执行工作流（Stitch 范式）",
+                "组件落地清单（Tailwind / 生态组件）",
+            ]
+            missing_advanced = [item for item in advanced_sections if item not in uiux_content]
+            if missing_advanced:
+                findings.append(
+                    UIReviewFinding(
+                        level="medium",
+                        title="UI/UX 文档缺少高级平台化章节",
+                        description="文档缺少多端策略或质量门禁，可能导致 Web/H5/小程序/APP/桌面端 的设计一致性与商业完成度不足。",
+                        recommendation="补充多端适配策略、组件库矩阵和商业级设计质量门禁章节。",
+                        evidence=missing_advanced,
+                    )
+                )
+                score -= 8
+            else:
+                strengths.append("UI/UX 文档已覆盖多端策略与商业级质量门禁。")
+            required_platform_terms = ("WEB", "H5", "微信小程序", "APP", "桌面端")
+            missing_platform_terms = [term for term in required_platform_terms if term not in uiux_content]
+            if missing_platform_terms:
+                findings.append(
+                    UIReviewFinding(
+                        level="high",
+                        title="多端策略未覆盖五端口径",
+                        description="UI/UX 文档未同时覆盖 Web/H5/微信小程序/APP/桌面端，平台策略存在缺口。",
+                        recommendation="在跨端策略章节补齐五端目标、交互差异与共享组件契约。",
+                        evidence=missing_platform_terms,
+                    )
+                )
+                score -= 12
+            else:
+                strengths.append("UI/UX 文档已覆盖 Web/H5/微信小程序/APP/桌面端 五端口径。")
 
         expected_library = profile["primary_library"]["name"].lower()
         package_json = self._read_package_json()
@@ -250,6 +285,25 @@ class UIReviewReviewer:
                 score -= 8
             else:
                 strengths.append(f"依赖层已基本匹配推荐组件生态：{profile['primary_library']['name']}。")
+            frontend_token_expectations = {
+                "miniapp": ("tdesign", "taro", "uniapp", "uni-app", "vant-weapp", "nutui"),
+                "desktop": ("electron", "tauri", "wails"),
+                "react-native": ("react-native", "nativewind", "tamagui"),
+                "flutter": ("flutter", "dart"),
+                "swiftui": ("swiftui", "xcode"),
+            }
+            expected_tokens = frontend_token_expectations.get(profile.get("normalized_frontend", ""))
+            if expected_tokens and not any(token in dependency_blob for token in expected_tokens):
+                findings.append(
+                    UIReviewFinding(
+                        level="medium",
+                        title="依赖层未体现目标端生态",
+                        description="当前目标端与依赖生态不一致，可能导致交互范式与平台能力无法落地。",
+                        recommendation="补齐目标端框架依赖，或在文档中声明跨端桥接方案与边界。",
+                        evidence=[profile.get("normalized_frontend", "")],
+                    )
+                )
+                score -= 8
         else:
             notes.append("未检测到 package.json，组件生态一致性仅做文档级审查。")
 

@@ -3,6 +3,7 @@
 """
 
 from pathlib import Path
+from urllib import error as urllib_error
 
 import pytest
 
@@ -143,6 +144,18 @@ class TestIntegrationManager:
         assert iflow.precondition_guidance
         assert any("/auth" in item for item in iflow.precondition_guidance)
         assert iflow.precondition_label in {"需宿主鉴权", "已检测到鉴权配置"}
+        assert any(item["status"] == "project-context-required" for item in iflow.precondition_items)
+        assert any(item["status"] == "host-auth-required" for item in iflow.precondition_items)
+
+        assert codex.precondition_status == "session-restart-required"
+        assert any("重开宿主会话" in item["label"] for item in codex.precondition_items)
+        assert any(item["status"] == "project-context-required" for item in codex.precondition_items)
+        assert any("目标项目目录" in item for item in codex.precondition_guidance)
+
+        cursor = by_host["cursor"]
+        assert cursor.precondition_status == "project-context-required"
+        assert cursor.precondition_items
+        assert any("目标项目" in item for item in cursor.precondition_guidance)
 
         kimi = by_host["kimi-cli"]
         assert kimi.category == "cli"
@@ -169,6 +182,122 @@ class TestIntegrationManager:
         assert kiro.host_protocol_mode == "official-steering"
         assert ".kiro/steering/super-dev.md" in kiro.official_project_surfaces
         assert "~/.kiro/steering/AGENTS.md" in kiro.official_user_surfaces
+
+        roo = by_host["roo-code"]
+        assert roo.host_protocol_mode == "official-skill"
+        assert roo.capability_labels["slash"] == "native"
+        assert roo.slash_command_file == ".roo/commands/super-dev.md"
+        assert ".roo/rules/super-dev.md" in roo.official_project_surfaces
+
+        copilot = by_host["vscode-copilot"]
+        assert copilot.host_protocol_mode == "official-context"
+        assert copilot.capability_labels["slash"] == "none"
+        assert copilot.trigger_command == "super-dev: <需求描述>"
+        assert ".github/copilot-instructions.md" in copilot.official_project_surfaces
+
+        aider = by_host["aider"]
+        assert aider.category == "cli"
+        assert aider.capability_labels["slash"] == "none"
+        assert aider.capability_labels["skills"] == "none"
+        assert "aider.chat/docs" in aider.official_docs_url
+
+    def test_adapter_profile_contains_docs_references_and_capability_labels(self, temp_project_dir: Path):
+        manager = IntegrationManager(temp_project_dir)
+        claude = manager.get_adapter_profile("claude-code")
+        codex = manager.get_adapter_profile("codex-cli")
+
+        assert len(claude.official_docs_references) >= 2
+        assert claude.capability_labels["slash"] == "native"
+        assert claude.capability_labels["skills"] == "none"
+        assert claude.capability_labels["trigger"] == "slash"
+
+        assert codex.capability_labels["slash"] == "none"
+        assert codex.capability_labels["trigger"] == "text"
+        assert codex.capability_labels["skills"] == "official"
+
+    def test_verify_official_docs_reports_reachability(self, temp_project_dir: Path, monkeypatch: pytest.MonkeyPatch):
+        manager = IntegrationManager(temp_project_dir)
+
+        class _Resp:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        def _fake_urlopen(req, timeout=0):
+            return _Resp()
+
+        monkeypatch.setattr("super_dev.integrations.manager.urllib_request.urlopen", _fake_urlopen)
+
+        result = manager.verify_official_docs("claude-code")
+        assert result["status"] == "verified"
+        assert result["reachable"] == result["checked"]
+        assert result["checked"] >= 2
+
+    def test_host_hardening_blueprint_contains_steps(self, temp_project_dir: Path):
+        manager = IntegrationManager(temp_project_dir)
+        codex = manager.host_hardening_blueprint("codex-cli")
+        claude = manager.host_hardening_blueprint("claude-code")
+
+        assert codex["trigger_mode"] == "text"
+        assert any("install skill" in step for step in codex["required_steps"])
+        assert claude["trigger_mode"] == "slash"
+        assert any("setup project slash command" in step for step in claude["required_steps"])
+
+    def test_compare_official_capabilities_reports_alignment(self, temp_project_dir: Path, monkeypatch: pytest.MonkeyPatch):
+        manager = IntegrationManager(temp_project_dir)
+
+        class _Resp:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self, size=-1):
+                return b"slash commands rules skills sub-agents instructions"
+
+        def _fake_urlopen(req, timeout=0):
+            return _Resp()
+
+        monkeypatch.setattr("super_dev.integrations.manager.urllib_request.urlopen", _fake_urlopen)
+
+        result = manager.compare_official_capabilities("claude-code")
+        assert result["status"] == "passed"
+        assert result["reachable_urls"] >= 1
+        checks = result["checks"]
+        assert checks["slash"]["ok"] is True
+        assert checks["rules"]["ok"] is True
+
+    def test_verify_official_docs_fallbacks_head_to_get(self, temp_project_dir: Path, monkeypatch: pytest.MonkeyPatch):
+        manager = IntegrationManager(temp_project_dir)
+
+        class _Resp:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        def _fake_urlopen(req, timeout=0, context=None):
+            method = req.get_method()
+            if method == "HEAD":
+                raise urllib_error.HTTPError(req.full_url, 405, "Method Not Allowed", {}, None)
+            return _Resp()
+
+        monkeypatch.setattr("super_dev.integrations.manager.urllib_request.urlopen", _fake_urlopen)
+
+        result = manager.verify_official_docs("claude-code")
+        assert result["status"] == "verified"
+        assert result["reachable"] == result["checked"]
+        assert all(item.get("method") == "GET" for item in result["details"])
 
     def test_qoder_rules_generated(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)
@@ -296,6 +425,23 @@ class TestIntegrationManager:
             assert "/super-dev" in content
             assert "$ARGUMENTS" in content
             assert 'super-dev create "$ARGUMENTS"' in content
+
+    def test_setup_injects_system_flow_contract_marker(self, temp_project_dir: Path):
+        manager = IntegrationManager(temp_project_dir)
+        files = manager.setup("qoder", force=True)
+        assert files
+        content = files[0].read_text(encoding="utf-8")
+        assert "SUPER_DEV_FLOW_CONTRACT_V1" in content
+        assert "PHASE_CHAIN: research>docs>docs_confirm>spec>frontend>preview_confirm>backend>quality>delivery" in content
+
+    def test_iflow_toml_slash_command_injects_flow_contract_comment(self, temp_project_dir: Path):
+        manager = IntegrationManager(temp_project_dir)
+        command_file = manager.setup_slash_command(target="iflow", force=True)
+        assert command_file is not None
+        assert command_file.suffix == ".toml"
+        content = command_file.read_text(encoding="utf-8")
+        assert "# SUPER_DEV_FLOW_CONTRACT_V1" in content
+        assert "# DOC_CONFIRM_GATE: required" in content
 
     def test_setup_global_slash_command(self, temp_project_dir: Path, monkeypatch: pytest.MonkeyPatch):
         fake_home = temp_project_dir / "fake-home"

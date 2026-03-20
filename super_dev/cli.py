@@ -13,12 +13,18 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import traceback
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal, cast
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 
 try:
     import requests
@@ -38,6 +44,7 @@ from .catalogs import (
     FULL_FRONTEND_TEMPLATE_IDS,
     HOST_COMMAND_CANDIDATES,
     HOST_TOOL_IDS,
+    PRIMARY_HOST_TOOL_IDS,
     PIPELINE_BACKEND_IDS,
     PIPELINE_FRONTEND_TEMPLATE_IDS,
     PLATFORM_IDS,
@@ -83,6 +90,7 @@ SUPPORTED_PIPELINE_BACKENDS = list(PIPELINE_BACKEND_IDS)
 SUPPORTED_DOMAINS = list(DOMAIN_IDS)
 SUPPORTED_CICD = list(CICD_PLATFORM_IDS)
 SUPPORTED_HOST_TOOLS = list(HOST_TOOL_IDS)
+PRIMARY_SUPPORTED_HOST_TOOLS = list(PRIMARY_HOST_TOOL_IDS)
 
 
 class SuperDevCLI:
@@ -351,11 +359,76 @@ class SuperDevCLI:
             help="以 JSON 格式输出",
         )
 
+        regression_guard_parser = subparsers.add_parser(
+            "regression-guard",
+            help="生成回归检查清单",
+            description="基于 Impact Analysis 输出可执行的回归检查清单，减少修复或重构带来的连带回退。",
+        )
+        regression_guard_parser.add_argument(
+            "description",
+            nargs="?",
+            default="",
+            help="变更描述，例如“修改登录流程”",
+        )
+        regression_guard_parser.add_argument(
+            "--files",
+            nargs="*",
+            default=[],
+            help="已知会修改的文件列表，用于提升回归清单准确度",
+        )
+        regression_guard_parser.add_argument(
+            "--path",
+            default=".",
+            help="项目路径 (默认为当前目录)",
+        )
+        regression_guard_parser.add_argument(
+            "-o", "--output",
+            help="输出报告路径（默认为 output/<project>-regression-guard.md 或 .json）",
+        )
+        regression_guard_parser.add_argument(
+            "-f", "--format",
+            choices=["json", "markdown", "text"],
+            default="text",
+            help="输出格式",
+        )
+        regression_guard_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 格式输出",
+        )
+
+        dependency_graph_parser = subparsers.add_parser(
+            "dependency-graph",
+            help="生成依赖图与关键路径",
+            description="输出内部依赖图、关键节点和关键路径，帮助宿主在改动前理解 blast radius。",
+        )
+        dependency_graph_parser.add_argument(
+            "path",
+            nargs="?",
+            default=".",
+            help="项目路径 (默认为当前目录)",
+        )
+        dependency_graph_parser.add_argument(
+            "-o", "--output",
+            help="输出报告路径（默认为 output/<project>-dependency-graph.md 或 .json）",
+        )
+        dependency_graph_parser.add_argument(
+            "-f", "--format",
+            choices=["json", "markdown", "text"],
+            default="text",
+            help="输出格式",
+        )
+        dependency_graph_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 格式输出",
+        )
+
         # workflow 命令
         workflow_parser = subparsers.add_parser(
             "workflow",
             help="运行工作流",
-            description="执行 Super Dev 6 阶段工作流"
+            description="执行 Super Dev 7 阶段工作流"
         )
         workflow_parser.add_argument(
             "--phase",
@@ -551,7 +624,7 @@ class SuperDevCLI:
         )
         integrate_parser.add_argument(
             "action",
-            choices=["list", "setup", "matrix", "smoke", "audit", "validate"],
+            choices=["list", "setup", "harden", "matrix", "smoke", "audit", "validate"],
             help="操作类型"
         )
         integrate_parser.add_argument(
@@ -602,6 +675,22 @@ class SuperDevCLI:
             "--actor",
             default="user",
             help="用于 validate：记录操作者（默认: user）"
+        )
+        integrate_parser.add_argument(
+            "--verify-docs",
+            action="store_true",
+            help="对宿主官方文档链接执行在线可达性核验（matrix/audit）",
+        )
+        integrate_parser.add_argument(
+            "--official-compare",
+            action="store_true",
+            help="对照官方文档内容校验 slash/rules/skills 能力声明（matrix/audit/harden）",
+        )
+        integrate_parser.add_argument(
+            "--parity-threshold",
+            type=float,
+            default=95.0,
+            help="宿主一致性总分门槛（默认: 95.0）",
         )
 
         # onboard 命令 - 首次安装向导（宿主选择 + 集成 + skill + slash）
@@ -1539,6 +1628,11 @@ class SuperDevCLI:
             "--impact",
             help="影响范围"
         )
+        spec_propose_parser.add_argument(
+            "--no-scaffold",
+            action="store_true",
+            help="仅创建 proposal，不生成 spec/plan/tasks/checklist 模板"
+        )
 
         # spec add-req
         spec_add_req_parser = spec_subparsers.add_parser(
@@ -1560,6 +1654,34 @@ class SuperDevCLI:
         spec_add_req_parser.add_argument(
             "description",
             help="需求描述"
+        )
+
+        spec_scaffold_parser = spec_subparsers.add_parser(
+            "scaffold",
+            help="为变更生成 spec/plan/tasks/checklist 四件套"
+        )
+        spec_scaffold_parser.add_argument(
+            "change_id",
+            help="变更 ID"
+        )
+        spec_scaffold_parser.add_argument(
+            "--force",
+            action="store_true",
+            help="强制覆盖已存在文件"
+        )
+
+        spec_quality_parser = spec_subparsers.add_parser(
+            "quality",
+            help="评估 Spec 完整度与质量分"
+        )
+        spec_quality_parser.add_argument(
+            "change_id",
+            help="变更 ID"
+        )
+        spec_quality_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 格式输出"
         )
 
         # spec archive
@@ -1817,12 +1939,45 @@ class SuperDevCLI:
         run_parser = subparsers.add_parser(
             "run",
             help="运行控制",
-            description="运行控制命令（如 pipeline 失败恢复）"
+            description="运行控制命令（恢复、状态、阶段回跳、阶段确认）"
         )
         run_parser.add_argument(
             "--resume",
             action="store_true",
             help="恢复最近一次失败的 pipeline 运行",
+        )
+        run_parser.add_argument(
+            "--status",
+            action="store_true",
+            help="查看当前流程状态、阶段确认与推荐下一步",
+        )
+        run_parser.add_argument(
+            "--phase",
+            help="从指定阶段继续执行（如 docs/spec/frontend/backend/quality/delivery）",
+        )
+        run_parser.add_argument(
+            "--jump",
+            help="跳转到指定阶段并继续执行（会先展示影响面）",
+        )
+        run_parser.add_argument(
+            "--confirm",
+            dest="confirm_phase",
+            help="确认指定阶段（docs/ui/architecture/quality/frontend/backend/delivery）",
+        )
+        run_parser.add_argument(
+            "--comment",
+            default="",
+            help="阶段确认备注",
+        )
+        run_parser.add_argument(
+            "--actor",
+            default="cli-user",
+            help="阶段确认操作者",
+        )
+        run_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="状态输出使用 JSON 格式",
         )
 
         policy_parser = subparsers.add_parser(
@@ -1847,6 +2002,11 @@ class SuperDevCLI:
         )
 
         return parser
+
+    def _public_host_targets(self, *, integration_manager) -> list[str]:
+        available_targets = [item.name for item in integration_manager.list_targets()]
+        public_targets = [target for target in PRIMARY_SUPPORTED_HOST_TOOLS if target in available_targets]
+        return public_targets or available_targets
 
     def run(self, args: list | None = None) -> int:
         """
@@ -2178,8 +2338,6 @@ super-dev start --idea "你的需求"
             self.console.print(f"[red]项目不存在: {project_path}[/red]")
             return 1
 
-        self.console.print(f"[cyan]正在分析项目: {project_path}[/cyan]")
-
         try:
             analyzer = ProjectAnalyzer(project_path)
             report = analyzer.analyze()
@@ -2193,11 +2351,13 @@ super-dev start --idea "你的需求"
 
                 if args.output:
                     Path(args.output).write_text(output, encoding="utf-8")
-                    self.console.print(f"[green]报告已保存到: {args.output}[/green]")
                 else:
-                    self.console.print(output)
+                    sys.stdout.write(output + "\n")
+                return 0
 
-            elif output_format == "markdown":
+            self.console.print(f"[cyan]正在分析项目: {project_path}[/cyan]")
+
+            if output_format == "markdown":
                 output = report.to_markdown()
 
                 if args.output:
@@ -2265,8 +2425,6 @@ super-dev start --idea "你的需求"
             self.console.print(f"[red]项目不存在: {project_path}[/red]")
             return 1
 
-        self.console.print(f"[cyan]正在生成 Repo Map: {project_path}[/cyan]")
-
         try:
             builder = RepoMapBuilder(project_path)
             report = builder.build()
@@ -2276,14 +2434,12 @@ super-dev start --idea "你的需求"
                 output = json.dumps(report.to_dict(), ensure_ascii=False, indent=2)
                 if args.output:
                     Path(args.output).write_text(output, encoding="utf-8")
-                    self.console.print(f"[green]Repo Map 已保存到: {args.output}[/green]")
                 else:
-                    paths = builder.write(report)
-                    self.console.print(f"[green]Repo Map 已生成[/green]")
-                    self.console.print(f"  Markdown: {paths['markdown']}")
-                    self.console.print(f"  JSON: {paths['json']}")
-                    self.console.print(output)
+                    builder.write(report)
+                    sys.stdout.write(output + "\n")
                 return 0
+
+            self.console.print(f"[cyan]正在生成 Repo Map: {project_path}[/cyan]")
 
             if output_format == "markdown":
                 output = report.to_markdown()
@@ -2335,8 +2491,6 @@ super-dev start --idea "你的需求"
             self.console.print("[yellow]请提供变更描述或 --files 列表，例如 `super-dev impact \"修改登录流程\" --files services/auth.py`[/yellow]")
             return 1
 
-        self.console.print(f"[cyan]正在分析变更影响范围: {project_path}[/cyan]")
-
         try:
             analyzer = ImpactAnalyzer(project_path)
             report = analyzer.build(description=args.description, files=list(args.files or []))
@@ -2346,14 +2500,12 @@ super-dev start --idea "你的需求"
                 output = json.dumps(report.to_dict(), ensure_ascii=False, indent=2)
                 if args.output:
                     Path(args.output).write_text(output, encoding="utf-8")
-                    self.console.print(f"[green]Impact Analysis 已保存到: {args.output}[/green]")
                 else:
-                    paths = analyzer.write(report)
-                    self.console.print("[green]Impact Analysis 已生成[/green]")
-                    self.console.print(f"  Markdown: {paths['markdown']}")
-                    self.console.print(f"  JSON: {paths['json']}")
-                    self.console.print(output)
+                    analyzer.write(report)
+                    sys.stdout.write(output + "\n")
                 return 0
+
+            self.console.print(f"[cyan]正在分析变更影响范围: {project_path}[/cyan]")
 
             if output_format == "markdown":
                 output = report.to_markdown()
@@ -2392,6 +2544,136 @@ super-dev start --idea "你的需求"
             self.console.print(f"[red]Impact Analysis 生成失败: {e}[/red]")
             self.logger.error(
                 "Impact Analysis 生成失败",
+                extra={"error_type": type(e).__name__, "error_message": str(e), "traceback": traceback.format_exc()},
+            )
+            if '--debug' in sys.argv or '-d' in sys.argv:
+                self.console.print(traceback.format_exc())
+            return 1
+
+    def _cmd_regression_guard(self, args) -> int:
+        """生成回归检查清单。"""
+        from .analyzer import RegressionGuardBuilder
+
+        project_path = Path(args.path).resolve()
+        if not project_path.exists():
+            self.console.print(f"[red]项目不存在: {project_path}[/red]")
+            return 1
+
+        if not args.description and not args.files:
+            self.console.print(
+                "[yellow]请提供变更描述或 --files 列表，例如 `super-dev regression-guard \"修改登录流程\" --files services/auth.py`[/yellow]"
+            )
+            return 1
+
+        try:
+            builder = RegressionGuardBuilder(project_path)
+            report = builder.build(description=args.description, files=list(args.files or []))
+            output_format = "json" if args.json else args.format
+
+            if output_format == "json":
+                output = json.dumps(report.to_dict(), ensure_ascii=False, indent=2)
+                if args.output:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                else:
+                    builder.write(report)
+                    sys.stdout.write(output + "\n")
+                return 0
+
+            self.console.print(f"[cyan]正在生成 Regression Guard: {project_path}[/cyan]")
+
+            if output_format == "markdown":
+                output = report.to_markdown()
+                if args.output:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                    self.console.print(f"[green]Regression Guard 已保存到: {args.output}[/green]")
+                else:
+                    paths = builder.write(report)
+                    self.console.print("[green]Regression Guard 已生成[/green]")
+                    self.console.print(f"  Markdown: {paths['markdown']}")
+                    self.console.print(f"  JSON: {paths['json']}")
+                return 0
+
+            paths = builder.write(report)
+            self.console.print("[green]Regression Guard 已生成[/green]")
+            self.console.print(f"  项目: {report.project_name}")
+            self.console.print(f"  风险等级: {report.risk_level}")
+            self.console.print(f"  Markdown: {paths['markdown']}")
+            self.console.print(f"  JSON: {paths['json']}")
+            self.console.print(f"  高优先级检查: {len(report.high_priority_checks)}")
+            self.console.print(f"  中优先级检查: {len(report.medium_priority_checks)}")
+            self.console.print(f"  支撑性检查: {len(report.supporting_checks)}")
+            self.console.print("")
+            self.console.print(f"[cyan]{report.summary}[/cyan]")
+            self.console.print("")
+            self.console.print("[cyan]推荐命令:[/cyan]")
+            for item in report.recommended_commands:
+                self.console.print(f"  - {item}")
+            return 0
+
+        except Exception as e:
+            self.console.print(f"[red]Regression Guard 生成失败: {e}[/red]")
+            self.logger.error(
+                "Regression Guard 生成失败",
+                extra={"error_type": type(e).__name__, "error_message": str(e), "traceback": traceback.format_exc()},
+            )
+            if '--debug' in sys.argv or '-d' in sys.argv:
+                self.console.print(traceback.format_exc())
+            return 1
+
+    def _cmd_dependency_graph(self, args) -> int:
+        """生成依赖图与关键路径。"""
+        from .analyzer import DependencyGraphBuilder
+
+        project_path = Path(args.path).resolve()
+        if not project_path.exists():
+            self.console.print(f"[red]项目不存在: {project_path}[/red]")
+            return 1
+
+        try:
+            builder = DependencyGraphBuilder(project_path)
+            report = builder.build()
+            output_format = "json" if args.json else args.format
+
+            if output_format == "json":
+                output = json.dumps(report.to_dict(), ensure_ascii=False, indent=2)
+                if args.output:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                else:
+                    builder.write(report)
+                    sys.stdout.write(output + "\n")
+                return 0
+
+            self.console.print(f"[cyan]正在生成 Dependency Graph: {project_path}[/cyan]")
+
+            if output_format == "markdown":
+                output = report.to_markdown()
+                if args.output:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                    self.console.print(f"[green]Dependency Graph 已保存到: {args.output}[/green]")
+                else:
+                    paths = builder.write(report)
+                    self.console.print("[green]Dependency Graph 已生成[/green]")
+                    self.console.print(f"  Markdown: {paths['markdown']}")
+                    self.console.print(f"  JSON: {paths['json']}")
+                return 0
+
+            paths = builder.write(report)
+            self.console.print("[green]Dependency Graph 已生成[/green]")
+            self.console.print(f"  项目: {report.project_name}")
+            self.console.print(f"  Markdown: {paths['markdown']}")
+            self.console.print(f"  JSON: {paths['json']}")
+            self.console.print(f"  节点数: {report.node_count}")
+            self.console.print(f"  边数: {report.edge_count}")
+            self.console.print(f"  关键节点: {len(report.critical_nodes)}")
+            self.console.print(f"  关键路径: {len(report.critical_paths)}")
+            self.console.print("")
+            self.console.print(f"[cyan]{report.summary}[/cyan]")
+            return 0
+
+        except Exception as e:
+            self.console.print(f"[red]Dependency Graph 生成失败: {e}[/red]")
+            self.logger.error(
+                "Dependency Graph 生成失败",
                 extra={"error_type": type(e).__name__, "error_message": str(e), "traceback": traceback.format_exc()},
             )
             if '--debug' in sys.argv or '-d' in sys.argv:
@@ -2882,9 +3164,30 @@ super-dev start --idea "你的需求"
 
     def _cmd_run(self, args) -> int:
         """运行控制命令（恢复等）"""
-        if not args.resume:
-            self.console.print("[yellow]请指定运行控制参数，例如: super-dev run --resume[/yellow]")
-            return 1
+        if getattr(args, "status", False):
+            return self._cmd_run_status(args)
+        confirm_phase = str(getattr(args, "confirm_phase", "") or "").strip()
+        if confirm_phase:
+            return self._cmd_run_confirm_phase(
+                phase_name=confirm_phase,
+                comment=str(getattr(args, "comment", "") or ""),
+                actor=str(getattr(args, "actor", "") or "cli-user"),
+            )
+        jump_stage = str(getattr(args, "jump", "") or "").strip()
+        if jump_stage:
+            return self._cmd_run_from_stage(stage_selector=jump_stage, show_impact=True)
+        phase_stage = str(getattr(args, "phase", "") or "").strip()
+        if phase_stage:
+            return self._cmd_run_from_stage(stage_selector=phase_stage, show_impact=False)
+        if getattr(args, "resume", False):
+            return self._cmd_run_resume(args)
+        self.console.print(
+            "[yellow]请指定运行控制参数，例如: super-dev run --status / --resume / --phase frontend / --jump docs / --confirm docs[/yellow]"
+        )
+        return 1
+
+    def _cmd_run_resume(self, args) -> int:
+        """恢复最近一次 pipeline 运行"""
 
         project_dir = Path.cwd()
         run_state = self._read_pipeline_run_state(project_dir)
@@ -2964,6 +3267,237 @@ super-dev start --idea "你的需求"
         self.console.print("[cyan]恢复最近一次失败/中断的 pipeline 运行...[/cyan]")
         self.console.print(f"[dim]需求: {pipeline_args.description}[/dim]")
         return self._cmd_pipeline(pipeline_args)
+
+    def _cmd_run_status(self, args) -> int:
+        project_dir = Path.cwd()
+        run_state = self._read_pipeline_run_state(project_dir) or {}
+        docs_state = self._get_docs_confirmation_state(project_dir)
+        ui_state = self._get_ui_revision_state(project_dir)
+        architecture_state = self._get_architecture_revision_state(project_dir)
+        quality_state = self._get_quality_revision_state(project_dir)
+        phase_confirmations = {}
+        if isinstance(run_state.get("phase_confirmations"), dict):
+            phase_confirmations = dict(run_state.get("phase_confirmations") or {})
+        payload = {
+            "run_state_exists": bool(run_state),
+            "status": str(run_state.get("status", "")).strip() or "unknown",
+            "description": str((run_state.get("pipeline_args") or {}).get("description", "")).strip(),
+            "failed_stage": str(run_state.get("failed_stage", "")).strip(),
+            "resume_from_stage": str(run_state.get("resume_from_stage", "")).strip(),
+            "docs_confirmation": docs_state,
+            "ui_revision": ui_state,
+            "architecture_revision": architecture_state,
+            "quality_revision": quality_state,
+            "phase_confirmations": phase_confirmations,
+            "recommended_next": self._run_status_recommendation(
+                run_state=run_state,
+                docs_state=docs_state,
+                ui_state=ui_state,
+                architecture_state=architecture_state,
+                quality_state=quality_state,
+            ),
+        }
+        if getattr(args, "json", False):
+            self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return 0
+        self.console.print("[cyan]Super Dev 流程状态[/cyan]")
+        self.console.print(f"  运行状态: {payload['status']}")
+        self.console.print(f"  当前需求: {payload['description'] or '-'}")
+        self.console.print(f"  失败阶段: {payload['failed_stage'] or '-'}")
+        self.console.print(f"  恢复起点: {payload['resume_from_stage'] or '-'}")
+        self.console.print(f"  文档确认: {self._docs_confirmation_label(docs_state['status'])}")
+        self.console.print(f"  UI 改版: {self._review_status_label(ui_state['status'], review_type='ui')}")
+        self.console.print(
+            f"  架构返工: {self._review_status_label(architecture_state['status'], review_type='architecture')}"
+        )
+        self.console.print(
+            f"  质量返工: {self._review_status_label(quality_state['status'], review_type='quality')}"
+        )
+        if phase_confirmations:
+            self.console.print("  阶段确认:")
+            for phase, item in sorted(phase_confirmations.items()):
+                status = str((item or {}).get("status", "")).strip() or "pending_review"
+                actor = str((item or {}).get("actor", "")).strip() or "-"
+                self.console.print(f"    - {phase}: {self._review_status_label(status)} | {actor}")
+        self.console.print(f"  下一步: {payload['recommended_next']}")
+        return 0
+
+    def _cmd_run_confirm_phase(self, *, phase_name: str, comment: str, actor: str) -> int:
+        project_dir = Path.cwd()
+        normalized = phase_name.strip().lower()
+        if normalized in {"docs", "document", "documents"}:
+            path = save_docs_confirmation(
+                project_dir,
+                {
+                    "status": "confirmed",
+                    "comment": comment or "三文档确认通过",
+                    "actor": actor,
+                    "run_id": "",
+                },
+            )
+            self.console.print(f"[green]✓[/green] 已确认 docs 阶段: {path}")
+            return 0
+        if normalized in {"ui", "frontend-ui"}:
+            path = save_ui_revision(
+                project_dir,
+                {
+                    "status": "confirmed",
+                    "comment": comment or "UI 阶段确认通过",
+                    "actor": actor,
+                    "run_id": "",
+                },
+            )
+            self.console.print(f"[green]✓[/green] 已确认 ui 阶段: {path}")
+            return 0
+        if normalized in {"architecture", "arch"}:
+            path = save_architecture_revision(
+                project_dir,
+                {
+                    "status": "confirmed",
+                    "comment": comment or "架构阶段确认通过",
+                    "actor": actor,
+                    "run_id": "",
+                },
+            )
+            self.console.print(f"[green]✓[/green] 已确认 architecture 阶段: {path}")
+            return 0
+        if normalized in {"quality", "qa"}:
+            path = save_quality_revision(
+                project_dir,
+                {
+                    "status": "confirmed",
+                    "comment": comment or "质量阶段确认通过",
+                    "actor": actor,
+                    "run_id": "",
+                },
+            )
+            self.console.print(f"[green]✓[/green] 已确认 quality 阶段: {path}")
+            return 0
+        run_state = self._read_pipeline_run_state(project_dir) or {}
+        phase_confirmations = run_state.get("phase_confirmations")
+        if not isinstance(phase_confirmations, dict):
+            phase_confirmations = {}
+        phase_confirmations[normalized] = {
+            "status": "confirmed",
+            "comment": comment or f"{normalized} 阶段确认通过",
+            "actor": actor,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        run_state["phase_confirmations"] = phase_confirmations
+        run_state["updated_at"] = datetime.now(timezone.utc).isoformat()
+        self._write_pipeline_run_state(project_dir, run_state)
+        self.console.print(f"[green]✓[/green] 已确认阶段: {normalized}")
+        return 0
+
+    def _cmd_run_from_stage(self, *, stage_selector: str, show_impact: bool) -> int:
+        project_dir = Path.cwd()
+        run_state = self._read_pipeline_run_state(project_dir)
+        if not run_state:
+            self.console.print("[red]未找到可恢复运行记录，无法按阶段继续[/red]")
+            self.console.print("[dim]请先执行一次 super-dev \"需求\" 或 super-dev pipeline \"需求\"[/dim]")
+            return 1
+        stage_number = self._resolve_pipeline_stage_selector(stage_selector)
+        if stage_number is None:
+            self.console.print(f"[red]无法识别阶段: {stage_selector}[/red]")
+            self.console.print(
+                "[dim]可用阶段: research/docs/spec/frontend/backend/quality/delivery/rehearsal[/dim]"
+            )
+            return 1
+        if show_impact:
+            impact_lines = self._stage_jump_impact(stage_number)
+            self.console.print(f"[cyan]阶段回跳影响分析（目标: {stage_selector} / 第 {stage_number} 阶段）[/cyan]")
+            for line in impact_lines:
+                self.console.print(f"  - {line}")
+        run_state["status"] = "failed"
+        run_state["failed_stage"] = str(stage_number)
+        run_state["resume_from_stage"] = str(stage_number)
+        run_state["next_stage"] = str(stage_number)
+        run_state["updated_at"] = datetime.now(timezone.utc).isoformat()
+        self._write_pipeline_run_state(project_dir, run_state)
+        self.console.print(f"[cyan]将从第 {stage_number} 阶段继续执行...[/cyan]")
+        return self._cmd_run_resume(argparse.Namespace(resume=True))
+
+    def _run_status_recommendation(
+        self,
+        *,
+        run_state: dict[str, Any],
+        docs_state: dict[str, Any],
+        ui_state: dict[str, Any],
+        architecture_state: dict[str, Any],
+        quality_state: dict[str, Any],
+    ) -> str:
+        if docs_state.get("status") != "confirmed":
+            return 'super-dev review docs --status confirmed --comment "三文档已确认"'
+        if ui_state.get("status") == "revision_requested":
+            return 'super-dev review ui --status confirmed --comment "UI 改版已通过"'
+        if architecture_state.get("status") == "revision_requested":
+            return 'super-dev review architecture --status confirmed --comment "架构返工已通过"'
+        if quality_state.get("status") == "revision_requested":
+            return 'super-dev review quality --status confirmed --comment "质量返工已通过"'
+        status = str(run_state.get("status", "")).strip().lower()
+        if status in {"failed", "running", "waiting_confirmation", "waiting_ui_revision", "waiting_architecture_revision", "waiting_quality_revision"}:
+            return "super-dev run --resume"
+        return "super-dev run --phase frontend"
+
+    def _resolve_pipeline_stage_selector(self, value: str) -> int | None:
+        normalized = str(value).strip().lower()
+        stage_map = {
+            "research": 0,
+            "discovery": 0,
+            "docs": 1,
+            "document": 1,
+            "documents": 1,
+            "spec": 2,
+            "frontend": 3,
+            "ui": 3,
+            "backend": 4,
+            "implementation": 4,
+            "redteam": 5,
+            "quality": 6,
+            "qa": 6,
+            "review": 7,
+            "prompt": 8,
+            "cicd": 9,
+            "deploy-fix": 10,
+            "delivery": 11,
+            "rehearsal": 12,
+        }
+        if normalized.isdigit():
+            stage_number = int(normalized)
+            if 0 <= stage_number <= 12:
+                return stage_number
+            return None
+        return stage_map.get(normalized)
+
+    def _stage_jump_impact(self, stage_number: int) -> list[str]:
+        if stage_number <= 1:
+            return [
+                "将重做 research / PRD / Architecture / UIUX",
+                "会使 Spec 与任务拆解重新计算",
+                "后续实现与质量验证需要全量重跑",
+            ]
+        if stage_number == 2:
+            return [
+                "将重算 Spec 与 tasks",
+                "前后端实现任务依赖会刷新",
+                "建议在继续前确认三文档未变更",
+            ]
+        if stage_number == 3:
+            return [
+                "将重做前端骨架与预览验证",
+                "可能触发 UI 改版门重新确认",
+            ]
+        if stage_number == 4:
+            return [
+                "将重做实现骨架与任务执行",
+                "后续红队与质量门禁会重新执行",
+            ]
+        if stage_number >= 5:
+            return [
+                "将从质量/交付后段开始重跑",
+                "不会重建前置文档与 spec，除非门禁判定需要回退",
+            ]
+        return ["将按目标阶段继续执行并自动校验前置门禁"]
 
     def _cmd_policy(self, args) -> int:
         """Policy DSL 管理"""
@@ -4221,6 +4755,7 @@ super-dev start --idea "你的需求"
         def _persist_run_state(status: str, extra: dict[str, Any] | None = None) -> None:
             payload = {
                 "status": status,
+                "status_normalized": self._normalize_run_status(status),
                 "project_name": project_name,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
                 "pipeline_args": pipeline_args_snapshot,
@@ -4363,6 +4898,24 @@ super-dev start --idea "你的需求"
                 )
                 self.console.print(f"[dim]恢复审计报告: {resume_audit_files['markdown']}[/dim]")
 
+            knowledge_dir = project_dir / "knowledge"
+            knowledge_cache_file = output_dir / "knowledge-cache" / f"{project_name}-knowledge-bundle.json"
+            knowledge_file_count = 0
+            if knowledge_dir.exists():
+                knowledge_file_count = sum(
+                    1
+                    for path in knowledge_dir.rglob("*")
+                    if path.is_file() and path.suffix.lower() in {".md", ".txt", ".yaml", ".yml"}
+                )
+            self.console.print(
+                f"[dim]知识库扫描: knowledge 文件 {knowledge_file_count} 条 | "
+                f"缓存 {'存在' if knowledge_cache_file.exists() else '不存在'}[/dim]"
+            )
+            _update_run_context(
+                knowledge_file_count=knowledge_file_count,
+                knowledge_cache_exists=knowledge_cache_file.exists(),
+            )
+
             # ========== 第 0 阶段: 需求增强 ==========
             _start_stage("0", "需求增强")
             if _should_skip_for_resume(0):
@@ -4463,6 +5016,11 @@ super-dev start --idea "你的需求"
                     backend=args.backend,
                     domain=args.domain,
                     language_preferences=pipeline_config.language_preferences,
+                    knowledge_summary=(
+                        knowledge_bundle.get("research_summary", {})
+                        if isinstance(knowledge_bundle, dict)
+                        else {}
+                    ),
                 )
 
                 # 生成文档内容
@@ -5542,11 +6100,250 @@ super-dev start --idea "你的需求"
                 self.console.print(f"  - {file_path}")
             return 0
 
+        if args.action == "harden":
+            from .skills import SkillManager
+
+            project_dir = Path.cwd()
+            available_targets = [item.name for item in manager.list_targets()]
+            detected_meta: dict[str, list[str]] = {}
+            if args.target:
+                targets = [args.target]
+            elif args.all:
+                targets = available_targets
+            else:
+                targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
+                if not targets:
+                    targets = available_targets
+            hardening_results: dict[str, Any] = {}
+            skill_manager = SkillManager(project_dir)
+            official_compare_enabled = bool(getattr(args, "official_compare", False)) or True
+            usage_profiles: dict[str, dict[str, Any]] = {}
+            for target in targets:
+                profile = manager.get_adapter_profile(target)
+                plan = manager.host_hardening_blueprint(target)
+                usage_profiles[target] = self._build_host_usage_profile(
+                    integration_manager=manager,
+                    target=target,
+                )
+                written_files = [str(path) for path in manager.setup(target=target, force=True)]
+                slash_file = manager.setup_slash_command(target=target, force=True)
+                if slash_file is not None:
+                    written_files.append(str(slash_file))
+                global_protocol = manager.setup_global_protocol(target=target, force=True)
+                if global_protocol is not None:
+                    written_files.append(str(global_protocol))
+                global_slash = manager.setup_global_slash_command(target=target, force=True)
+                if global_slash is not None:
+                    written_files.append(str(global_slash))
+                skill_install: dict[str, Any] = {"required": manager.requires_skill(target), "installed": False}
+                if manager.requires_skill(target):
+                    try:
+                        skill_path = skill_manager.install(
+                            source="super-dev",
+                            target=target,
+                            name="super-dev-core",
+                            force=True,
+                        ).path
+                        skill_install = {
+                            "required": True,
+                            "installed": True,
+                            "path": str(skill_path),
+                        }
+                    except Exception as exc:
+                        skill_install = {
+                            "required": True,
+                            "installed": False,
+                            "error": str(exc),
+                        }
+                docs_check = manager.verify_official_docs(target) if bool(getattr(args, "verify_docs", False)) else {}
+                official_compare = (
+                    manager.compare_official_capabilities(target, timeout_seconds=8.0)
+                    if official_compare_enabled
+                    else {}
+                )
+                hardening_results[target] = {
+                    "host": target,
+                    "category": profile.category,
+                    "adapter_mode": profile.adapter_mode,
+                    "plan": plan,
+                    "written_files": written_files,
+                    "skill_install": skill_install,
+                    "contract": {},
+                    "docs_check": docs_check,
+                    "official_compare": official_compare,
+                }
+            report = self._collect_host_diagnostics(
+                project_dir=project_dir,
+                targets=targets,
+                skill_name="super-dev-core",
+                check_integrate=True,
+                check_skill=True,
+                check_slash=True,
+            )
+            compatibility = self._build_compatibility_summary(
+                report=report,
+                targets=targets,
+                check_integrate=True,
+                check_skill=True,
+                check_slash=True,
+            )
+            hosts_report = report.get("hosts", {}) if isinstance(report, dict) else {}
+            if isinstance(hosts_report, dict):
+                for target in targets:
+                    host_info = hosts_report.get(target, {})
+                    checks = host_info.get("checks", {}) if isinstance(host_info, dict) else {}
+                    contract = checks.get("contract", {}) if isinstance(checks, dict) else {}
+                    item = hardening_results.get(target, {})
+                    if isinstance(item, dict):
+                        item["contract"] = contract if isinstance(contract, dict) else {}
+            payload = {
+                "project_dir": str(project_dir),
+                "detected_hosts": targets if not detected_meta else list(detected_meta.keys()),
+                "detection_details": detected_meta,
+                "selected_targets": targets,
+                "hardening_results": hardening_results,
+                "report": report,
+                "compatibility": compatibility,
+                "usage_profiles": usage_profiles,
+            }
+            official_compare_summary = self._build_official_compare_summary(hardening_results=hardening_results)
+            host_parity_summary = self._build_host_parity_summary(usage_profiles=usage_profiles)
+            host_gate_summary = self._build_host_gate_summary(report=report, targets=targets)
+            host_runtime_script_summary = self._build_host_runtime_script_summary(usage_profiles=usage_profiles)
+            host_recovery_summary = self._build_host_recovery_summary(
+                targets=targets,
+                usage_profiles=usage_profiles,
+            )
+            payload["official_compare_summary"] = official_compare_summary
+            payload["host_parity_summary"] = host_parity_summary
+            payload["host_gate_summary"] = host_gate_summary
+            payload["host_runtime_script_summary"] = host_runtime_script_summary
+            payload["host_recovery_summary"] = host_recovery_summary
+            parity_index = self._build_host_parity_index(
+                threshold=float(getattr(args, "parity_threshold", 95.0)),
+                official_compare_summary=official_compare_summary,
+                host_parity_summary=host_parity_summary,
+                host_gate_summary=host_gate_summary,
+                host_runtime_script_summary=host_runtime_script_summary,
+                host_recovery_summary=host_recovery_summary,
+                compatibility=compatibility,
+            )
+            payload["host_parity_index"] = parity_index
+            if not bool(args.no_save):
+                report_files = self._write_host_hardening_report(project_dir=project_dir, payload=payload)
+                payload["report_files"] = {name: str(path) for name, path in report_files.items()}
+            if args.json:
+                sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+                return 0 if bool(report.get("overall_ready", False)) and bool(parity_index.get("passed", False)) else 1
+
+            self.console.print("[cyan]Super Dev 宿主系统级深适配[/cyan]")
+            self.console.print(f"[dim]项目目录: {project_dir}[/dim]")
+            self.console.print(
+                f"[cyan]兼容性评分: {compatibility['overall_score']:.2f}/100 "
+                f"(ready {compatibility['ready_hosts']}/{compatibility['total_hosts']})[/cyan]"
+            )
+            self.console.print(
+                f"[cyan]流程一致性: {compatibility.get('flow_consistency_score', 0):.2f}/100 "
+                f"({compatibility.get('flow_consistent_hosts', 0)}/{compatibility.get('total_hosts', 0)})[/cyan]"
+            )
+            self.console.print(
+                f"[cyan]官方文档对照: {official_compare_summary.get('score', 0):.2f}/100 "
+                f"({official_compare_summary.get('passed', 0)}/{official_compare_summary.get('total', 0)})[/cyan]"
+            )
+            self.console.print(
+                f"[cyan]宿主体验一致性: {host_parity_summary.get('score', 0):.2f}/100 "
+                f"({host_parity_summary.get('passed', 0)}/{host_parity_summary.get('total', 0)})[/cyan]"
+            )
+            self.console.print(
+                f"[cyan]确认门禁一致性: {host_gate_summary.get('score', 0):.2f}/100 "
+                f"({host_gate_summary.get('passed', 0)}/{host_gate_summary.get('total', 0)})[/cyan]"
+            )
+            self.console.print(
+                f"[cyan]真人验收脚本一致性: {host_runtime_script_summary.get('score', 0):.2f}/100 "
+                f"({host_runtime_script_summary.get('passed', 0)}/{host_runtime_script_summary.get('total', 0)})[/cyan]"
+            )
+            self.console.print(
+                f"[cyan]失败恢复一致性: {host_recovery_summary.get('score', 0):.2f}/100 "
+                f"({host_recovery_summary.get('passed', 0)}/{host_recovery_summary.get('total', 0)})[/cyan]"
+            )
+            self.console.print(
+                f"[cyan]Host Parity Index: {parity_index.get('score', 0):.2f}/100 "
+                f"(threshold {parity_index.get('threshold', 95.0):.2f}, "
+                f"{'pass' if bool(parity_index.get('passed', False)) else 'fail'})[/cyan]"
+            )
+            for target in targets:
+                item = hardening_results.get(target, {})
+                contract = item.get("contract", {})
+                ok = bool((contract or {}).get("ok", False))
+                self.console.print("")
+                self.console.print(
+                    f"[cyan]- {target}[/cyan] "
+                    f"{'[green]contract ok[/green]' if ok else '[yellow]needs review[/yellow]'}"
+                )
+                written_files = item.get("written_files", [])
+                if isinstance(written_files, list) and written_files:
+                    self.console.print("  已更新:")
+                    for file_path in written_files:
+                        self.console.print(f"    - {file_path}")
+                skill_install = item.get("skill_install", {})
+                if isinstance(skill_install, dict) and bool(skill_install.get("required", False)):
+                    if bool(skill_install.get("installed", False)):
+                        self.console.print(f"  Skill 安装: [green]ok[/green] ({skill_install.get('path', '-')})")
+                    else:
+                        self.console.print(f"  Skill 安装: [yellow]failed[/yellow] ({skill_install.get('error', '-')})")
+                docs_check = item.get("docs_check", {})
+                if isinstance(docs_check, dict) and docs_check:
+                    self.console.print(
+                        f"  文档在线核验: {docs_check.get('status', 'unknown')} "
+                        f"({docs_check.get('reachable', 0)}/{docs_check.get('checked', 0)})"
+                    )
+                official_compares = payload.get("official_compares", {})
+                if isinstance(official_compares, dict):
+                    compare = official_compares.get(target, {})
+                    if isinstance(compare, dict) and compare:
+                        self.console.print(
+                            f"  官方对照: {compare.get('status', 'unknown')} "
+                            f"({compare.get('reachable_urls', 0)}/{compare.get('checked_urls', 0)})"
+                        )
+                official_compare = item.get("official_compare", {})
+                if isinstance(official_compare, dict) and official_compare:
+                    self.console.print(
+                        f"  官方对照: {official_compare.get('status', 'unknown')} "
+                        f"({official_compare.get('reachable_urls', 0)}/{official_compare.get('checked_urls', 0)})"
+                    )
+                invalid = (contract or {}).get("invalid_surfaces", {})
+                if isinstance(invalid, dict) and invalid:
+                    self.console.print("  [yellow]仍有不一致面[/yellow]:")
+                    for surface_key in invalid.keys():
+                        self.console.print(f"    - {surface_key}")
+                else:
+                    self.console.print("  [green]✓[/green] 接入面已与系统流程契约对齐")
+            if "report_files" in payload:
+                report_files = payload["report_files"]
+                if isinstance(report_files, dict):
+                    self.console.print("")
+                    self.console.print("[cyan]深适配报告[/cyan]")
+                    for name, path in report_files.items():
+                        self.console.print(f"  - {name}: {path}")
+            return 0 if bool(report.get("overall_ready", False)) and bool(parity_index.get("passed", False)) else 1
+
         if args.action == "matrix":
             targets: list[str] | None = [args.target] if args.target else None
             profiles = manager.list_adapter_profiles(targets=targets)
+            docs_checks: dict[str, Any] = {}
+            official_compares: dict[str, Any] = {}
+            if bool(getattr(args, "verify_docs", False)):
+                for profile in profiles:
+                    docs_checks[profile.host] = manager.verify_official_docs(profile.host)
+            if bool(getattr(args, "official_compare", False)):
+                for profile in profiles:
+                    official_compares[profile.host] = manager.compare_official_capabilities(profile.host)
             if args.json:
-                payload = [profile.to_dict() for profile in profiles]
+                payload = {
+                    "profiles": [profile.to_dict() for profile in profiles],
+                    "docs_checks": docs_checks,
+                    "official_compares": official_compares,
+                }
                 sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
                 return 0
 
@@ -5563,6 +6360,23 @@ super-dev start --idea "你的需求"
                 docs_badge = "verified" if profile.docs_verified else "pending"
                 docs_url = profile.official_docs_url or "-"
                 self.console.print(f"  官方文档: {docs_url} ({docs_badge})")
+                if profile.official_docs_references:
+                    self.console.print(f"  官方参考: {len(profile.official_docs_references)} 条")
+                labels = profile.capability_labels or {}
+                capability_summary = ", ".join(f"{key}={value}" for key, value in labels.items()) if labels else "-"
+                self.console.print(f"  能力标签: {capability_summary}")
+                if profile.host in docs_checks:
+                    docs_check = docs_checks[profile.host]
+                    self.console.print(
+                        f"  文档在线核验: {docs_check.get('status', 'unknown')} "
+                        f"({docs_check.get('reachable', 0)}/{docs_check.get('checked', 0)})"
+                    )
+                if profile.host in official_compares:
+                    compare = official_compares[profile.host]
+                    self.console.print(
+                        f"  官方对照: {compare.get('status', 'unknown')} "
+                        f"({compare.get('reachable_urls', 0)}/{compare.get('checked_urls', 0)})"
+                    )
                 self.console.print(f"  主入口: {profile.primary_entry}")
                 self.console.print(f"  触发命令: {profile.trigger_command}")
                 self.console.print(f"  触发上下文: {profile.trigger_context}")
@@ -5688,13 +6502,47 @@ super-dev start --idea "你的需求"
                 "usage_profiles": usage_profiles,
                 "repair_actions": repair_actions,
             }
+            payload["host_parity_summary"] = self._build_host_parity_summary(usage_profiles=usage_profiles)
+            payload["host_gate_summary"] = self._build_host_gate_summary(report=report, targets=targets)
+            payload["host_runtime_script_summary"] = self._build_host_runtime_script_summary(usage_profiles=usage_profiles)
+            payload["host_recovery_summary"] = self._build_host_recovery_summary(
+                targets=targets,
+                usage_profiles=usage_profiles,
+            )
+            if bool(getattr(args, "verify_docs", False)):
+                payload["docs_checks"] = {
+                    target: manager.verify_official_docs(target)
+                    for target in targets
+                }
+            if bool(getattr(args, "official_compare", False)):
+                official_compares = {
+                    target: manager.compare_official_capabilities(target, timeout_seconds=8.0)
+                    for target in targets
+                }
+                payload["official_compares"] = official_compares
+                payload["official_compare_summary"] = self._build_official_compare_summary(
+                    hardening_results={
+                        target: {"official_compare": official_compares.get(target, {})}
+                        for target in targets
+                    }
+                )
+            payload["host_parity_index"] = self._build_host_parity_index(
+                threshold=float(getattr(args, "parity_threshold", 95.0)),
+                official_compare_summary=payload.get("official_compare_summary", {}),
+                host_parity_summary=payload.get("host_parity_summary", {}),
+                host_gate_summary=payload.get("host_gate_summary", {}),
+                host_runtime_script_summary=payload.get("host_runtime_script_summary", {}),
+                host_recovery_summary=payload.get("host_recovery_summary", {}),
+                compatibility=compatibility,
+            )
             if not bool(args.no_save):
                 report_files = self._write_host_surface_audit_report(project_dir=project_dir, payload=payload)
                 payload["report_files"] = {name: str(path) for name, path in report_files.items()}
 
             if args.json:
                 sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
-                return 0 if bool(report.get("overall_ready", False)) else 1
+                parity_index = payload.get("host_parity_index", {})
+                return 0 if bool(report.get("overall_ready", False)) and bool((parity_index or {}).get("passed", False)) else 1
 
             self.console.print("[cyan]Super Dev 宿主 Surface 审计[/cyan]")
             self.console.print(f"[dim]项目目录: {project_dir}[/dim]")
@@ -5706,6 +6554,47 @@ super-dev start --idea "你的需求"
                 f"[cyan]兼容性评分: {compatibility['overall_score']:.2f}/100 "
                 f"(ready {compatibility['ready_hosts']}/{compatibility['total_hosts']})[/cyan]"
             )
+            self.console.print(
+                f"[cyan]流程一致性: {compatibility.get('flow_consistency_score', 0):.2f}/100 "
+                f"({compatibility.get('flow_consistent_hosts', 0)}/{compatibility.get('total_hosts', 0)})[/cyan]"
+            )
+            host_parity = payload.get("host_parity_summary", {})
+            if isinstance(host_parity, dict) and host_parity:
+                self.console.print(
+                    f"[cyan]宿主体验一致性: {host_parity.get('score', 0):.2f}/100 "
+                    f"({host_parity.get('passed', 0)}/{host_parity.get('total', 0)})[/cyan]"
+                )
+            host_gate = payload.get("host_gate_summary", {})
+            if isinstance(host_gate, dict) and host_gate:
+                self.console.print(
+                    f"[cyan]确认门禁一致性: {host_gate.get('score', 0):.2f}/100 "
+                    f"({host_gate.get('passed', 0)}/{host_gate.get('total', 0)})[/cyan]"
+                )
+            host_runtime_script = payload.get("host_runtime_script_summary", {})
+            if isinstance(host_runtime_script, dict) and host_runtime_script:
+                self.console.print(
+                    f"[cyan]真人验收脚本一致性: {host_runtime_script.get('score', 0):.2f}/100 "
+                    f"({host_runtime_script.get('passed', 0)}/{host_runtime_script.get('total', 0)})[/cyan]"
+                )
+            host_recovery = payload.get("host_recovery_summary", {})
+            if isinstance(host_recovery, dict) and host_recovery:
+                self.console.print(
+                    f"[cyan]失败恢复一致性: {host_recovery.get('score', 0):.2f}/100 "
+                    f"({host_recovery.get('passed', 0)}/{host_recovery.get('total', 0)})[/cyan]"
+                )
+            official_summary = payload.get("official_compare_summary", {})
+            if isinstance(official_summary, dict) and official_summary:
+                self.console.print(
+                    f"[cyan]官方文档对照: {official_summary.get('score', 0):.2f}/100 "
+                    f"({official_summary.get('passed', 0)}/{official_summary.get('total', 0)})[/cyan]"
+                )
+            parity_index = payload.get("host_parity_index", {})
+            if isinstance(parity_index, dict) and parity_index:
+                self.console.print(
+                    f"[cyan]Host Parity Index: {parity_index.get('score', 0):.2f}/100 "
+                    f"(threshold {parity_index.get('threshold', 95.0):.2f}, "
+                    f"{'pass' if bool(parity_index.get('passed', False)) else 'fail'})[/cyan]"
+                )
             if args.repair and repair_actions:
                 self.console.print("[cyan]修复动作[/cyan]")
                 for target, actions in repair_actions.items():
@@ -5746,7 +6635,7 @@ super-dev start --idea "你的需求"
                     self.console.print("[cyan]审计报告[/cyan]")
                     for name, path in report_files.items():
                         self.console.print(f"  - {name}: {path}")
-            return 0 if bool(report.get("overall_ready", False)) else 1
+            return 0 if bool(report.get("overall_ready", False)) and bool((parity_index or {}).get("passed", False)) else 1
 
         if args.action == "validate":
             project_dir = Path.cwd()
@@ -6083,14 +6972,14 @@ super-dev start --idea "你的需求"
                 if key in ("c", "C"):
                     selected = {
                         target for target in available_targets
-                        if target in {"claude-code", "codebuddy-cli", "codex-cli", "cursor-cli", "gemini-cli", "iflow", "kimi-cli", "kiro-cli", "opencode", "qoder-cli"}
+                        if integration_manager.get_adapter_profile(target).category == "cli"
                     }
                     live.update(renderable(), refresh=True)
                     continue
                 if key in ("i", "I"):
                     selected = {
                         target for target in available_targets
-                        if target in {"antigravity", "codebuddy", "cursor", "kiro", "qoder", "trae", "windsurf"}
+                        if integration_manager.get_adapter_profile(target).category == "ide"
                     }
                     live.update(renderable(), refresh=True)
                     continue
@@ -6135,7 +7024,8 @@ super-dev start --idea "你的需求"
         intro = (
             "安装后直接在宿主里触发。\n"
             "支持 slash 的宿主使用 `/super-dev 你的需求`。\n"
-            "不支持 slash 的宿主使用 `super-dev: 你的需求` 或 `super-dev：你的需求`。"
+            f"不支持 slash 的宿主使用 `super-dev: 你的需求` 或 `super-dev：你的需求`。\n"
+            f"当前版本内置 {len(available_targets)} 个宿主适配配置。"
         )
         self.console.print(Panel(intro, title="Super Dev 安装向导", padding=(1, 2)))
 
@@ -6172,7 +7062,7 @@ super-dev start --idea "你的需求"
             return
 
         integration_manager = IntegrationManager(Path.cwd())
-        available_targets = [item.name for item in integration_manager.list_targets()]
+        available_targets = self._public_host_targets(integration_manager=integration_manager)
         lines = [
             "宿主负责编码、工具调用和模型能力。",
             "Super Dev 负责 research → 三文档 → 确认门 → Spec → 前端优先 → 质量门禁 → 交付。",
@@ -6485,16 +7375,22 @@ super-dev start --idea "你的需求"
                 precondition_label = str(usage_profile.get("precondition_label", "")).strip()
                 precondition_guidance = usage_profile.get("precondition_guidance", [])
                 precondition_signals = usage_profile.get("precondition_signals", {})
+                precondition_items = usage_profile.get("precondition_items", [])
                 host_report["preconditions"] = {
                     "status": precondition_status,
                     "label": precondition_label,
                     "guidance": precondition_guidance if isinstance(precondition_guidance, list) else [],
                     "signals": precondition_signals if isinstance(precondition_signals, dict) else {},
+                    "items": precondition_items if isinstance(precondition_items, list) else [],
                 }
                 if precondition_status == "host-auth-required":
                     host_report["suggestions"].append(
                         "若宿主报 Invalid API key provided，请先在宿主内完成 /auth 或更新宿主 API key 配置。"
                     )
+                if precondition_status == "session-restart-required":
+                    host_report["suggestions"].append("接入后先关闭旧宿主会话，再开一个新会话后重试。")
+                if precondition_status == "project-context-required":
+                    host_report["suggestions"].append("确认当前聊天/终端绑定的是目标项目，再重新触发 Super Dev。")
             report["hosts"][target] = host_report
             if not host_report["ready"]:
                 report["overall_ready"] = False
@@ -6524,6 +7420,7 @@ super-dev start --idea "你的需求"
         total_passed = 0
         total_possible = 0
         ready_hosts = 0
+        flow_consistent_hosts = 0
         hosts = report.get("hosts", {})
         if not isinstance(hosts, dict):
             hosts = {}
@@ -6539,25 +7436,298 @@ super-dev start --idea "你的需求"
                 check_value = checks.get(check_name, {})
                 if isinstance(check_value, dict) and bool(check_value.get("ok", False)):
                     passed += 1
+            flow_consistent = False
+            contract_check = checks.get("contract", {})
+            if isinstance(contract_check, dict):
+                flow_consistent = True
+                surfaces = contract_check.get("surfaces", {})
+                if isinstance(surfaces, dict):
+                    for item in surfaces.values():
+                        if not isinstance(item, dict):
+                            continue
+                        missing_markers = item.get("missing_markers", [])
+                        if isinstance(missing_markers, list) and "flow" in missing_markers:
+                            flow_consistent = False
+                            break
             score = round((passed / possible) * 100, 2) if possible > 0 else 100.0
             per_host[target] = {
                 "score": score,
                 "passed": passed,
                 "possible": possible,
                 "ready": bool(host.get("ready", False)) if isinstance(host, dict) else False,
+                "flow_consistent": flow_consistent,
             }
             total_passed += passed
             total_possible += possible
             if bool(host.get("ready", False)) if isinstance(host, dict) else False:
                 ready_hosts += 1
+            if flow_consistent:
+                flow_consistent_hosts += 1
 
         overall_score = round((total_passed / total_possible) * 100, 2) if total_possible > 0 else 100.0
+        flow_consistency_score = round((flow_consistent_hosts / len(targets)) * 100, 2) if targets else 100.0
         return {
             "overall_score": overall_score,
             "ready_hosts": ready_hosts,
             "total_hosts": len(targets),
             "enabled_checks": enabled_checks,
+            "flow_consistent_hosts": flow_consistent_hosts,
+            "flow_consistency_score": flow_consistency_score,
             "hosts": per_host,
+        }
+
+    def _build_official_compare_summary(self, *, hardening_results: dict[str, Any]) -> dict[str, Any]:
+        total = 0
+        passed = 0
+        partial = 0
+        unknown = 0
+        failed = 0
+        per_host: dict[str, str] = {}
+        for host, item in hardening_results.items():
+            total += 1
+            status = "unknown"
+            if isinstance(item, dict):
+                official_compare = item.get("official_compare", {})
+                if isinstance(official_compare, dict):
+                    status = str(official_compare.get("status", "unknown")).strip() or "unknown"
+            per_host[str(host)] = status
+            if status == "passed":
+                passed += 1
+            elif status == "partial":
+                partial += 1
+            elif status == "failed":
+                failed += 1
+            else:
+                unknown += 1
+        score = round((passed / total) * 100, 2) if total else 100.0
+        return {
+            "total": total,
+            "passed": passed,
+            "partial": partial,
+            "failed": failed,
+            "unknown": unknown,
+            "score": score,
+            "hosts": per_host,
+        }
+
+    def _build_host_parity_summary(self, *, usage_profiles: dict[str, dict[str, Any]]) -> dict[str, Any]:
+        total = 0
+        passed = 0
+        per_host: dict[str, dict[str, Any]] = {}
+        required_keys = ("slash", "rules", "skills", "trigger")
+        for host, usage in usage_profiles.items():
+            total += 1
+            labels = usage.get("capability_labels", {}) if isinstance(usage, dict) else {}
+            trigger_command = str(usage.get("trigger_command", "")) if isinstance(usage, dict) else ""
+            smoke_prompt = str(usage.get("smoke_test_prompt", "")) if isinstance(usage, dict) else ""
+            smoke_signal = str(usage.get("smoke_success_signal", "")) if isinstance(usage, dict) else ""
+            protocol_mode = str(usage.get("host_protocol_mode", "")).strip() if isinstance(usage, dict) else ""
+            slash_label = str((labels or {}).get("slash", "")).strip()
+            trigger_ok = (
+                trigger_command.startswith("/super-dev")
+                if slash_label == "native"
+                else trigger_command.startswith("super-dev:")
+            )
+            checks = {
+                "trigger": trigger_ok,
+                "smoke_prompt": "SMOKE_OK" in smoke_prompt,
+                "smoke_signal": "SMOKE_OK" in smoke_signal,
+                "protocol_mode": bool(protocol_mode),
+                "capability_labels": all(key in labels for key in required_keys),
+            }
+            check_total = len(checks)
+            check_passed = sum(1 for item in checks.values() if bool(item))
+            host_pass = check_passed == check_total
+            if host_pass:
+                passed += 1
+            per_host[str(host)] = {
+                "passed": host_pass,
+                "score": round((check_passed / check_total) * 100, 2) if check_total else 100.0,
+                "checks": checks,
+            }
+        score = round((passed / total) * 100, 2) if total else 100.0
+        return {
+            "total": total,
+            "passed": passed,
+            "score": score,
+            "hosts": per_host,
+        }
+
+    def _build_host_recovery_summary(
+        self,
+        *,
+        targets: list[str],
+        usage_profiles: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        from .integrations import IntegrationManager
+
+        total = 0
+        passed = 0
+        hosts: dict[str, dict[str, Any]] = {}
+        for target in targets:
+            total += 1
+            usage = usage_profiles.get(target, {}) if isinstance(usage_profiles, dict) else {}
+            slash_label = ""
+            if isinstance(usage, dict):
+                labels = usage.get("capability_labels", {})
+                if isinstance(labels, dict):
+                    slash_label = str(labels.get("slash", "")).strip()
+            commands = [f"super-dev integrate setup --target {target} --force"]
+            if IntegrationManager.requires_skill(target):
+                commands.append(f"super-dev skill install super-dev --target {target} --name super-dev-core --force")
+            if slash_label == "native":
+                commands.append(f"super-dev onboard --host {target} --skip-integrate --skip-skill --force --yes")
+            commands.append(f"super-dev integrate audit --target {target} --repair --force")
+            checks = {
+                "has_setup": any(cmd.startswith("super-dev integrate setup --target ") for cmd in commands),
+                "has_repair_audit": any(cmd.startswith("super-dev integrate audit --target ") for cmd in commands),
+                "contains_target": all(f" {target} " in f" {cmd} " for cmd in commands),
+            }
+            if IntegrationManager.requires_skill(target):
+                checks["has_skill_install"] = any(cmd.startswith("super-dev skill install ") for cmd in commands)
+            if slash_label == "native":
+                checks["has_slash_recovery"] = any(cmd.startswith("super-dev onboard --host ") for cmd in commands)
+            host_pass = all(bool(item) for item in checks.values())
+            if host_pass:
+                passed += 1
+            hosts[target] = {
+                "passed": host_pass,
+                "checks": checks,
+                "recommended_commands": commands,
+            }
+        score = round((passed / total) * 100, 2) if total else 100.0
+        return {
+            "total": total,
+            "passed": passed,
+            "score": score,
+            "hosts": hosts,
+        }
+
+    def _build_host_gate_summary(self, *, report: dict[str, Any], targets: list[str]) -> dict[str, Any]:
+        total = 0
+        passed = 0
+        hosts: dict[str, dict[str, Any]] = {}
+        report_hosts = report.get("hosts", {}) if isinstance(report, dict) else {}
+        if not isinstance(report_hosts, dict):
+            report_hosts = {}
+        for target in targets:
+            total += 1
+            host = report_hosts.get(target, {})
+            checks = host.get("checks", {}) if isinstance(host, dict) else {}
+            contract = checks.get("contract", {}) if isinstance(checks, dict) else {}
+            surfaces = contract.get("surfaces", {}) if isinstance(contract, dict) else {}
+            docs_confirm_ok = True
+            preview_confirm_ok = True
+            if isinstance(surfaces, dict):
+                for surface in surfaces.values():
+                    if not isinstance(surface, dict):
+                        continue
+                    if not bool(surface.get("exists", False)):
+                        continue
+                    missing = surface.get("missing_markers", [])
+                    if not isinstance(missing, list):
+                        continue
+                    if "confirmation" in missing:
+                        docs_confirm_ok = False
+                    if "flow" in missing:
+                        preview_confirm_ok = False
+            host_pass = docs_confirm_ok and preview_confirm_ok
+            if host_pass:
+                passed += 1
+            hosts[target] = {
+                "passed": host_pass,
+                "checks": {
+                    "docs_confirm_gate": docs_confirm_ok,
+                    "preview_confirm_gate": preview_confirm_ok,
+                },
+            }
+        score = round((passed / total) * 100, 2) if total else 100.0
+        return {
+            "total": total,
+            "passed": passed,
+            "score": score,
+            "hosts": hosts,
+        }
+
+    def _build_host_runtime_script_summary(self, *, usage_profiles: dict[str, dict[str, Any]]) -> dict[str, Any]:
+        total = 0
+        passed = 0
+        hosts: dict[str, dict[str, Any]] = {}
+        for host, usage in usage_profiles.items():
+            total += 1
+            if not isinstance(usage, dict):
+                usage = {}
+            smoke_steps = usage.get("smoke_test_steps", [])
+            post_steps = usage.get("post_onboard_steps", [])
+            checks = {
+                "has_final_trigger": bool(str(usage.get("final_trigger", "")).strip()),
+                "has_smoke_prompt": "SMOKE_OK" in str(usage.get("smoke_test_prompt", "")),
+                "has_smoke_signal": "SMOKE_OK" in str(usage.get("smoke_success_signal", "")),
+                "has_smoke_steps": isinstance(smoke_steps, list) and len(smoke_steps) > 0,
+                "has_post_onboard_steps": isinstance(post_steps, list) and len(post_steps) > 0,
+            }
+            host_pass = all(bool(item) for item in checks.values())
+            if host_pass:
+                passed += 1
+            hosts[str(host)] = {
+                "passed": host_pass,
+                "checks": checks,
+            }
+        score = round((passed / total) * 100, 2) if total else 100.0
+        return {
+            "total": total,
+            "passed": passed,
+            "score": score,
+            "hosts": hosts,
+        }
+
+    def _build_host_parity_index(
+        self,
+        *,
+        threshold: float,
+        official_compare_summary: dict[str, Any] | None,
+        host_parity_summary: dict[str, Any] | None,
+        host_gate_summary: dict[str, Any] | None,
+        host_runtime_script_summary: dict[str, Any] | None,
+        host_recovery_summary: dict[str, Any] | None,
+        compatibility: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        metrics: dict[str, float] = {}
+        mapping: list[tuple[str, dict[str, Any] | None]] = [
+            ("official_compare", official_compare_summary),
+            ("host_parity", host_parity_summary),
+            ("host_gate", host_gate_summary),
+            ("runtime_script", host_runtime_script_summary),
+            ("host_recovery", host_recovery_summary),
+        ]
+        for name, summary in mapping:
+            if isinstance(summary, dict):
+                if name == "official_compare":
+                    total = int(summary.get("total", 0) or 0)
+                    passed = int(summary.get("passed", 0) or 0)
+                    partial = int(summary.get("partial", 0) or 0)
+                    failed = int(summary.get("failed", 0) or 0)
+                    if total <= 0 or (passed + partial + failed) <= 0:
+                        continue
+                try:
+                    metrics[name] = float(summary.get("score", 0))
+                except Exception:
+                    metrics[name] = 0.0
+        if isinstance(compatibility, dict):
+            try:
+                metrics["flow_consistency"] = float(compatibility.get("flow_consistency_score", 0))
+            except Exception:
+                metrics["flow_consistency"] = 0.0
+        if metrics:
+            score = round(sum(metrics.values()) / len(metrics), 2)
+        else:
+            score = 0.0
+        limit = float(threshold)
+        return {
+            "score": score,
+            "threshold": limit,
+            "passed": score >= limit,
+            "metrics": metrics,
         }
 
     def _repair_host_diagnostics(
@@ -6655,7 +7825,7 @@ super-dev start --idea "你的需求"
         integration_manager = IntegrationManager(project_dir)
         skill_manager = SkillManager(project_dir)
 
-        available_targets = [item.name for item in integration_manager.list_targets()]
+        available_targets = self._public_host_targets(integration_manager=integration_manager)
         targets: list[str]
         detected_meta: dict[str, list[str]] = {}
 
@@ -6890,6 +8060,10 @@ super-dev start --idea "你的需求"
             f"[cyan]兼容性评分: {compatibility['overall_score']:.2f}/100 "
             f"(ready {compatibility['ready_hosts']}/{compatibility['total_hosts']})[/cyan]"
         )
+        self.console.print(
+            f"[cyan]流程一致性: {compatibility.get('flow_consistency_score', 0):.2f}/100 "
+            f"({compatibility.get('flow_consistent_hosts', 0)}/{compatibility.get('total_hosts', 0)})[/cyan]"
+        )
         self.console.print("")
         if args.repair:
             self.console.print("[cyan]Repair 模式已执行[/cyan]")
@@ -7005,7 +8179,7 @@ super-dev start --idea "你的需求"
 
         project_dir = Path.cwd()
         integration_manager = IntegrationManager(project_dir)
-        available_targets = [item.name for item in integration_manager.list_targets()]
+        available_targets = self._public_host_targets(integration_manager=integration_manager)
         detected_targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
 
         target = args.host
@@ -7205,6 +8379,10 @@ super-dev start --idea "你的需求"
             f"[cyan]兼容性评分: {compatibility['overall_score']:.2f}/100 "
             f"(ready {compatibility['ready_hosts']}/{compatibility['total_hosts']})[/cyan]"
         )
+        self.console.print(
+            f"[cyan]流程一致性: {compatibility.get('flow_consistency_score', 0):.2f}/100 "
+            f"({compatibility.get('flow_consistent_hosts', 0)}/{compatibility.get('total_hosts', 0)})[/cyan]"
+        )
         for target in targets:
             host_compat = compatibility["hosts"].get(target, {})
             score = host_compat.get("score", 0.0)
@@ -7345,6 +8523,17 @@ super-dev start --idea "你的需求"
         precondition_label = usage.get("precondition_label", "")
         if isinstance(precondition_label, str) and precondition_label.strip():
             self.console.print(f"{indent}宿主前置条件: {precondition_label}")
+        precondition_items = usage.get("precondition_items", [])
+        if isinstance(precondition_items, list) and precondition_items:
+            self.console.print(f"{indent}前置条件项:")
+            for item in precondition_items:
+                if not isinstance(item, dict):
+                    continue
+                item_label = str(item.get("label", "")).strip()
+                item_status = str(item.get("status", "")).strip()
+                item_text = item_label or item_status
+                if item_text:
+                    self.console.print(f"{indent}  - {item_text}")
         precondition_guidance = usage.get("precondition_guidance", [])
         if isinstance(precondition_guidance, list) and precondition_guidance:
             self.console.print(f"{indent}前置条件说明:")
@@ -7511,9 +8700,14 @@ super-dev start --idea "你的需求"
             "certification_evidence": list(profile.certification_evidence),
             "host_protocol_mode": profile.host_protocol_mode,
             "host_protocol_summary": profile.host_protocol_summary,
+            "capability_labels": dict(profile.capability_labels),
             "official_project_surfaces": list(profile.official_project_surfaces),
             "official_user_surfaces": list(profile.official_user_surfaces),
             "observed_compatibility_surfaces": list(profile.observed_compatibility_surfaces),
+            "official_docs_url": profile.official_docs_url,
+            "official_docs_references": list(profile.official_docs_references),
+            "docs_check_status": profile.docs_check_status,
+            "docs_check_summary": profile.docs_check_summary,
             "usage_mode": profile.usage_mode,
             "primary_entry": profile.primary_entry,
             "trigger_command": profile.trigger_command,
@@ -7531,6 +8725,7 @@ super-dev start --idea "你的需求"
             "precondition_label": profile.precondition_label,
             "precondition_guidance": list(profile.precondition_guidance),
             "precondition_signals": dict(profile.precondition_signals),
+            "precondition_items": list(profile.precondition_items),
             "notes": profile.notes,
         }
 
@@ -7669,6 +8864,17 @@ super-dev start --idea "你的需求"
                 precondition_label = usage.get("precondition_label", "")
                 if isinstance(precondition_label, str) and precondition_label.strip():
                     lines.append(f"- Host Preconditions: {precondition_label}")
+                precondition_items = usage.get("precondition_items", [])
+                if isinstance(precondition_items, list) and precondition_items:
+                    lines.append("- Host Precondition Items:")
+                    for item in precondition_items:
+                        if not isinstance(item, dict):
+                            continue
+                        item_label = str(item.get("label", "")).strip()
+                        item_status = str(item.get("status", "")).strip()
+                        item_text = item_label or item_status
+                        if item_text:
+                            lines.append(f"  - {item_text}")
                 precondition_guidance = usage.get("precondition_guidance", [])
                 if isinstance(precondition_guidance, list) and precondition_guidance:
                     lines.append("- Host Precondition Guidance:")
@@ -7829,6 +9035,7 @@ super-dev start --idea "你的需求"
             surface_ready = bool(host.get("ready", False))
             precondition_label = usage.get("precondition_label", "-")
             precondition_guidance = usage.get("precondition_guidance", [])
+            precondition_items = usage.get("precondition_items", [])
             blocking_reason = ""
             recommended_action = ""
             blocker_type = ""
@@ -7881,6 +9088,7 @@ super-dev start --idea "你的需求"
                     "certification_label": usage.get("certification_label", "-"),
                     "precondition_label": precondition_label,
                     "precondition_guidance": precondition_guidance,
+                    "precondition_items": precondition_items if isinstance(precondition_items, list) else [],
                     "smoke_test_prompt": usage.get("smoke_test_prompt", ""),
                     "smoke_success_signal": usage.get("smoke_success_signal", ""),
                     "runtime_checklist": [
@@ -8059,6 +9267,174 @@ super-dev start --idea "你的需求"
             "history_markdown": history_md,
         }
 
+    def _render_host_hardening_markdown(self, payload: dict[str, Any]) -> str:
+        compatibility = payload.get("compatibility", {})
+        selected_targets = payload.get("selected_targets", [])
+        hardening_results = payload.get("hardening_results", {})
+        if not isinstance(compatibility, dict):
+            compatibility = {}
+        if not isinstance(selected_targets, list):
+            selected_targets = []
+        if not isinstance(hardening_results, dict):
+            hardening_results = {}
+        lines = [
+            "# Host System Hardening Report",
+            "",
+            f"- Generated At (UTC): {datetime.now(timezone.utc).isoformat()}",
+            f"- Project Dir: {payload.get('project_dir', '')}",
+            f"- Selected Targets: {', '.join(str(item) for item in selected_targets) if selected_targets else '(none)'}",
+            f"- Compatibility Score: {compatibility.get('overall_score', 0)}/100",
+            f"- Flow Consistency: {compatibility.get('flow_consistency_score', 0)}/100",
+            f"- Official Doc Alignment: {((payload.get('official_compare_summary', {}) or {}).get('score', 0))}/100",
+            f"- Host Parity: {((payload.get('host_parity_summary', {}) or {}).get('score', 0))}/100",
+            f"- Host Gate Parity: {((payload.get('host_gate_summary', {}) or {}).get('score', 0))}/100",
+            f"- Host Runtime Script Parity: {((payload.get('host_runtime_script_summary', {}) or {}).get('score', 0))}/100",
+            f"- Host Recovery Parity: {((payload.get('host_recovery_summary', {}) or {}).get('score', 0))}/100",
+            "",
+        ]
+        for target in selected_targets:
+            item = hardening_results.get(target, {}) if isinstance(target, str) else {}
+            if not isinstance(item, dict):
+                item = {}
+            plan = item.get("plan", {})
+            contract = item.get("contract", {})
+            official_compare = item.get("official_compare", {})
+            gate_hosts = (payload.get("host_gate_summary", {}) or {}).get("hosts", {})
+            gate_info = gate_hosts.get(target, {}) if isinstance(gate_hosts, dict) else {}
+            runtime_script_hosts = (payload.get("host_runtime_script_summary", {}) or {}).get("hosts", {})
+            runtime_script_info = runtime_script_hosts.get(target, {}) if isinstance(runtime_script_hosts, dict) else {}
+            recovery_hosts = (payload.get("host_recovery_summary", {}) or {}).get("hosts", {})
+            recovery_info = recovery_hosts.get(target, {}) if isinstance(recovery_hosts, dict) else {}
+            lines.extend([f"## {target}", ""])
+            lines.append(f"- Trigger: {plan.get('final_trigger', '-')}")
+            lines.append(f"- Trigger Mode: {plan.get('trigger_mode', '-')}")
+            lines.append(f"- Contract OK: {'yes' if bool((contract or {}).get('ok', False)) else 'no'}")
+            if isinstance(gate_info, dict) and gate_info:
+                lines.append(f"- Gate Parity: {'yes' if bool(gate_info.get('passed', False)) else 'no'}")
+            if isinstance(runtime_script_info, dict) and runtime_script_info:
+                lines.append(
+                    f"- Runtime Script Parity: {'yes' if bool(runtime_script_info.get('passed', False)) else 'no'}"
+                )
+            if isinstance(recovery_info, dict) and recovery_info:
+                lines.append(f"- Recovery Parity: {'yes' if bool(recovery_info.get('passed', False)) else 'no'}")
+                commands = recovery_info.get("recommended_commands", [])
+                if isinstance(commands, list) and commands:
+                    lines.append("- Recovery Commands:")
+                    for cmd in commands:
+                        lines.append(f"  - {cmd}")
+            if isinstance(official_compare, dict) and official_compare:
+                lines.append(
+                    f"- Official Compare: {official_compare.get('status', 'unknown')} "
+                    f"({official_compare.get('reachable_urls', 0)}/{official_compare.get('checked_urls', 0)})"
+                )
+            written_files = item.get("written_files", [])
+            if isinstance(written_files, list) and written_files:
+                lines.append("- Updated Files:")
+                for path in written_files:
+                    lines.append(f"  - {path}")
+            required_steps = plan.get("required_steps", [])
+            if isinstance(required_steps, list) and required_steps:
+                lines.append("- Required Steps:")
+                for step in required_steps:
+                    lines.append(f"  - {step}")
+            skill_install = item.get("skill_install", {})
+            if isinstance(skill_install, dict) and bool(skill_install.get("required", False)):
+                lines.append(
+                    f"- Skill Install: {'ok' if bool(skill_install.get('installed', False)) else 'failed'}"
+                )
+                if skill_install.get("path"):
+                    lines.append(f"  - Path: {skill_install.get('path')}")
+                if skill_install.get("error"):
+                    lines.append(f"  - Error: {skill_install.get('error')}")
+            invalid = (contract or {}).get("invalid_surfaces", {})
+            if isinstance(invalid, dict) and invalid:
+                lines.append("- Invalid Surfaces:")
+                for surface_key in invalid.keys():
+                    lines.append(f"  - {surface_key}")
+            lines.append("")
+        return "\n".join(lines).rstrip() + "\n"
+
+    def _render_host_parity_onepage_markdown(self, payload: dict[str, Any]) -> str:
+        selected_targets = payload.get("selected_targets", [])
+        if not isinstance(selected_targets, list):
+            selected_targets = []
+        hardening_results = payload.get("hardening_results", {})
+        if not isinstance(hardening_results, dict):
+            hardening_results = {}
+        parity_index = payload.get("host_parity_index", {})
+        if not isinstance(parity_index, dict):
+            parity_index = {}
+        lines = [
+            "# Host Parity Onepage",
+            "",
+            f"- Generated At (UTC): {datetime.now(timezone.utc).isoformat()}",
+            f"- Project Dir: {payload.get('project_dir', '')}",
+            f"- Host Parity Index: {parity_index.get('score', 0)}/100 "
+            f"(threshold {parity_index.get('threshold', 95.0)}, "
+            f"{'pass' if bool(parity_index.get('passed', False)) else 'fail'})",
+            "",
+            "| Host | Status | Failed Dimension | Next Command |",
+            "|---|---|---|---|",
+        ]
+        official_hosts = (payload.get("official_compare_summary", {}) or {}).get("hosts", {})
+        parity_hosts = (payload.get("host_parity_summary", {}) or {}).get("hosts", {})
+        gate_hosts = (payload.get("host_gate_summary", {}) or {}).get("hosts", {})
+        runtime_hosts = (payload.get("host_runtime_script_summary", {}) or {}).get("hosts", {})
+        recovery_hosts = (payload.get("host_recovery_summary", {}) or {}).get("hosts", {})
+        flow_hosts = (payload.get("compatibility", {}) or {}).get("hosts", {})
+        for target in selected_targets:
+            item = hardening_results.get(target, {}) if isinstance(target, str) else {}
+            contract = item.get("contract", {}) if isinstance(item, dict) else {}
+            recovery = recovery_hosts.get(target, {}) if isinstance(recovery_hosts, dict) else {}
+            recovery_commands = recovery.get("recommended_commands", []) if isinstance(recovery, dict) else []
+            dimensions: list[tuple[str, bool]] = []
+            dimensions.append(("official_compare", str((official_hosts or {}).get(target, "unknown")) == "passed"))
+            dimensions.append(("host_parity", bool(((parity_hosts or {}).get(target, {}) or {}).get("passed", False))))
+            dimensions.append(("host_gate", bool(((gate_hosts or {}).get(target, {}) or {}).get("passed", False))))
+            dimensions.append(("runtime_script", bool(((runtime_hosts or {}).get(target, {}) or {}).get("passed", False))))
+            dimensions.append(("host_recovery", bool(((recovery_hosts or {}).get(target, {}) or {}).get("passed", False))))
+            dimensions.append(("flow_consistency", bool(((flow_hosts or {}).get(target, {}) or {}).get("flow_consistent", False))))
+            contract_ok = bool((contract or {}).get("ok", False))
+            status = "PASS" if contract_ok and all(ok for _, ok in dimensions) else "FAIL"
+            failed = [name for name, ok in dimensions if not ok]
+            failed_text = ", ".join(failed) if failed else "-"
+            next_command = recovery_commands[0] if isinstance(recovery_commands, list) and recovery_commands else "-"
+            lines.append(f"| {target} | {status} | {failed_text} | `{next_command}` |")
+        return "\n".join(lines).rstrip() + "\n"
+
+    def _write_host_hardening_report(
+        self,
+        *,
+        project_dir: Path,
+        payload: dict[str, Any],
+    ) -> dict[str, Path]:
+        project_name = self._resolve_report_project_name(project_dir)
+        output_dir = project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        json_file = output_dir / f"{project_name}-host-hardening.json"
+        md_file = output_dir / f"{project_name}-host-hardening.md"
+        onepage_file = output_dir / f"{project_name}-host-parity-onepage.md"
+        json_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        md_file.write_text(self._render_host_hardening_markdown(payload), encoding="utf-8")
+        onepage_file.write_text(self._render_host_parity_onepage_markdown(payload), encoding="utf-8")
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        history_dir = output_dir / "host-hardening-history"
+        history_dir.mkdir(parents=True, exist_ok=True)
+        history_json = history_dir / f"{project_name}-host-hardening-{stamp}.json"
+        history_md = history_dir / f"{project_name}-host-hardening-{stamp}.md"
+        history_onepage = history_dir / f"{project_name}-host-parity-onepage-{stamp}.md"
+        history_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        history_md.write_text(self._render_host_hardening_markdown(payload), encoding="utf-8")
+        history_onepage.write_text(self._render_host_parity_onepage_markdown(payload), encoding="utf-8")
+        return {
+            "json": json_file,
+            "markdown": md_file,
+            "onepage_markdown": onepage_file,
+            "history_json": history_json,
+            "history_markdown": history_md,
+            "history_onepage_markdown": history_onepage,
+        }
+
     def _write_host_runtime_validation_report(
         self,
         *,
@@ -8226,13 +9602,19 @@ super-dev start --idea "你的需求"
                 motivation=args.motivation or "",
                 impact=args.impact or ""
             )
+            scaffolded_files: dict[str, Path] = {}
+            if not bool(getattr(args, "no_scaffold", False)):
+                scaffolded_files = generator.scaffold_change_artifacts(change.id, force=False)
 
             self.console.print(f"[green]✓[/green] 变更提案已创建: {change.id}")
             self.console.print(f"  [dim].super-dev/changes/{change.id}/[/dim]")
+            if scaffolded_files:
+                self.console.print("  [dim]已生成 spec/plan/tasks/checklist 四件套[/dim]")
             self.console.print("")
             self.console.print("[cyan]下一步:[/cyan]")
             self.console.print(f"  1. 运行 'super-dev spec add-req {change.id} <spec> <req> <desc>' 添加需求")
-            self.console.print(f"  2. 或 'super-dev spec show {change.id}' 查看详情")
+            self.console.print(f"  2. 运行 'super-dev spec validate {change.id} -v' 先做规格校验")
+            self.console.print(f"  3. 或 'super-dev spec show {change.id}' 查看详情")
 
         elif args.spec_action == "add-req":
             # 向变更添加需求
@@ -8247,6 +9629,20 @@ super-dev start --idea "你的需求"
             self.console.print("[green]✓[/green] 需求已添加到变更")
             self.console.print(f"  规范: {delta.spec_name}")
             self.console.print(f"  需求: {args.req_name}")
+
+        elif args.spec_action == "scaffold":
+            generator = SpecGenerator(project_dir)
+            try:
+                generated = generator.scaffold_change_artifacts(
+                    args.change_id,
+                    force=bool(getattr(args, "force", False)),
+                )
+            except FileNotFoundError as e:
+                self.console.print(f"[red]{e}[/red]")
+                return 1
+            self.console.print(f"[green]✓[/green] 已生成模板: {args.change_id}")
+            for _, file_path in sorted(generated.items(), key=lambda item: str(item[1])):
+                self.console.print(f"  [dim]{file_path.relative_to(project_dir)}[/dim]")
 
         elif args.spec_action == "archive":
             # 归档变更
@@ -8310,6 +9706,55 @@ super-dev start --idea "你的需求"
                         )
 
             return 0 if result.is_valid else 1
+
+        elif args.spec_action == "quality":
+            from rich.table import Table
+            from .specs import SpecValidator
+
+            validator = SpecValidator(project_dir)
+            report = validator.assess_change_quality(args.change_id)
+            if getattr(args, "json", False):
+                sys.stdout.write(json.dumps(report.to_dict(), ensure_ascii=False, indent=2) + "\n")
+                return 0 if report.score >= 75 else 1
+
+            score_color = "green" if report.score >= 90 else ("yellow" if report.score >= 75 else "red")
+            self.console.print(
+                f"[cyan]Spec 质量评估: {report.change_id}[/cyan] "
+                f"[{score_color}]{report.score:.1f}[/] ({report.level})"
+            )
+
+            table = Table(show_header=True, header_style="bold magenta")
+            table.add_column("维度", style="cyan", width=16)
+            table.add_column("结果", style="white", width=10)
+            table.add_column("说明", style="dim", width=44)
+            for key, item in report.checks.items():
+                passed = bool(item.get("passed", False))
+                reason = str(item.get("reason", "")).strip() or "-"
+                table.add_row(key, "[green]pass[/green]" if passed else "[red]fail[/red]", reason)
+            self.console.print(table)
+
+            if report.blockers:
+                self.console.print("[yellow]缺口:[/yellow]")
+                for blocker in report.blockers:
+                    self.console.print(f"  - {blocker}")
+
+            if report.suggestions:
+                self.console.print("[cyan]建议动作:[/cyan]")
+                for suggestion in report.suggestions:
+                    self.console.print(f"  - {suggestion}")
+
+            if report.action_plan:
+                self.console.print("[cyan]执行计划:[/cyan]")
+                for item in report.action_plan:
+                    priority = str(item.get("priority", "")).strip()
+                    step = str(item.get("step", "")).strip()
+                    command = str(item.get("command", "")).strip()
+                    prefix = f"[{priority}] " if priority else ""
+                    self.console.print(f"  - {prefix}{step}")
+                    if command:
+                        self.console.print(f"    [dim]{command}[/dim]")
+
+            return 0 if report.score >= 75 else 1
 
         elif args.spec_action == "view":
             # 交互式仪表板
@@ -8404,7 +9849,7 @@ super-dev start --idea "你的需求"
             "init", "analyze", "workflow", "studio", "expert", "quality", "metrics", "preview",
             "deploy", "create", "wizard", "design", "spec", "task", "pipeline", "run", "config", "skill", "integrate",
             "onboard", "doctor", "setup", "install", "start", "bootstrap", "detect", "policy", "update", "review", "release",
-            "fix", "repo-map", "impact",
+            "fix", "repo-map", "impact", "regression-guard", "dependency-graph",
         }
         return first not in known_commands
 
@@ -8800,13 +10245,45 @@ super-dev start --idea "你的需求"
     def _pipeline_run_state_path(self, project_dir: Path) -> Path:
         return project_dir / ".super-dev" / "runs" / "last-pipeline.json"
 
+    def _normalize_run_status(self, status: Any) -> str:
+        normalized = str(status or "").strip().lower()
+        if normalized in {"success", "completed"}:
+            return "completed"
+        if normalized in {"failed"}:
+            return "failed"
+        if normalized in {"cancelled"}:
+            return "cancelled"
+        if normalized in {"running", "cancelling", "waiting_confirmation", "waiting_ui_revision", "waiting_architecture_revision", "waiting_quality_revision"}:
+            return "running"
+        if normalized in {"queued"}:
+            return "queued"
+        return "unknown"
+
     def _write_pipeline_run_state(self, project_dir: Path, payload: dict[str, Any]) -> None:
         state_file = self._pipeline_run_state_path(project_dir)
         state_file.parent.mkdir(parents=True, exist_ok=True)
-        state_file.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        payload_with_normalized = dict(payload)
+        payload_with_normalized["status_normalized"] = self._normalize_run_status(payload_with_normalized.get("status"))
+        lock_file = state_file.parent / ".runs.lock"
+        lock_handle = lock_file.open("a+", encoding="utf-8")
+        try:
+            if fcntl is not None:
+                fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=state_file.parent,
+                prefix=".last-pipeline.",
+                suffix=".tmp",
+                delete=False,
+            ) as temp_file:
+                temp_file.write(json.dumps(payload_with_normalized, ensure_ascii=False, indent=2))
+                temp_path = Path(temp_file.name)
+            os.replace(temp_path, state_file)
+        finally:
+            if fcntl is not None:
+                fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+            lock_handle.close()
 
     def _read_pipeline_run_state(self, project_dir: Path) -> dict[str, Any] | None:
         state_file = self._pipeline_run_state_path(project_dir)

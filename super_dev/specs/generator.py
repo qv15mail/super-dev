@@ -8,6 +8,7 @@ Spec-Driven Development 生成器
 """
 
 from pathlib import Path
+import re
 
 from .manager import ChangeManager, SpecManager
 from .models import (
@@ -54,6 +55,46 @@ class SpecGenerator:
         )
         self.change_manager.save_change(change)
         return change
+
+    def scaffold_change_artifacts(self, change_id: str, *, force: bool = False) -> dict[str, Path]:
+        """为变更生成 Spec 四件套（spec/plan/tasks/checklist）"""
+        change = self.change_manager.load_change(change_id)
+        if not change:
+            raise FileNotFoundError(f"变更不存在: {change_id}")
+
+        change_path = self.change_manager.get_change_path(change_id)
+        change_path.mkdir(parents=True, exist_ok=True)
+
+        spec_name = self._guess_primary_spec_name(change_id)
+        spec_path = change_path / "specs" / spec_name / "spec.md"
+        plan_path = change_path / "plan.md"
+        tasks_path = change_path / "tasks.md"
+        checklist_path = change_path / "checklist.md"
+
+        spec_path.parent.mkdir(parents=True, exist_ok=True)
+
+        files_and_content = {
+            spec_path: self._render_spec_template(
+                title=change.title,
+                description=change.proposal.description if change.proposal else "",
+            ),
+            plan_path: self._render_plan_template(
+                title=change.title,
+                description=change.proposal.description if change.proposal else "",
+            ),
+            tasks_path: self._render_tasks_template(title=change.title),
+            checklist_path: self._render_checklist_template(),
+        }
+
+        written: dict[str, Path] = {}
+        for file_path, content in files_and_content.items():
+            if file_path.exists() and not force:
+                written[file_path.name] = file_path
+                continue
+            file_path.write_text(content, encoding="utf-8")
+            written[file_path.name] = file_path
+
+        return written
 
     def add_requirement_to_change(
         self,
@@ -262,3 +303,82 @@ _Add domain-specific information here_
             project_path.write_text(project_content, encoding="utf-8")
 
         return agents_path, project_path
+
+    def _guess_primary_spec_name(self, change_id: str) -> str:
+        candidate = re.sub(r"^(add|update|remove|refactor)-", "", change_id.strip().lower())
+        candidate = re.sub(r"[^a-z0-9_-]+", "-", candidate).strip("-")
+        return candidate or "core"
+
+    def _render_spec_template(self, *, title: str, description: str) -> str:
+        summary = description.strip() or "请补充功能背景与范围。"
+        return (
+            f"# {title}\n\n"
+            "## Summary\n"
+            f"{summary}\n\n"
+            "## ADDED Requirements\n\n"
+            "### Requirement: core-behavior\n"
+            "SHALL 系统必须满足核心行为定义。\n\n"
+            "#### Scenario 1: Happy path\n"
+            "- GIVEN 前置条件成立\n"
+            "- WHEN 用户执行核心动作\n"
+            "- THEN 返回预期结果\n\n"
+            "## Notes\n"
+            "- 用户故事：作为 <角色>，我希望 <能力>，以便 <价值>\n"
+            "- 性能：定义响应时间、吞吐、并发目标\n"
+            "- 可靠性：定义错误预算与恢复目标\n"
+            "- 安全性：定义鉴权、审计、最小权限要求\n\n"
+            "## Acceptance Checklist\n"
+            "- [ ] AC1: 核心流程可验证通过\n"
+            "- [ ] AC2: 失败路径有明确处理\n"
+            "- [ ] AC3: 回归测试覆盖关键场景\n\n"
+            "## Out of Scope\n"
+            "- 明确不在本次变更范围的内容\n"
+        )
+
+    def _render_plan_template(self, *, title: str, description: str) -> str:
+        summary = description.strip() or "请补充变更目标。"
+        return (
+            f"# Plan: {title}\n\n"
+            "## Context\n"
+            f"{summary}\n\n"
+            "## Architecture Impact\n"
+            "- 模块边界\n"
+            "- 数据流\n"
+            "- 兼容性\n\n"
+            "## Risks & Mitigations\n"
+            "- 风险1: <描述> -> 缓解: <策略>\n"
+            "- 风险2: <描述> -> 缓解: <策略>\n\n"
+            "## Rollout Strategy\n"
+            "- 阶段发布与回滚方案\n"
+            "- 观测与告警策略\n"
+        )
+
+    def _render_tasks_template(self, *, title: str) -> str:
+        return (
+            f"# Tasks: {title}\n\n"
+            "## 1. Discovery & Design\n"
+            "- [ ] 1.1 梳理边界与验收标准\n"
+            "- [ ] 1.2 输出实现设计与风险评估\n\n"
+            "## 2. Implementation\n"
+            "- [ ] 2.1 完成核心能力实现\n"
+            "- [ ] 2.2 完成失败路径与恢复逻辑\n\n"
+            "## 3. Quality\n"
+            "- [ ] 3.1 补齐单元与集成测试\n"
+            "- [ ] 3.2 执行回归与验收验证\n\n"
+            "## 4. Delivery\n"
+            "- [ ] 4.1 更新文档与变更说明\n"
+            "- [ ] 4.2 完成交付检查清单\n"
+        )
+
+    def _render_checklist_template(self) -> str:
+        return (
+            "# Checklist\n\n"
+            "## Before Merge\n"
+            "- [ ] 规范与任务一致\n"
+            "- [ ] 所有 MUST 场景均有测试\n"
+            "- [ ] 风险与回滚策略已确认\n\n"
+            "## Release Readiness\n"
+            "- [ ] 质量门禁通过\n"
+            "- [ ] 观测指标与告警已配置\n"
+            "- [ ] 发布说明已准备\n"
+        )

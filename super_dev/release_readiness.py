@@ -1,5 +1,9 @@
 """
-Super Dev 产品发布就绪度评估
+开发：Excellent（11964948@qq.com）
+功能：发布就绪度评估器
+作用：评估版本对齐、文档覆盖、宿主兼容性等发布条件
+创建时间：2025-12-30
+最后修改：2026-03-20
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ from . import __version__
 from .catalogs import HOST_TOOL_IDS
 from .integrations import IntegrationManager
 from .skills import SkillManager
+from .specs import SpecValidator
 
 
 @dataclass
@@ -107,9 +112,9 @@ class ReleaseReadinessEvaluator:
     REQUIRED_DOCS = {
         "README.md": ["pip install", "uv tool install", "/super-dev", "super-dev:", "super-dev update"],
         "README_EN.md": ["pip install", "uv tool install", "/super-dev", "super-dev:", "super-dev update"],
+        "docs/README.md": ["用户文档", "维护者文档"],
         "docs/HOST_USAGE_GUIDE.md": ["Smoke", "/super-dev", "super-dev:"],
         "docs/HOST_CAPABILITY_AUDIT.md": ["官方依据", "super-dev integrate smoke"],
-        "docs/PRODUCT_AUDIT.md": ["P0", "P1", "P2"],
         "docs/WORKFLOW_GUIDE.md": ["super-dev review docs", "super-dev run --resume"],
         "docs/WORKFLOW_GUIDE_EN.md": ["super-dev review docs", "super-dev run --resume"],
     }
@@ -150,6 +155,7 @@ class ReleaseReadinessEvaluator:
                 self._check_runtime_boundary_rules(),
                 self._check_packaging_entrypoints(),
                 self._check_release_spec_exists(),
+                self._check_spec_quality(),
             ]
         )
         if verify_tests:
@@ -238,16 +244,17 @@ class ReleaseReadinessEvaluator:
             if item.host_protocol_mode in {"official-subagent", "official-skill", "official-steering", "official-context"}
         ]
 
+        stable_hosts = len(certified) + len(compatible)
         passed = (
             len(certified) >= 2
             and len(official_backed) >= max(10, len(HOST_TOOL_IDS) - 3)
-            and len(certified) + len(compatible) >= max(8, len(HOST_TOOL_IDS) // 2)
+            and stable_hosts >= 8
             and not docs_unverified
         )
         detail = (
-            f"certified={len(certified)}, compatible={len(compatible)}, official_backed={len(official_backed)}, total={len(profiles)}"
+            f"certified={len(certified)}, compatible={len(compatible)}, stable={stable_hosts}, official_backed={len(official_backed)}, total={len(profiles)}"
             if passed
-            else f"certified={certified}, compatible={compatible}, official_backed={official_backed}, docs_unverified={docs_unverified}"
+            else f"certified={certified}, compatible={compatible}, stable={stable_hosts}, official_backed={official_backed}, docs_unverified={docs_unverified}"
         )
         return ReleaseReadinessCheck(
             name="Host Coverage Depth",
@@ -312,6 +319,35 @@ class ReleaseReadinessEvaluator:
             detail=detail,
             severity="medium" if not passed else "low",
             recommendation="将发布收尾任务沉淀到正式 change spec，避免口头跟踪。",
+        )
+
+    def _check_spec_quality(self) -> ReleaseReadinessCheck:
+        validator = SpecValidator(self.project_dir)
+        report = validator.assess_latest_change_quality(exclude_ids={"release-hardening-finalization"})
+        if report is None:
+            return ReleaseReadinessCheck(
+                name="Spec Quality",
+                passed=True,
+                detail="no active change spec under evaluation",
+                severity="low",
+                recommendation="如当前发布包含新需求或修复变更，先执行 `super-dev spec quality <change_id>`。",
+            )
+
+        passed = report.passed
+        detail = (
+            f"change={report.change_id}, score={report.score:.1f}, level={report.level}, blockers={len(report.blockers)}"
+        )
+        recommendation = (
+            report.action_plan[0].get("command", "")
+            if report.action_plan
+            else f"执行 `super-dev spec quality {report.change_id}` 查看完整整改计划。"
+        )
+        return ReleaseReadinessCheck(
+            name="Spec Quality",
+            passed=passed,
+            detail=detail,
+            severity="high" if not passed else "low",
+            recommendation=recommendation,
         )
 
     def _check_test_suite(self) -> ReleaseReadinessCheck:

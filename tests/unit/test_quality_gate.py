@@ -255,6 +255,89 @@ class TestQualityGateChecker:
         check = checker._check_spec_task_completion()
         assert check.status.value == "failed"
 
+    def test_spec_task_completion_uses_latest_change_file(self, temp_project_dir: Path):
+        legacy_task_file = temp_project_dir / ".super-dev" / "changes" / "legacy" / "tasks.md"
+        legacy_task_file.parent.mkdir(parents=True, exist_ok=True)
+        legacy_task_file.write_text(
+            "# Tasks\n\n- [x] **1.1: done**\n- [ ] **1.2: pending**\n",
+            encoding="utf-8",
+        )
+
+        latest_task_file = temp_project_dir / ".super-dev" / "changes" / "latest" / "tasks.md"
+        latest_task_file.parent.mkdir(parents=True, exist_ok=True)
+        latest_task_file.write_text(
+            "# Tasks\n\n- [x] **2.1: done**\n- [x] **2.2: done**\n",
+            encoding="utf-8",
+        )
+
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="1-N+1",
+        )
+        check = checker._check_spec_task_completion()
+        assert check.status.value == "passed"
+        assert "latest" in check.details
+
+    def test_document_consistency_passed_when_new_sections_complete(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-prd.md").write_text(
+            "## 1\n### 1.7 联网研究证据与方案对比\n### 1.8 关键决策账本\n### 1.9 用户到专业交付统一协议\n",
+            encoding="utf-8",
+        )
+        (output_dir / "demo-architecture.md").write_text(
+            "## 1\n### 1.4 架构选型取舍与证据链\n### 1.5 架构决策账本\n### 1.6 Agent 执行流水线（全端）\n",
+            encoding="utf-8",
+        )
+        (output_dir / "demo-uiux.md").write_text(
+            "## 2\n### 2.8 多端适配与平台化设计策略\n### 2.9 商业级设计质量门禁\nWEB\nH5\n微信小程序\nAPP\n桌面端\n",
+            encoding="utf-8",
+        )
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="1-N+1",
+        )
+        check = checker._check_document_consistency(
+            prd_path=output_dir / "demo-prd.md",
+            arch_path=output_dir / "demo-architecture.md",
+            uiux_path=output_dir / "demo-uiux.md",
+        )
+        assert check.status.value == "passed"
+        assert check.score == 100
+
+    def test_document_consistency_failed_when_platform_coverage_missing(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-prd.md").write_text(
+            "## 1\n### 1.7 联网研究证据与方案对比\n### 1.8 关键决策账本\n### 1.9 用户到专业交付统一协议\n",
+            encoding="utf-8",
+        )
+        (output_dir / "demo-architecture.md").write_text(
+            "## 1\n### 1.4 架构选型取舍与证据链\n### 1.5 架构决策账本\n### 1.6 Agent 执行流水线（全端）\n",
+            encoding="utf-8",
+        )
+        (output_dir / "demo-uiux.md").write_text(
+            "## 2\n### 2.8 多端适配与平台化设计策略\n### 2.9 商业级设计质量门禁\n",
+            encoding="utf-8",
+        )
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="1-N+1",
+        )
+        check = checker._check_document_consistency(
+            prd_path=output_dir / "demo-prd.md",
+            arch_path=output_dir / "demo-architecture.md",
+            uiux_path=output_dir / "demo-uiux.md",
+        )
+        assert check.status.value == "failed"
+        assert "UI 五端覆盖" in check.details
+
     def test_pipeline_observability_check_passed(self, temp_project_dir: Path):
         output_dir = temp_project_dir / "output"
         output_dir.mkdir(parents=True, exist_ok=True)

@@ -1,4 +1,4 @@
-# Bitbucket Pipelines CI/CD for 用户认证系统
+# Bitbucket Pipelines CI/CD for super-dev
 image: node:18
 
 definitions:
@@ -12,7 +12,8 @@ definitions:
       image: redis:7
 
   caches:
-    node: node_modules
+    node_frontend: frontend/node_modules
+    node_backend: backend/node_modules
 
 pipelines:
   branches:
@@ -20,15 +21,18 @@ pipelines:
       - step:
           name: 'Build and Test'
           caches:
-            - node
+            - node_frontend
+            - node_backend
           services:
             - postgres
             - redis
           script:
-            - npm ci
-            - npm run lint
-            - npm run type-check
-            - npm test -- --coverage --watchAll=false
+            - if [ -f frontend/package.json ]; then npm --prefix frontend ci; fi
+            - if [ -f backend/package.json ]; then npm --prefix backend ci; fi
+            - if [ -f frontend/package.json ]; then npm --prefix frontend run lint --if-present; npm --prefix frontend run type-check --if-present; fi
+            - if [ -f backend/package.json ]; then npm --prefix backend run lint --if-present; fi
+            - if [ -f frontend/package.json ]; then npm --prefix frontend run test --if-present; fi
+            - if [ -f backend/package.json ]; then npm --prefix backend run test --if-present; fi
           after-script:
             - pipe: atlassian/code-insights:0.5.0
               variables:
@@ -39,8 +43,8 @@ pipelines:
       - step:
           name: 'Build Docker Image'
           script:
-            - docker build -t ${REGISTRY_URL}/用户认证系统:${BITBUCKET_BUILD_NUMBER} .
-            - docker push ${REGISTRY_URL}/用户认证系统:${BITBUCKET_BUILD_NUMBER}
+            - docker build -t ${REGISTRY_URL}/super-dev:${BITBUCKET_BUILD_NUMBER} .
+            - docker push ${REGISTRY_URL}/super-dev:${BITBUCKET_BUILD_NUMBER}
           services:
             - docker
 
@@ -53,29 +57,32 @@ pipelines:
                 KUBE_CONFIG: ${KUBE_CONFIG_PROD}
                 KUBECTL_VERSION: '1.28.0'
                 RESOURCE_PATH: 'k8s/'
-                SELECTOR: 'app=用户认证系统'
-                CONTAINER: '用户认证系统'
-                IMAGE: ${REGISTRY_URL}/用户认证系统:${BITBUCKET_BUILD_NUMBER}
+                SELECTOR: 'app=super-dev'
+                CONTAINER: 'super-dev'
+                IMAGE: ${REGISTRY_URL}/super-dev:${BITBUCKET_BUILD_NUMBER}
 
     develop:
       - step:
           name: 'Build and Test'
           caches:
-            - node
+            - node_frontend
+            - node_backend
           services:
             - postgres
             - redis
           script:
-            - npm ci
-            - npm run lint
-            - npm run type-check
-            - npm test -- --coverage --watchAll=false
+            - if [ -f frontend/package.json ]; then npm --prefix frontend ci; fi
+            - if [ -f backend/package.json ]; then npm --prefix backend ci; fi
+            - if [ -f frontend/package.json ]; then npm --prefix frontend run lint --if-present; npm --prefix frontend run type-check --if-present; fi
+            - if [ -f backend/package.json ]; then npm --prefix backend run lint --if-present; fi
+            - if [ -f frontend/package.json ]; then npm --prefix frontend run test --if-present; fi
+            - if [ -f backend/package.json ]; then npm --prefix backend run test --if-present; fi
 
       - step:
           name: 'Build Docker Image'
           script:
-            - docker build -t ${REGISTRY_URL}/用户认证系统:${BITBUCKET_BUILD_NUMBER} .
-            - docker push ${REGISTRY_URL}/用户认证系统:${BITBUCKET_BUILD_NUMBER}
+            - docker build -t ${REGISTRY_URL}/super-dev:${BITBUCKET_BUILD_NUMBER} .
+            - docker push ${REGISTRY_URL}/super-dev:${BITBUCKET_BUILD_NUMBER}
           services:
             - docker
 
@@ -88,23 +95,26 @@ pipelines:
                 KUBE_CONFIG: ${KUBE_CONFIG_DEV}
                 KUBECTL_VERSION: '1.28.0'
                 RESOURCE_PATH: 'k8s/'
-                SELECTOR: 'app=用户认证系统'
-                CONTAINER: '用户认证系统'
-                IMAGE: ${REGISTRY_URL}/用户认证系统:${BITBUCKET_BUILD_NUMBER}
+                SELECTOR: 'app=super-dev'
+                CONTAINER: 'super-dev'
+                IMAGE: ${REGISTRY_URL}/super-dev:${BITBUCKET_BUILD_NUMBER}
 
   pull-requests:
     - step:
         name: 'PR Build and Test'
         caches:
-          - node
+          - node_frontend
+          - node_backend
         services:
           - postgres
           - redis
         script:
-          - npm ci
-          - npm run lint
-          - npm run type-check
-          - npm test -- --coverage --watchAll=false
+          - if [ -f frontend/package.json ]; then npm --prefix frontend ci; fi
+          - if [ -f backend/package.json ]; then npm --prefix backend ci; fi
+          - if [ -f frontend/package.json ]; then npm --prefix frontend run lint --if-present; npm --prefix frontend run type-check --if-present; fi
+          - if [ -f backend/package.json ]; then npm --prefix backend run lint --if-present; fi
+          - if [ -f frontend/package.json ]; then npm --prefix frontend run test --if-present; fi
+          - if [ -f backend/package.json ]; then npm --prefix backend run test --if-present; fi
         after-script:
           - pipe: atlassian/code-insights:0.5.0
             variables:

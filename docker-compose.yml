@@ -11,7 +11,7 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - API_URL=http://api:8080
+      - API_URL=http://api:3000
     depends_on:
       - api
     networks:
@@ -24,10 +24,10 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "3000:3000"
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/用户认证系统
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/super_dev
       - REDIS_URL=redis://redis:6379
     depends_on:
       - postgres
@@ -42,7 +42,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_DB=用户认证系统
+      - POSTGRES_DB=super_dev
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=password
     networks:

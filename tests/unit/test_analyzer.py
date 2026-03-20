@@ -15,6 +15,7 @@ from super_dev.analyzer import (
     PatternType,
     ProjectAnalyzer,
     ProjectCategory,
+    RegressionGuardBuilder,
     RepoMapBuilder,
     TechStack,
     detect_project_type,
@@ -541,3 +542,31 @@ class TestImpactAnalyzer:
         assert any("Authentication" in item for item in report.regression_focus)
         assert files["markdown"].exists()
         assert files["json"].exists()
+
+
+class TestRegressionGuardBuilder:
+    def test_build_regression_guard_from_description_and_files(self, temp_project_dir: Path):
+        (temp_project_dir / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+        (temp_project_dir / "services").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / "services" / "auth.py").write_text(
+            "class AuthService:\n    def login(self):\n        return True\n",
+            encoding="utf-8",
+        )
+        (temp_project_dir / "api").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / "api" / "routes.py").write_text(
+            "def login_route():\n    return {'ok': True}\n",
+            encoding="utf-8",
+        )
+
+        builder = RegressionGuardBuilder(temp_project_dir)
+        report = builder.build(description="修改登录流程", files=["services/auth.py"])
+        files = builder.write(report)
+
+        assert report.risk_level in {"medium", "high"}
+        assert report.high_priority_checks or report.medium_priority_checks or report.supporting_checks
+        assert report.recommended_commands
+        assert files["markdown"].exists()
+        assert files["json"].exists()
+        markdown = files["markdown"].read_text(encoding="utf-8")
+        assert "# Regression Guard" in markdown
+        assert "Recommended Commands" in markdown

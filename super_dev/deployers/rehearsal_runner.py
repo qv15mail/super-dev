@@ -1,5 +1,9 @@
 """
-发布演练执行器（Launch Rehearsal Runner）
+开发：Excellent（11964948@qq.com）
+功能：发布演练执行器
+作用：验证发布就绪度，执行预发布检查清单
+创建时间：2025-12-30
+最后修改：2026-03-20
 """
 
 from __future__ import annotations

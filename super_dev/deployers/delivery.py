@@ -26,7 +26,7 @@ class ArtifactSpec:
 class DeliveryPackager:
     """交付包生成器"""
 
-    def __init__(self, project_dir: Path, name: str, version: str = "2.0.10"):
+    def __init__(self, project_dir: Path, name: str, version: str = "2.0.11"):
         self.project_dir = Path(project_dir).resolve()
         self.name = name
         self.version = version
@@ -65,9 +65,13 @@ class DeliveryPackager:
         spec_task_summary = self._collect_spec_task_summary()
         if spec_task_summary["task_files"] > 0:
             if int(spec_task_summary["pending"]) > 0:
+                target_change = str(spec_task_summary.get("target_change", "")).strip()
+                target_path = ".super-dev/changes/*/tasks.md"
+                if target_change:
+                    target_path = f".super-dev/changes/{target_change}/tasks.md"
                 missing_required.append(
                     {
-                        "path": ".super-dev/changes/*/tasks.md",
+                        "path": target_path,
                         "reason": f"存在未完成 Spec 任务: {spec_task_summary['pending']}",
                     }
                 )
@@ -258,12 +262,22 @@ class DeliveryPackager:
         except ValueError:
             return str(path)
 
-    def _collect_spec_task_summary(self) -> dict[str, int]:
+    def _collect_spec_task_summary(self) -> dict[str, int | str]:
         task_files = list((self.project_dir / ".super-dev" / "changes").glob("*/tasks.md"))
+        selected_files: list[Path] = []
+        selected_change = ""
+        named_file = self.project_dir / ".super-dev" / "changes" / self.name / "tasks.md"
+        if named_file.exists():
+            selected_files = [named_file]
+            selected_change = self.name
+        elif task_files:
+            latest_file = max(task_files, key=lambda path: path.stat().st_mtime)
+            selected_files = [latest_file]
+            selected_change = latest_file.parent.name
         total = 0
         completed = 0
         in_progress = 0
-        for task_file in task_files:
+        for task_file in selected_files:
             for line in task_file.read_text(encoding="utf-8", errors="ignore").splitlines():
                 stripped = line.strip()
                 if not stripped.startswith("- ["):
@@ -278,9 +292,10 @@ class DeliveryPackager:
                     in_progress += 1
         pending = max(0, total - completed)
         return {
-            "task_files": len(task_files),
+            "task_files": len(selected_files),
             "total": total,
             "completed": completed,
             "pending": pending,
             "in_progress": in_progress,
+            "target_change": selected_change,
         }

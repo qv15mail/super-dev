@@ -4,7 +4,7 @@
 #
 # 用法:
 #   ./install.sh                                # 交互式向导（支持多选宿主）
-#   ./install.sh --targets claude-code,codex-cli,cursor-cli,opencode,iflow,qoder,windsurf,codebuddy
+#   ./install.sh --targets claude-code,codex-cli,cursor-cli,opencode,qoder,windsurf,codebuddy,vscode-copilot
 #   ./install.sh --targets all --no-skill
 #
 
@@ -21,9 +21,9 @@ success() { echo -e "${GREEN}${NC} $1"; }
 warning() { echo -e "${YELLOW}${NC} $1"; }
 error() { echo -e "${RED}${NC} $1"; }
 
-ALL_TARGETS_CSV="claude-code,codebuddy-cli,codebuddy,codex-cli,cursor-cli,windsurf,gemini-cli,iflow,kimi-cli,kiro-cli,opencode,qoder-cli,cursor,kiro,qoder,trae"
-CLI_TARGETS_CSV="claude-code,codebuddy-cli,codex-cli,cursor-cli,gemini-cli,iflow,kimi-cli,kiro-cli,opencode,qoder-cli"
-IDE_TARGETS_CSV="codebuddy,cursor,kiro,qoder,trae,windsurf"
+ALL_TARGETS_CSV="antigravity,claude-code,codebuddy-cli,codebuddy,codex-cli,cursor-cli,windsurf,gemini-cli,kiro-cli,opencode,qoder-cli,vscode-copilot,cursor,kiro,qoder,trae"
+CLI_TARGETS_CSV="claude-code,codebuddy-cli,codex-cli,cursor-cli,gemini-cli,kiro-cli,opencode,qoder-cli"
+IDE_TARGETS_CSV="antigravity,codebuddy,cursor,kiro,qoder,trae,vscode-copilot,windsurf"
 
 TARGETS="$ALL_TARGETS_CSV"
 WITH_SKILL="true"
@@ -209,7 +209,8 @@ run_guided_selector() {
   echo -e "${GREEN}Super Dev 安装向导${NC}"
   echo "=================================="
   echo "定位：宿主负责编码，Super Dev 负责治理、规范、门禁与交付标准"
-  echo "触发规则：支持 slash 的宿主使用 /super-dev；不支持 slash 的宿主使用 super-dev:"
+  echo "触发规则：支持 slash 的宿主使用 /super-dev；不支持 slash 的宿主使用 super-dev: 或 super-dev："
+  echo "当前版本默认内置 16 个主推宿主适配配置"
   echo "请选择要接入的宿主工具（支持多选）"
   echo ""
   echo "CLI 宿主:"
@@ -313,7 +314,7 @@ Super Dev Installer
 
 Options:
   --targets <list>   目标平台，逗号分隔，或 all/cli/ide
-                     可选: claude-code,codebuddy-cli,codebuddy,codex-cli,cursor-cli,windsurf,gemini-cli,iflow,kimi-cli,kiro-cli,opencode,qoder-cli,cursor,kiro,qoder,trae
+                     可选: antigravity,claude-code,codebuddy-cli,codebuddy,codex-cli,cursor-cli,windsurf,gemini-cli,kiro-cli,opencode,qoder-cli,vscode-copilot,cursor,kiro,qoder,trae
   --no-skill         只生成宿主集成和 /super-dev 映射，不安装内置 skill
   --guided           强制进入交互式安装向导
   --no-guided        跳过交互向导（需配合 --targets）

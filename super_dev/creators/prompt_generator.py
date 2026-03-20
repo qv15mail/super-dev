@@ -136,7 +136,7 @@ class AIPromptGenerator:
 4. 再读取 `output/*-uiux.md`
 5. 再读取 `output/*-execution-plan.md`
 6. 如果三份核心文档缺失，先补齐文档，不得直接创建 Spec 或开始编码。
-7. 如果 `output/*-knowledge-bundle.json` 存在，必须先读取其中命中的 `local_knowledge`、`web_knowledge` 与 `research_summary`，并把这些结论继承到文档和实现中。
+7. 如果 `output/knowledge-cache/*-knowledge-bundle.json` 存在，必须先读取其中命中的 `local_knowledge`、`web_knowledge` 与 `research_summary`，并把这些结论继承到文档和实现中。
 
 ### 阶段 1.5. 文档确认门（强制暂停）
 
@@ -314,6 +314,16 @@ import {{ Save, Search, Settings }} from 'lucide-react';
 
 {self._render_ui_profile(ui_profile)}
 
+### 宿主 UI 生成执行契约（必须遵守）
+
+1. 必须先输出 **UI 方案草图说明**（信息架构、页面骨架、组件生态、token 策略）再写代码。
+2. 每个关键页面必须提供 **2 个视觉方案**，并说明主方案取舍原因。
+3. 必须按 **Token → Primitive → Pattern → Surface** 四层实现，不允许直接散写样式。
+4. 若使用 Shadcn / DaisyUI / Aceternity / Magic UI，必须先声明用途边界与替换策略，禁止混搭失控。
+5. 页面完成后必须自检：状态矩阵、转化路径、信任模块、可访问性、性能预算。
+6. 必须把技术细节转译成“目标-步骤-结果”，保证非技术与专业用户都能使用同一套交互。
+7. 若目标端为 Web/H5/微信小程序/APP/桌面端，必须切换到对应生态（TDesign 小程序 / RN / Flutter / SwiftUI / Electron / Tauri）并遵循平台交互规范。
+
 ### 安全规范
 
 1. **输入验证**: 所有用户输入必须验证
@@ -458,6 +468,19 @@ project-root/
         lines.extend(f"- {item}" for item in profile["trust_modules"][:8])
         lines.extend(["", "**明确禁止**:"])
         lines.extend(f"- {item}" for item in profile["banned_patterns"][:6])
+        ui_matrix = profile.get("ui_library_matrix", [])
+        if ui_matrix:
+            lines.extend(["", "**多端组件库映射**:"])
+            for row in ui_matrix[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    f"- {row.get('scene', '-')}: {row.get('libraries', '-')}（重点：{row.get('focus', '-')}）"
+                )
+        quality = profile.get("quality_checklist", [])
+        if quality:
+            lines.extend(["", "**商业级 UI 交付清单**:"])
+            lines.extend(f"- [ ] {item}" for item in quality[:8])
         return "\n".join(lines)
 
     def _read_document(self, doc_type: str) -> str | None:

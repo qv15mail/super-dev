@@ -1,5 +1,9 @@
 """
-发布演练（Launch Rehearsal）文档生成器
+开发：Excellent（11964948@qq.com）
+功能：发布演练文档生成器
+作用：生成发布前检查清单、回滚手册和冒烟测试清单
+创建时间：2025-12-30
+最后修改：2026-03-20
 """
 
 from __future__ import annotations

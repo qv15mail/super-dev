@@ -32,6 +32,7 @@ class ProjectCreator:
         state_management: list[str] | None = None,
         testing_frameworks: list[str] | None = None,
         language_preferences: list[str] | None = None,
+        knowledge_summary: dict | None = None,
     ):
         """初始化项目创建器"""
         self.project_dir = Path(project_dir).resolve()
@@ -66,6 +67,7 @@ class ProjectCreator:
             state_management=state_management,
             testing_frameworks=testing_frameworks,
             language_preferences=language_preferences,
+            knowledge_summary=knowledge_summary,
         )
         self.spec_builder = SpecBuilder(
             project_dir=self.project_dir,

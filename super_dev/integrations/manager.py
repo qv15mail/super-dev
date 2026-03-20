@@ -7,6 +7,9 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import os
 from pathlib import Path
+import ssl
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 from ..catalogs import HOST_TOOL_CATEGORY_MAP, HOST_TOOL_IDS
 
@@ -53,11 +56,16 @@ class HostAdapterProfile:
     precondition_label: str
     precondition_guidance: list[str]
     precondition_signals: dict[str, bool]
+    precondition_items: list[dict[str, object]]
     host_protocol_mode: str
     host_protocol_summary: str
     official_project_surfaces: list[str]
     official_user_surfaces: list[str]
     observed_compatibility_surfaces: list[str]
+    official_docs_references: list[str]
+    docs_check_status: str
+    docs_check_summary: str
+    capability_labels: dict[str, str]
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -70,10 +78,19 @@ class IntegrationManager:
     TEXT_TRIGGER_PREFIX_FULLWIDTH = "super-dev："
     CODEX_AGENTS_BEGIN = "<!-- BEGIN SUPER DEV CODEX -->"
     CODEX_AGENTS_END = "<!-- END SUPER DEV CODEX -->"
-    NO_SKILL_TARGETS: set[str] = {"claude-code", "kiro"}
+    NO_SKILL_TARGETS: set[str] = {
+        "aider",
+        "claude-code",
+        "cline",
+        "jetbrains-ai",
+        "kiro",
+        "vscode-copilot",
+    }
     HOST_USAGE_LOCATIONS: dict[str, str] = {
         "antigravity": "打开 Antigravity 的 Agent Chat / Prompt 面板，并确保当前工作区就是目标项目。",
+        "aider": "在项目目录启动 aider 会话后触发。",
         "claude-code": "在项目目录启动 Claude Code 当前会话后，直接在同一会话里触发。",
+        "cline": "在 VS Code 的 Cline 面板中，绑定当前项目后触发。",
         "codebuddy-cli": "在项目目录启动 CodeBuddy CLI 会话后触发。",
         "codebuddy": "打开 CodeBuddy IDE 的 Agent Chat，在项目上下文内触发。",
         "codex-cli": "在项目目录完成接入后，重启 codex，然后在新的 Codex CLI 会话里触发。",
@@ -82,10 +99,13 @@ class IntegrationManager:
         "windsurf": "打开 Windsurf 的 Agent Chat 或 Workflow 入口，在项目上下文内触发。",
         "gemini-cli": "在项目目录启动 Gemini CLI 会话后触发。",
         "iflow": "在项目目录启动 iFlow CLI 会话后触发。",
+        "jetbrains-ai": "在 JetBrains IDE 的 Junie/AI Agent 会话中触发。",
         "kimi-cli": "在项目目录启动 Kimi CLI 会话后触发。",
         "kiro-cli": "在项目目录启动 Kiro CLI 会话后触发。",
         "opencode": "在项目目录启动 OpenCode CLI 会话后触发。",
         "qoder-cli": "在项目目录启动 Qoder CLI 会话后触发。",
+        "roo-code": "在 VS Code 的 Roo Code 聊天面板中触发。",
+        "vscode-copilot": "在 VS Code Copilot Chat 绑定当前项目后触发。",
         "kiro": "打开 Kiro IDE 的 Agent Chat 或 AI 面板，在项目上下文内触发。",
         "qoder": "打开 Qoder IDE 的 Agent Chat，在当前项目内触发。",
         "trae": "打开 Trae Agent Chat，在当前项目上下文内直接触发。",
@@ -97,10 +117,18 @@ class IntegrationManager:
             "用户级会补充 `~/.gemini/GEMINI.md`、`~/.gemini/commands/super-dev.md` 与 `~/.gemini/skills/super-dev-core/SKILL.md`。",
             "接入后建议新开一个 Antigravity Chat，使 GEMINI 上下文、slash 与 Skill 一起生效。",
         ],
+        "aider": [
+            "Aider 是终端宿主，建议配合 `.aider.conf.yml` 与 `--read` 只读上下文文件。",
+            "当前按文本触发 `super-dev: <需求描述>` 适配，不走 slash。",
+        ],
         "claude-code": [
             "推荐作为首选 CLI 宿主。",
             "接入后可先执行 super-dev doctor --host claude-code 确认 slash 已生效。",
             "Claude Code 官方已公开 `.claude/agents/` 与 `~/.claude/agents/`，Super Dev 会生成 subagent 协议文件。",
+        ],
+        "cline": [
+            "Cline 优先使用 `.clinerules/` 规则目录，确保项目约束在每次任务开始时自动注入。",
+            "当前按文本触发 `super-dev: <需求描述>` 适配，减少与内建 slash 的语义冲突。",
         ],
         "codebuddy-cli": [
             "在当前 CLI 会话中直接输入即可。",
@@ -134,6 +162,10 @@ class IntegrationManager:
             "优先在同一会话中完成 research -> 三文档 -> 用户确认 -> Spec -> 前端运行验证 -> 后端/交付。",
             "若宿主支持联网，先让它完成同类产品研究。",
         ],
+        "jetbrains-ai": [
+            "JetBrains Junie 推荐使用 `.junie/AGENTS.md` 统一项目级上下文。",
+            "当前按文本触发 `super-dev: <需求描述>` 适配，不依赖自定义 slash。",
+        ],
         "iflow": [
             "当前按 slash 宿主适配。",
             "如果 slash 未出现，先检查项目级命令文件是否已写入。",
@@ -157,6 +189,14 @@ class IntegrationManager:
             "适合命令行流水线开发。",
             "若 slash 未生效，先确认 .qoder/commands/super-dev.md 已生成。",
             "官方文档已公开 .qoder/skills 与 ~/.qoder/skills。",
+        ],
+        "roo-code": [
+            "Roo Code 支持项目级 `.roo/rules/` 与 `.roo/commands/`，建议与 `/super-dev` 命令一起使用。",
+            "在同一会话连续完成 research、三文档确认、Spec 与开发实现。",
+        ],
+        "vscode-copilot": [
+            "VS Code Copilot 建议使用 `.github/copilot-instructions.md` 固化流水线约束。",
+            "当前按文本触发 `super-dev: <需求描述>` 适配，确保与 Copilot Chat 一致。",
         ],
         "kiro": [
             "Kiro IDE 当前优先按 steering/rules + 宿主级 Skill 模式触发，不走 /super-dev。",
@@ -182,6 +222,73 @@ class IntegrationManager:
             "若宿主返回 `Invalid API key provided`，先在 iFlow 会话内执行 `/auth` 重新登录。",
             "若使用 API key 模式，更新 `IFLOW_API_KEY`，或写入 `~/.iflow/settings.json` / `./.iflow/settings.json` 后重启 iFlow 会话。",
         ],
+        "codex-cli": [
+            "Codex CLI 接入后必须重启 `codex`，旧会话不会自动重新加载 AGENTS.md 与宿主级 Skill。",
+            "触发前确认当前终端已经进入目标项目目录，并重新打开新的 Codex 会话。",
+        ],
+        "antigravity": [
+            "Antigravity 接入后建议重新打开 Prompt / Agent Chat，让 GEMINI.md、workflows 与技能面一起加载。",
+            "触发前确认当前工作区就是目标项目。",
+        ],
+        "trae": [
+            "Trae 接入后建议完全关闭旧 Agent Chat，重新打开项目后再发起新会话。",
+            "触发前确认当前 Agent Chat 绑定的是目标项目工作区。",
+        ],
+        "cursor": [
+            "Cursor 需要在目标项目工作区的 Agent Chat 中触发，避免把规则加载到错误工作区。",
+        ],
+        "cursor-cli": [
+            "Cursor CLI 触发前确认当前终端已进入目标项目目录。",
+        ],
+        "gemini-cli": [
+            "Gemini CLI 触发前确认当前终端已进入目标项目目录，并让新的会话读取 `GEMINI.md`。",
+        ],
+        "kimi-cli": [
+            "Kimi CLI 触发前确认当前终端已进入目标项目目录，并让新的会话读取 `.kimi/AGENTS.md`。",
+        ],
+        "kiro": [
+            "Kiro IDE 接入后建议重新打开 Agent Chat，让 steering / rules 在新会话里生效。",
+            "触发前确认当前工作区就是目标项目。",
+        ],
+        "kiro-cli": [
+            "Kiro CLI 触发前确认当前终端已进入目标项目目录。",
+        ],
+        "qoder": [
+            "Qoder IDE 触发前确认当前 Agent Chat 绑定的是目标项目；若新命令未出现，重新打开项目或新建会话。",
+        ],
+        "qoder-cli": [
+            "Qoder CLI 触发前确认当前终端已进入目标项目目录。",
+        ],
+        "codebuddy": [
+            "CodeBuddy IDE 触发前确认当前 Agent Chat 位于目标项目上下文。",
+        ],
+        "codebuddy-cli": [
+            "CodeBuddy CLI 触发前确认当前终端已进入目标项目目录。",
+        ],
+        "windsurf": [
+            "Windsurf 触发前确认当前 Agent Chat / Workflow 绑定的是目标项目工作区。",
+        ],
+        "opencode": [
+            "OpenCode CLI 触发前确认当前终端已进入目标项目目录。",
+        ],
+        "claude-code": [
+            "Claude Code 触发前确认当前会话就是目标项目目录下的当前会话。",
+        ],
+        "aider": [
+            "Aider 触发前确认当前终端已进入目标项目目录，并在同一会话中加载项目上下文。",
+        ],
+        "cline": [
+            "Cline 触发前确认当前聊天绑定的是目标工作区，并让 `.clinerules/` 已被重新加载。",
+        ],
+        "jetbrains-ai": [
+            "JetBrains AI / Junie 触发前确认当前 IDE 已打开目标项目，并在新的 Agent 会话中加载 `.junie/AGENTS.md`。",
+        ],
+        "roo-code": [
+            "Roo Code 触发前确认当前聊天位于目标项目工作区，并重新加载 `.roo/` 规则与命令。",
+        ],
+        "vscode-copilot": [
+            "VS Code Copilot 触发前确认当前工作区就是目标项目，并让新的 Chat 会话读取项目级说明文件。",
+        ],
     }
 
     TARGETS: dict[str, IntegrationTarget] = {
@@ -190,10 +297,20 @@ class IntegrationManager:
             description="Antigravity IDE 工作流 + Gemini 上下文注入",
             files=["GEMINI.md", ".agent/workflows/super-dev.md"],
         ),
+        "aider": IntegrationTarget(
+            name="aider",
+            description="Aider CLI 约束文件注入",
+            files=["AGENTS.md"],
+        ),
         "claude-code": IntegrationTarget(
             name="claude-code",
             description="Claude Code CLI 深度集成",
             files=[".claude/CLAUDE.md", ".claude/agents/super-dev-core.md"],
+        ),
+        "cline": IntegrationTarget(
+            name="cline",
+            description="Cline IDE 规则注入",
+            files=[".clinerules/super-dev.md"],
         ),
         "codebuddy-cli": IntegrationTarget(
             name="codebuddy-cli",
@@ -234,6 +351,11 @@ class IntegrationManager:
             description="iFlow CLI 项目规则注入",
             files=[".iflow/AGENTS.md"],
         ),
+        "jetbrains-ai": IntegrationTarget(
+            name="jetbrains-ai",
+            description="JetBrains Junie 项目规则注入",
+            files=[".junie/AGENTS.md"],
+        ),
         "kimi-cli": IntegrationTarget(
             name="kimi-cli",
             description="Kimi CLI 项目规则注入",
@@ -248,6 +370,16 @@ class IntegrationManager:
             name="qoder-cli",
             description="Qoder CLI 项目规则注入",
             files=[".qoder/AGENTS.md"],
+        ),
+        "roo-code": IntegrationTarget(
+            name="roo-code",
+            description="Roo Code 规则 + 命令注入",
+            files=[".roo/rules/super-dev.md"],
+        ),
+        "vscode-copilot": IntegrationTarget(
+            name="vscode-copilot",
+            description="VS Code Copilot 仓库级指令注入",
+            files=[".github/copilot-instructions.md"],
         ),
         "opencode": IntegrationTarget(
             name="opencode",
@@ -288,33 +420,117 @@ class IntegrationManager:
         "opencode": ".opencode/commands/super-dev.md",
         "qoder-cli": ".qoder/commands/super-dev.md",
         "qoder": ".qoder/commands/super-dev.md",
+        "roo-code": ".roo/commands/super-dev.md",
         "cursor": ".cursor/commands/super-dev.md",
     }
     GLOBAL_SLASH_COMMAND_FILES: dict[str, str] = {
         "antigravity": ".gemini/commands/super-dev.md",
         "opencode": ".config/opencode/commands/super-dev.md",
     }
-    NO_SLASH_TARGETS: set[str] = {"codex-cli", "kimi-cli", "kiro", "trae"}
-    OFFICIAL_DOCS: dict[str, str] = {
-        "antigravity": "https://antigravity.im/documentation",
-        "claude-code": "https://docs.anthropic.com/en/docs/claude-code/slash-commands",
-        "codebuddy-cli": "https://www.codebuddy.ai/docs/cli/slash-commands",
-        "codebuddy": "https://www.codebuddy.ai/docs/cli/ide-integrations",
-        "codex-cli": "https://platform.openai.com/docs/codex",
-        "cursor-cli": "https://docs.cursor.com/en/cli/reference/slash-commands",
-        "windsurf": "https://docs.windsurf.com/plugins/cascade/workflows",
-        "gemini-cli": "https://google-gemini.github.io/gemini-cli/docs/",
-        "iflow": "https://platform.iflow.cn/en/cli/examples/slash-commands",
-        "kimi-cli": "https://www.kimi.com/code/docs/en/kimi-cli/guides/interaction.html",
-        "kiro-cli": "https://kiro.dev/docs/cli/",
-        "opencode": "https://opencode.ai/docs/commands/",
-        "qoder-cli": "https://docs.qoder.com/cli/using-cli",
-        "cursor": "https://docs.cursor.com/en/agent/chat/commands",
-        "kiro": "https://kiro.dev/docs/steering/",
-        "qoder": "https://docs.qoder.com/user-guide/commands",
-        "trae": "https://www.traeide.com/docs/what-is-trae-rules",
+    NO_SLASH_TARGETS: set[str] = {
+        "aider",
+        "cline",
+        "codex-cli",
+        "jetbrains-ai",
+        "kimi-cli",
+        "kiro",
+        "trae",
+        "vscode-copilot",
     }
-    DOCS_VERIFIED_TARGETS: set[str] = {key for key, value in OFFICIAL_DOCS.items() if bool(value)}
+    OFFICIAL_DOCS_INDEX: dict[str, tuple[str, ...]] = {
+        "antigravity": (
+            "https://antigravity.im/documentation",
+        ),
+        "aider": (
+            "https://aider.chat/docs/",
+            "https://aider.chat/docs/config/aider_conf.html",
+            "https://aider.chat/docs/usage/conventions.html",
+        ),
+        "claude-code": (
+            "https://docs.anthropic.com/en/docs/claude-code/slash-commands",
+            "https://docs.anthropic.com/en/docs/claude-code/sub-agents",
+        ),
+        "cline": (
+            "https://docs.cline.bot/customization/cline-rules",
+        ),
+        "codebuddy-cli": (
+            "https://www.codebuddy.ai/docs/cli/slash-commands",
+            "https://www.codebuddy.ai/docs/cli/skills",
+        ),
+        "codebuddy": (
+            "https://www.codebuddy.ai/docs/cli/ide-integrations",
+            "https://www.codebuddy.ai/docs/ide/Features/Subagents",
+            "https://www.codebuddy.ai/docs/cli/skills",
+        ),
+        "codex-cli": (
+            "https://developers.openai.com/codex/cli",
+            "https://developers.openai.com/codex/guides/agents-md",
+            "https://developers.openai.com/codex/skills",
+        ),
+        "cursor-cli": (
+            "https://docs.cursor.com/en/cli/overview",
+            "https://docs.cursor.com/en/cli/reference/slash-commands",
+        ),
+        "windsurf": (
+            "https://docs.windsurf.com/plugins/cascade/workflows",
+            "https://docs.windsurf.com/windsurf/cascade/memories#custom-skills",
+        ),
+        "gemini-cli": (
+            "https://google-gemini.github.io/gemini-cli/docs/",
+        ),
+        "iflow": (
+            "https://platform.iflow.cn/en/cli/examples/slash-commands",
+            "https://platform.iflow.cn/en/cli/examples/skill",
+        ),
+        "jetbrains-ai": (
+            "https://junie.jetbrains.com/docs/agent-skills.html",
+            "https://www.jetbrains.com/help/junie/customize-guidelines.html",
+        ),
+        "kimi-cli": (
+            "https://www.kimi.com/code/docs/en/kimi-cli/guides/interaction.html",
+            "https://www.kimi.com/code/docs/en/kimi-cli/guides/agents.html",
+        ),
+        "kiro-cli": (
+            "https://kiro.dev/docs/cli/",
+        ),
+        "opencode": (
+            "https://opencode.ai/docs/commands/",
+            "https://opencode.ai/docs/skills/",
+        ),
+        "qoder-cli": (
+            "https://docs.qoder.com/cli/using-cli",
+            "https://docs.qoder.com/cli/skills",
+        ),
+        "roo-code": (
+            "https://docs.roocode.com/features/slash-commands",
+            "https://docs.roocode.com/features/custom-instructions",
+            "https://docs.roocode.com/features/custom-modes",
+        ),
+        "vscode-copilot": (
+            "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-custom-instructions",
+            "https://docs.github.com/copilot/customizing-copilot/adding-custom-instructions-for-github-copilot",
+        ),
+        "cursor": (
+            "https://docs.cursor.com/en/agent/chat/commands",
+        ),
+        "kiro": (
+            "https://kiro.dev/docs/steering/",
+        ),
+        "qoder": (
+            "https://docs.qoder.com/user-guide/commands",
+            "https://docs.qoder.com/user-guide/skills",
+        ),
+        "trae": (
+            "https://docs.trae.ai/docs/what-is-trae-rules",
+        ),
+    }
+    OFFICIAL_DOCS: dict[str, str] = {
+        key: (values[0] if values else "")
+        for key, values in OFFICIAL_DOCS_INDEX.items()
+    }
+    DOCS_VERIFIED_TARGETS: set[str] = {
+        key for key, values in OFFICIAL_DOCS_INDEX.items() if bool(values)
+    }
     HOST_CERTIFICATIONS: dict[str, dict[str, object]] = {
         "antigravity": {
             "level": "experimental",
@@ -509,10 +725,44 @@ class IntegrationManager:
         "只在聊天里总结不算完成",
         "instead of only replying in chat",
     )
+    CONTRACT_FLOW_GROUP: tuple[str, ...] = (
+        "SUPER_DEV_FLOW_CONTRACT_V1",
+        "PHASE_CHAIN: research>docs>docs_confirm>spec>frontend>preview_confirm>backend>quality>delivery",
+        "DOC_CONFIRM_GATE: required",
+        "PREVIEW_CONFIRM_GATE: required",
+        "HOST_PARITY: required",
+    )
 
     def __init__(self, project_dir: Path):
         self.project_dir = Path(project_dir).resolve()
         self.templates_dir = self.project_dir / "templates"
+
+    def _flow_contract_markdown_block(self) -> str:
+        return (
+            "## Super Dev System Flow Contract\n"
+            "- SUPER_DEV_FLOW_CONTRACT_V1\n"
+            "- PHASE_CHAIN: research>docs>docs_confirm>spec>frontend>preview_confirm>backend>quality>delivery\n"
+            "- DOC_CONFIRM_GATE: required\n"
+            "- PREVIEW_CONFIRM_GATE: required\n"
+            "- HOST_PARITY: required\n"
+        )
+
+    def _flow_contract_toml_block(self) -> str:
+        return (
+            "# SUPER_DEV_FLOW_CONTRACT_V1\n"
+            "# PHASE_CHAIN: research>docs>docs_confirm>spec>frontend>preview_confirm>backend>quality>delivery\n"
+            "# DOC_CONFIRM_GATE: required\n"
+            "# PREVIEW_CONFIRM_GATE: required\n"
+            "# HOST_PARITY: required\n"
+        )
+
+    def _append_flow_contract(self, *, content: str, relative: str) -> str:
+        normalized = content or ""
+        if "SUPER_DEV_FLOW_CONTRACT_V1" in normalized:
+            return normalized
+        if str(relative).endswith(".toml"):
+            return f"{normalized.rstrip()}\n\n{self._flow_contract_toml_block()}"
+        return f"{normalized.rstrip()}\n\n{self._flow_contract_markdown_block()}"
 
     def _first_response_contract_zh(self) -> str:
         return (
@@ -568,8 +818,9 @@ class IntegrationManager:
         integration_files = list(self.TARGETS[target].files)
         slash_file = self.SLASH_COMMAND_FILES.get(target, "") if self.supports_slash(target) else ""
         skill_dir = SkillManager.TARGET_PATHS.get(target, "") if self.requires_skill(target) else ""
-        docs_url = self.OFFICIAL_DOCS.get(target, "")
-        docs_verified = target in self.DOCS_VERIFIED_TARGETS
+        docs_references = self._official_docs_references(target)
+        docs_url = docs_references[0] if docs_references else ""
+        docs_verified = bool(docs_references)
         adapter_mode = self._adapter_mode(target=target, category=category, integration_files=integration_files)
         usage = self._usage_profile(target=target, category=category)
         certification = self._certification_profile(target)
@@ -577,6 +828,7 @@ class IntegrationManager:
         preconditions = self._precondition_profile(target=target)
         surfaces = self._install_surfaces(target=target)
         protocol = self._protocol_profile(target=target)
+        capability_labels = self._capability_labels(target=target)
 
         return HostAdapterProfile(
             host=target,
@@ -612,11 +864,18 @@ class IntegrationManager:
             precondition_label=str(preconditions["label"]),
             precondition_guidance=list(preconditions["guidance"]),
             precondition_signals=dict(preconditions["signals"]),
+            precondition_items=list(preconditions["items"]),
             host_protocol_mode=str(protocol["mode"]),
             host_protocol_summary=str(protocol["summary"]),
             official_project_surfaces=list(surfaces["official_project_surfaces"]),
             official_user_surfaces=list(surfaces["official_user_surfaces"]),
             observed_compatibility_surfaces=list(surfaces["observed_compatibility_surfaces"]),
+            official_docs_references=docs_references,
+            docs_check_status="declared" if docs_references else "missing",
+            docs_check_summary=(
+                f"declared {len(docs_references)} refs" if docs_references else "no official docs references"
+            ),
+            capability_labels=capability_labels,
         )
 
     def _certification_profile(self, target: str) -> dict[str, object]:
@@ -640,6 +899,285 @@ class IntegrationManager:
     def list_adapter_profiles(self, targets: list[str] | None = None) -> list[HostAdapterProfile]:
         selected = targets or sorted(self.TARGETS.keys())
         return [self.get_adapter_profile(target) for target in selected]
+
+    def host_hardening_blueprint(self, target: str) -> dict[str, object]:
+        profile = self.get_adapter_profile(target)
+        trigger_mode = "slash" if self.supports_slash(target) else "text"
+        required_steps = [
+            "setup project integration files",
+            "inject system flow contract markers",
+            "audit surface contract markers",
+            "generate host usage profile",
+        ]
+        if self.supports_slash(target):
+            required_steps.append("setup project slash command")
+            required_steps.append("setup user-level slash command")
+        if self.requires_skill(target):
+            required_steps.append("install skill to host skill directory")
+        protocol_mode = str(profile.host_protocol_mode or "")
+        if protocol_mode:
+            required_steps.append(f"apply host protocol mode: {protocol_mode}")
+        return {
+            "host": target,
+            "trigger_mode": trigger_mode,
+            "final_trigger": profile.trigger_command,
+            "required_steps": required_steps,
+            "required_project_surfaces": list(profile.official_project_surfaces),
+            "required_user_surfaces": list(profile.official_user_surfaces),
+        }
+
+    def _official_docs_references(self, target: str) -> list[str]:
+        references = list(self.OFFICIAL_DOCS_INDEX.get(target, ()))
+        return [item.strip() for item in references if isinstance(item, str) and item.strip()]
+
+    def _capability_labels(self, *, target: str) -> dict[str, str]:
+        slash_label = "native" if self.supports_slash(target) else "none"
+        protocol = self._protocol_profile(target=target)
+        mode = str(protocol.get("mode", "")).strip().lower()
+        if mode in {"official-context", "official-steering"}:
+            rules_label = "official"
+        elif mode.startswith("official"):
+            rules_label = "official"
+        else:
+            rules_label = "compat"
+        if self.requires_skill(target):
+            compatibility_skill_targets = {"cursor-cli", "cursor", "gemini-cli", "kimi-cli", "kiro-cli", "kiro", "trae"}
+            skill_label = "compat" if target in compatibility_skill_targets else "official"
+        else:
+            skill_label = "none"
+        trigger_label = "slash" if self.supports_slash(target) else "text"
+        return {
+            "slash": slash_label,
+            "rules": rules_label,
+            "skills": skill_label,
+            "trigger": trigger_label,
+        }
+
+    def verify_official_docs(self, target: str, *, timeout_seconds: float = 5.0) -> dict[str, object]:
+        references = self._official_docs_references(target)
+        if not references:
+            return {
+                "target": target,
+                "status": "missing",
+                "checked": 0,
+                "reachable": 0,
+                "unreachable": 0,
+                "details": [],
+            }
+        details: list[dict[str, object]] = []
+        reachable = 0
+        for url in references:
+            probe = self._probe_official_url(url=url, timeout_seconds=timeout_seconds)
+            ok = bool(probe.get("reachable", False))
+            code = probe.get("status_code")
+            reason = str(probe.get("error", ""))
+            if ok:
+                reachable += 1
+            details.append(
+                {
+                    "url": url,
+                    "reachable": ok,
+                    "status_code": code,
+                    "error": reason,
+                    "method": str(probe.get("method", "")),
+                    "tls_mode": str(probe.get("tls_mode", "")),
+                }
+            )
+        checked = len(details)
+        status = "verified" if reachable == checked else ("partial" if reachable > 0 else "failed")
+        return {
+            "target": target,
+            "status": status,
+            "checked": checked,
+            "reachable": reachable,
+            "unreachable": checked - reachable,
+            "details": details,
+        }
+
+    def _fetch_official_doc_excerpt(
+        self,
+        url: str,
+        *,
+        timeout_seconds: float = 5.0,
+        max_bytes: int = 120000,
+    ) -> dict[str, object]:
+        probe = self._probe_official_url(
+            url=url,
+            timeout_seconds=timeout_seconds,
+            read_content=True,
+            max_bytes=max_bytes,
+        )
+        return {
+            "url": url,
+            "reachable": bool(probe.get("reachable", False)),
+            "status_code": probe.get("status_code"),
+            "error": str(probe.get("error", "")),
+            "content": str(probe.get("content", "")),
+            "method": str(probe.get("method", "")),
+            "tls_mode": str(probe.get("tls_mode", "")),
+        }
+
+    def _probe_official_url(
+        self,
+        *,
+        url: str,
+        timeout_seconds: float,
+        read_content: bool = False,
+        max_bytes: int = 120000,
+    ) -> dict[str, object]:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; super-dev-host-audit/1.0)",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+        attempts: list[tuple[str, bool]]
+        if read_content:
+            attempts = [("GET", True), ("GET", False)]
+        else:
+            attempts = [("HEAD", True), ("GET", True), ("GET", False)]
+        last_error = ""
+        last_status: int | None = None
+        for method, strict_tls in attempts:
+            try:
+                req = urllib_request.Request(url, headers=headers, method=method)
+                open_kwargs: dict[str, object] = {"timeout": timeout_seconds}
+                if not strict_tls:
+                    open_kwargs["context"] = ssl._create_unverified_context()
+                with urllib_request.urlopen(req, **open_kwargs) as resp:
+                    status = int(getattr(resp, "status", 200))
+                    content = ""
+                    if read_content and method == "GET":
+                        content = resp.read(max_bytes).decode("utf-8", errors="ignore")
+                    return {
+                        "url": url,
+                        "reachable": 200 <= status < 400,
+                        "status_code": status,
+                        "error": "",
+                        "content": content,
+                        "method": method,
+                        "tls_mode": "strict" if strict_tls else "insecure-fallback",
+                    }
+            except urllib_error.HTTPError as exc:
+                status = int(getattr(exc, "code", 0) or 0)
+                last_status = status
+                last_error = str(exc)
+                if method == "HEAD" and status in {401, 403, 405, 406, 429}:
+                    continue
+                if 200 <= status < 400:
+                    return {
+                        "url": url,
+                        "reachable": True,
+                        "status_code": status,
+                        "error": str(exc),
+                        "content": "",
+                        "method": method,
+                        "tls_mode": "strict" if strict_tls else "insecure-fallback",
+                    }
+                if method == "GET" and not strict_tls:
+                    break
+            except Exception as exc:
+                last_error = str(exc)
+                if method == "HEAD":
+                    continue
+                if method == "GET" and strict_tls:
+                    continue
+                break
+        try:
+            return {
+                "url": url,
+                "reachable": False,
+                "status_code": last_status,
+                "error": last_error,
+                "content": "",
+                "method": "GET",
+                "tls_mode": "strict",
+            }
+        except Exception:
+            return {
+                "url": url,
+                "reachable": False,
+                "status_code": last_status,
+                "error": last_error,
+                "content": "",
+                "method": "GET",
+                "tls_mode": "strict",
+            }
+
+    def compare_official_capabilities(self, target: str, *, timeout_seconds: float = 5.0) -> dict[str, object]:
+        references = self._official_docs_references(target)
+        expected = self._capability_labels(target=target)
+        if not references:
+            return {
+                "target": target,
+                "status": "missing",
+                "expected": expected,
+                "checked_urls": 0,
+                "reachable_urls": 0,
+                "checks": {},
+                "details": [],
+            }
+        fetched = [
+            self._fetch_official_doc_excerpt(url, timeout_seconds=timeout_seconds)
+            for url in references
+        ]
+        reachable = [item for item in fetched if bool(item.get("reachable", False))]
+        corpus = "\n".join(str(item.get("content", "")).lower() for item in reachable)
+        checks: dict[str, dict[str, object]] = {}
+        keyword_map: dict[str, tuple[str, ...]] = {
+            "slash": ("slash", "/super-dev", "commands", "workflow"),
+            "rules": ("rules", "instruction", "guideline", "agents.md", "steering", "context"),
+            "skills": ("skill", "skills", "subagent", "sub-agents", "agent"),
+        }
+        required = 0
+        passed = 0
+        for capability in ("slash", "rules", "skills"):
+            label = str(expected.get(capability, "")).strip().lower()
+            if label == "none":
+                checks[capability] = {
+                    "expected": label,
+                    "ok": True,
+                    "matched_keywords": [],
+                    "reason": "not-required",
+                }
+                continue
+            required += 1
+            keywords = keyword_map.get(capability, ())
+            matched = [item for item in keywords if item in corpus]
+            ok = bool(matched) and bool(reachable)
+            if ok:
+                passed += 1
+            checks[capability] = {
+                "expected": label,
+                "ok": ok,
+                "matched_keywords": matched,
+                "reason": "matched" if ok else ("no-reachable-docs" if not reachable else "keyword-mismatch"),
+            }
+        if not reachable:
+            status = "unknown"
+        elif required == 0:
+            status = "passed"
+        elif passed == required:
+            status = "passed"
+        elif passed > 0:
+            status = "partial"
+        else:
+            status = "failed"
+        return {
+            "target": target,
+            "status": status,
+            "expected": expected,
+            "checked_urls": len(fetched),
+            "reachable_urls": len(reachable),
+            "checks": checks,
+            "details": [
+                {
+                    "url": str(item.get("url", "")),
+                    "reachable": bool(item.get("reachable", False)),
+                    "status_code": item.get("status_code"),
+                    "error": str(item.get("error", "")),
+                }
+                for item in fetched
+            ],
+        }
 
     @classmethod
     def resolve_global_protocol_path(cls, target: str) -> Path | None:
@@ -677,6 +1215,7 @@ class IntegrationManager:
             ("documents", cls.CONTRACT_DOC_GROUP),
             ("confirmation", cls.CONTRACT_CONFIRMATION_GROUP),
             ("artifacts", cls.CONTRACT_ARTIFACT_GROUP),
+            ("flow", cls.CONTRACT_FLOW_GROUP),
         ]
 
     @classmethod
@@ -700,37 +1239,38 @@ class IntegrationManager:
         documents_group = groups[1]
         confirmation_group = groups[2]
         artifacts_group = groups[3]
+        flow_group = groups[4]
 
         normalized = surface_path.as_posix()
 
         if surface_key.startswith("project-slash:") or surface_key.startswith("global-slash:"):
-            return [trigger_group, documents_group, confirmation_group]
+            return [trigger_group, documents_group, confirmation_group, flow_group]
 
         if surface_key.startswith("skill:"):
-            return [trigger_group, documents_group, confirmation_group, artifacts_group]
+            return [trigger_group, documents_group, confirmation_group, artifacts_group, flow_group]
 
         if surface_key.startswith("compatibility-protocol:"):
-            return [trigger_group, documents_group, confirmation_group]
+            return [trigger_group, documents_group, confirmation_group, flow_group]
 
         if normalized.endswith(".agent/workflows/super-dev.md"):
-            return [documents_group, confirmation_group]
+            return [documents_group, confirmation_group, flow_group]
 
         if normalized.endswith("/agents/super-dev-core.md"):
-            return [trigger_group, documents_group, confirmation_group, artifacts_group]
+            return [trigger_group, documents_group, confirmation_group, artifacts_group, flow_group]
 
         if normalized.endswith("AGENTS.md") and target == "codex-cli":
-            return [trigger_group, documents_group, confirmation_group, artifacts_group]
+            return [trigger_group, documents_group, confirmation_group, artifacts_group, flow_group]
 
         if normalized.endswith("GEMINI.md"):
-            return [trigger_group, documents_group, confirmation_group]
+            return [trigger_group, documents_group, confirmation_group, flow_group]
 
         if normalized.endswith("/steering/AGENTS.md") or normalized.endswith("/steering/super-dev.md"):
-            return [trigger_group, documents_group, confirmation_group]
+            return [trigger_group, documents_group, confirmation_group, flow_group]
 
         if normalized.endswith("/rules.md") or normalized.endswith("/project_rules.md"):
-            return [trigger_group, documents_group, confirmation_group]
+            return [trigger_group, documents_group, confirmation_group, flow_group]
 
-        return [documents_group, confirmation_group]
+        return [documents_group, confirmation_group, flow_group]
 
     @classmethod
     def audit_surface_contract(
@@ -953,6 +1493,32 @@ class IntegrationManager:
 
     def _precondition_profile(self, *, target: str) -> dict[str, object]:
         guidance = list(self.HOST_PRECONDITION_GUIDANCE.get(target, []))
+        items: list[dict[str, object]] = []
+        usage = self._usage_profile(target=target, category=HOST_TOOL_CATEGORY_MAP.get(target, "ide"))
+
+        context_item = {
+            "status": "project-context-required",
+            "label": "需在目标项目/工作区内触发",
+            "guidance": [str(usage["usage_location"]).strip()],
+            "signals": {
+                "project_dir_exists": self.project_dir.exists(),
+            },
+        }
+        if str(usage["usage_location"]).strip():
+            items.append(context_item)
+
+        if bool(usage["requires_restart_after_onboard"]):
+            items.append(
+                {
+                    "status": "session-restart-required",
+                    "label": "接入后需重开宿主会话",
+                    "guidance": [
+                        "完成 `super-dev onboard/setup` 后，关闭旧会话并新开一个宿主会话，再触发 Super Dev。",
+                    ],
+                    "signals": {},
+                }
+            )
+
         if target == "iflow":
             project_settings = self.project_dir / ".iflow" / "settings.json"
             user_settings = Path.home() / ".iflow" / "settings.json"
@@ -960,22 +1526,59 @@ class IntegrationManager:
             project_cfg = project_settings.exists()
             user_cfg = user_settings.exists()
             any_signal = env_key or project_cfg or user_cfg
-            return {
-                "status": "host-auth-required",
-                "label": "已检测到鉴权配置" if any_signal else "需宿主鉴权",
-                "guidance": guidance,
-                "signals": {
-                    "env_iflow_api_key": env_key,
-                    "project_settings_json": project_cfg,
-                    "user_settings_json": user_cfg,
+            items.insert(
+                0,
+                {
+                    "status": "host-auth-required",
+                    "label": "已检测到鉴权配置" if any_signal else "需宿主鉴权",
+                    "guidance": guidance,
+                    "signals": {
+                        "env_iflow_api_key": env_key,
+                        "project_settings_json": project_cfg,
+                        "user_settings_json": user_cfg,
+                    },
                 },
+            )
+        else:
+            extra = [item for item in guidance if isinstance(item, str) and item.strip()]
+            if extra:
+                items[0]["guidance"] = list(dict.fromkeys([*items[0]["guidance"], *extra])) if items else extra
+
+        if not items:
+            return {
+                "status": "none",
+                "label": "无额外前置条件",
+                "guidance": [],
+                "signals": {},
+                "items": [],
             }
 
+        priority = {
+            "host-auth-required": 0,
+            "session-restart-required": 1,
+            "project-context-required": 2,
+        }
+        primary = min(
+            items,
+            key=lambda item: priority.get(str(item.get("status", "")), 99),
+        )
+        combined_guidance: list[str] = []
+        combined_signals: dict[str, bool] = {}
+        for item in items:
+            for guidance_item in item.get("guidance", []):
+                if isinstance(guidance_item, str) and guidance_item.strip() and guidance_item not in combined_guidance:
+                    combined_guidance.append(guidance_item.strip())
+            item_signals = item.get("signals", {})
+            if isinstance(item_signals, dict):
+                for key, value in item_signals.items():
+                    combined_signals[str(key)] = bool(value)
+
         return {
-            "status": "none",
-            "label": "无额外前置条件",
-            "guidance": guidance,
-            "signals": {},
+            "status": str(primary.get("status", "none")),
+            "label": str(primary.get("label", "无额外前置条件")),
+            "guidance": combined_guidance,
+            "signals": combined_signals,
+            "items": items,
         }
 
     def _protocol_profile(self, *, target: str) -> dict[str, str]:
@@ -995,6 +1598,26 @@ class IntegrationManager:
             "codebuddy": {
                 "mode": "official-subagent",
                 "summary": "官方 commands + agents + skills",
+            },
+            "vscode-copilot": {
+                "mode": "official-context",
+                "summary": "官方 copilot-instructions + AGENTS",
+            },
+            "jetbrains-ai": {
+                "mode": "official-context",
+                "summary": "官方 .junie/AGENTS + agent skills",
+            },
+            "cline": {
+                "mode": "official-context",
+                "summary": "官方 .clinerules + AGENTS",
+            },
+            "roo-code": {
+                "mode": "official-skill",
+                "summary": "官方 commands + rules + modes",
+            },
+            "aider": {
+                "mode": "official-context",
+                "summary": "官方 .aider.conf + conventions/read-only context",
             },
             "qoder-cli": {
                 "mode": "official-skill",
@@ -1099,6 +1722,40 @@ class IntegrationManager:
                     "~/.codebuddy/agents/super-dev-core.md",
                     "~/.codebuddy/skills/super-dev-core/SKILL.md",
                 ],
+                "observed_compatibility_surfaces": [],
+            },
+            "vscode-copilot": {
+                "official_project_surfaces": [
+                    ".github/copilot-instructions.md",
+                    "AGENTS.md",
+                ],
+                "official_user_surfaces": ["~/.copilot/copilot-instructions.md"],
+                "observed_compatibility_surfaces": [],
+            },
+            "jetbrains-ai": {
+                "official_project_surfaces": [
+                    ".junie/AGENTS.md",
+                    ".junie/skills/super-dev-core/SKILL.md",
+                ],
+                "official_user_surfaces": ["~/.junie/skills/super-dev-core/SKILL.md"],
+                "observed_compatibility_surfaces": [],
+            },
+            "cline": {
+                "official_project_surfaces": [".clinerules/super-dev.md", "AGENTS.md"],
+                "official_user_surfaces": ["~/Documents/Cline/Rules/super-dev.md"],
+                "observed_compatibility_surfaces": [],
+            },
+            "roo-code": {
+                "official_project_surfaces": [
+                    ".roo/rules/super-dev.md",
+                    ".roo/commands/super-dev.md",
+                ],
+                "official_user_surfaces": ["~/.roo/rules/super-dev.md", "~/.roo/commands/super-dev.md"],
+                "observed_compatibility_surfaces": [],
+            },
+            "aider": {
+                "official_project_surfaces": ["AGENTS.md", ".aider.conf.yml"],
+                "official_user_surfaces": ["~/.aider.conf.yml"],
                 "observed_compatibility_surfaces": [],
             },
             "codex-cli": {
@@ -1218,11 +1875,15 @@ class IntegrationManager:
         for relative in integration.files:
             file_path = self.project_dir / relative
             if target == "codex-cli" and relative == "AGENTS.md":
+                block_content = self._append_flow_contract(
+                    content=self._build_file_content(target=target, relative=relative),
+                    relative=relative,
+                )
                 updated = self._upsert_managed_block(
                     file_path=file_path,
                     begin=self.CODEX_AGENTS_BEGIN,
                     end=self.CODEX_AGENTS_END,
-                    block_content=self._build_file_content(target=target, relative=relative),
+                    block_content=block_content,
                 )
                 if updated:
                     written_files.append(file_path)
@@ -1230,7 +1891,10 @@ class IntegrationManager:
             if file_path.exists() and not force:
                 continue
             file_path.parent.mkdir(parents=True, exist_ok=True)
-            content = self._build_file_content(target=target, relative=relative)
+            content = self._append_flow_contract(
+                content=self._build_file_content(target=target, relative=relative),
+                relative=relative,
+            )
             file_path.write_text(content, encoding="utf-8")
             written_files.append(file_path)
 
@@ -1243,50 +1907,95 @@ class IntegrationManager:
             if protocol_file.exists() and not force:
                 return None
             protocol_file.parent.mkdir(parents=True, exist_ok=True)
-            protocol_file.write_text(self._build_claude_agent_content(), encoding="utf-8")
+            protocol_file.write_text(
+                self._append_flow_contract(
+                    content=self._build_claude_agent_content(),
+                    relative=protocol_file.as_posix(),
+                ),
+                encoding="utf-8",
+            )
             return protocol_file
 
         if target == "codebuddy" and protocol_file is not None:
             if protocol_file.exists() and not force:
                 return None
             protocol_file.parent.mkdir(parents=True, exist_ok=True)
-            protocol_file.write_text(self._build_codebuddy_agent_content(), encoding="utf-8")
+            protocol_file.write_text(
+                self._append_flow_contract(
+                    content=self._build_codebuddy_agent_content(),
+                    relative=protocol_file.as_posix(),
+                ),
+                encoding="utf-8",
+            )
             return protocol_file
 
         if target == "kiro" and protocol_file is not None:
             if protocol_file.exists() and not force:
                 return None
             protocol_file.parent.mkdir(parents=True, exist_ok=True)
-            protocol_file.write_text(self._build_kiro_global_steering_content(), encoding="utf-8")
+            protocol_file.write_text(
+                self._append_flow_contract(
+                    content=self._build_kiro_global_steering_content(),
+                    relative=protocol_file.as_posix(),
+                ),
+                encoding="utf-8",
+            )
             return protocol_file
 
         if target == "gemini-cli" and protocol_file is not None:
             if protocol_file.exists() and not force:
                 return None
             protocol_file.parent.mkdir(parents=True, exist_ok=True)
-            protocol_file.write_text(self._build_content(target), encoding="utf-8")
+            protocol_file.write_text(
+                self._append_flow_contract(
+                    content=self._build_content(target),
+                    relative=protocol_file.as_posix(),
+                ),
+                encoding="utf-8",
+            )
             return protocol_file
 
         if target == "antigravity" and protocol_file is not None:
             if protocol_file.exists() and not force:
                 return None
             protocol_file.parent.mkdir(parents=True, exist_ok=True)
-            protocol_file.write_text(self._build_antigravity_context_content(), encoding="utf-8")
+            protocol_file.write_text(
+                self._append_flow_contract(
+                    content=self._build_antigravity_context_content(),
+                    relative=protocol_file.as_posix(),
+                ),
+                encoding="utf-8",
+            )
             return protocol_file
 
         if target == "trae" and protocol_file is not None:
             compatibility_file = self.resolve_compatibility_protocol_path(target)
-            content = self._build_content(target)
+            content = self._append_flow_contract(
+                content=self._build_content(target),
+                relative=protocol_file.as_posix(),
+            )
             if protocol_file.exists() and not force:
                 if compatibility_file is not None and not compatibility_file.exists():
                     compatibility_file.parent.mkdir(parents=True, exist_ok=True)
-                    compatibility_file.write_text(content, encoding="utf-8")
+                    compatibility_file.write_text(
+                        self._append_flow_contract(
+                            content=content,
+                            relative=compatibility_file.as_posix(),
+                        ),
+                        encoding="utf-8",
+                    )
                 return None
             protocol_file.parent.mkdir(parents=True, exist_ok=True)
             protocol_file.write_text(content, encoding="utf-8")
             if compatibility_file is not None:
                 compatibility_file.parent.mkdir(parents=True, exist_ok=True)
-                compatibility_file.write_text(content, encoding="utf-8")
+                compatibility_file.write_text(
+                    self._append_flow_contract(
+                        content=content,
+                        relative=compatibility_file.as_posix(),
+                    ),
+                    encoding="utf-8",
+                )
             return protocol_file
 
         return None
@@ -1357,7 +2066,11 @@ class IntegrationManager:
         if command_file.exists() and not force:
             return None
         command_file.parent.mkdir(parents=True, exist_ok=True)
-        command_file.write_text(self._build_slash_command_content(target), encoding="utf-8")
+        command_content = self._append_flow_contract(
+            content=self._build_slash_command_content(target),
+            relative=command_file.name,
+        )
+        command_file.write_text(command_content, encoding="utf-8")
         return command_file
 
     @classmethod

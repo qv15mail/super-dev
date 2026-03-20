@@ -79,7 +79,9 @@ def test_host_tool_catalog_ids_unique():
     assert ids == list(HOST_TOOL_IDS)
     assert len(ids) == len(set(ids))
     assert {
+        "aider",
         "claude-code",
+        "cline",
         "codebuddy-cli",
         "codebuddy",
         "codex-cli",
@@ -87,10 +89,13 @@ def test_host_tool_catalog_ids_unique():
         "windsurf",
         "gemini-cli",
         "iflow",
+        "jetbrains-ai",
         "kimi-cli",
         "kiro-cli",
         "opencode",
         "qoder-cli",
+        "roo-code",
+        "vscode-copilot",
         "cursor",
         "kiro",
         "qoder",

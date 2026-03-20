@@ -11,8 +11,8 @@ from pathlib import Path
 
 PLATFORM_CATALOG: list[dict[str, str]] = [
     {"id": "web", "name": "Web 应用"},
-    {"id": "mobile", "name": "移动应用"},
-    {"id": "wechat", "name": "微信小程序"},
+    {"id": "mobile", "name": "H5 / APP"},
+    {"id": "wechat", "name": "微信小程序（MiniApp）"},
     {"id": "desktop", "name": "桌面应用"},
 ]
 
@@ -130,7 +130,9 @@ CICD_PLATFORM_TARGET_IDS: tuple[str, ...] = tuple(item for item in CICD_PLATFORM
 
 HOST_TOOL_CATALOG: list[dict[str, str]] = [
     {"id": "antigravity", "name": "Antigravity"},
+    {"id": "aider", "name": "Aider CLI"},
     {"id": "claude-code", "name": "Claude Code"},
+    {"id": "cline", "name": "Cline"},
     {"id": "codebuddy-cli", "name": "CodeBuddy CLI"},
     {"id": "codebuddy", "name": "CodeBuddy"},
     {"id": "codex-cli", "name": "Codex CLI"},
@@ -138,10 +140,13 @@ HOST_TOOL_CATALOG: list[dict[str, str]] = [
     {"id": "windsurf", "name": "Windsurf"},
     {"id": "gemini-cli", "name": "Gemini CLI"},
     {"id": "iflow", "name": "iFlow CLI"},
+    {"id": "jetbrains-ai", "name": "JetBrains Junie"},
     {"id": "kimi-cli", "name": "Kimi CLI"},
     {"id": "kiro-cli", "name": "Kiro CLI"},
     {"id": "opencode", "name": "OpenCode CLI"},
     {"id": "qoder-cli", "name": "Qoder CLI"},
+    {"id": "roo-code", "name": "Roo Code"},
+    {"id": "vscode-copilot", "name": "VS Code Copilot"},
     {"id": "cursor", "name": "Cursor"},
     {"id": "kiro", "name": "Kiro"},
     {"id": "qoder", "name": "Qoder"},
@@ -150,7 +155,32 @@ HOST_TOOL_CATALOG: list[dict[str, str]] = [
 
 HOST_TOOL_IDS: tuple[str, ...] = tuple(item["id"] for item in HOST_TOOL_CATALOG)
 
+PRIMARY_CLI_HOST_TOOL_IDS: tuple[str, ...] = (
+    "claude-code",
+    "codex-cli",
+    "gemini-cli",
+    "opencode",
+    "kiro-cli",
+    "cursor-cli",
+    "qoder-cli",
+    "codebuddy-cli",
+)
+
+PRIMARY_IDE_HOST_TOOL_IDS: tuple[str, ...] = (
+    "antigravity",
+    "cursor",
+    "windsurf",
+    "kiro",
+    "qoder",
+    "codebuddy",
+    "trae",
+    "vscode-copilot",
+)
+
+PRIMARY_HOST_TOOL_IDS: tuple[str, ...] = PRIMARY_CLI_HOST_TOOL_IDS + PRIMARY_IDE_HOST_TOOL_IDS
+
 CLI_HOST_TOOL_IDS: tuple[str, ...] = (
+    "aider",
     "claude-code",
     "codebuddy-cli",
     "codex-cli",
@@ -170,7 +200,9 @@ HOST_TOOL_CATEGORY_MAP: dict[str, str] = {
 
 HOST_COMMAND_CANDIDATES: dict[str, list[str]] = {
     "antigravity": ["antigravity"],
+    "aider": ["aider"],
     "claude-code": ["claude", "claude-code"],
+    "cline": ["cline"],
     "codebuddy-cli": ["codebuddy", "codebuddy-cli"],
     "codebuddy": ["codebuddy"],
     "codex-cli": ["codex"],
@@ -182,6 +214,7 @@ HOST_COMMAND_CANDIDATES: dict[str, list[str]] = {
     "kiro-cli": ["kiro"],
     "opencode": ["opencode"],
     "qoder-cli": ["qoder", "qoder-cli"],
+    "roo-code": ["roo", "roo-code"],
     "cursor": ["cursor"],
     "qoder": ["qoder"],
     "trae": ["trae"],
@@ -253,6 +286,19 @@ HOST_PATH_PATTERNS: dict[str, list[str]] = {
         "%LOCALAPPDATA%/Programs/Trae/Trae.exe",
         "%PROGRAMFILES%/Trae/Trae.exe",
         "%PROGRAMFILES(X86)%/Trae/Trae.exe",
+    ],
+    "vscode-copilot": [
+        "~/Applications/Visual Studio Code.app",
+        "/Applications/Visual Studio Code.app",
+        "%LOCALAPPDATA%/Programs/Microsoft VS Code/Code.exe",
+        "%PROGRAMFILES%/Microsoft VS Code/Code.exe",
+        "%PROGRAMFILES(X86)%/Microsoft VS Code/Code.exe",
+    ],
+    "jetbrains-ai": [
+        "~/Applications/IntelliJ IDEA.app",
+        "/Applications/IntelliJ IDEA.app",
+        "~/Applications/PyCharm.app",
+        "/Applications/PyCharm.app",
     ],
 }
 

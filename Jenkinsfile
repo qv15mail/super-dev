@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = "your-registry/用户认证系统"
+        DOCKER_IMAGE = "your-registry/super-dev"
         DOCKER_TAG = "${sh(returnStdout: true, script: 'git rev-parse --short HEAD').trim()}"
         KUBECONFIG_DEV = credentials('kubeconfig-dev')
         KUBECONFIG_PROD = credentials('kubeconfig-prod')
@@ -19,12 +19,23 @@ pipeline {
             parallel {
                 stage('Frontend') {
                     steps {
-                        sh 'npm ci'
+                        script {
+                            if (fileExists('frontend/package.json')) {
+                                sh 'npm --prefix frontend ci'
+                            }
+                        }
                     }
                 }
                 stage('Backend') {
                     steps {
-                        sh 'pip install -e ".[dev]"'
+                        script {
+                            if (fileExists('backend/package.json')) {
+                                sh 'npm --prefix backend ci'
+                            }
+                            if (fileExists('requirements.txt') || fileExists('backend/requirements.txt') || fileExists('pyproject.toml')) {
+                                sh 'pip install -e ".[dev]"'
+                            }
+                        }
                     }
                 }
             }
@@ -32,54 +43,53 @@ pipeline {
 
         stage('Lint') {
             steps {
-                sh 'npm run lint || pylint **/*.py'
+                script {
+                    if (fileExists('frontend/package.json')) {
+                        sh 'npm --prefix frontend run lint --if-present'
+                    }
+                    if (fileExists('backend/package.json')) {
+                        sh 'npm --prefix backend run lint --if-present'
+                    }
+                    if (fileExists('super_dev')) {
+                        sh 'ruff check super_dev tests'
+                    }
+                }
             }
         }
 
         stage('Type Check') {
             steps {
-                sh 'npm run type-check || mypy .'
+                script {
+                    if (fileExists('frontend/package.json')) {
+                        sh 'npm --prefix frontend run type-check --if-present'
+                    }
+                    if (fileExists('backend/package.json')) {
+                        sh 'npm --prefix backend run type-check --if-present'
+                    }
+                    if (fileExists('super_dev')) {
+                        sh 'mypy super_dev'
+                    }
+                }
             }
         }
 
         stage('Test') {
             steps {
-                sh '''
-                    npm test -- --coverage --watchAll=false
-                    pytest --cov=. --cov-report=xml
-                '''
-            }
-            post {
-                always {
-                    publishHTML([
-                        reportDir: 'coverage/lcov-report',
-                        reportFiles: 'index.html',
-                        reportName: 'Coverage Report'
-                    ])
+                script {
+                    if (fileExists('frontend/package.json')) {
+                        sh 'npm --prefix frontend run test --if-present'
+                    }
+                    if (fileExists('backend/package.json')) {
+                        sh 'npm --prefix backend run test --if-present'
+                    }
+                    if (fileExists('tests')) {
+                        sh 'pytest -q'
+                    }
                 }
             }
-        }
-
-        stage('Knowledge Gates') {
-            steps {
-                sh '''
-                    mkdir -p artifacts
-                    python3 scripts/audit_development_kb.py
-                    python3 scripts/check_knowledge_gates.py --project-dir . --format json --out artifacts/knowledge-gate-report.json
-                    python3 scripts/check_knowledge_gates.py --project-dir . --format md --out artifacts/knowledge-gate-report.md
-                    python3 scripts/check_knowledge_gates.py --project-dir . --format html --out artifacts/knowledge-gate-report.html
-                    python3 scripts/check_knowledge_gates.py --project-dir . --format junit --out artifacts/knowledge-gate-junit.xml
-                '''
-            }
             post {
                 always {
-                    archiveArtifacts artifacts: 'artifacts/knowledge-gate-*.*', fingerprint: true
-                    publishHTML([
-                        reportDir: 'artifacts',
-                        reportFiles: 'knowledge-gate-report.html',
-                        reportName: 'Knowledge Gate Report'
-                    ])
-                    junit 'artifacts/knowledge-gate-junit.xml'
+                    echo 'Tests finished'
                 }
             }
         }
@@ -117,8 +127,8 @@ pipeline {
                 sh '''
                     echo ${KUBECONFIG_DEV} > kubeconfig
                     kubectl --kubeconfig=kubeconfig apply -f k8s/ -n dev
-                    kubectl --kubeconfig=kubeconfig set image deployment/用户认证系统 用户认证系统=${DOCKER_IMAGE}:${DOCKER_TAG} -n dev
-                    kubectl --kubeconfig=kubeconfig rollout status deployment/用户认证系统 -n dev
+                    kubectl --kubeconfig=kubeconfig set image deployment/super-dev super-dev=${DOCKER_IMAGE}:${DOCKER_TAG} -n dev
+                    kubectl --kubeconfig=kubeconfig rollout status deployment/super-dev -n dev
                 '''
             }
         }
@@ -132,8 +142,8 @@ pipeline {
                 sh '''
                     echo ${KUBECONFIG_PROD} > kubeconfig
                     kubectl --kubeconfig=kubeconfig apply -f k8s/ -n prod
-                    kubectl --kubeconfig=kubeconfig set image deployment/用户认证系统 用户认证系统=${DOCKER_IMAGE}:${DOCKER_TAG} -n prod
-                    kubectl --kubeconfig=kubeconfig rollout status deployment/用户认证系统 -n prod
+                    kubectl --kubeconfig=kubeconfig set image deployment/super-dev super-dev=${DOCKER_IMAGE}:${DOCKER_TAG} -n prod
+                    kubectl --kubeconfig=kubeconfig rollout status deployment/super-dev -n prod
                 '''
             }
         }

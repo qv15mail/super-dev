@@ -19,7 +19,7 @@
 
 ## Version
 
-Current version: `2.0.10`
+Current version: `2.0.11`
 
 ---
 
@@ -78,22 +78,37 @@ It is built to solve delivery-process problems:
 - Auto-detect available hosts and score readiness
 - Emit compatibility report and history
 - `--save-profile` writes host profile into `super-dev.yaml`
+- `integrate validate` summarizes host prerequisites, runtime acceptance state, and delivery-readiness guidance
 
-### 5. Auditable Delivery Assets
+### 5. Codebase Intelligence and Change Analysis
+
+- `repo-map` generates a codebase map and suggested reading order
+- `dependency-graph` outputs module dependencies and critical paths
+- `impact` analyzes blast radius, risk level, and recommended actions
+- `regression-guard` turns impact analysis into an executable regression checklist
+
+### 6. Auditable Delivery Assets
 
 - `pipeline-metrics` telemetry
 - `pipeline-contract` stage evidence
 - `resume-audit` for resumed runs
 - Delivery package: manifest/report/archive
-- `proof-pack` delivery evidence bundle
+- `proof-pack` delivery evidence bundle with executive summary
+- `release readiness` plus `Spec Quality` as one unified release-scoring panel
 
-### 6. Commercial-Grade Gate Chain
+### 7. Commercial-Grade Gate Chain
 
 - Red-team checks (security/performance/architecture)
 - Quality gate (scenario + policy thresholds)
 - Release rehearsal and rollback playbooks
 
-### 7. Commercial UI Intelligence
+### 8. Bugfix and Revision Loops
+
+- `super-dev fix` explicitly enters the lightweight bugfix path
+- docs revision, UI revision, architecture revision, and quality revision are first-class workflow gates
+- defect remediation still produces documents, verification, and delivery evidence
+
+### 9. Commercial UI Intelligence
 
 - Built-in UI/UX knowledge base for product type, industry tone, trust modules, page skeletons, anti-patterns, and information density
 - Built-in mainstream component ecosystem recommendations across React/Next, Vue, Angular, and Svelte
@@ -137,8 +152,15 @@ Common delivery-evidence commands:
 super-dev integrate audit --auto --repair --force
 super-dev integrate validate --auto
 super-dev repo-map
+super-dev dependency-graph
 super-dev impact "Change the login flow" --files services/auth.py
+super-dev regression-guard "Change the login flow" --files services/auth.py
 super-dev fix "Fix login 500 and add regression verification"
+super-dev spec propose add-billing --title "..." --description "..." --no-scaffold
+super-dev spec scaffold <change_id>
+super-dev spec quality <change_id>
+super-dev run --status
+super-dev run --confirm docs --comment "core docs approved"
 super-dev release proof-pack
 super-dev release readiness
 super-dev review architecture --status revision_requested --comment "The technical plan must be redesigned"
@@ -161,12 +183,15 @@ After onboarding, the terminal prints the final trigger for each selected host:
 - slash hosts: `/super-dev your requirement`
 - text-trigger hosts: `super-dev: your requirement`
 - for manual runtime acceptance, run `super-dev integrate validate --target <host>`
+- `super-dev doctor --host <host>` / `integrate audit` / `integrate validate` now surface host prerequisites such as authentication, session restart, and project/workspace binding.
 
 If you want an explicit bootstrap step before host onboarding:
 
 ```bash
 super-dev bootstrap --name my-project --platform web --frontend next --backend node
 ```
+
+`super-dev release proof-pack` and `super-dev release readiness` now include the current active change's `Spec Quality` score so the delivery panel shows proposal/spec/plan/tasks/checklist/validation maturity in one place.
 
 This will explicitly generate:
 
@@ -175,16 +200,34 @@ This will explicitly generate:
 
 These files make the initialization contract, trigger model, and pipeline order visible.
 
+If you need cross-phase workflow control, you can also use:
+
+```bash
+super-dev run --status
+super-dev run --phase frontend
+super-dev run --jump quality
+super-dev run --confirm docs --comment "core docs approved"
+```
+
+If you want to separate Spec proposal creation, scaffolding, and quality scoring, you can also use:
+
+```bash
+super-dev spec propose add-billing --title "..." --description "..." --no-scaffold
+super-dev spec scaffold add-billing
+super-dev spec quality add-billing
+super-dev spec quality add-billing --json
+```
+
 ### 3. Pin a specific version
 
 ```bash
-pip install super-dev==2.0.10
+pip install super-dev==2.0.11
 ```
 
 ### 4. Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.10
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.11
 ```
 
 ### 5. Source install for development
@@ -267,12 +310,13 @@ Additional notes:
 
 ## Key Docs
 
+- [Docs overview](docs/README.md)
+- [Quickstart](docs/QUICKSTART.md)
+- [Install options](docs/INSTALL_OPTIONS.md)
 - [Host usage guide](docs/HOST_USAGE_GUIDE.md)
 - [Host capability audit](docs/HOST_CAPABILITY_AUDIT.md)
-- [Host runtime validation matrix](docs/HOST_RUNTIME_VALIDATION.md)
-- [Host install surfaces](docs/HOST_INSTALL_SURFACES.md)
 - [Workflow guide](docs/WORKFLOW_GUIDE_EN.md)
-- [Product audit](docs/PRODUCT_AUDIT.md)
+- [Integration guide](docs/INTEGRATION_GUIDE.md)
 
 Operating principle:
 
@@ -301,11 +345,11 @@ This view shows the main source directories under `super_dev` and their dependen
 
 ## Simplest Usage (For End Users)
 
-### CLI Hosts (Claude Code / CodeBuddy CLI / Codex CLI / Cursor CLI / Gemini CLI / iFlow CLI / Kimi CLI / Kiro CLI / OpenCode CLI / Qoder CLI)
+### CLI Hosts (Claude Code / Codex CLI / Gemini CLI / OpenCode / Kiro CLI / Cursor CLI / Qoder CLI / CodeBuddy CLI)
 
 1. Run `super-dev` in your project root to finish onboarding.  
-2. Hosts with native mapping support can run `/super-dev your requirement`.
-3. Codex CLI and Kimi CLI currently do not use `/super-dev`; type `super-dev: your requirement` inside the host session.
+2. Slash-capable hosts such as Claude Code, Gemini CLI, Kiro CLI, Cursor CLI, Qoder CLI, CodeBuddy CLI, and OpenCode can run `/super-dev your requirement`.
+3. Codex CLI currently does not use `/super-dev`; type `super-dev: your requirement` inside the host session.
 4. The host is constrained to execute `research -> docs -> user confirmation -> spec -> frontend runtime validation -> backend/testing/delivery`, not jump straight into implementation.
 5. For defect remediation, prefer `super-dev fix "bug description"` so the host follows the lighter bugfix path instead of the full feature-delivery path.
 6. For an existing or complex repository, run `super-dev repo-map` first so the host starts from an explicit codebase map instead of guessing structure at runtime.
@@ -321,12 +365,17 @@ This view shows the main source directories under `super_dev` and their dependen
 - If the project contains a `knowledge/` directory, the host must read the relevant local knowledge files before drafting documents.
 - If `output/knowledge-cache/*-knowledge-bundle.json` exists, the host must inherit its matched local knowledge, research summary, and scenario constraints into the documents, spec, and implementation.
 
-### IDE Hosts (Antigravity / CodeBuddy / Cursor / Kiro / Qoder / Trae / Windsurf)
+### IDE Hosts (Antigravity / Cursor / Windsurf / Kiro / Qoder / CodeBuddy / Trae / VS Code Copilot)
 
 1. Run `super-dev` in your project root to finish onboarding.  
 2. Open the IDE Agent Chat and trigger according to the real host entry.  
 3. IDEs with slash support use `/super-dev your requirement`; non-slash IDEs use `super-dev: your requirement`.
 4. Non-slash hosts follow the same research-first pipeline through project rules, AGENTS, or skills.
+
+This release focuses on `16` primary host integration profiles. The full matrix and official references live in:
+
+- [HOST_CAPABILITY_AUDIT.md](/Users/weiyou/Documents/kaifa/super-dev/docs/HOST_CAPABILITY_AUDIT.md)
+- [HOST_USAGE_GUIDE.md](/Users/weiyou/Documents/kaifa/super-dev/docs/HOST_USAGE_GUIDE.md)
 
 ### Host Trigger Matrix
 
@@ -345,8 +394,6 @@ Certification levels:
 | Cursor CLI | CLI | Compatible | Yes | Run `/super-dev your requirement` inside the Cursor CLI session | No |
 | Cursor IDE | IDE | Experimental | Yes | Run `/super-dev your requirement` in Agent Chat | No |
 | Gemini CLI | CLI | Compatible | Yes | Run `/super-dev your requirement` inside the Gemini CLI session | No |
-| iFlow CLI | CLI | Experimental | Yes | Run `/super-dev your requirement` inside the iFlow CLI session | No |
-| Kimi CLI | CLI | Experimental | No | Type `super-dev: your requirement` inside the Kimi CLI session (governed by `.kimi/AGENTS.md`) | No |
 | Kiro CLI | CLI | Compatible | Yes | Run `/super-dev your requirement` inside the Kiro CLI session | No |
 | Kiro IDE | IDE | Experimental | No | Type `super-dev: your requirement` inside Kiro IDE Agent Chat (governed by `.kiro/steering/super-dev.md` + `~/.kiro/steering/AGENTS.md`) | No |
 | OpenCode CLI | CLI | Experimental | Yes | Run `/super-dev your requirement` inside the OpenCode CLI session (governed by `.opencode/commands/` + `.opencode/skills/` / `~/.config/opencode/skills/`) | No |
@@ -445,7 +492,7 @@ Notes:
 3. The current integration model is `.codebuddy/commands/` + `.codebuddy/agents/` + `.codebuddy/skills/`.
 
 
-#### 5. Cursor CLI
+#### 4. Cursor CLI
 
 Install:
 ```bash
@@ -466,7 +513,7 @@ Notes:
 1. Good fit for running research, docs, and coding in one terminal session.
 2. If the command list is stale, reopen the Cursor CLI session.
 
-#### 6. Cursor IDE
+#### 5. Cursor IDE
 
 Install:
 ```bash
@@ -487,7 +534,7 @@ Notes:
 1. Keep the full pipeline inside one chat when possible.
 2. If rules were not loaded, reopen the workspace or start a new chat.
 
-#### 7. Antigravity
+#### 6. Antigravity
 
 Install:
 ```bash
@@ -510,7 +557,7 @@ Notes:
 3. It also writes user-level `~/.gemini/GEMINI.md`, `~/.gemini/commands/super-dev.md`, and `~/.gemini/skills/super-dev-core/SKILL.md`.
 4. Restart Antigravity or open a fresh Agent Chat before typing `/super-dev your requirement`.
 
-#### 8. Gemini CLI
+#### 7. Gemini CLI
 
 Install:
 ```bash
@@ -531,51 +578,7 @@ Notes:
 1. Prefer to keep research -> three core docs -> user confirmation -> spec -> frontend runtime validation -> backend/delivery in one continuous session.
 2. If the host supports browsing, let it perform competitor research first.
 
-#### 9. iFlow CLI
-
-Install:
-```bash
-super-dev onboard --host iflow --force --yes
-```
-
-Where to trigger:
-Open an iFlow CLI session in the project directory and trigger there.
-
-Trigger command:
-```text
-/super-dev your requirement
-```
-
-Restart required after onboard: No
-
-Notes:
-1. Currently adapted as a slash-capable CLI host.
-2. If slash does not appear, verify that the project command file was written.
-3. If the host returns `Invalid API key provided`, run `/auth` inside iFlow first, or update `IFLOW_API_KEY` / `settings.json`, then restart the host session.
-
-#### 10. Kimi CLI
-
-Install:
-```bash
-super-dev onboard --host kimi-cli --force --yes
-```
-
-Where to trigger:
-Open a Kimi CLI session in the project directory and trigger there.
-
-Trigger command:
-```text
-super-dev: your requirement
-```
-
-Restart required after onboard: No
-
-Notes:
-1. Do not type `/super-dev`; Kimi CLI currently prefers `.kimi/AGENTS.md + text trigger`.
-2. Running `super-dev doctor --host kimi-cli` once is recommended.
-3. Keep the whole workflow in the same session when possible.
-
-#### 11. Kiro CLI
+#### 8. Kiro CLI
 
 Install:
 ```bash
@@ -596,7 +599,7 @@ Notes:
 1. Use slash directly in CLI mode.
 2. If project rules are stale, reopen Kiro CLI from the project root.
 
-#### 12. Kiro IDE
+#### 9. Kiro IDE
 
 Install:
 ```bash
@@ -618,7 +621,7 @@ Notes:
 2. Onboarding writes project-level `.kiro/steering/super-dev.md` and also installs the official global steering file at `~/.kiro/steering/AGENTS.md`.
 3. If steering or rules did not load, reopen the project window.
 
-#### 13. OpenCode
+#### 10. OpenCode
 
 Install:
 ```bash
@@ -639,7 +642,7 @@ Notes:
 1. Uses the CLI slash path.
 2. Even if you also use a global command directory, keep the project-level integration files.
 
-#### 14. Qoder CLI
+#### 11. Qoder CLI
 
 Install:
 ```bash
@@ -660,7 +663,7 @@ Notes:
 1. Suitable for terminal-first pipeline execution.
 2. If slash does not work, verify that `.qoder/commands/super-dev.md` exists.
 
-#### 15. Qoder IDE
+#### 12. Qoder IDE
 
 Install:
 ```bash
@@ -681,7 +684,7 @@ Notes:
 1. Qoder IDE now uses project-level commands + rules, so trigger `/super-dev your requirement` in Agent Chat.
 2. If the command does not appear, verify that `.qoder/commands/super-dev.md` exists, then reopen the project or start a fresh chat.
 
-#### 16. Windsurf
+#### 13. Windsurf
 
 Install:
 ```bash
@@ -702,7 +705,7 @@ Notes:
 1. Currently adapted through the IDE slash/workflow path.
 2. Best used when research, docs, spec, and coding stay in one workflow.
 
-#### 17. Codex CLI
+#### 14. Codex CLI
 
 Install:
 ```bash
@@ -724,7 +727,7 @@ Notes:
 2. Execution relies on `AGENTS.md` plus the official user-level skill at `~/.codex/skills/super-dev-core/SKILL.md`.
 3. If the old session did not reload the Skill, restart `codex` and retry.
 
-#### 18. Trae
+#### 15. Trae
 
 Install:
 ```bash
@@ -746,3 +749,25 @@ Notes:
 2. Onboarding always writes project-level `.trae/project_rules.md` + `.trae/rules.md` and user-level `~/.trae/user_rules.md` + `~/.trae/rules.md`; if a compatible host skill directory is detected, it also enhances `~/.trae/skills/super-dev-core/SKILL.md`.
 3. After onboarding, restart Trae or at least open a fresh Agent Chat so the rule file loads; if the compatibility skill exists it will load together.
 4. Then continue delivery from `output/*` and `.super-dev/changes/*/tasks.md`.
+
+#### 16. VS Code Copilot
+
+Install:
+```bash
+super-dev onboard --host vscode-copilot --force --yes
+```
+
+Where to trigger:
+Open Copilot Chat inside the target VS Code workspace.
+
+Trigger command:
+```text
+super-dev: your requirement
+```
+
+Restart required after onboard: No
+
+Notes:
+1. VS Code Copilot currently relies on `.github/copilot-instructions.md` plus `AGENTS.md`.
+2. Do not use `/super-dev`; trigger with `super-dev:` or `super-dev：` inside Copilot Chat.
+3. If the current chat did not reload the new instructions, reopen the workspace or start a fresh Copilot Chat session.

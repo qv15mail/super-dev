@@ -26,12 +26,12 @@ class ProjectConfig:
 
     name: str
     description: str = ""
-    version: str = "2.0.10"
+    version: str = "2.0.11"
     author: str = ""
     license: str = "MIT"
 
     # 技术栈
-    platform: str = "web"  # web, mobile, wechat, desktop
+    platform: str = "web"  # web, mobile(H5/APP), wechat(miniapp), desktop
     frontend: str = "next"  # 扩展支持：next, remix, react-vite, gatsby, nuxt, vue-vite, angular, sveltekit, astro, solid, qwik
     backend: str = "node"  # node, python, go, java, rust, php, ruby, csharp, kotlin, swift, elixir, scala, dart
     database: str = "postgresql"  # postgresql, mysql, mongodb, redis
@@ -80,7 +80,7 @@ class ConfigManager:
     DEFAULT_CONFIG: dict[str, Any] = {
         "name": "my-project",
         "description": "A Super Dev project",
-        "version": "2.0.10",
+        "version": "2.0.11",
         "platform": "web",
         "frontend": "next",  # 默认使用 Next.js
         "backend": "node",

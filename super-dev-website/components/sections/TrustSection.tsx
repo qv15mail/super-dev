@@ -5,25 +5,25 @@ const COPY = {
   zh: {
     eyebrow: 'Proof / Trust',
     title: '可信度来自可验证的证据。',
-    body: '开源、已发布、多宿主、本地知识库、质量门禁和交付产物，都直接展示给用户。',
+    body: '开源、已发布、多宿主、本地知识库、宿主验收、Spec 评分、质量门禁和交付产物，都直接展示给用户。',
     items: [
       { icon: BadgeCheck, title: 'MIT 开源与 PyPI 发布', body: '代码可见、安装路径清晰、版本可追踪，版本升级和分发路径也足够明确。'},
-      { icon: PackageCheck, title: '多宿主接入', body: '同一套治理逻辑可安装到 CLI 和 IDE 宿主，不要求用户迁移到新的开发工具。'},
+      { icon: PackageCheck, title: '多宿主接入与验收中心', body: '同一套治理逻辑可安装到 CLI 和 IDE 宿主，并通过 Host Validation Center 跟踪前置条件、运行时验收和交付就绪状态。'},
       { icon: BookCopy, title: '本地知识库优先', body: 'knowledge/ 和 knowledge bundle 会优先进入 research、三文档、Spec、质量与交付。'},
-      { icon: ShieldCheck, title: 'UI Review 与 Release Readiness', body: '运行验证、质量门禁和发布检查都会明确产出结果，方便判断项目是否达到交付标准。'},
-      { icon: Archive, title: '交付产物可审计', body: '交付清单、质量报告、运行验证和 release readiness 都会落盘，便于复盘、交接和审查。'},
+      { icon: ShieldCheck, title: 'UI Review、Spec Quality 与 Release Readiness', body: '运行验证、质量门禁、Spec Quality 和发布检查都会明确产出结果，方便判断项目是否达到交付标准。'},
+      { icon: Archive, title: '交付产物可审计', body: 'Repo Map、Dependency Graph、Impact Analysis、Regression Guard、Proof Pack 等交付证据都会落盘，便于复盘、交接和审查。'},
     ],
   },
   en: {
     eyebrow: 'Proof / Trust',
     title: 'Visible trust signals.',
-    body: 'Open source, published packages, host coverage, local knowledge, quality gates, and delivery artifacts all appear directly on the page.',
+    body: 'Open source, published packages, host coverage, local knowledge, host validation, spec scoring, quality gates, and delivery artifacts all appear directly on the page.',
     items: [
       { icon: BadgeCheck, title: 'MIT open source and PyPI release', body: 'The code is visible, the install path is clear, and versions are traceable. This is not a black-box hosted platform.'},
-      { icon: PackageCheck, title: 'Multi-host integration', body: 'The same governance model installs into CLI and IDE hosts without forcing the user onto a new coding tool.'},
+      { icon: PackageCheck, title: 'Multi-host integration and validation', body: 'The same governance model installs into CLI and IDE hosts, while the Host Validation Center tracks prerequisites, runtime acceptance, and delivery readiness.'},
       { icon: BookCopy, title: 'Local knowledge first', body: 'knowledge/ and knowledge bundles are reused in research, the three core docs, spec generation, quality, and delivery.'},
-      { icon: ShieldCheck, title: 'UI Review and Release Readiness', body: 'The work is not done when code is generated. It must pass runtime validation, quality gates, and release checks.'},
-      { icon: Archive, title: 'Auditable delivery artifacts', body: 'Delivery manifests, quality reports, runtime validation, and release readiness are written to disk.'},
+      { icon: ShieldCheck, title: 'UI Review, Spec Quality, and Release Readiness', body: 'The work is not done when code is generated. It must pass runtime validation, quality gates, spec-quality scoring, and release checks.'},
+      { icon: Archive, title: 'Auditable delivery artifacts', body: 'Repo Map, Dependency Graph, Impact Analysis, Regression Guard, Proof Pack, and release artifacts are written to disk.'},
     ],
   },
 } as const;

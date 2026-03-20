@@ -15,6 +15,7 @@ from super_dev.cli import SuperDevCLI
 from super_dev.integrations import IntegrationManager
 from super_dev.review_state import save_docs_confirmation, save_ui_revision
 from super_dev.skills import SkillManager
+from super_dev.specs.generator import SpecGenerator
 
 
 def _confirm_docs(temp_project_dir: Path) -> None:
@@ -36,7 +37,7 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         parents=True,
         exist_ok=True,
     )
-    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.10"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
+    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.11"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
     (project_dir / ".gitignore").write_text(
         "\n".join(
             [
@@ -62,18 +63,18 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
-    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.10"\n', encoding="utf-8")
+    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.11"\n', encoding="utf-8")
     (project_dir / "README.md").write_text(
-        "当前版本：`2.0.10`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "当前版本：`2.0.11`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "README_EN.md").write_text(
-        "Current version: `2.0.10`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "Current version: `2.0.11`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "docs" / "HOST_USAGE_GUIDE.md").write_text("Smoke\n/super-dev\nsuper-dev:\n", encoding="utf-8")
     (project_dir / "docs" / "HOST_CAPABILITY_AUDIT.md").write_text("官方依据\nsuper-dev integrate smoke\n", encoding="utf-8")
-    (project_dir / "docs" / "PRODUCT_AUDIT.md").write_text("P0\nP1\nP2\n", encoding="utf-8")
+    (project_dir / "docs" / "README.md").write_text("用户文档\n维护者文档\n", encoding="utf-8")
     (project_dir / "docs" / "WORKFLOW_GUIDE.md").write_text("super-dev review docs\nsuper-dev run --resume\n", encoding="utf-8")
     (project_dir / "docs" / "WORKFLOW_GUIDE_EN.md").write_text("super-dev review docs\nsuper-dev run --resume\n", encoding="utf-8")
     (project_dir / "install.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
@@ -99,8 +100,18 @@ def _prepare_proof_pack_project(project_dir: Path) -> None:
         json.dumps({"project_name": project_dir.name}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    (output_dir / f"{project_dir.name}-dependency-graph.md").write_text("# Dependency Graph\n\nok\n", encoding="utf-8")
+    (output_dir / f"{project_dir.name}-dependency-graph.json").write_text(
+        json.dumps({"project_name": project_dir.name, "node_count": 4, "edge_count": 3}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     (output_dir / f"{project_dir.name}-impact-analysis.md").write_text("# Change Impact Analysis\n\nok\n", encoding="utf-8")
     (output_dir / f"{project_dir.name}-impact-analysis.json").write_text(
+        json.dumps({"project_name": project_dir.name, "risk_level": "medium"}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (output_dir / f"{project_dir.name}-regression-guard.md").write_text("# Regression Guard\n\nok\n", encoding="utf-8")
+    (output_dir / f"{project_dir.name}-regression-guard.json").write_text(
         json.dumps({"project_name": project_dir.name, "risk_level": "medium"}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
@@ -130,6 +141,14 @@ def _prepare_proof_pack_project(project_dir: Path) -> None:
             "run_id": "proof-pack-run",
         },
     )
+    generator = SpecGenerator(project_dir)
+    generator.init_sdd()
+    change = generator.create_change(
+        change_id="proof-quality",
+        title="Proof Quality",
+        description="proof pack spec quality",
+    )
+    generator.scaffold_change_artifacts(change.id)
 
 
 class TestCLIInit:
@@ -752,12 +771,57 @@ class TestCLISkillAndIntegrate:
             result = cli.run(["integrate", "matrix", "--target", "qoder", "--json"])
             assert result == 0
             payload = json.loads(capsys.readouterr().out)
-            assert isinstance(payload, list)
-            assert len(payload) == 1
-            row = payload[0]
+            assert isinstance(payload, dict)
+            assert "profiles" in payload
+            assert "docs_checks" in payload
+            assert len(payload["profiles"]) == 1
+            row = payload["profiles"][0]
             assert row["host"] == "qoder"
             assert row["adapter_mode"] == "native-ide-rule-file"
             assert "official_docs_url" in row
+        finally:
+            os.chdir(original_cwd)
+
+    def test_integrate_harden_json(self, temp_project_dir: Path, capsys, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["integrate", "harden", "--target", "codex-cli", "--json"])
+            assert result == 0
+            payload = json.loads(capsys.readouterr().out)
+            assert isinstance(payload, dict)
+            assert payload["selected_targets"] == ["codex-cli"]
+            assert "hardening_results" in payload
+            item = payload["hardening_results"]["codex-cli"]
+            assert item["plan"]["trigger_mode"] == "text"
+            assert "skill_install" in item
+            assert "official_compare" in item
+            assert "compatibility" in payload
+            assert "official_compare_summary" in payload
+            assert "host_parity_summary" in payload
+            assert "host_gate_summary" in payload
+            assert "host_runtime_script_summary" in payload
+            assert "host_recovery_summary" in payload
+            assert "host_parity_index" in payload
+            assert payload["host_parity_summary"]["total"] == 1
+            assert payload["host_gate_summary"]["total"] == 1
+            assert payload["host_runtime_script_summary"]["total"] == 1
+            assert payload["host_recovery_summary"]["total"] == 1
+            assert payload["host_parity_index"]["passed"] is True
+            gate = payload["host_gate_summary"]["hosts"]["codex-cli"]
+            assert gate["passed"] is True
+            runtime_script = payload["host_runtime_script_summary"]["hosts"]["codex-cli"]
+            assert runtime_script["passed"] is True
+            recovery = payload["host_recovery_summary"]["hosts"]["codex-cli"]
+            assert recovery["passed"] is True
+            assert any("integrate setup --target codex-cli --force" in cmd for cmd in recovery["recommended_commands"])
+            assert "report_files" in payload
+            assert Path(payload["report_files"]["onepage_markdown"]).exists()
+            assert Path(payload["report_files"]["history_onepage_markdown"]).exists()
         finally:
             os.chdir(original_cwd)
 
@@ -956,11 +1020,13 @@ class TestCLISkillAndIntegrate:
             assert (temp_project_dir / ".gemini" / "commands" / "super-dev.md").exists()
             assert (temp_project_dir / ".claude" / "CLAUDE.md").exists()
             assert (temp_project_dir / "AGENTS.md").exists()
-            assert (temp_project_dir / ".kimi" / "AGENTS.md").exists()
             assert (temp_project_dir / ".qoder" / "rules.md").exists()
             assert (temp_project_dir / ".qoder" / "commands" / "super-dev.md").exists()
             assert (temp_project_dir / ".claude" / "commands" / "super-dev.md").exists()
+            assert (temp_project_dir / ".github" / "copilot-instructions.md").exists()
+            assert (temp_project_dir / ".cursor" / "rules" / "super-dev.mdc").exists()
             assert not (temp_project_dir / ".kimi" / "commands" / "super-dev.md").exists()
+            assert not (temp_project_dir / ".kimi" / "AGENTS.md").exists()
         finally:
             os.chdir(original_cwd)
 
@@ -1063,6 +1129,22 @@ class TestCLISkillAndIntegrate:
         finally:
             os.chdir(original_cwd)
 
+    def test_doctor_prints_multiple_host_precondition_items_for_codex(self, temp_project_dir: Path, capsys):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["doctor", "--host", "codex-cli", "--repair", "--force"])
+            assert result == 0
+
+            output = capsys.readouterr().out
+            assert "宿主前置条件" in output
+            assert "接入后需重开宿主会话" in output
+            assert "需在目标项目/工作区内触发" in output
+            assert "关闭旧会话并新开一个宿主会话" in output
+        finally:
+            os.chdir(original_cwd)
+
     def test_doctor_accepts_global_slash_mapping_when_project_slash_missing(
         self,
         temp_project_dir: Path,
@@ -1151,6 +1233,8 @@ class TestCLISkillAndIntegrate:
             assert "compatibility" in payload
             assert "codex-cli" in payload["detected_hosts"]
             assert payload["compatibility"]["total_hosts"] >= 1
+            assert "flow_consistent_hosts" in payload["compatibility"]
+            assert "flow_consistency_score" in payload["compatibility"]
             assert payload["usage_profiles"]["codex-cli"]["usage_mode"] == "agents-and-skill"
             assert payload["usage_profiles"]["codex-cli"]["certification_level"] == "certified"
             assert payload["usage_profiles"]["codex-cli"]["certification_label"] == "Certified"
@@ -1516,7 +1600,7 @@ class TestCLISkillAndIntegrate:
                 return None
 
             def json(self):
-                return {"info": {"version": "2.0.10"}}
+                return {"info": {"version": "2.0.11"}}
 
         monkeypatch.setattr("super_dev.cli.requests.get", lambda *args, **kwargs: DummyResponse())
 
@@ -1525,7 +1609,7 @@ class TestCLISkillAndIntegrate:
         output = capsys.readouterr().out
         assert "当前版本" in output
         assert "PyPI 最新版本" in output
-        assert "2.0.10" in output
+        assert "2.0.11" in output
 
     def test_update_uses_uv_when_requested(self, capsys, monkeypatch):
         cli = SuperDevCLI()
@@ -1536,7 +1620,7 @@ class TestCLISkillAndIntegrate:
                 return None
 
             def json(self):
-                return {"info": {"version": "2.0.10"}}
+                return {"info": {"version": "2.0.11"}}
 
         monkeypatch.setattr("super_dev.cli.requests.get", lambda *args, **kwargs: DummyResponse())
 
@@ -1562,7 +1646,7 @@ class TestCLISkillAndIntegrate:
                 return None
 
             def json(self):
-                return {"info": {"version": "2.0.10"}}
+                return {"info": {"version": "2.0.11"}}
 
         monkeypatch.setattr("super_dev.cli.requests.get", lambda *args, **kwargs: DummyResponse())
 
@@ -1703,6 +1787,23 @@ class TestCLIPipeline:
         finally:
             os.chdir(original_cwd)
 
+    def test_repo_map_json_output_is_strict_json(self, temp_project_dir: Path, capsys):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            (temp_project_dir / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+            (temp_project_dir / "main.py").write_text("print('hello')\n", encoding="utf-8")
+
+            cli = SuperDevCLI()
+            result = cli.run(["repo-map", "--json"])
+            captured = capsys.readouterr()
+
+            assert result == 0
+            payload = json.loads(captured.out)
+            assert payload["project_name"] == temp_project_dir.name
+        finally:
+            os.chdir(original_cwd)
+
     def test_impact_command_generates_artifacts(self, temp_project_dir: Path):
         original_cwd = os.getcwd()
         os.chdir(temp_project_dir)
@@ -1721,6 +1822,116 @@ class TestCLIPipeline:
             assert result == 0
             assert (temp_project_dir / "output" / f"{temp_project_dir.name}-impact-analysis.md").exists()
             assert (temp_project_dir / "output" / f"{temp_project_dir.name}-impact-analysis.json").exists()
+        finally:
+            os.chdir(original_cwd)
+
+    def test_impact_json_output_is_strict_json(self, temp_project_dir: Path, capsys):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            (temp_project_dir / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+            (temp_project_dir / "services").mkdir(parents=True, exist_ok=True)
+            (temp_project_dir / "services" / "auth.py").write_text(
+                "class AuthService:\n    def login(self):\n        return True\n",
+                encoding="utf-8",
+            )
+
+            cli = SuperDevCLI()
+            result = cli.run(["impact", "修改登录流程", "--files", "services/auth.py", "--json"])
+            captured = capsys.readouterr()
+
+            assert result == 0
+            payload = json.loads(captured.out)
+            assert payload["project_name"] == temp_project_dir.name
+            assert payload["risk_level"] in {"low", "medium", "high"}
+        finally:
+            os.chdir(original_cwd)
+
+    def test_regression_guard_command_generates_artifacts(self, temp_project_dir: Path):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            (temp_project_dir / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+            (temp_project_dir / "services").mkdir(parents=True, exist_ok=True)
+            (temp_project_dir / "services" / "auth.py").write_text(
+                "class AuthService:\n    def login(self):\n        return True\n",
+                encoding="utf-8",
+            )
+
+            cli = SuperDevCLI()
+            result = cli.run(["regression-guard", "修改登录流程", "--files", "services/auth.py"])
+
+            assert result == 0
+            assert (temp_project_dir / "output" / f"{temp_project_dir.name}-regression-guard.md").exists()
+            assert (temp_project_dir / "output" / f"{temp_project_dir.name}-regression-guard.json").exists()
+        finally:
+            os.chdir(original_cwd)
+
+    def test_regression_guard_json_output_is_strict_json(self, temp_project_dir: Path, capsys):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            (temp_project_dir / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+            (temp_project_dir / "services").mkdir(parents=True, exist_ok=True)
+            (temp_project_dir / "services" / "auth.py").write_text(
+                "class AuthService:\n    def login(self):\n        return True\n",
+                encoding="utf-8",
+            )
+
+            cli = SuperDevCLI()
+            result = cli.run(["regression-guard", "修改登录流程", "--files", "services/auth.py", "--json"])
+            captured = capsys.readouterr()
+
+            assert result == 0
+            payload = json.loads(captured.out)
+            assert payload["project_name"] == temp_project_dir.name
+            assert "high_priority_checks" in payload
+        finally:
+            os.chdir(original_cwd)
+
+    def test_dependency_graph_command_generates_artifacts(self, temp_project_dir: Path):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            (temp_project_dir / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+            (temp_project_dir / "main.py").write_text("from services.auth import login\n", encoding="utf-8")
+            (temp_project_dir / "services").mkdir(parents=True, exist_ok=True)
+            (temp_project_dir / "services" / "__init__.py").write_text("", encoding="utf-8")
+            (temp_project_dir / "services" / "auth.py").write_text(
+                "from api.routes import login_route\n\ndef login():\n    return login_route()\n",
+                encoding="utf-8",
+            )
+            (temp_project_dir / "api").mkdir(parents=True, exist_ok=True)
+            (temp_project_dir / "api" / "__init__.py").write_text("", encoding="utf-8")
+            (temp_project_dir / "api" / "routes.py").write_text("def login_route():\n    return True\n", encoding="utf-8")
+
+            cli = SuperDevCLI()
+            result = cli.run(["dependency-graph"])
+
+            assert result == 0
+            assert (temp_project_dir / "output" / f"{temp_project_dir.name}-dependency-graph.md").exists()
+            assert (temp_project_dir / "output" / f"{temp_project_dir.name}-dependency-graph.json").exists()
+        finally:
+            os.chdir(original_cwd)
+
+    def test_dependency_graph_json_output_is_strict_json(self, temp_project_dir: Path, capsys):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            (temp_project_dir / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+            (temp_project_dir / "main.py").write_text("from services.auth import login\n", encoding="utf-8")
+            (temp_project_dir / "services").mkdir(parents=True, exist_ok=True)
+            (temp_project_dir / "services" / "__init__.py").write_text("", encoding="utf-8")
+            (temp_project_dir / "services" / "auth.py").write_text("def login():\n    return True\n", encoding="utf-8")
+
+            cli = SuperDevCLI()
+            result = cli.run(["dependency-graph", "--json"])
+            captured = capsys.readouterr()
+
+            assert result == 0
+            payload = json.loads(captured.out)
+            assert payload["project_name"] == temp_project_dir.name
+            assert payload["node_count"] >= 1
         finally:
             os.chdir(original_cwd)
 
@@ -2000,6 +2211,22 @@ class TestCLIPipeline:
 
         try:
             _confirm_docs(temp_project_dir)
+            policy_dir = temp_project_dir / ".super-dev"
+            policy_dir.mkdir(parents=True, exist_ok=True)
+            (policy_dir / "policy.yaml").write_text(
+                yaml.safe_dump(
+                    {
+                        "require_redteam": True,
+                        "require_quality_gate": True,
+                        "require_rehearsal_verify": False,
+                        "min_quality_threshold": 80,
+                        "allowed_cicd_platforms": ["all"],
+                    },
+                    allow_unicode=True,
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
             cli = SuperDevCLI()
             result = cli.run(
                 ["pipeline", "构建一个支持登录和看板的平台", "--skip-rehearsal-verify"]
@@ -2061,6 +2288,7 @@ class TestCLIPipeline:
             payload = json.loads(run_state_file.read_text(encoding="utf-8"))
             assert payload["failure_reason"] == "delivery_packaging_incomplete"
             assert payload["failed_stage"] == "11"
+            assert payload["status_normalized"] == "failed"
         finally:
             os.chdir(original_cwd)
 
@@ -2085,12 +2313,39 @@ class TestCLIPipeline:
             payload = json.loads(run_state_file.read_text(encoding="utf-8"))
             assert payload["status"] == "waiting_confirmation"
             assert payload["resume_from_stage"] == "2"
+            assert payload["status_normalized"] == "running"
         finally:
             os.chdir(original_cwd)
 
 
 class TestCLIRunControl:
     """测试 run 控制命令（恢复）"""
+
+    def test_write_pipeline_run_state_creates_lock_file(self, temp_project_dir: Path):
+        cli = SuperDevCLI()
+        cli._write_pipeline_run_state(
+            temp_project_dir,
+            {"status": "running", "project_name": "demo"},
+        )
+        lock_file = temp_project_dir / ".super-dev" / "runs" / ".runs.lock"
+        assert lock_file.exists()
+        state_file = temp_project_dir / ".super-dev" / "runs" / "last-pipeline.json"
+        payload = json.loads(state_file.read_text(encoding="utf-8"))
+        assert payload["status_normalized"] == "running"
+
+    def test_run_resume_returns_error_for_corrupted_state_file(self, temp_project_dir: Path):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            run_state_dir = temp_project_dir / ".super-dev" / "runs"
+            run_state_dir.mkdir(parents=True, exist_ok=True)
+            (run_state_dir / "last-pipeline.json").write_text("{invalid-json", encoding="utf-8")
+
+            cli = SuperDevCLI()
+            result = cli.run(["run", "--resume"])
+            assert result == 1
+        finally:
+            os.chdir(original_cwd)
 
     def test_run_resume_replays_failed_pipeline(self, temp_project_dir: Path, monkeypatch):
         original_cwd = os.getcwd()
@@ -2522,6 +2777,7 @@ class TestCLIRunControl:
             )
             assert payload["passed"] is True
             assert payload["score"] == 100
+            assert any(check["name"] == "Spec Quality" for check in payload["checks"])
         finally:
             os.chdir(original_cwd)
 
@@ -2542,8 +2798,37 @@ class TestCLIRunControl:
             assert payload["status"] == "ready"
             assert payload["ready_count"] == payload["total_count"]
             assert payload["summary"]["blocking_count"] == 0
+            assert any(artifact["name"] == "Spec Quality" for artifact in payload["artifacts"])
             assert any(artifact["name"] == "Repo Map" for artifact in payload["artifacts"])
+            assert any(artifact["name"] == "Dependency Graph" for artifact in payload["artifacts"])
             assert any(artifact["name"] == "Impact Analysis" for artifact in payload["artifacts"])
+            assert any(artifact["name"] == "Regression Guard" for artifact in payload["artifacts"])
             assert (temp_project_dir / "output" / f"{temp_project_dir.name}-proof-pack-summary.md").exists()
+        finally:
+            os.chdir(original_cwd)
+
+    def test_release_proof_pack_marks_rehearsal_artifact_ready_when_report_exists(
+        self, temp_project_dir: Path
+    ):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            _prepare_proof_pack_project(temp_project_dir)
+            (temp_project_dir / "output" / "rehearsal" / f"{temp_project_dir.name}-rehearsal-report.json").write_text(
+                json.dumps({"passed": False, "score": 35}, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            cli = SuperDevCLI()
+            result = cli.run(["release", "proof-pack", "--json"])
+
+            assert result == 0
+            payload = json.loads(
+                (temp_project_dir / "output" / f"{temp_project_dir.name}-proof-pack.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            rehearsal = next(item for item in payload["artifacts"] if item["name"] == "Release Rehearsal")
+            assert rehearsal["status"] == "ready"
+            assert "passed=False" in rehearsal["summary"]
         finally:
             os.chdir(original_cwd)

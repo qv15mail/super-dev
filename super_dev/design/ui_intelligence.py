@@ -1,10 +1,9 @@
 """
-商业级 UI Intelligence
-
-作用：
-1. 基于产品类型、行业和前端栈推荐更成熟的 UI 方案
-2. 为 UI/UX 文档、宿主提示词和设计治理提供统一知识库
-3. 约束宿主优先生成现代商业产品，而不是模板化 AI 页面
+开发：Excellent（11964948@qq.com）
+功能：商业级 UI Intelligence 推荐引擎
+作用：基于产品类型、行业和前端栈推荐 UI 方案，提供配色、字体、组件库和设计治理知识库
+创建时间：2025-12-30
+最后修改：2026-03-20
 """
 
 from __future__ import annotations
@@ -41,9 +40,20 @@ class UIIntelligenceAdvisor:
         "nextjs": "react",
         "nuxt": "vue",
         "nuxtjs": "vue",
-        "react-native": "mobile",
-        "flutter": "mobile",
-        "swiftui": "mobile",
+        "react-native": "react-native",
+        "flutter": "flutter",
+        "swiftui": "swiftui",
+        "taro": "miniapp",
+        "uniapp": "miniapp",
+        "uni-app": "miniapp",
+        "wechat-miniprogram": "miniapp",
+        "miniprogram": "miniapp",
+        "miniapp": "miniapp",
+        "mp-weixin": "miniapp",
+        "weapp": "miniapp",
+        "electron": "desktop",
+        "tauri": "desktop",
+        "desktop": "desktop",
     }
 
     PRODUCT_PROFILES: dict[str, dict[str, Any]] = {
@@ -361,7 +371,220 @@ class UIIntelligenceAdvisor:
                 "所有页面都靠装饰性视觉撑场面",
             ],
         },
+        "legal": {
+            "trust_modules": [
+                "律师资质与执照展示",
+                "案件成功率与客户评价",
+                "隐私保护与数据安全声明",
+                "咨询流程与费用透明说明",
+            ],
+            "tone": "权威、严谨、专业、可信",
+            "banned_patterns": [
+                "过度活泼或娱乐化的视觉",
+                "缺少资质证明的专业页面",
+            ],
+        },
+        "beauty": {
+            "trust_modules": [
+                "技师资质与服务项目",
+                "真实案例与效果对比",
+                "预约流程与退改政策",
+                "产品安全认证与成分说明",
+            ],
+            "tone": "精致、温暖、品牌感、女性友好",
+            "banned_patterns": [
+                "粗糙的排版和低质量图片",
+                "缺少真人案例的纯装饰页面",
+            ],
+        },
+        "restaurant": {
+            "trust_modules": [
+                "菜品实拍与价格展示",
+                "营业时间与位置导航",
+                "食品安全认证",
+                "用户评价与推荐菜品",
+            ],
+            "tone": "温暖、食欲感、本地化、便捷",
+            "banned_patterns": [
+                "使用库存图片替代实际菜品",
+                "菜单信息不完整或过时",
+            ],
+        },
+        "travel": {
+            "trust_modules": [
+                "目的地实景图片与评价",
+                "价格透明与退改政策",
+                "安全提示与保险说明",
+                "行程定制与客服支持",
+            ],
+            "tone": "向往感、安全感、便捷、值得信赖",
+            "banned_patterns": [
+                "过度修图导致期望落差",
+                "隐藏费用和不透明的定价",
+            ],
+        },
+        "real-estate": {
+            "trust_modules": [
+                "房源实景与户型图",
+                "价格趋势与区域分析",
+                "经纪人资质与评价",
+                "交易流程与法律说明",
+            ],
+            "tone": "专业、值得信赖、数据驱动",
+            "banned_patterns": [
+                "过度美化的效果图替代实景",
+                "关键信息（价格、面积）不突出",
+            ],
+        },
     }
+
+    PRODUCT_COLOR_PALETTES: dict[str, dict[str, str]] = {
+        # SaaS & Software
+        "saas": {"primary": "#2563EB", "secondary": "#3B82F6", "accent": "#EA580C", "background": "#F8FAFC", "text": "#1E293B", "card": "#FFFFFF", "muted": "#E9EFF8", "border": "#E2E8F0", "name": "Trust Blue"},
+        "micro-saas": {"primary": "#6366F1", "secondary": "#818CF8", "accent": "#059669", "background": "#F5F3FF", "text": "#1E1B4B", "card": "#FFFFFF", "muted": "#EBEFF9", "border": "#E0E7FF", "name": "Indigo Focus"},
+        "b2b": {"primary": "#0F172A", "secondary": "#334155", "accent": "#0369A1", "background": "#F8FAFC", "text": "#020617", "card": "#FFFFFF", "muted": "#E8ECF1", "border": "#E2E8F0", "name": "Enterprise Navy"},
+        "productivity": {"primary": "#0D9488", "secondary": "#14B8A6", "accent": "#EA580C", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F1F4", "border": "#99F6E4", "name": "Teal Efficiency"},
+        "collaboration": {"primary": "#6366F1", "secondary": "#818CF8", "accent": "#059669", "background": "#F5F3FF", "text": "#312E81", "card": "#FFFFFF", "muted": "#EBEFF9", "border": "#E0E7FF", "name": "Team Indigo"},
+        "ai-platform": {"primary": "#7C3AED", "secondary": "#A78BFA", "accent": "#0891B2", "background": "#FAF5FF", "text": "#1E1B4B", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "AI Violet"},
+        "design-tool": {"primary": "#4F46E5", "secondary": "#6366F1", "accent": "#EA580C", "background": "#EEF2FF", "text": "#312E81", "card": "#FFFFFF", "muted": "#EBEEF8", "border": "#C7D2FE", "name": "Creative Indigo"},
+        "knowledge-base": {"primary": "#475569", "secondary": "#64748B", "accent": "#2563EB", "background": "#F8FAFC", "text": "#1E293B", "card": "#FFFFFF", "muted": "#EAEFF3", "border": "#E2E8F0", "name": "Slate Knowledge"},
+        # E-commerce & Marketplace
+        "ecommerce": {"primary": "#059669", "secondary": "#10B981", "accent": "#EA580C", "background": "#ECFDF5", "text": "#064E3B", "card": "#FFFFFF", "muted": "#E8F1F3", "border": "#A7F3D0", "name": "Commerce Green"},
+        "ecommerce-luxury": {"primary": "#1C1917", "secondary": "#44403C", "accent": "#A16207", "background": "#FAFAF9", "text": "#0C0A09", "card": "#FFFFFF", "muted": "#E8ECF0", "border": "#D6D3D1", "name": "Luxury Noir"},
+        "marketplace": {"primary": "#7C3AED", "secondary": "#A78BFA", "accent": "#16A34A", "background": "#FAF5FF", "text": "#4C1D95", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "Market Purple"},
+        "subscription-box": {"primary": "#D946EF", "secondary": "#E879F9", "accent": "#EA580C", "background": "#FDF4FF", "text": "#86198F", "card": "#FFFFFF", "muted": "#F0EEF9", "border": "#F5D0FE", "name": "Unbox Magenta"},
+        # Finance & Fintech
+        "fintech": {"primary": "#F59E0B", "secondary": "#FBBF24", "accent": "#8B5CF6", "background": "#0F172A", "text": "#F8FAFC", "card": "#222735", "muted": "#272F42", "border": "#334155", "name": "Crypto Gold"},
+        "banking": {"primary": "#0F172A", "secondary": "#1E3A8A", "accent": "#A16207", "background": "#F8FAFC", "text": "#020617", "card": "#FFFFFF", "muted": "#E8ECF1", "border": "#E2E8F0", "name": "Bank Navy"},
+        "insurance": {"primary": "#0369A1", "secondary": "#0EA5E9", "accent": "#16A34A", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E7EFF5", "border": "#BAE6FD", "name": "Trust Sky"},
+        "financial-dashboard": {"primary": "#0F172A", "secondary": "#1E293B", "accent": "#22C55E", "background": "#020617", "text": "#F8FAFC", "card": "#0E1223", "muted": "#1A1E2F", "border": "#334155", "name": "Dark Finance"},
+        "analytics": {"primary": "#1E40AF", "secondary": "#3B82F6", "accent": "#D97706", "background": "#F8FAFC", "text": "#1E3A8A", "card": "#FFFFFF", "muted": "#E9EEF6", "border": "#DBEAFE", "name": "Data Blue"},
+        # Healthcare & Wellness
+        "healthcare": {"primary": "#0891B2", "secondary": "#22D3EE", "accent": "#059669", "background": "#ECFEFF", "text": "#164E63", "card": "#FFFFFF", "muted": "#E8F1F6", "border": "#A5F3FC", "name": "Medical Cyan"},
+        "mental-health": {"primary": "#8B5CF6", "secondary": "#C4B5FD", "accent": "#059669", "background": "#FAF5FF", "text": "#4C1D95", "card": "#FFFFFF", "muted": "#EDEFF9", "border": "#EDE9FE", "name": "Calm Violet"},
+        "fitness": {"primary": "#F97316", "secondary": "#FB923C", "accent": "#22C55E", "background": "#1F2937", "text": "#F8FAFC", "card": "#313742", "muted": "#37414F", "border": "#374151", "name": "Energy Orange"},
+        "beauty-spa": {"primary": "#EC4899", "secondary": "#F9A8D4", "accent": "#8B5CF6", "background": "#FDF2F8", "text": "#831843", "card": "#FFFFFF", "muted": "#F1EEF5", "border": "#FBCFE8", "name": "Blush Pink"},
+        # Education & Learning
+        "education": {"primary": "#4F46E5", "secondary": "#818CF8", "accent": "#EA580C", "background": "#EEF2FF", "text": "#1E1B4B", "card": "#FFFFFF", "muted": "#EBEEF8", "border": "#C7D2FE", "name": "Learn Indigo"},
+        "e-learning": {"primary": "#0D9488", "secondary": "#2DD4BF", "accent": "#EA580C", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F1F4", "border": "#5EEAD4", "name": "Edu Teal"},
+        # Media & Entertainment
+        "social-media": {"primary": "#E11D48", "secondary": "#FB7185", "accent": "#2563EB", "background": "#FFF1F2", "text": "#881337", "card": "#FFFFFF", "muted": "#F0ECF2", "border": "#FECDD3", "name": "Social Rose"},
+        "gaming": {"primary": "#7C3AED", "secondary": "#A78BFA", "accent": "#F43F5E", "background": "#0F0F23", "text": "#E2E8F0", "card": "#1E1C35", "muted": "#27273B", "border": "#4C1D95", "name": "Game Violet"},
+        "music": {"primary": "#1E1B4B", "secondary": "#4338CA", "accent": "#22C55E", "background": "#0F0F23", "text": "#F8FAFC", "card": "#1B1B30", "muted": "#27273B", "border": "#312E81", "name": "Sound Dark"},
+        "video-streaming": {"primary": "#0F0F23", "secondary": "#1E1B4B", "accent": "#E11D48", "background": "#000000", "text": "#F8FAFC", "card": "#0C0C0D", "muted": "#181818", "border": "#312E81", "name": "Stream Black"},
+        "podcast": {"primary": "#1E1B4B", "secondary": "#312E81", "accent": "#F97316", "background": "#0F0F23", "text": "#F8FAFC", "card": "#1B1B30", "muted": "#27273B", "border": "#4338CA", "name": "Voice Dark"},
+        "content": {"primary": "#475569", "secondary": "#94A3B8", "accent": "#2563EB", "background": "#FFFFFF", "text": "#1E293B", "card": "#F8FAFC", "muted": "#F1F5F9", "border": "#E2E8F0", "name": "Reader Slate"},
+        "creative-agency": {"primary": "#EC4899", "secondary": "#F472B6", "accent": "#0891B2", "background": "#FDF2F8", "text": "#831843", "card": "#FFFFFF", "muted": "#F1EEF5", "border": "#FBCFE8", "name": "Agency Pink"},
+        "creator-economy": {"primary": "#EC4899", "secondary": "#F472B6", "accent": "#EA580C", "background": "#FDF2F8", "text": "#831843", "card": "#FFFFFF", "muted": "#F1EEF5", "border": "#FBCFE8", "name": "Creator Pink"},
+        # Professional Services
+        "legal": {"primary": "#1E3A8A", "secondary": "#1E40AF", "accent": "#B45309", "background": "#F8FAFC", "text": "#0F172A", "card": "#FFFFFF", "muted": "#E9EEF5", "border": "#CBD5E1", "name": "Legal Blue"},
+        "government": {"primary": "#0F172A", "secondary": "#334155", "accent": "#0369A1", "background": "#F8FAFC", "text": "#020617", "card": "#FFFFFF", "muted": "#E8ECF1", "border": "#E2E8F0", "name": "Gov Navy"},
+        "nonprofit": {"primary": "#0891B2", "secondary": "#22D3EE", "accent": "#EA580C", "background": "#ECFEFF", "text": "#164E63", "card": "#FFFFFF", "muted": "#E8F1F6", "border": "#A5F3FC", "name": "Impact Cyan"},
+        "consulting": {"primary": "#0F172A", "secondary": "#1E293B", "accent": "#2563EB", "background": "#F8FAFC", "text": "#020617", "card": "#FFFFFF", "muted": "#E8ECF1", "border": "#E2E8F0", "name": "Consult Navy"},
+        # Real Estate & Hospitality
+        "real-estate": {"primary": "#0F766E", "secondary": "#14B8A6", "accent": "#0369A1", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F0F3", "border": "#99F6E4", "name": "Property Teal"},
+        "hotel": {"primary": "#1E3A8A", "secondary": "#3B82F6", "accent": "#A16207", "background": "#F8FAFC", "text": "#1E40AF", "card": "#FFFFFF", "muted": "#E9EEF5", "border": "#BFDBFE", "name": "Hotel Royal"},
+        "travel": {"primary": "#0EA5E9", "secondary": "#38BDF8", "accent": "#EA580C", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E8F2F8", "border": "#BAE6FD", "name": "Travel Sky"},
+        "restaurant": {"primary": "#DC2626", "secondary": "#F87171", "accent": "#A16207", "background": "#FEF2F2", "text": "#450A0A", "card": "#FFFFFF", "muted": "#F0EDF1", "border": "#FECACA", "name": "Dining Red"},
+        # Technology & IOT
+        "smart-home": {"primary": "#1E293B", "secondary": "#334155", "accent": "#22C55E", "background": "#0F172A", "text": "#F8FAFC", "card": "#1B2336", "muted": "#272F42", "border": "#475569", "name": "IoT Dark"},
+        "ev-charging": {"primary": "#0891B2", "secondary": "#22D3EE", "accent": "#16A34A", "background": "#ECFEFF", "text": "#164E63", "card": "#FFFFFF", "muted": "#E8F1F6", "border": "#A5F3FC", "name": "EV Cyan"},
+        "web3": {"primary": "#8B5CF6", "secondary": "#A78BFA", "accent": "#FBBF24", "background": "#0F0F23", "text": "#F8FAFC", "card": "#1E1D35", "muted": "#27273B", "border": "#4C1D95", "name": "Web3 Purple"},
+        "logistics": {"primary": "#2563EB", "secondary": "#3B82F6", "accent": "#EA580C", "background": "#EFF6FF", "text": "#1E40AF", "card": "#FFFFFF", "muted": "#E9EFF8", "border": "#BFDBFE", "name": "Logistics Blue"},
+        "agriculture": {"primary": "#15803D", "secondary": "#22C55E", "accent": "#A16207", "background": "#F0FDF4", "text": "#14532D", "card": "#FFFFFF", "muted": "#E8F0F1", "border": "#BBF7D0", "name": "Farm Green"},
+        # Lifestyle & Events
+        "dating": {"primary": "#E11D48", "secondary": "#FB7185", "accent": "#EA580C", "background": "#FFF1F2", "text": "#881337", "card": "#FFFFFF", "muted": "#F0ECF2", "border": "#FECDD3", "name": "Love Rose"},
+        "wedding": {"primary": "#DB2777", "secondary": "#F472B6", "accent": "#A16207", "background": "#FDF2F8", "text": "#831843", "card": "#FFFFFF", "muted": "#F0EDF4", "border": "#FBCFE8", "name": "Wedding Fuchsia"},
+        "pet-tech": {"primary": "#F97316", "secondary": "#FB923C", "accent": "#2563EB", "background": "#FFF7ED", "text": "#9A3412", "card": "#FFFFFF", "muted": "#F1F0F0", "border": "#FED7AA", "name": "Pet Orange"},
+        # Portfolio & Personal
+        "portfolio": {"primary": "#18181B", "secondary": "#3F3F46", "accent": "#2563EB", "background": "#FAFAFA", "text": "#09090B", "card": "#FFFFFF", "muted": "#E8ECF0", "border": "#E4E4E7", "name": "Mono Zinc"},
+        "luxury-brand": {"primary": "#1C1917", "secondary": "#44403C", "accent": "#A16207", "background": "#FAFAF9", "text": "#0C0A09", "card": "#FFFFFF", "muted": "#E8ECF0", "border": "#D6D3D1", "name": "Luxury Stone"},
+        # Job & HR
+        "job-board": {"primary": "#0369A1", "secondary": "#0EA5E9", "accent": "#16A34A", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E7EFF5", "border": "#BAE6FD", "name": "Career Sky"},
+        # Dashboard variants
+        "dashboard": {"primary": "#1E40AF", "secondary": "#3B82F6", "accent": "#D97706", "background": "#F8FAFC", "text": "#1E3A8A", "card": "#FFFFFF", "muted": "#E9EEF6", "border": "#DBEAFE", "name": "Dashboard Blue"},
+        "admin": {"primary": "#0F172A", "secondary": "#334155", "accent": "#2563EB", "background": "#F8FAFC", "text": "#020617", "card": "#FFFFFF", "muted": "#E8ECF1", "border": "#E2E8F0", "name": "Admin Slate"},
+        # Landing & General
+        "landing": {"primary": "#2563EB", "secondary": "#3B82F6", "accent": "#EA580C", "background": "#FFFFFF", "text": "#111827", "card": "#F8FAFC", "muted": "#F1F5F9", "border": "#E5E7EB", "name": "Brand Blue"},
+        "general": {"primary": "#2563EB", "secondary": "#3B82F6", "accent": "#EA580C", "background": "#FFFFFF", "text": "#111827", "card": "#F8FAFC", "muted": "#F1F5F9", "border": "#E5E7EB", "name": "Professional Blue"},
+        # Construction & Automotive
+        "construction": {"primary": "#64748B", "secondary": "#94A3B8", "accent": "#EA580C", "background": "#F8FAFC", "text": "#334155", "card": "#FFFFFF", "muted": "#EBF0F5", "border": "#E2E8F0", "name": "Build Slate"},
+        "automotive": {"primary": "#1E293B", "secondary": "#334155", "accent": "#DC2626", "background": "#F8FAFC", "text": "#0F172A", "card": "#FFFFFF", "muted": "#E9EDF1", "border": "#E2E8F0", "name": "Auto Dark"},
+        # Photography & Creative
+        "photography": {"primary": "#18181B", "secondary": "#27272A", "accent": "#F8FAFC", "background": "#000000", "text": "#FAFAFA", "card": "#0C0C0C", "muted": "#181818", "border": "#3F3F46", "name": "Photo Noir"},
+        # Coworking & Services
+        "coworking": {"primary": "#F59E0B", "secondary": "#FBBF24", "accent": "#2563EB", "background": "#FFFBEB", "text": "#78350F", "card": "#FFFFFF", "muted": "#F1F2EF", "border": "#FDE68A", "name": "Space Amber"},
+        "home-services": {"primary": "#1E40AF", "secondary": "#3B82F6", "accent": "#EA580C", "background": "#EFF6FF", "text": "#1E3A8A", "card": "#FFFFFF", "muted": "#E9EEF6", "border": "#BFDBFE", "name": "Service Blue"},
+        # Childcare & Senior Care
+        "childcare": {"primary": "#F472B6", "secondary": "#FBCFE8", "accent": "#16A34A", "background": "#FDF2F8", "text": "#9D174D", "card": "#FFFFFF", "muted": "#F1F0F6", "border": "#FCE7F3", "name": "Care Pink"},
+        "senior-care": {"primary": "#0369A1", "secondary": "#38BDF8", "accent": "#16A34A", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E7EFF5", "border": "#E0F2FE", "name": "Elder Sky"},
+        # Medical & Health Services
+        "medical-clinic": {"primary": "#0891B2", "secondary": "#22D3EE", "accent": "#16A34A", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F1F6", "border": "#CCFBF1", "name": "Clinic Teal"},
+        "pharmacy": {"primary": "#15803D", "secondary": "#22C55E", "accent": "#0369A1", "background": "#F0FDF4", "text": "#14532D", "card": "#FFFFFF", "muted": "#E8F0F1", "border": "#BBF7D0", "name": "Pharma Green"},
+        "dental": {"primary": "#0EA5E9", "secondary": "#38BDF8", "accent": "#0EA5E9", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E8F2F8", "border": "#BAE6FD", "name": "Dental Sky"},
+        "veterinary": {"primary": "#0D9488", "secondary": "#14B8A6", "accent": "#EA580C", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F1F4", "border": "#99F6E4", "name": "Vet Teal"},
+        # Food & Beverage
+        "florist": {"primary": "#15803D", "secondary": "#22C55E", "accent": "#EC4899", "background": "#F0FDF4", "text": "#14532D", "card": "#FFFFFF", "muted": "#E8F0F1", "border": "#BBF7D0", "name": "Bloom Green"},
+        "bakery-cafe": {"primary": "#92400E", "secondary": "#B45309", "accent": "#92400E", "background": "#FEF3C7", "text": "#78350F", "card": "#FFFFFF", "muted": "#EDEEF0", "border": "#FDE68A", "name": "Bake Amber"},
+        "brewery": {"primary": "#7C2D12", "secondary": "#B91C1C", "accent": "#A16207", "background": "#FEF2F2", "text": "#450A0A", "card": "#FFFFFF", "muted": "#ECEDF0", "border": "#FECACA", "name": "Brew Red"},
+        # Transport & Media
+        "airline": {"primary": "#1E3A8A", "secondary": "#3B82F6", "accent": "#EA580C", "background": "#EFF6FF", "text": "#1E40AF", "card": "#FFFFFF", "muted": "#E9EEF5", "border": "#BFDBFE", "name": "Sky Royal"},
+        "news-media": {"primary": "#DC2626", "secondary": "#EF4444", "accent": "#1E40AF", "background": "#FEF2F2", "text": "#450A0A", "card": "#FFFFFF", "muted": "#F0EDF1", "border": "#FECACA", "name": "News Red"},
+        "magazine": {"primary": "#18181B", "secondary": "#3F3F46", "accent": "#EC4899", "background": "#FAFAFA", "text": "#09090B", "card": "#FFFFFF", "muted": "#E8ECF0", "border": "#E4E4E7", "name": "Editorial Mono"},
+        # Freelancer & Agency
+        "freelancer": {"primary": "#6366F1", "secondary": "#818CF8", "accent": "#16A34A", "background": "#EEF2FF", "text": "#312E81", "card": "#FFFFFF", "muted": "#EBEFF9", "border": "#C7D2FE", "name": "Freelance Indigo"},
+        "marketing-agency": {"primary": "#EC4899", "secondary": "#F472B6", "accent": "#0891B2", "background": "#FDF2F8", "text": "#831843", "card": "#FFFFFF", "muted": "#F1EEF5", "border": "#FBCFE8", "name": "Marketing Pink"},
+        "event-management": {"primary": "#7C3AED", "secondary": "#A78BFA", "accent": "#EA580C", "background": "#FAF5FF", "text": "#4C1D95", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "Event Purple"},
+        # Community & Membership
+        "membership": {"primary": "#7C3AED", "secondary": "#A78BFA", "accent": "#16A34A", "background": "#FAF5FF", "text": "#4C1D95", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "Community Purple"},
+        "newsletter": {"primary": "#0369A1", "secondary": "#0EA5E9", "accent": "#EA580C", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E7EFF5", "border": "#BAE6FD", "name": "Newsletter Sky"},
+        "digital-products": {"primary": "#6366F1", "secondary": "#818CF8", "accent": "#16A34A", "background": "#EEF2FF", "text": "#312E81", "card": "#FFFFFF", "muted": "#EBEFF9", "border": "#C7D2FE", "name": "Digital Indigo"},
+        "church": {"primary": "#7C3AED", "secondary": "#A78BFA", "accent": "#A16207", "background": "#FAF5FF", "text": "#4C1D95", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "Faith Purple"},
+        # Web3 & Digital
+        "nft-web3": {"primary": "#8B5CF6", "secondary": "#A78BFA", "accent": "#FBBF24", "background": "#0F0F23", "text": "#F8FAFC", "card": "#1E1D35", "muted": "#27273B", "border": "#4C1D95", "name": "Web3 Violet"},
+        "remote-work": {"primary": "#6366F1", "secondary": "#818CF8", "accent": "#059669", "background": "#F5F3FF", "text": "#312E81", "card": "#FFFFFF", "muted": "#EBEFF9", "border": "#E0E7FF", "name": "Remote Indigo"},
+        # Streaming & Music
+        "music-streaming": {"primary": "#1E1B4B", "secondary": "#4338CA", "accent": "#22C55E", "background": "#0F0F23", "text": "#F8FAFC", "card": "#1B1B30", "muted": "#27273B", "border": "#312E81", "name": "Sound Indigo"},
+        # Recruitment & Local
+        "recruitment": {"primary": "#0369A1", "secondary": "#0EA5E9", "accent": "#16A34A", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E7EFF5", "border": "#BAE6FD", "name": "Career Sky"},
+        "hyperlocal": {"primary": "#059669", "secondary": "#10B981", "accent": "#EA580C", "background": "#ECFDF5", "text": "#064E3B", "card": "#FFFFFF", "muted": "#E8F1F3", "border": "#A7F3D0", "name": "Local Green"},
+        "online-course": {"primary": "#0D9488", "secondary": "#2DD4BF", "accent": "#EA580C", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F1F4", "border": "#5EEAD4", "name": "Course Teal"},
+    }
+
+    PRODUCT_TYPOGRAPHY_PRESETS: dict[str, dict[str, str]] = {
+        "saas": {"heading": "Inter", "body": "Inter", "mood": "professional, clean, modern", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Inter:wght@400;500;600;700;800&display=swap');"},
+        "ecommerce": {"heading": "DM Sans", "body": "Inter", "mood": "friendly, approachable, trustworthy", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');"},
+        "ecommerce-luxury": {"heading": "Cormorant Garamond", "body": "Montserrat", "mood": "elegant, luxury, sophisticated", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600&display=swap');"},
+        "fintech": {"heading": "Space Grotesk", "body": "IBM Plex Sans", "mood": "technical, trustworthy, precise", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');"},
+        "healthcare": {"heading": "Plus Jakarta Sans", "body": "Nunito Sans", "mood": "calming, professional, accessible", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Nunito+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');"},
+        "education": {"heading": "Outfit", "body": "Source Sans 3", "mood": "clear, friendly, encouraging", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Outfit:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap');"},
+        "gaming": {"heading": "Rajdhani", "body": "Exo 2", "mood": "bold, energetic, futuristic", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Exo+2:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap');"},
+        "beauty-spa": {"heading": "Cormorant Garamond", "body": "Montserrat", "mood": "elegant, calming, sophisticated", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600&display=swap');"},
+        "content": {"heading": "Merriweather", "body": "Source Sans 3", "mood": "readable, editorial, classic", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Merriweather:wght@400;700&family=Source+Sans+3:wght@400;500;600&display=swap');"},
+        "dashboard": {"heading": "Inter", "body": "Inter", "mood": "dense, efficient, neutral", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Inter:wght@400;500;600;700&display=swap');"},
+        "portfolio": {"heading": "Space Grotesk", "body": "Inter", "mood": "creative, distinctive, modern", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');"},
+        "landing": {"heading": "Plus Jakarta Sans", "body": "Inter", "mood": "confident, modern, impactful", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');"},
+        "social-media": {"heading": "Poppins", "body": "Open Sans", "mood": "modern, friendly, social", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Open+Sans:wght@400;500;600&family=Poppins:wght@400;500;600;700&display=swap');"},
+        "restaurant": {"heading": "Playfair Display", "body": "Lato", "mood": "warm, appetizing, inviting", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Lato:wght@400;700&family=Playfair+Display:wght@400;500;600;700&display=swap');"},
+        "real-estate": {"heading": "DM Serif Display", "body": "DM Sans", "mood": "premium, trustworthy, established", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap');"},
+        "legal": {"heading": "EB Garamond", "body": "Source Sans 3", "mood": "authoritative, traditional, trustworthy", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=EB+Garamond:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap');"},
+        "general": {"heading": "Plus Jakarta Sans", "body": "Inter", "mood": "modern, professional, versatile", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');"},
+    }
+
+    PRE_DELIVERY_CHECKLIST: list[str] = [
+        "SVG 图标替代所有 emoji（使用 Lucide/Heroicons/Tabler）",
+        "所有可点击元素具有 cursor-pointer",
+        "hover 状态使用 150-300ms 平滑过渡",
+        "浅色模式文字对比度至少 4.5:1（WCAG AA）",
+        "focus 状态对键盘导航可见",
+        "尊重 prefers-reduced-motion 偏好设置",
+        "响应式断点覆盖：375px / 768px / 1024px / 1440px",
+        "深色模式文字对比度至少 4.5:1（如适用）",
+        "按钮和输入框高度一致（40px 基线）",
+        "卡片圆角统一（8-12px）",
+        "loading/empty/error/disabled 状态完整",
+        "品牌字体已加载，无系统字体回退直出",
+    ]
 
     STACK_RECOMMENDATIONS: dict[str, list[LibraryRecommendation]] = {
         "react": [
@@ -373,10 +596,12 @@ class UIIntelligenceAdvisor:
                     "组件骨架成熟，适合快速搭建高质量产品界面",
                     "与设计 token、主题系统、品牌定制兼容性强",
                     "便于结合 TanStack Table、React Hook Form、Zod 形成完整前端基线",
+                    "可与 Aceternity UI / Magic UI 的视觉模块组合，提升品牌差异化表现",
                 ],
                 notes=[
                     "必须先定义 token、容器、字重和信息密度，再批量生成组件",
                     "表单建议配合 React Hook Form + Zod",
+                    "视觉特效组件仅用于首屏叙事与反馈，避免影响可读性和性能",
                 ],
             ),
             LibraryRecommendation(
@@ -392,27 +617,177 @@ class UIIntelligenceAdvisor:
                 ],
             ),
             LibraryRecommendation(
-                name="MUI",
+                name="DaisyUI + Tailwind CSS",
                 category="Alternative",
-                rationale="适合需要完整组件覆盖和企业级主题系统的 React 项目。",
+                rationale="适合多主题业务和快速产出高一致性视觉。",
                 strengths=[
-                    "组件覆盖全，适合复杂业务表面",
-                    "主题系统成熟",
+                    "主题切换能力强，适合白标与多品牌场景",
+                    "与 Tailwind 兼容，开发效率高",
                 ],
                 notes=[
-                    "默认 Material 视觉不应直接作为商业品牌终稿",
+                    "需要补充高级组件与版式体系，避免默认主题观感",
+                ],
+            ),
+            LibraryRecommendation(
+                name="Aceternity UI / Magic UI",
+                category="Alternative",
+                rationale="适合官网、品牌页和叙事型 landing，增强视觉张力。",
+                strengths=[
+                    "高质量视觉模块与动效资源丰富",
+                    "可快速构建有辨识度的商业首屏",
+                ],
+                notes=[
+                    "必须设置性能预算并搭配可读性审查，避免炫技化",
+                ],
+            ),
+            LibraryRecommendation(
+                name="NextUI + Tailwind CSS",
+                category="Alternative",
+                rationale="适合需要现代感与动效且开发效率优先的 React/Next 项目。",
+                strengths=[
+                    "内置 Framer Motion 动效，开箱即用的过渡与微交互",
+                    "组件视觉精美，深色模式支持优秀",
+                    "与 Tailwind CSS 深度集成，定制灵活",
+                ],
+                notes=[
+                    "组件库仍在快速迭代中，注意版本兼容",
+                    "大型表格和复杂表单场景需要补充 TanStack Table 等",
+                ],
+            ),
+            LibraryRecommendation(
+                name="MUI (Material UI)",
+                category="Alternative",
+                rationale="适合大型企业应用和需要完整组件覆盖的 React 项目。",
+                strengths=[
+                    "组件覆盖最全（60+），文档完善，社区庞大",
+                    "Material Design 3 主题系统成熟，token 化能力强",
+                    "Data Grid、Date Picker 等高级组件企业级可用",
+                ],
+                notes=[
+                    "包体较大，需要 tree-shaking 优化",
+                    "默认 Material 风格强烈，品牌化需要大量主题覆盖",
                 ],
             ),
             LibraryRecommendation(
                 name="Mantine",
                 category="Alternative",
-                rationale="适合偏现代产品化、需要开发效率和一致性的 React 项目。",
+                rationale="适合全栈 React 项目和需要丰富 hooks 与工具库的场景。",
                 strengths=[
-                    "Hooks 与组件生态完整",
-                    "适合 SaaS 与工具类产品",
+                    "100+ 组件 + 50+ hooks，功能覆盖极广",
+                    "内置表单管理、通知系统、富文本编辑器",
+                    "深色模式和主题定制体验优秀",
                 ],
                 notes=[
-                    "适合产品工作台，但营销页仍需较强定制",
+                    "样式方案与 Tailwind 并行使用时需要协调",
+                    "更新频率高，大版本升级需关注 breaking changes",
+                ],
+            ),
+            LibraryRecommendation(
+                name="Chakra UI",
+                category="Alternative",
+                rationale="适合重视可访问性和开发体验的 React 项目。",
+                strengths=[
+                    "无障碍性（A11y）开箱即用，符合 WAI-ARIA",
+                    "Style Props 系统直观，开发效率高",
+                    "主题系统灵活，支持语义化 token",
+                ],
+                notes=[
+                    "运行时 CSS-in-JS 有性能开销，SSR 场景需注意",
+                    "组件视觉相对朴素，品牌化需要额外设计投入",
+                ],
+            ),
+            LibraryRecommendation(
+                name="Headless UI + Tailwind CSS",
+                category="Alternative",
+                rationale="适合对视觉完全自主控制、不想受组件库风格限制的项目。",
+                strengths=[
+                    "完全无样式的交互组件，视觉 100% 由开发者定义",
+                    "由 Tailwind Labs 官方维护，与 Tailwind 完美集成",
+                    "无障碍性内置，键盘导航和 ARIA 支持完善",
+                ],
+                notes=[
+                    "组件数量有限（~15 个），复杂场景需要自建组件",
+                    "适合有设计能力的团队，纯开发团队上手成本较高",
+                ],
+            ),
+            LibraryRecommendation(
+                name="Tremor + Tailwind CSS",
+                category="Alternative",
+                rationale="适合数据仪表板和 KPI 展示型产品，开箱即用的图表与指标组件。",
+                strengths=[
+                    "专为 Dashboard 设计，KPI 卡片/图表/列表组件即开即用",
+                    "与 Recharts 深度集成，数据可视化能力强",
+                    "Tailwind 原生，主题定制简单",
+                ],
+                notes=[
+                    "仅适合数据展示场景，不适合通用 UI",
+                    "组件数量有限，营销页和表单场景需要搭配其他库",
+                ],
+            ),
+            LibraryRecommendation(
+                name="Park UI + Ark UI",
+                category="Alternative",
+                rationale="适合需要跨框架一致性（React/Vue/Solid）的设计系统项目。",
+                strengths=[
+                    "基于 Ark UI 的 headless 层，支持 React/Vue/Solid 三框架",
+                    "预设主题精美，视觉质量高",
+                    "Panda CSS 集成，token 化设计系统",
+                ],
+                notes=[
+                    "生态相对新，社区资源不如 shadcn/MUI 丰富",
+                    "需要了解 Panda CSS 的工作方式",
+                ],
+            ),
+            LibraryRecommendation(
+                name="Arco Design React",
+                category="Alternative",
+                rationale="适合追求现代感中后台的 React 项目，字节跳动出品。",
+                strengths=[
+                    "60+ 组件覆盖，视觉比 Ant Design 更现代精致",
+                    "暗色模式和主题定制开箱即用",
+                    "IconBox 和插画资源丰富",
+                ],
+                notes=[
+                    "社区不如 Ant Design 庞大，但组件质量高",
+                ],
+            ),
+            LibraryRecommendation(
+                name="Ant Design Mobile",
+                category="Alternative",
+                rationale="适合 H5 移动端和混合 APP 的 React 项目。",
+                strengths=[
+                    "移动端交互模式成熟（下拉刷新、滑动、手势）",
+                    "与 Ant Design 桌面版设计语言统一",
+                    "高性能虚拟列表和懒加载内置",
+                ],
+                notes=[
+                    "仅适合移动端/H5，不适合桌面端",
+                ],
+            ),
+            LibraryRecommendation(
+                name="Semi Design",
+                category="Alternative",
+                rationale="适合追求设计工程化和主题定制的 React 项目，抖音出品。",
+                strengths=[
+                    "DSM（Design to Code）设计工程化能力强",
+                    "2800+ Design Token，主题定制粒度极细",
+                    "A11y 优先，WAI-ARIA 支持完善",
+                ],
+                notes=[
+                    "国际化社区较小，中文生态为主",
+                ],
+            ),
+            LibraryRecommendation(
+                name="TDesign React",
+                category="Alternative",
+                rationale="适合遵循腾讯设计规范的 React 项目。",
+                strengths=[
+                    "腾讯官方设计系统，组件覆盖完整",
+                    "与 TDesign 小程序版设计语言统一，适合跨端一致性",
+                    "Starter Kit 开箱即用",
+                ],
+                notes=[
+                    "主要面向腾讯生态，外部社区较小",
                 ],
             ),
         ],
@@ -442,6 +817,20 @@ class UIIntelligenceAdvisor:
                 ],
             ),
             LibraryRecommendation(
+                name="Ant Design Vue",
+                category="Alternative",
+                rationale="适合中后台系统和中文团队的 Vue 项目，Ant Design 生态的 Vue 实现。",
+                strengths=[
+                    "与 Ant Design React 版保持一致的设计语言和组件覆盖",
+                    "表格、表单、树形、日期选择等 B 端核心组件成熟",
+                    "中文文档完善，国内社区活跃",
+                ],
+                notes=[
+                    "默认 Ant 风格强烈，品牌化需要通过 ConfigProvider 做主题覆盖",
+                    "包体较大，建议按需引入",
+                ],
+            ),
+            LibraryRecommendation(
                 name="Arco Design Vue",
                 category="Alternative",
                 rationale="适合需要更现代感的中后台与数据工作台。",
@@ -451,6 +840,71 @@ class UIIntelligenceAdvisor:
                 ],
                 notes=[
                     "仍需针对品牌感与信息密度做定制",
+                ],
+            ),
+            LibraryRecommendation(
+                name="Vuetify 3",
+                category="Alternative",
+                rationale="适合遵循 Material Design 3 规范的 Vue 项目。",
+                strengths=[
+                    "Material Design 3 官方级实现，组件覆盖 70+",
+                    "内置网格系统、主题引擎和无障碍支持",
+                    "企业级组件（Data Table、Treeview）成熟",
+                ],
+                notes=[
+                    "包体较大，需要按需引入优化",
+                    "视觉强绑定 Material，品牌化需要大量 token 覆盖",
+                ],
+            ),
+            LibraryRecommendation(
+                name="PrimeVue",
+                category="Alternative",
+                rationale="适合需要完整组件覆盖和多主题支持的 Vue 企业项目。",
+                strengths=[
+                    "90+ 组件覆盖，含 DataTable、Chart、Editor 等高级组件",
+                    "多种预设主题（Lara/Aura/Nora），无障碍优先设计",
+                    "支持 unstyled 模式，可完全自定义视觉",
+                ],
+                notes=[
+                    "预设主题风格独特，品牌化需要主题定制",
+                ],
+            ),
+            LibraryRecommendation(
+                name="Radix Vue + Tailwind CSS",
+                category="Alternative",
+                rationale="适合追求 Vue 版 shadcn 级别控制力的项目。",
+                strengths=[
+                    "headless 组件，视觉完全由 Tailwind 控制",
+                    "无障碍内置，与 shadcn-vue 配合使用",
+                ],
+                notes=[
+                    "生态较新，需要自建部分业务组件",
+                ],
+            ),
+            LibraryRecommendation(
+                name="TDesign Vue Next",
+                category="Alternative",
+                rationale="适合遵循腾讯设计规范的 Vue 3 项目，与小程序端保持统一。",
+                strengths=[
+                    "腾讯官方 Vue 3 组件库，与 TDesign 小程序设计语言统一",
+                    "适合需要 Web + 小程序跨端一致性的项目",
+                    "Starter Kit 和模板项目开箱即用",
+                ],
+                notes=[
+                    "主要面向腾讯生态，外部社区相对较小",
+                ],
+            ),
+            LibraryRecommendation(
+                name="Vant 4",
+                category="Alternative",
+                rationale="适合 H5 移动端的 Vue 3 项目，有赞出品。",
+                strengths=[
+                    "70+ 移动端组件，触控交互和手势支持成熟",
+                    "轻量高性能，按需引入后包体小",
+                    "多语言和多主题支持",
+                ],
+                notes=[
+                    "仅适合移动端/H5，不适合桌面端中后台",
                 ],
             ),
         ],
@@ -466,7 +920,45 @@ class UIIntelligenceAdvisor:
                 notes=[
                     "必须做主题和排版升级，不能直接 Material 默认观感交付",
                 ],
-            )
+            ),
+            LibraryRecommendation(
+                name="PrimeNG",
+                category="Alternative",
+                rationale="适合需要丰富组件和企业级功能的 Angular 项目。",
+                strengths=[
+                    "80+ 组件覆盖，含 TreeTable、Schedule、Editor 等高级组件",
+                    "多主题预设（Lara/Aura），支持深色模式",
+                    "社区活跃，商业支持可用",
+                ],
+                notes=[
+                    "默认主题风格偏传统，品牌化需定制",
+                ],
+            ),
+            LibraryRecommendation(
+                name="NG-ZORRO (Ant Design of Angular)",
+                category="Alternative",
+                rationale="适合中后台和中文团队的 Angular 项目。",
+                strengths=[
+                    "Ant Design 规范的 Angular 实现，组件覆盖完整",
+                    "中文文档完善，国内社区活跃",
+                    "表格、表单、树形等 B 端核心组件成熟",
+                ],
+                notes=[
+                    "与 Ant Design React 版保持视觉一致，品牌化需额外投入",
+                ],
+            ),
+            LibraryRecommendation(
+                name="Spartan UI + Tailwind CSS",
+                category="Alternative",
+                rationale="适合追求 Angular 版 shadcn 体验的项目。",
+                strengths=[
+                    "shadcn/ui 的 Angular 移植版，headless + Tailwind 组合",
+                    "完全可定制，品牌控制力强",
+                ],
+                notes=[
+                    "生态较新，组件数量持续增长中",
+                ],
+            ),
         ],
         "svelte": [
             LibraryRecommendation(
@@ -507,6 +999,101 @@ class UIIntelligenceAdvisor:
                 ],
             )
         ],
+        "desktop": [
+            LibraryRecommendation(
+                name="Electron / Tauri + React/Vue + Tailwind + 桌面组件库",
+                category="Primary",
+                rationale="适合跨平台桌面应用，兼顾 Web 技术效率与桌面系统能力。",
+                strengths=[
+                    "可复用现有 Web 组件体系与设计 token",
+                    "便于集成文件系统、托盘、通知、离线缓存等桌面能力",
+                ],
+                notes=[
+                    "窗口布局、快捷键、菜单栏、深色模式需按桌面范式设计",
+                    "避免把桌面端做成纯网页壳，需补齐本地能力交互",
+                ],
+            ),
+            LibraryRecommendation(
+                name="Wails / Tauri + 原生壳层",
+                category="Alternative",
+                rationale="适合更轻量、资源占用更低的桌面客户端。",
+                strengths=[
+                    "包体更轻，启动性能更好",
+                ],
+                notes=[
+                    "需要明确前后端通信契约与本地权限边界",
+                ],
+            ),
+        ],
+        "react-native": [
+            LibraryRecommendation(
+                name="React Native + NativeWind + Tamagui / React Native Paper",
+                category="Primary",
+                rationale="适合 AI Coding 场景快速落地跨端 APP，同时保持可控品牌系统。",
+                strengths=[
+                    "跨平台组件复用效率高",
+                    "可通过 token 保持与 Web/H5 品牌一致",
+                ],
+                notes=[
+                    "导航、手势、系统权限优先按原生范式设计",
+                    "避免直接照搬 Web 布局和交互节奏",
+                ],
+            )
+        ],
+        "flutter": [
+            LibraryRecommendation(
+                name="Flutter + Material 3 / Cupertino + FlexColorScheme",
+                category="Primary",
+                rationale="适合高性能跨端 APP 与复杂动画场景。",
+                strengths=[
+                    "渲染一致性高，组件体系完整",
+                    "动画和复杂交互实现能力强",
+                ],
+                notes=[
+                    "必须先定义主题和组件状态映射，避免默认 Material 风格直出",
+                ],
+            )
+        ],
+        "swiftui": [
+            LibraryRecommendation(
+                name="SwiftUI + Design Tokens + SF Symbols",
+                category="Primary",
+                rationale="适合 iOS 原生体验优先的商业 APP。",
+                strengths=[
+                    "原生体验、动效和无障碍能力优秀",
+                    "便于与 iOS 设计规范对齐",
+                ],
+                notes=[
+                    "遵循 Human Interface Guidelines，避免网页式信息堆叠",
+                ],
+            )
+        ],
+        "miniapp": [
+            LibraryRecommendation(
+                name="TDesign 小程序 + Taro / UniApp + Tailwind(TW 适配)",
+                category="Primary",
+                rationale="适合微信小程序商业场景，兼顾腾讯生态组件规范与跨端复用。",
+                strengths=[
+                    "符合微信生态交互习惯，组件成熟",
+                    "支持表单、弹层、列表、导航等高频业务组件快速搭建",
+                ],
+                notes=[
+                    "小程序端优先使用 TDesign 组件与交互模式",
+                    "触控区域、性能包体、分包策略需前置约束",
+                ],
+            ),
+            LibraryRecommendation(
+                name="Vant Weapp / NutUI(小程序)",
+                category="Alternative",
+                rationale="适合轻量业务与已有技术栈迁移。",
+                strengths=[
+                    "上手成本低，社区资料丰富",
+                ],
+                notes=[
+                    "需要额外做品牌 token 重写，避免默认风格模板化",
+                ],
+            ),
+        ],
         "default": [
             LibraryRecommendation(
                 name="Tailwind CSS + Headless Patterns",
@@ -546,6 +1133,26 @@ class UIIntelligenceAdvisor:
             "default": "LayerCake / ECharts",
             "dense": "ECharts",
         },
+        "miniapp": {
+            "default": "F2 / ECharts 小程序版",
+            "dense": "F2 + 自定义业务图层",
+        },
+        "react-native": {
+            "default": "Victory Native / React Native Skia Charts",
+            "dense": "Skia-based custom charts",
+        },
+        "flutter": {
+            "default": "fl_chart / Syncfusion Flutter Charts",
+            "dense": "Syncfusion / CustomPainter charts",
+        },
+        "swiftui": {
+            "default": "Swift Charts",
+            "dense": "Swift Charts + custom marks",
+        },
+        "desktop": {
+            "default": "ECharts / Plotly（桌面高密度分析）",
+            "dense": "ECharts + AG Grid integrated charts",
+        },
         "default": {
             "default": "ECharts",
             "dense": "ECharts",
@@ -557,6 +1164,11 @@ class UIIntelligenceAdvisor:
         "vue": "vee-validate + Zod / Valibot",
         "angular": "Angular Reactive Forms",
         "svelte": "sveltekit-superforms + Zod",
+        "miniapp": "TDesign Form + 小程序原生校验",
+        "react-native": "React Hook Form + Zod + controlled inputs",
+        "flutter": "Form + Validator + Riverpod/BLoC",
+        "swiftui": "SwiftUI Form + Observable validation",
+        "desktop": "Schema Form + local persistence + shortcut actions",
         "default": "Schema-driven validation + typed DTO",
     }
 
@@ -565,6 +1177,11 @@ class UIIntelligenceAdvisor:
         "vue": "VueUse Motion / Motion One + CSS transitions",
         "angular": "Angular Animations + CSS transitions",
         "svelte": "Svelte transitions + Motion One",
+        "miniapp": "小程序原生动画 + 轻量过渡（避免重动画）",
+        "react-native": "Reanimated / Moti + native transitions",
+        "flutter": "Implicit animations + Motion spec",
+        "swiftui": "SwiftUI animation + spring transitions",
+        "desktop": "Micro-interaction transitions + window state animations",
         "default": "Meaningful CSS transitions only",
     }
 
@@ -621,6 +1238,7 @@ class UIIntelligenceAdvisor:
             "页面需要像成熟商业产品，具备截图、案例、信任、状态、流程和数据层级",
             "组件库只负责加速，不负责品牌感，必须做 token 和排版层重写",
             "对营销页、产品页、工作台分别使用不同的信息密度和交互策略",
+            "同一产品在 Web/H5/小程序/APP 需保持品牌一致，同时保留平台原生交互习惯",
         ]
 
         trust_modules = list(industry_rules["trust_modules"]) + list(profile["conversion_modules"])
@@ -646,6 +1264,21 @@ class UIIntelligenceAdvisor:
             "motion": self.MOTION_STACK.get(normalized_frontend, self.MOTION_STACK["default"]),
             "icons": icon_library,
         }
+        ui_library_matrix = [
+            {"scene": "Web 工作台", "libraries": "shadcn/ui + Radix + Tailwind", "focus": "高密度任务与状态可见性"},
+            {"scene": "品牌官网/H5", "libraries": "Tailwind + Aceternity UI / Magic UI", "focus": "叙事转化与视觉识别"},
+            {"scene": "多主题业务", "libraries": "Tailwind + DaisyUI", "focus": "主题系统与快速迭代"},
+            {"scene": "微信小程序", "libraries": "TDesign 小程序 + Taro / UniApp", "focus": "腾讯生态规范、触控效率与性能包体"},
+            {"scene": "APP", "libraries": "React Native / Flutter / SwiftUI", "focus": "手势、反馈、导航与原生体验一致性"},
+            {"scene": "桌面端", "libraries": "Electron / Tauri + React/Vue + Tailwind", "focus": "窗口范式、快捷键与本地能力集成"},
+        ]
+        quality_checklist = [
+            "必须提供 token（color/typography/spacing/radius/shadow/motion）并可复用",
+            "必须覆盖关键状态（loading/empty/error/success/permission）",
+            "必须具备商业信任模块（案例、指标、定价、FAQ、合规）",
+            "必须通过可访问性检查（对比度、键盘、focus、reduced motion）",
+            "必须通过品牌差异化检查（字体层级、配色节奏、图形语言）",
+        ]
 
         style_direction = self._build_style_direction(style=style, product_type=product_type, industry=industry)
         database_keywords = self._knowledge_keywords(
@@ -654,6 +1287,19 @@ class UIIntelligenceAdvisor:
             industry=industry,
             frontend=normalized_frontend,
         )
+
+        # Find matching palette
+        palette_key = product_type
+        if palette_key not in self.PRODUCT_COLOR_PALETTES:
+            # Try industry match
+            palette_key = industry if industry in self.PRODUCT_COLOR_PALETTES else "general"
+        color_palette = self.PRODUCT_COLOR_PALETTES.get(palette_key, self.PRODUCT_COLOR_PALETTES["general"])
+
+        # Find matching typography
+        typo_key = product_type
+        if typo_key not in self.PRODUCT_TYPOGRAPHY_PRESETS:
+            typo_key = industry if industry in self.PRODUCT_TYPOGRAPHY_PRESETS else "general"
+        typography_preset = self.PRODUCT_TYPOGRAPHY_PRESETS.get(typo_key, self.PRODUCT_TYPOGRAPHY_PRESETS["general"])
 
         return {
             "normalized_frontend": normalized_frontend,
@@ -673,6 +1319,11 @@ class UIIntelligenceAdvisor:
             "style_direction": style_direction,
             "industry_tone": industry_rules["tone"],
             "knowledge_keywords": database_keywords,
+            "ui_library_matrix": ui_library_matrix,
+            "quality_checklist": quality_checklist,
+            "color_palette": color_palette,
+            "typography_preset": typography_preset,
+            "pre_delivery_checklist": list(self.PRE_DELIVERY_CHECKLIST),
         }
 
     def _table_strategy(self, frontend: str, density: str) -> str:
@@ -685,6 +1336,12 @@ class UIIntelligenceAdvisor:
                 return "CDK Table / AG Grid（复杂后台）"
             if frontend == "svelte":
                 return "TanStack Table core + custom renderers"
+            if frontend == "miniapp":
+                return "TDesign Table / 虚拟列表 + 分页筛选"
+            if frontend in {"react-native", "flutter", "swiftui"}:
+                return "Virtualized List + Filter Chips + Sticky Header"
+            if frontend == "desktop":
+                return "AG Grid / Naive DataTable + Split View + Local Index"
         return "Semantic table + lightweight sorting/filtering"
 
     def _build_style_direction(self, *, style: str, product_type: str, industry: str) -> dict[str, str]:

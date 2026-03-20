@@ -3,7 +3,7 @@
 功能：工作流编排引擎 - 协调 12 阶段工作流（含第 0 阶段）
 作用：管理任务执行、专家调度、质量门禁
 创建时间：2025-12-30
-最后修改：2026-02-24
+最后修改：2026-03-20
 """
 
 import asyncio
@@ -82,6 +82,7 @@ class WorkflowEngine:
 
         # 阶段注册表
         self._phase_handlers: dict[Phase, Callable] = {}
+        self._checkpoint_dir = self.project_dir / ".super-dev" / "checkpoints"
 
         # 注册默认阶段处理器
         self._register_default_handlers()
@@ -101,11 +102,46 @@ class WorkflowEngine:
     def register_phase_handler(self, phase: Phase, handler: Callable) -> None:
         self._phase_handlers[phase] = handler
 
+    def _save_checkpoint(self, phase: Phase, result: PhaseResult, context: WorkflowContext) -> None:
+        """保存阶段检查点"""
+        self._checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        checkpoint = {
+            "phase": phase.value,
+            "success": result.success,
+            "duration": result.duration,
+            "quality_score": result.quality_score,
+            "errors": result.errors,
+            "timestamp": datetime.now().isoformat(),
+            "project": self.config_manager.config.name,
+        }
+        path = self._checkpoint_dir / f"{phase.value}.json"
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(checkpoint, f, indent=2, ensure_ascii=False)
+
+    def _load_checkpoint(self, phase: Phase) -> dict | None:
+        """加载阶段检查点"""
+        path = self._checkpoint_dir / f"{phase.value}.json"
+        if not path.exists():
+            return None
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return None
+
+    def _clear_checkpoints(self) -> None:
+        """清除所有检查点"""
+        if self._checkpoint_dir.exists():
+            for f in self._checkpoint_dir.glob("*.json"):
+                f.unlink(missing_ok=True)
+
     async def run(
         self,
         phases: list[Phase] | None = None,
         context: WorkflowContext | None = None,
         stop_requested: Callable[[], bool] | None = None,
+        resume: bool = False,
+        phase_timeout: int = 600,
     ) -> dict[Phase, PhaseResult]:
         if context is None:
             context = WorkflowContext(
@@ -118,6 +154,8 @@ class WorkflowEngine:
             phases = self._get_phases_from_config()
 
         results = {}
+        if not resume:
+            self._clear_checkpoints()
         self._print_workflow_start(phases)
 
         for phase in phases:
@@ -128,9 +166,34 @@ class WorkflowEngine:
                 )
                 break
 
+            # 检查点恢复：跳过已成功完成的阶段
+            if resume:
+                checkpoint = self._load_checkpoint(phase)
+                if checkpoint and checkpoint.get("success"):
+                    self.logger.info(
+                        f"恢复模式：跳过已完成阶段 {phase.value}",
+                        extra={"phase": phase.value}
+                    )
+                    results[phase] = PhaseResult(
+                        phase=phase,
+                        success=True,
+                        duration=checkpoint.get("duration", 0.0),
+                        quality_score=checkpoint.get("quality_score", 0.0),
+                    )
+                    if self.console:
+                        self.console.print(
+                            f"[blue]↪[/blue] {phase.value}: "
+                            f"已恢复 (跳过，上次耗时 {checkpoint.get('duration', 0):.1f}s)"
+                        )
+                    continue
+
             try:
-                result = await self._run_phase(phase, context)
+                result = await self._run_phase(phase, context, phase_timeout=phase_timeout)
                 results[phase] = result
+
+                # 保存检查点
+                if result.success:
+                    self._save_checkpoint(phase, result, context)
 
                 # 红队审查必须通过，避免风险进入后续阶段
                 if phase == Phase.REDTEAM and isinstance(result.output, dict):
@@ -205,7 +268,7 @@ class WorkflowEngine:
                 phases.append(phase_map[p])
         return phases
 
-    async def _run_phase(self, phase: Phase, context: WorkflowContext) -> PhaseResult:
+    async def _run_phase(self, phase: Phase, context: WorkflowContext, phase_timeout: int = 600) -> PhaseResult:
         start_time = datetime.now()
         phase_name = phase.value.upper()
 
@@ -220,7 +283,18 @@ class WorkflowEngine:
                     details={'available_phases': list(self._phase_handlers.keys())}
                 )
 
-            output = await self._execute_handler(handler, context)
+            try:
+                output = await asyncio.wait_for(
+                    self._execute_handler_async(handler, context),
+                    timeout=phase_timeout,
+                )
+            except asyncio.TimeoutError:
+                duration = (datetime.now() - start_time).total_seconds()
+                raise PhaseExecutionError(
+                    phase=phase_name,
+                    message=f"阶段 {phase_name} 超时（限制 {phase_timeout} 秒）",
+                    details={"timeout": phase_timeout, "duration": duration},
+                )
             duration = (datetime.now() - start_time).total_seconds()
 
             # 兼容自定义处理器直接返回 PhaseResult 的场景
@@ -273,11 +347,13 @@ class WorkflowEngine:
                 details=error_details
             ) from e
 
-    async def _execute_handler(self, handler: Callable, context: WorkflowContext) -> Any:
+    async def _execute_handler_async(self, handler: Callable, context: WorkflowContext) -> Any:
         if asyncio.iscoroutinefunction(handler):
             return await handler(context)
         else:
             return handler(context)
+
+    _execute_handler = _execute_handler_async
 
     def _calculate_quality_score(self, phase: Phase, context: WorkflowContext) -> float:
         """使用真实质量评分引擎计算分数"""
@@ -320,6 +396,11 @@ class WorkflowEngine:
         description = user_input.get("enriched_description", user_input.get("description", ""))
         domain = user_input.get("domain", "")
         offline = user_input.get("offline", False)
+        config_obj = getattr(context, "config", None)
+        config_data = getattr(config_obj, "config", config_obj)
+        project_name = str(user_input.get("name", getattr(config_data, "name", "") or "project"))
+        allowed_domains = list(getattr(config_data, "knowledge_allowed_domains", []) or [])
+        cache_ttl_seconds = getattr(config_data, "knowledge_cache_ttl_seconds", None)
 
         # 1. 解析结构化需求
         parser = RequirementParser()
@@ -332,8 +413,33 @@ class WorkflowEngine:
 
         # 2. 需求知识增强（本地知识库 + 联网检索）
         try:
-            augmenter = KnowledgeAugmenter(project_dir=self.project_dir, web_enabled=not offline)
-            knowledge_bundle = augmenter.augment(requirement=description, domain=domain)
+            augmenter = KnowledgeAugmenter(
+                project_dir=self.project_dir,
+                web_enabled=not offline,
+                allowed_web_domains=allowed_domains,
+                cache_ttl_seconds=cache_ttl_seconds,
+            )
+            output_dir = self.project_dir / "output"
+            knowledge_bundle = augmenter.load_cached_bundle(
+                output_dir=output_dir,
+                project_name=project_name,
+                requirement=description,
+                domain=domain,
+            )
+            if knowledge_bundle is None:
+                knowledge_bundle = augmenter.augment(
+                    requirement=description,
+                    domain=domain,
+                    max_local_results=12,
+                    max_web_results=8,
+                )
+                augmenter.save_bundle(
+                    bundle=knowledge_bundle,
+                    output_dir=output_dir,
+                    project_name=project_name,
+                    requirement=description,
+                    domain=domain,
+                )
             context.research_data["knowledge_bundle"] = knowledge_bundle
             context.user_input["knowledge_enhanced"] = bool(knowledge_bundle.get("local_knowledge"))
             context.user_input["web_research"] = bool(knowledge_bundle.get("web_knowledge"))

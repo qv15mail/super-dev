@@ -50,6 +50,12 @@ class TestAIPromptGenerator:
         assert "UI 达到商业级完成度而不是模板化页面" in prompt
         assert "本项目 UI 实现基线" in prompt
         assert "首选组件生态" in prompt
+        assert "宿主 UI 生成执行契约（必须遵守）" in prompt
+        assert "每个关键页面必须提供 **2 个视觉方案**" in prompt
+        assert "Token → Primitive → Pattern → Surface" in prompt
+        assert "非技术与专业用户都能使用同一套交互" in prompt
+        assert "Web/H5/微信小程序/APP/桌面端" in prompt
+        assert "TDesign 小程序 / RN / Flutter / SwiftUI / Electron / Tauri" in prompt
 
     def test_generate_bugfix_prompt_requires_lightweight_docs(self, temp_project_dir: Path):
         output_dir = temp_project_dir / "output"

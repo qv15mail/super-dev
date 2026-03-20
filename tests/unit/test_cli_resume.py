@@ -119,3 +119,52 @@ def test_write_resume_audit_outputs_json_and_markdown(temp_project_dir) -> None:
     markdown = files["markdown"].read_text(encoding="utf-8")
     assert "Resume Audit" in markdown
     assert "fallback" in markdown.lower()
+
+
+def test_resolve_pipeline_stage_selector_supports_aliases() -> None:
+    cli = SuperDevCLI()
+
+    assert cli._resolve_pipeline_stage_selector("research") == 0
+    assert cli._resolve_pipeline_stage_selector("docs") == 1
+    assert cli._resolve_pipeline_stage_selector("spec") == 2
+    assert cli._resolve_pipeline_stage_selector("frontend") == 3
+    assert cli._resolve_pipeline_stage_selector("backend") == 4
+    assert cli._resolve_pipeline_stage_selector("quality") == 6
+    assert cli._resolve_pipeline_stage_selector("delivery") == 11
+    assert cli._resolve_pipeline_stage_selector("12") == 12
+    assert cli._resolve_pipeline_stage_selector("unknown") is None
+
+
+def test_stage_jump_impact_includes_core_messages() -> None:
+    cli = SuperDevCLI()
+    docs_impact = cli._stage_jump_impact(1)
+    frontend_impact = cli._stage_jump_impact(3)
+    quality_impact = cli._stage_jump_impact(6)
+
+    assert any("PRD" in item for item in docs_impact)
+    assert any("前端骨架" in item for item in frontend_impact)
+    assert any("质量" in item or "交付" in item for item in quality_impact)
+
+
+def test_run_confirm_phase_updates_run_state_for_generic_phase(temp_project_dir, monkeypatch) -> None:
+    cli = SuperDevCLI()
+    monkeypatch.chdir(temp_project_dir)
+    cli._write_pipeline_run_state(
+        temp_project_dir,
+        {
+            "status": "failed",
+            "pipeline_args": {"description": "demo"},
+        },
+    )
+
+    code = cli._cmd_run_confirm_phase(
+        phase_name="frontend",
+        comment="前端预览已通过",
+        actor="tester",
+    )
+    assert code == 0
+
+    run_state = cli._read_pipeline_run_state(temp_project_dir) or {}
+    confirmations = run_state.get("phase_confirmations") or {}
+    assert "frontend" in confirmations
+    assert confirmations["frontend"]["status"] == "confirmed"

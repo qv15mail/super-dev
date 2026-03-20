@@ -84,16 +84,28 @@ class TestDocumentGeneratorIntegration:
 
         assert "### 1.4 市场与对标结论" in prd
         assert "### 1.6 需求澄清问题" in prd
+        assert "### 1.7 联网研究证据与方案对比" in prd
+        assert "### 1.8 关键决策账本" in prd
+        assert "### 1.9 用户到专业交付统一协议" in prd
         assert "### 2.4 功能优先级与范围边界" in prd
+        assert "### 2.6 实施方案分层与取舍" in prd
         assert "### 7.4 业务验收矩阵" in prd
         assert "### 1.3 需求到架构的落地映射" in architecture
+        assert "### 1.4 架构选型取舍与证据链" in architecture
+        assert "### 1.5 架构决策账本" in architecture
+        assert "### 1.6 Agent 执行流水线（全端）" in architecture
         assert "### 3.3 关键时序图" in architecture
         assert "### 8.3 容错与降级策略" in architecture
         assert "### 1.4 商业级体验目标" in uiux
         assert "### 1.5 设计 Intelligence 结论" in uiux
-        assert "### 2.7 组件生态与实现基线" in uiux
+        assert "### 2.7 布局栅格与密度策略" in uiux
+        assert "### 2.8 组件生态与实现基线" in uiux
+        assert "### 2.10 多端适配与平台化设计策略" in uiux
+        assert "### 2.11 商业级设计质量门禁" in uiux
+        assert "### 2.12 精美 UI 执行工作流（Stitch 范式）" in uiux
         assert "### 5.3 组件状态矩阵" in uiux
         assert "### 5.4 图标、图表与内容模块" in uiux
+        assert "### 5.5 组件落地清单（Tailwind / 生态组件）" in uiux
         assert "### 7.3 商业化与信任设计" in uiux
 
     def test_document_generator_embeds_ui_intelligence_stack(self):
@@ -109,6 +121,26 @@ class TestDocumentGeneratorIntegration:
         assert "shadcn/ui + Radix UI + Tailwind CSS" in uiux
         assert "表单与验证" in uiux
         assert "图标体系" in uiux
+        assert "多场景组件库矩阵" in uiux
+
+    def test_document_generator_consumes_research_summary_for_evidence(self):
+        generator = DocumentGenerator(
+            name="research-driven-app",
+            description="生成证据驱动文档",
+            frontend="react",
+            backend="python",
+            knowledge_summary={
+                "research_confidence": "high",
+                "evidence_distribution": {"official": 3, "industry": 1, "community": 0},
+                "benchmark_products": ["Product X: benchmark"],
+                "primary_sources": [("openai.com", 2)],
+            },
+        )
+
+        prd = generator.generate_prd()
+
+        assert "研究可信度" in prd
+        assert "openai.com" in prd
 
     def test_execution_plan_switches_to_bugfix_mode(self):
         generator = DocumentGenerator(

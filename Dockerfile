@@ -1,4 +1,4 @@
-# Multi-stage build for 用户认证系统
+# Multi-stage build for super-dev
 
 # ========== Build stage ==========
 FROM node:18-alpine AS builder
@@ -44,5 +44,5 @@ ENTRYPOINT ["dumb-init", "--"]
 # Start the application
 CMD ["node", "dist/main.js"]
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
     CMD node -e "require('http').get('http://localhost:3000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"

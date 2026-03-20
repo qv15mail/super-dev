@@ -1,9 +1,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: 用户认证系统
+  name: super-dev
   labels:
-    app: 用户认证系统
+    app: super-dev
     version: v1
 spec:
   replicas: 3
@@ -14,16 +14,16 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app: 用户认证系统
+      app: super-dev
   template:
     metadata:
       labels:
-        app: 用户认证系统
+        app: super-dev
         version: v1
     spec:
       containers:
-      - name: 用户认证系统
-        image: your-registry/用户认证系统:latest
+      - name: super-dev
+        image: your-registry/super-dev:latest
         ports:
         - containerPort: 3000
           name: http
@@ -34,20 +34,20 @@ spec:
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
-              name: 用户认证系统-secret
+              name: super-dev-secret
               key: database-url
         - name: REDIS_URL
           valueFrom:
             configMapKeyRef:
-              name: 用户认证系统-config
+              name: super-dev-config
               key: redis-url
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
             memory: "512Mi"
             cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
         livenessProbe:
           httpGet:
             path: /health

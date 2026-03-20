@@ -17,6 +17,8 @@ from .models import (
 )
 from .repo_map import RepoMapBuilder, RepoMapItem, RepoMapReport
 from .impact import ImpactAnalyzer, ImpactAnalysisReport, ImpactItem
+from .regression_guard import RegressionCheck, RegressionGuardBuilder, RegressionGuardReport
+from .dependency_graph import CriticalPath, DependencyEdge, DependencyGraphBuilder, DependencyGraphReport, DependencyNode
 
 __all__ = [
     "ProjectAnalyzer",
@@ -35,6 +37,14 @@ __all__ = [
     "ImpactAnalyzer",
     "ImpactAnalysisReport",
     "ImpactItem",
+    "RegressionCheck",
+    "RegressionGuardBuilder",
+    "RegressionGuardReport",
+    "DependencyEdge",
+    "DependencyNode",
+    "CriticalPath",
+    "DependencyGraphBuilder",
+    "DependencyGraphReport",
     "detect_project_type",
     "detect_tech_stack",
 ]

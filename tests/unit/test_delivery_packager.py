@@ -53,7 +53,7 @@ def test_delivery_packager_ready(temp_project_dir: Path) -> None:
     name = "demo"
     _seed_required_files(temp_project_dir, name)
 
-    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.10")
+    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.11")
     result = packager.package(cicd_platform="all")
 
     assert result["status"] == "ready"
@@ -87,7 +87,7 @@ def test_delivery_packager_incomplete_without_migrations(temp_project_dir: Path)
         if file_path.is_file():
             file_path.unlink()
 
-    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.10")
+    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.11")
     result = packager.package(cicd_platform="all")
 
     assert result["status"] == "incomplete"
@@ -107,14 +107,34 @@ def test_delivery_packager_incomplete_with_pending_spec_tasks(temp_project_dir: 
         encoding="utf-8",
     )
 
-    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.10")
+    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.11")
     result = packager.package(cicd_platform="all")
 
     assert result["status"] == "incomplete"
     missing_items = result["missing_required"]
     assert isinstance(missing_items, list)
     reasons = {item["path"] for item in missing_items if isinstance(item, dict)}
-    assert ".super-dev/changes/*/tasks.md" in reasons
+    assert ".super-dev/changes/demo/tasks.md" in reasons
+
+
+def test_delivery_packager_uses_named_change_tasks_only(temp_project_dir: Path) -> None:
+    name = "demo"
+    _seed_required_files(temp_project_dir, name)
+    legacy_task_file = temp_project_dir / ".super-dev" / "changes" / "legacy" / "tasks.md"
+    legacy_task_file.parent.mkdir(parents=True, exist_ok=True)
+    legacy_task_file.write_text(
+        "# Tasks\n\n- [ ] **1.1: pending**\n",
+        encoding="utf-8",
+    )
+
+    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.11")
+    result = packager.package(cicd_platform="all")
+
+    assert result["status"] == "ready"
+    manifest_path = Path(str(result["manifest_file"]))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["spec_tasks"]["pending"] == 0
+    assert manifest["spec_tasks"]["target_change"] == "demo"
 
 
 def test_delivery_packager_incomplete_without_frontend_runtime_report(temp_project_dir: Path) -> None:
@@ -123,7 +143,7 @@ def test_delivery_packager_incomplete_without_frontend_runtime_report(temp_proje
     (temp_project_dir / "output" / f"{name}-frontend-runtime.md").unlink()
     (temp_project_dir / "output" / f"{name}-frontend-runtime.json").unlink()
 
-    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.10")
+    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.11")
     result = packager.package(cicd_platform="all")
 
     assert result["status"] == "incomplete"

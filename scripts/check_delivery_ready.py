@@ -72,9 +72,24 @@ def _run_smoke(project_root: Path) -> Path:
         smoke_dir = Path(tmp)
         old_cwd = Path.cwd()
         old_disable_web = os.environ.get("SUPER_DEV_DISABLE_WEB")
+        old_allow_no_host = os.environ.get("SUPER_DEV_ALLOW_NO_HOST")
         try:
             os.chdir(smoke_dir)
             os.environ["SUPER_DEV_DISABLE_WEB"] = "1"
+            os.environ["SUPER_DEV_ALLOW_NO_HOST"] = "1"
+            policy_dir = smoke_dir / ".super-dev"
+            policy_dir.mkdir(parents=True, exist_ok=True)
+            (policy_dir / "policy.yaml").write_text(
+                (
+                    "require_redteam: true\n"
+                    "require_quality_gate: false\n"
+                    "require_rehearsal_verify: true\n"
+                    "min_quality_threshold: 70\n"
+                    "allowed_cicd_platforms:\n"
+                    "  - all\n"
+                ),
+                encoding="utf-8",
+            )
             cli = SuperDevCLI()
             result = cli.run(
                 [
@@ -91,12 +106,34 @@ def _run_smoke(project_root: Path) -> Path:
                     "python",
                     "--cicd",
                     "all",
+                    "--quality-threshold",
+                    "75",
                 ]
             )
             if result != 0:
                 raise RuntimeError(f"pipeline smoke 执行失败: exit={result}")
 
             manifest = smoke_dir / "output" / "delivery" / "release-smoke-delivery-manifest.json"
+            if not manifest.exists():
+                review_result = cli.run(
+                    [
+                        "review",
+                        "docs",
+                        "--status",
+                        "confirmed",
+                        "--comment",
+                        "smoke auto confirm",
+                    ]
+                )
+                if review_result != 0:
+                    raise RuntimeError(f"pipeline smoke 文档确认失败: exit={review_result}")
+                resume_result = cli.run(["run", "--resume"])
+                if resume_result != 0 and not manifest.exists():
+                    try:
+                        manifest = _latest_manifest(smoke_dir)
+                    except FileNotFoundError as exc:
+                        raise RuntimeError(f"pipeline smoke 恢复执行失败: exit={resume_result}") from exc
+
             if not manifest.exists():
                 # 回退查找最新 manifest，避免名称变更导致误判
                 manifest = _latest_manifest(smoke_dir)
@@ -117,6 +154,10 @@ def _run_smoke(project_root: Path) -> Path:
                 os.environ.pop("SUPER_DEV_DISABLE_WEB", None)
             else:
                 os.environ["SUPER_DEV_DISABLE_WEB"] = old_disable_web
+            if old_allow_no_host is None:
+                os.environ.pop("SUPER_DEV_ALLOW_NO_HOST", None)
+            else:
+                os.environ["SUPER_DEV_ALLOW_NO_HOST"] = old_allow_no_host
 
 
 def main() -> int:

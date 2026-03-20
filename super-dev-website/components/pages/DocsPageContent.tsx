@@ -25,7 +25,6 @@ const SLASH_HOSTS = [
   'cursor',
   'cursor-cli',
   'gemini-cli',
-  'iflow',
   'kiro-cli',
   'opencode',
   'qoder',
@@ -34,7 +33,7 @@ const SLASH_HOSTS = [
   'antigravity',
 ] as const;
 
-const TEXT_TRIGGER_HOSTS = ['codex-cli', 'kimi-cli', 'kiro', 'trae'] as const;
+const TEXT_TRIGGER_HOSTS = ['codex-cli', 'kiro', 'trae', 'vscode-copilot'] as const;
 
 type SectionLink = { id: string; label: string; icon: LucideIcon };
 type SurfaceGroup = { title: string; body: string; points: string[] };
@@ -88,9 +87,9 @@ const zhContent: Content = {
   heroKicker: 'Documentation Center',
   heroTitle: '安装、接入、触发、流水线和交付，都从这里开始。',
   heroBody:
-    '这份文档说明安装方式、宿主接入、触发方式、流水线、知识库、门禁和交付要求。',
+    '这份文档说明安装方式、宿主接入、触发方式、流水线、代码库理解、回归守卫、知识库、门禁和交付要求。',
   heroStats: [
-    { label: '支持宿主', value: '17' },
+    { label: '主推宿主', value: '16' },
     { label: '触发模型', value: '2 种' },
     { label: '核心阶段', value: '9 段' },
   ],
@@ -118,8 +117,8 @@ const zhContent: Content = {
     '先把工具装好，再进入宿主接入引导。安装阶段只需要弄清三件事：会安装什么、不会安装什么、下一步怎么触发宿主开始工作。',
   installBullets: [
     'pip 或 uv 会自动安装 Super Dev 的 Python 依赖。',
-    '不会自动安装 Claude Code、Cursor、Trae、Gemini CLI 等宿主本体。',
-    '终端输入 super-dev 后，会进入宿主安装引导并把协议面写入宿主和项目。',
+    '不会自动安装 Claude Code、Cursor、Trae、Gemini CLI、VS Code Copilot 等宿主本体。',
+    '终端输入 super-dev 后，会进入宿主安装引导，并把 16 个主推宿主的对应协议面写入宿主和项目。',
   ],
   installCode:
     'pip install -U super-dev\n# 或\nuv tool install super-dev\n\n# 打开安装引导\nsuper-dev\n\n# 更新到最新版\nsuper-dev update',
@@ -172,8 +171,6 @@ const zhContent: Content = {
         { host: 'opencode', protocol: '官方 commands + skills', grade: 'Experimental', trigger: '/super-dev' },
         { host: 'gemini-cli', protocol: '官方 commands + GEMINI.md', grade: 'Compatible', trigger: '/super-dev' },
         { host: 'kiro-cli', protocol: '官方 commands + AGENTS.md', grade: 'Compatible', trigger: '/super-dev' },
-        { host: 'kimi-cli', protocol: '官方 AGENTS.md + 文本触发', grade: 'Compatible', trigger: 'super-dev:' },
-        { host: 'iflow', protocol: '官方 commands + skills', grade: 'Experimental', trigger: '/super-dev' },
         { host: 'cursor-cli', protocol: '官方 commands + rules', grade: 'Compatible', trigger: '/super-dev' },
         { host: 'qoder-cli', protocol: '官方 commands + skills', grade: 'Compatible', trigger: '/super-dev' },
         { host: 'codebuddy-cli', protocol: '官方 commands + skills', grade: 'Compatible', trigger: '/super-dev' },
@@ -187,6 +184,7 @@ const zhContent: Content = {
         { host: 'kiro', protocol: '官方 project steering + global steering', grade: 'Experimental', trigger: 'super-dev:' },
         { host: 'qoder', protocol: '官方 commands + rules + skills', grade: 'Experimental', trigger: '/super-dev' },
         { host: 'trae', protocol: '官方 project rules + 兼容 Skill', grade: 'Compatible', trigger: 'super-dev:' },
+        { host: 'vscode-copilot', protocol: '官方 copilot-instructions + AGENTS', grade: 'Experimental', trigger: 'super-dev:' },
         { host: 'codebuddy', protocol: '官方 commands + skills', grade: 'Experimental', trigger: '/super-dev' },
         { host: 'windsurf', protocol: '官方 workflows + skills', grade: 'Experimental', trigger: '/super-dev' },
       ],
@@ -219,18 +217,23 @@ const zhContent: Content = {
       bullets: ['super-dev repo-map', 'super-dev impact "变更描述" --files ...', '先看 blast radius 再动手'],
     },
     {
+      title: '代码库理解与回归守卫',
+      body: '复杂仓库不要靠宿主临场猜结构。先生成依赖图，再把影响分析转换成可执行的回归清单。',
+      bullets: ['super-dev dependency-graph', 'super-dev regression-guard "变更描述" --files ...', '先补回归重点再修改关键路径'],
+    },
+    {
       title: '前端运行验证门',
       body: '必须有 frontend-runtime 报告通过，中后段才允许继续。',
       bullets: ['preview.html', 'frontend-runtime.json', '运行通过后再进后端'],
     },
     {
       title: '质量与交付门',
-      body: 'UI Review、红队、交付包、发布演练和 release readiness 共同定义“是否可交付”。',
-      bullets: ['UI Review', 'delivery ready', 'rehearsal passed'],
+      body: 'UI Review、Spec Quality、交付包、发布演练和 release readiness 共同定义“是否可交付”。',
+      bullets: ['UI Review', 'Spec Quality', 'Proof Pack / release readiness'],
     },
   ],
   commandsTitle: '常用命令',
-  commandsBody: '这里整理最常用的命令组：安装与引导、宿主接入、代码库理解、影响分析、确认门、质量检查、发布检查和更新。',
+  commandsBody: '这里整理最常用的命令组：安装与引导、宿主接入、代码库理解、影响分析、回归守卫、缺陷修复、确认门、质量检查、发布检查和更新。',
   commands: [
     {
       title: '安装与引导',
@@ -239,13 +242,23 @@ const zhContent: Content = {
     },
     {
       title: '宿主接入与修复',
-      code: 'super-dev onboard --host claude-code --force --yes\nsuper-dev doctor --host trae --repair --force\nsuper-dev detect --json',
+      code: 'super-dev onboard --host claude-code --force --yes\nsuper-dev doctor --host trae --repair --force\nsuper-dev integrate validate --auto\nsuper-dev detect --json',
       filename: 'Host Operations',
     },
     {
       title: '代码库理解与影响分析',
-      code: 'super-dev repo-map\nsuper-dev impact "修改登录流程" --files services/auth.py',
+      code: 'super-dev repo-map\nsuper-dev dependency-graph\nsuper-dev impact "修改登录流程" --files services/auth.py\nsuper-dev regression-guard "修改登录流程" --files services/auth.py',
       filename: 'Codebase Intelligence',
+    },
+    {
+      title: '缺陷修复路径',
+      code: 'super-dev fix "修复登录接口 500 并补充回归验证"',
+      filename: 'Bugfix Mode',
+    },
+    {
+      title: 'Spec 质量与脚手架',
+      code: 'super-dev spec propose add-billing --title "..." --description "..." --no-scaffold\nsuper-dev spec scaffold add-billing\nsuper-dev spec quality add-billing\nsuper-dev spec quality add-billing --json',
+      filename: 'Spec Quality',
     },
     {
       title: '确认与恢复',
@@ -254,7 +267,7 @@ const zhContent: Content = {
     },
     {
       title: '质量 / 发布 / 更新',
-      code: 'super-dev quality --type all\nsuper-dev release readiness --verify-tests\nsuper-dev update --check\nsuper-dev update',
+      code: 'super-dev quality --type all\nsuper-dev release proof-pack\nsuper-dev release readiness --verify-tests\nsuper-dev update --check\nsuper-dev update',
       filename: 'Quality & Release',
     },
   ],
@@ -276,9 +289,9 @@ const enContent: Content = {
   heroKicker: 'Documentation Center',
   heroTitle: 'Start with install, host onboarding, triggers, pipeline, and delivery.',
   heroBody:
-    'This documentation covers installation, host onboarding, triggers, pipeline stages, local knowledge, workflow gates, and delivery requirements.',
+    'This documentation covers installation, host onboarding, triggers, pipeline stages, codebase intelligence, regression guard, local knowledge, workflow gates, and delivery requirements.',
   heroStats: [
-    { label: 'Hosts', value: '17' },
+    { label: 'Primary hosts', value: '16' },
     { label: 'Trigger modes', value: '2' },
     { label: 'Core phases', value: '9' },
   ],
@@ -306,8 +319,8 @@ const enContent: Content = {
     'Install the tool first, then enter the host onboarding flow. This section covers what gets installed and what to run next.',
   installBullets: [
     'pip or uv automatically install Super Dev and its Python dependencies.',
-    'They do not install Claude Code, Cursor, Trae, Gemini CLI, or any host application.',
-    'Running super-dev opens the host installer and writes the required protocol surfaces into the host and the project.',
+    'They do not install Claude Code, Cursor, Trae, Gemini CLI, VS Code Copilot, or any host application.',
+    'Running super-dev opens the host installer and writes the required protocol surfaces for the 16 primary host profiles.',
   ],
   installCode:
     'pip install -U super-dev\n# or\nuv tool install super-dev\n\n# open the installer\nsuper-dev\n\n# update later\nsuper-dev update',
@@ -360,8 +373,6 @@ const enContent: Content = {
         { host: 'opencode', protocol: 'official commands + skills', grade: 'Experimental', trigger: '/super-dev' },
         { host: 'gemini-cli', protocol: 'official commands + GEMINI.md', grade: 'Compatible', trigger: '/super-dev' },
         { host: 'kiro-cli', protocol: 'official commands + AGENTS.md', grade: 'Compatible', trigger: '/super-dev' },
-        { host: 'kimi-cli', protocol: 'official AGENTS.md + text trigger', grade: 'Compatible', trigger: 'super-dev:' },
-        { host: 'iflow', protocol: 'official commands + skills', grade: 'Experimental', trigger: '/super-dev' },
         { host: 'cursor-cli', protocol: 'official commands + rules', grade: 'Compatible', trigger: '/super-dev' },
         { host: 'qoder-cli', protocol: 'official commands + skills', grade: 'Compatible', trigger: '/super-dev' },
         { host: 'codebuddy-cli', protocol: 'official commands + skills', grade: 'Compatible', trigger: '/super-dev' },
@@ -375,6 +386,7 @@ const enContent: Content = {
         { host: 'kiro', protocol: 'official project steering + global steering', grade: 'Experimental', trigger: 'super-dev:' },
         { host: 'qoder', protocol: 'official commands + rules + skills', grade: 'Experimental', trigger: '/super-dev' },
         { host: 'trae', protocol: 'official project rules + compatibility skill', grade: 'Compatible', trigger: 'super-dev:' },
+        { host: 'vscode-copilot', protocol: 'official copilot-instructions + AGENTS', grade: 'Experimental', trigger: 'super-dev:' },
         { host: 'codebuddy', protocol: 'official commands + skills', grade: 'Experimental', trigger: '/super-dev' },
         { host: 'windsurf', protocol: 'official workflows + skills', grade: 'Experimental', trigger: '/super-dev' },
       ],
@@ -407,18 +419,23 @@ const enContent: Content = {
       bullets: ['super-dev repo-map', 'super-dev impact "change description" --files ...', 'review scope before coding'],
     },
     {
+      title: 'Codebase intelligence and regression guard',
+      body: 'Do not let the host guess its way through a large repo. Generate the dependency graph first, then turn impact analysis into an executable regression checklist.',
+      bullets: ['super-dev dependency-graph', 'super-dev regression-guard "change description" --files ...', 'lock the regression focus before modifying critical paths'],
+    },
+    {
       title: 'Frontend runtime gate',
       body: 'A page file existing is not enough. A passing frontend runtime report is required before later stages continue.',
       bullets: ['preview.html', 'frontend-runtime.json', 'backend starts after runtime verification'],
     },
     {
       title: 'Quality & delivery gates',
-      body: 'UI review, red-team review, delivery packaging, release rehearsal, and release readiness define completion.',
-      bullets: ['UI Review', 'delivery ready', 'rehearsal passed'],
+      body: 'UI review, Spec Quality, delivery packaging, release rehearsal, and release readiness define completion.',
+      bullets: ['UI Review', 'Spec Quality', 'Proof Pack / release readiness'],
     },
   ],
   commandsTitle: 'Commands',
-  commandsBody: 'Keep the critical commands visible: install, onboarding, codebase intelligence, impact analysis, approval, quality, release checks, and update.',
+  commandsBody: 'Keep the critical commands visible: install, onboarding, codebase intelligence, impact analysis, regression guard, bugfix, approval, quality, release checks, and update.',
   commands: [
     {
       title: 'Install & bootstrap',
@@ -427,13 +444,23 @@ const enContent: Content = {
     },
     {
       title: 'Onboarding & repair',
-      code: 'super-dev onboard --host claude-code --force --yes\nsuper-dev doctor --host trae --repair --force\nsuper-dev detect --json',
+      code: 'super-dev onboard --host claude-code --force --yes\nsuper-dev doctor --host trae --repair --force\nsuper-dev integrate validate --auto\nsuper-dev detect --json',
       filename: 'Host Operations',
     },
     {
       title: 'Codebase intelligence & impact',
-      code: 'super-dev repo-map\nsuper-dev impact "Change the login flow" --files services/auth.py',
+      code: 'super-dev repo-map\nsuper-dev dependency-graph\nsuper-dev impact "Change the login flow" --files services/auth.py\nsuper-dev regression-guard "Change the login flow" --files services/auth.py',
       filename: 'Codebase Intelligence',
+    },
+    {
+      title: 'Bugfix mode',
+      code: 'super-dev fix "Fix login 500 and add regression verification"',
+      filename: 'Bugfix Mode',
+    },
+    {
+      title: 'Spec quality and scaffolding',
+      code: 'super-dev spec propose add-billing --title "..." --description "..." --no-scaffold\nsuper-dev spec scaffold add-billing\nsuper-dev spec quality add-billing\nsuper-dev spec quality add-billing --json',
+      filename: 'Spec Quality',
     },
     {
       title: 'Approve & resume',
@@ -442,7 +469,7 @@ const enContent: Content = {
     },
     {
       title: 'Quality / release / update',
-      code: 'super-dev quality --type all\nsuper-dev release readiness --verify-tests\nsuper-dev update --check\nsuper-dev update',
+      code: 'super-dev quality --type all\nsuper-dev release proof-pack\nsuper-dev release readiness --verify-tests\nsuper-dev update --check\nsuper-dev update',
       filename: 'Quality & Release',
     },
   ],
@@ -506,7 +533,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             <div className="max-w-[860px]">
               <div className="mb-5 flex flex-wrap items-center gap-2">
                 <Badge variant="version">{content.heroKicker}</Badge>
-                <Badge variant="certified">v2.0.10</Badge>
+                <Badge variant="certified">v2.0.11</Badge>
                 <Badge variant="compatible">{locale === 'en' ? 'Bilingual' : '中英双语'}</Badge>
               </div>
               <h1 className="max-w-[900px] text-4xl font-bold leading-[1.08] tracking-tight text-text-primary sm:text-5xl lg:text-[3.5rem]">

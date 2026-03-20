@@ -8,7 +8,7 @@ Spec-Driven Development 管理器
 """
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml  # type: ignore[import-untyped]
@@ -96,9 +96,9 @@ class SpecManager:
                     spec.requirements.append(current_req)
                 current_req = Requirement(name=line[16:].strip())
                 current_section = "requirement"
-            elif line.startswith("#### Scenario:"):
+            elif line.startswith("#### Scenario"):
                 if current_req:
-                    scenario = Scenario(when=line[13:].strip())
+                    scenario = Scenario(when=line.split(":", 1)[-1].strip() if ":" in line else "")
                     current_req.scenarios.append(scenario)
             elif current_section == "purpose" and line.strip():
                 spec.purpose += line.strip() + "\n"
@@ -249,7 +249,7 @@ class ChangeManager:
                 if change and (status is None or change.status == status):
                     changes.append(change)
 
-        return sorted(changes, key=lambda c: c.created_at, reverse=True)
+        return sorted(changes, key=lambda c: self._normalize_datetime(c.created_at), reverse=True)
 
     def delete_change(self, change_id: str):
         """删除变更"""
@@ -319,8 +319,13 @@ class ChangeManager:
         proposal.description = proposal.description.strip()
         proposal.motivation = proposal.motivation.strip()
         proposal.impact = proposal.impact.strip()
-
         return proposal
+
+
+    def _normalize_datetime(self, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
 
     def _parse_tasks(self, content: str) -> list[Task]:
         """解析任务"""

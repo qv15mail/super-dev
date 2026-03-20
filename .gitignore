@@ -54,6 +54,8 @@ htmlcov/
 
 # 输出文件
 output/
+.research/
+docs/plans/
 *.docx
 *.pdf
 artifacts/
@@ -74,6 +76,8 @@ artifacts/
 /.trae/
 /.windsurf/
 /GEMINI.md
+/AGENTS.md
+/CLAUDE.md
 
 # Local logs and media
 logs/

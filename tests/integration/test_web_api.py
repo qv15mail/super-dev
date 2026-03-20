@@ -15,6 +15,7 @@ from super_dev.cli import SuperDevCLI
 from super_dev.integrations import IntegrationManager
 from super_dev.orchestrator import Phase, PhaseResult
 from super_dev.review_state import save_docs_confirmation, save_ui_revision
+from super_dev.specs.generator import SpecGenerator
 
 
 @pytest.fixture(autouse=True)
@@ -31,7 +32,7 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         parents=True,
         exist_ok=True,
     )
-    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.10"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
+    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.11"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
     (project_dir / ".gitignore").write_text(
         "\n".join(
             [
@@ -57,18 +58,18 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
-    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.10"\n', encoding="utf-8")
+    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.11"\n', encoding="utf-8")
     (project_dir / "README.md").write_text(
-        "当前版本：`2.0.10`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "当前版本：`2.0.11`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "README_EN.md").write_text(
-        "Current version: `2.0.10`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        "Current version: `2.0.11`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "docs" / "HOST_USAGE_GUIDE.md").write_text("Smoke\n/super-dev\nsuper-dev:\n", encoding="utf-8")
     (project_dir / "docs" / "HOST_CAPABILITY_AUDIT.md").write_text("官方依据\nsuper-dev integrate smoke\n", encoding="utf-8")
-    (project_dir / "docs" / "PRODUCT_AUDIT.md").write_text("P0\nP1\nP2\n", encoding="utf-8")
+    (project_dir / "docs" / "README.md").write_text("用户文档\n维护者文档\n", encoding="utf-8")
     (project_dir / "docs" / "WORKFLOW_GUIDE.md").write_text("super-dev review docs\nsuper-dev run --resume\n", encoding="utf-8")
     (project_dir / "docs" / "WORKFLOW_GUIDE_EN.md").write_text("super-dev review docs\nsuper-dev run --resume\n", encoding="utf-8")
     (project_dir / "install.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
@@ -94,8 +95,18 @@ def _prepare_proof_pack_project(project_dir: Path) -> None:
         json.dumps({"project_name": project_dir.name}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    (output_dir / f"{project_dir.name}-dependency-graph.md").write_text("# Dependency Graph\n\nok\n", encoding="utf-8")
+    (output_dir / f"{project_dir.name}-dependency-graph.json").write_text(
+        json.dumps({"project_name": project_dir.name, "node_count": 4, "edge_count": 3}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     (output_dir / f"{project_dir.name}-impact-analysis.md").write_text("# Change Impact Analysis\n\nok\n", encoding="utf-8")
     (output_dir / f"{project_dir.name}-impact-analysis.json").write_text(
+        json.dumps({"project_name": project_dir.name, "risk_level": "medium"}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (output_dir / f"{project_dir.name}-regression-guard.md").write_text("# Regression Guard\n\nok\n", encoding="utf-8")
+    (output_dir / f"{project_dir.name}-regression-guard.json").write_text(
         json.dumps({"project_name": project_dir.name, "risk_level": "medium"}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
@@ -125,6 +136,14 @@ def _prepare_proof_pack_project(project_dir: Path) -> None:
             "run_id": "proof-pack-run",
         },
     )
+    generator = SpecGenerator(project_dir)
+    generator.init_sdd()
+    change = generator.create_change(
+        change_id="proof-quality",
+        title="Proof Quality",
+        description="proof pack spec quality",
+    )
+    generator.scaffold_change_artifacts(change.id)
 
 
 class TestWebAPI:
@@ -180,6 +199,7 @@ class TestWebAPI:
         default_payload = get_resp.json()
         assert default_payload["require_redteam"] is True
         assert default_payload["require_quality_gate"] is True
+        assert default_payload["require_rehearsal_verify"] is True
         assert default_payload["min_quality_threshold"] == 80
         assert default_payload["enforce_required_hosts_ready"] is False
         assert default_payload["min_required_host_score"] == 80
@@ -192,6 +212,7 @@ class TestWebAPI:
                 "preset": "enterprise",
                 "min_quality_threshold": 88,
                 "allowed_cicd_platforms": ["github", "gitlab"],
+                "require_rehearsal_verify": True,
                 "required_hosts": ["codex-cli", "claude-code"],
                 "enforce_required_hosts_ready": True,
                 "min_required_host_score": 86,
@@ -201,6 +222,7 @@ class TestWebAPI:
         updated_payload = update_resp.json()
         assert updated_payload["min_quality_threshold"] == 88
         assert updated_payload["allowed_cicd_platforms"] == ["github", "gitlab"]
+        assert updated_payload["require_rehearsal_verify"] is True
         assert updated_payload["require_host_profile"] is True
         assert set(updated_payload["required_hosts"]) == {"codex-cli", "claude-code"}
         assert updated_payload["enforce_required_hosts_ready"] is True
@@ -297,6 +319,7 @@ class TestWebAPI:
         status_payload = status_resp.json()
         assert status_payload["run_id"] == run_id
         assert status_payload["status"] in {"completed", "failed", "running", "queued", "cancelling", "cancelled"}
+        assert status_payload["status_normalized"] in {"completed", "failed", "running", "queued", "cancelled", "unknown"}
         assert "progress" in status_payload
         assert "pipeline_summary" in status_payload
         assert status_payload["pipeline_summary"]["current_stage_id"] in {
@@ -313,6 +336,15 @@ class TestWebAPI:
         # 持久化文件存在
         persisted = temp_project_dir / ".super-dev" / "runs" / f"{run_id}.json"
         assert persisted.exists()
+        persisted_payload = json.loads(persisted.read_text(encoding="utf-8"))
+        assert persisted_payload["status_normalized"] in {
+            "completed",
+            "failed",
+            "running",
+            "queued",
+            "cancelled",
+            "unknown",
+        }
 
         # 模拟进程重启后仍可从磁盘读取
         web_api._RUN_STORE.clear()
@@ -322,6 +354,31 @@ class TestWebAPI:
         )
         assert status_resp_2.status_code == 200
         assert status_resp_2.json()["run_id"] == run_id
+
+    def test_workflow_status_returns_404_for_corrupted_run_state_file(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+        runs_dir = temp_project_dir / ".super-dev" / "runs"
+        runs_dir.mkdir(parents=True, exist_ok=True)
+        run_id = "broken-run"
+        (runs_dir / f"{run_id}.json").write_text("{invalid-json", encoding="utf-8")
+
+        status_resp = client.get(
+            f"/api/workflow/status/{run_id}",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert status_resp.status_code == 404
+
+    def test_store_run_state_creates_lock_file(self, temp_project_dir: Path):
+        run_id = "lock-check"
+        web_api._store_run_state(
+            run_id,
+            persist_dir=temp_project_dir,
+            status="queued",
+            message="lock",
+            progress=0,
+        )
+        lock_file = temp_project_dir / ".super-dev" / "runs" / ".runs.lock"
+        assert lock_file.exists()
 
     def test_workflow_status_marks_confirmation_gate_waiting(self, temp_project_dir: Path):
         client = TestClient(web_api.app)
@@ -1092,6 +1149,51 @@ class TestWebAPI:
         assert status_payload["status"] == "cancelling"
         assert status_payload["cancel_requested"] is True
 
+    def test_workflow_cancel_requested_keeps_cancelled_when_background_errors(
+        self, temp_project_dir: Path, monkeypatch
+    ):
+        client = TestClient(web_api.app)
+
+        init_resp = client.post(
+            "/api/init",
+            params={"project_dir": str(temp_project_dir)},
+            json={"name": "api-cancel-error", "platform": "web", "frontend": "react", "backend": "node"},
+        )
+        assert init_resp.status_code == 200
+
+        async def fake_run(self, phases=None, context=None, **kwargs):
+            for current_run_id, run in list(web_api._RUN_STORE.items()):
+                if run.get("status") in {"queued", "running", "cancelling"}:
+                    web_api._store_run_state(
+                        current_run_id,
+                        persist_dir=temp_project_dir,
+                        cancel_requested=True,
+                        status="cancelling",
+                        message="工作流取消中",
+                    )
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(web_api.WorkflowEngine, "run", fake_run)
+
+        run_resp = client.post(
+            "/api/workflow/run",
+            params={"project_dir": str(temp_project_dir)},
+            json={"phases": ["discovery"]},
+        )
+        assert run_resp.status_code == 200
+        run_id = run_resp.json()["run_id"]
+        assert run_id
+
+        status_resp = client.get(
+            f"/api/workflow/status/{run_id}",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert status_resp.status_code == 200
+        status_payload = status_resp.json()
+        assert status_payload["status"] == "cancelled"
+        assert status_payload["message"] == "工作流已取消"
+        assert status_payload["cancel_requested"] is True
+
     def test_expert_advice_generation(self, temp_project_dir: Path):
         client = TestClient(web_api.app)
 
@@ -1292,6 +1394,26 @@ class TestWebAPI:
         host = payload["report"]["hosts"]["iflow"]
         assert host["preconditions"]["status"] == "host-auth-required"
         assert any("Invalid API key provided" in item for item in host["suggestions"])
+        assert any(item["status"] == "project-context-required" for item in usage["precondition_items"])
+
+    def test_hosts_doctor_codex_exposes_restart_and_context_preconditions(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+        resp = client.get(
+            "/api/hosts/doctor",
+            params={
+                "project_dir": str(temp_project_dir),
+                "host": "codex-cli",
+            },
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        usage = payload["usage_profiles"]["codex-cli"]
+        assert usage["precondition_status"] == "session-restart-required"
+        assert any(item["status"] == "session-restart-required" for item in usage["precondition_items"])
+        assert any(item["status"] == "project-context-required" for item in usage["precondition_items"])
+        host = payload["report"]["hosts"]["codex-cli"]
+        assert host["preconditions"]["status"] == "session-restart-required"
+        assert any("关闭旧宿主会话" in item for item in host["suggestions"])
 
     def test_detect_host_targets_uses_windows_env_candidates(self, temp_project_dir: Path, monkeypatch):
         localapp = temp_project_dir / "LocalAppData"
@@ -1799,6 +1921,7 @@ class TestWebAPI:
         assert payload["score"] == 100
         assert Path(payload["report_file"]).exists()
         assert Path(payload["json_file"]).exists()
+        assert any(check["name"] == "Spec Quality" for check in payload["checks"])
 
     def test_release_proof_pack_endpoint(self, temp_project_dir: Path):
         _prepare_proof_pack_project(temp_project_dir)
@@ -1816,8 +1939,11 @@ class TestWebAPI:
         assert Path(payload["json_file"]).exists()
         assert Path(payload["summary_file"]).exists()
         assert payload["summary"]["blocking_count"] == 0
+        assert any(artifact["name"] == "Spec Quality" for artifact in payload["artifacts"])
         assert any(artifact["name"] == "Repo Map" for artifact in payload["artifacts"])
+        assert any(artifact["name"] == "Dependency Graph" for artifact in payload["artifacts"])
         assert any(artifact["name"] == "Impact Analysis" for artifact in payload["artifacts"])
+        assert any(artifact["name"] == "Regression Guard" for artifact in payload["artifacts"])
 
     def test_repo_map_endpoint(self, temp_project_dir: Path):
         (temp_project_dir / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
@@ -1859,6 +1985,54 @@ class TestWebAPI:
         assert Path(payload["report_file"]).exists()
         assert Path(payload["json_file"]).exists()
         assert payload["affected_modules"]
+
+    def test_regression_guard_endpoint(self, temp_project_dir: Path):
+        (temp_project_dir / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+        (temp_project_dir / "services").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / "services" / "auth.py").write_text("class AuthService:\n    pass\n", encoding="utf-8")
+
+        client = TestClient(web_api.app)
+        resp = client.get(
+            "/api/analyze/regression-guard",
+            params={
+                "project_dir": str(temp_project_dir),
+                "description": "修改登录流程",
+                "files": ["services/auth.py"],
+            },
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["project_name"] == temp_project_dir.name
+        assert payload["risk_level"] in {"medium", "high"}
+        assert Path(payload["report_file"]).exists()
+        assert Path(payload["json_file"]).exists()
+        assert payload["high_priority_checks"] or payload["medium_priority_checks"] or payload["supporting_checks"]
+
+    def test_dependency_graph_endpoint(self, temp_project_dir: Path):
+        (temp_project_dir / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+        (temp_project_dir / "main.py").write_text("from services.auth import login\n", encoding="utf-8")
+        (temp_project_dir / "services").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / "services" / "__init__.py").write_text("", encoding="utf-8")
+        (temp_project_dir / "services" / "auth.py").write_text(
+            "from api.routes import login_route\n\ndef login():\n    return login_route()\n",
+            encoding="utf-8",
+        )
+        (temp_project_dir / "api").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / "api" / "__init__.py").write_text("", encoding="utf-8")
+        (temp_project_dir / "api" / "routes.py").write_text("def login_route():\n    return True\n", encoding="utf-8")
+
+        client = TestClient(web_api.app)
+        resp = client.get(
+            "/api/analyze/dependency-graph",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["project_name"] == temp_project_dir.name
+        assert Path(payload["report_file"]).exists()
+        assert Path(payload["json_file"]).exists()
+        assert payload["node_count"] >= 3
+        assert payload["edge_count"] >= 1
 
     def test_hosts_validate_endpoint(self, temp_project_dir: Path):
         client = TestClient(web_api.app)

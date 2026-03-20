@@ -7,9 +7,28 @@ from pathlib import Path
 from super_dev.specs.generator import SpecGenerator
 from super_dev.specs.manager import ChangeManager
 from super_dev.specs.models import Task, TaskStatus
+from super_dev.specs.validator import SpecValidator
 
 
 class TestSpecManager:
+    def test_proposal_roundtrip_is_parsed(self, temp_project_dir: Path):
+        generator = SpecGenerator(temp_project_dir)
+        generator.init_sdd()
+        change = generator.create_change(
+            change_id="add-search",
+            title="Add Search",
+            description="支持搜索",
+            motivation="提升效率",
+            impact="core module",
+        )
+
+        manager = ChangeManager(temp_project_dir)
+        loaded = manager.load_change(change.id)
+        assert loaded is not None
+        assert loaded.proposal is not None
+        assert loaded.proposal.description == "支持搜索"
+        assert loaded.proposal.motivation == "提升效率"
+
     def test_change_spec_requirements_persist_after_reload_and_save(self, temp_project_dir: Path):
         generator = SpecGenerator(temp_project_dir)
         generator.init_sdd()
@@ -93,3 +112,146 @@ class TestSpecManager:
         assert task.assigned_to == "frontend-team"
         assert task.dependencies == ["1.2"]
         assert task.spec_refs == ["auth::*", "session::login-flow"]
+
+    def test_list_changes_handles_mixed_timezone_created_at(self, temp_project_dir: Path):
+        manager = ChangeManager(temp_project_dir)
+        (temp_project_dir / ".super-dev" / "changes" / "naive").mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / ".super-dev" / "changes" / "aware").mkdir(parents=True, exist_ok=True)
+
+        (temp_project_dir / ".super-dev" / "changes" / "naive" / "change.yaml").write_text(
+            (
+                "id: naive\n"
+                "title: Naive\n"
+                "status: proposed\n"
+                "created_at: 2026-03-19T12:00:00\n"
+                "updated_at: 2026-03-19T12:00:00\n"
+            ),
+            encoding="utf-8",
+        )
+        (temp_project_dir / ".super-dev" / "changes" / "aware" / "change.yaml").write_text(
+            (
+                "id: aware\n"
+                "title: Aware\n"
+                "status: proposed\n"
+                "created_at: 2026-03-19T12:00:01+00:00\n"
+                "updated_at: 2026-03-19T12:00:01+00:00\n"
+            ),
+            encoding="utf-8",
+        )
+
+        changes = manager.list_changes()
+        ids = {change.id for change in changes}
+        assert "aware" in ids
+        assert "naive" in ids
+
+    def test_scaffold_creates_spec_four_piece_set(self, temp_project_dir: Path):
+        generator = SpecGenerator(temp_project_dir)
+        generator.init_sdd()
+        change = generator.create_change(
+            change_id="add-notify",
+            title="Add Notify",
+            description="通知能力",
+        )
+        generated = generator.scaffold_change_artifacts(change.id)
+
+        assert "plan.md" in generated
+        assert "tasks.md" in generated
+        assert "checklist.md" in generated
+        spec_path = generated.get("spec.md")
+        assert spec_path is not None
+        assert spec_path.exists()
+        content = spec_path.read_text(encoding="utf-8")
+        assert "## ADDED Requirements" in content
+        assert "## Acceptance Checklist" in content
+
+    def test_validator_accepts_simple_task_checklist_style(self, temp_project_dir: Path):
+        generator = SpecGenerator(temp_project_dir)
+        generator.init_sdd()
+        change = generator.create_change(
+            change_id="add-batch",
+            title="Add Batch",
+            description="批处理能力",
+        )
+        change_dir = temp_project_dir / ".super-dev" / "changes" / change.id
+        (change_dir / "tasks.md").write_text(
+            "# Tasks\n\n## 1. Group\n- [ ] 1.1 do thing\n",
+            encoding="utf-8",
+        )
+        (change_dir / "plan.md").write_text("# Plan\n\n## Context\nok\n", encoding="utf-8")
+        (change_dir / "checklist.md").write_text("# Checklist\n\n- [ ] item\n", encoding="utf-8")
+        validator = SpecValidator(temp_project_dir)
+        result = validator.validate_change(change.id)
+        assert result.is_valid
+
+    def test_quality_report_scores_high_for_scaffolded_change(self, temp_project_dir: Path):
+        generator = SpecGenerator(temp_project_dir)
+        generator.init_sdd()
+        change = generator.create_change(
+            change_id="add-quality",
+            title="Add Quality",
+            description="质量评估",
+        )
+        generator.scaffold_change_artifacts(change.id)
+        validator = SpecValidator(temp_project_dir)
+        report = validator.assess_change_quality(change.id)
+        assert report.score >= 75
+        assert report.level in {"excellent", "good"}
+        assert "spec" in report.checks
+        assert report.checks["spec"]["passed"] is True
+
+    def test_quality_report_detects_missing_artifacts(self, temp_project_dir: Path):
+        generator = SpecGenerator(temp_project_dir)
+        generator.init_sdd()
+        change = generator.create_change(
+            change_id="add-weak-spec",
+            title="Add Weak Spec",
+            description="弱规格",
+        )
+        change_dir = temp_project_dir / ".super-dev" / "changes" / change.id
+        (change_dir / "tasks.md").write_text("# Tasks\n\n", encoding="utf-8")
+        validator = SpecValidator(temp_project_dir)
+        report = validator.assess_change_quality(change.id)
+        assert report.score < 75
+        assert report.blockers
+        assert any("spec" in blocker for blocker in report.blockers)
+        assert report.action_plan
+        assert any(item.get("priority") == "P0" for item in report.action_plan)
+
+    def test_quality_report_to_dict_contains_serializable_fields(self, temp_project_dir: Path):
+        generator = SpecGenerator(temp_project_dir)
+        generator.init_sdd()
+        change = generator.create_change(
+            change_id="add-json-quality",
+            title="Add Json Quality",
+            description="json输出",
+        )
+        validator = SpecValidator(temp_project_dir)
+        report = validator.assess_change_quality(change.id)
+        payload = report.to_dict()
+        assert payload["change_id"] == change.id
+        assert "score" in payload
+        assert "checks" in payload
+        assert isinstance(payload["blockers"], list)
+        assert isinstance(payload["action_plan"], list)
+
+    def test_validator_can_pick_latest_change_quality(self, temp_project_dir: Path):
+        generator = SpecGenerator(temp_project_dir)
+        generator.init_sdd()
+        older = generator.create_change(
+            change_id="older-change",
+            title="Older Change",
+            description="older",
+        )
+        generator.scaffold_change_artifacts(older.id)
+
+        newer = generator.create_change(
+            change_id="newer-change",
+            title="Newer Change",
+            description="newer",
+        )
+        generator.scaffold_change_artifacts(newer.id)
+
+        validator = SpecValidator(temp_project_dir)
+        latest = validator.assess_latest_change_quality()
+        assert latest is not None
+        assert latest.change_id == newer.id
