@@ -2,7 +2,7 @@ author: ''
 backend: node
 cli: {}
 database: postgresql
-description: 发布前证据闭环收口
+description: confirm docs --comment ok
 domain: ''
 experts:
 - PM
@@ -14,6 +14,9 @@ experts:
 frontend: react
 host_compatibility_min_ready_hosts: 1
 host_compatibility_min_score: 80
+host_profile_enforce_selected: true
+host_profile_targets:
+- claude-code
 knowledge_allowed_domains:
 - openai.com
 - python.org
@@ -33,6 +36,8 @@ knowledge_allowed_domains:
 - nist.gov
 - docs.anthropic.com
 - docs.vllm.ai
+knowledge_cache_ttl_seconds: 1800
+language_preferences: []
 license: MIT
 name: super-dev
 output_dir: output
@@ -46,4 +51,6 @@ phases:
 - deployment
 platform: web
 quality_gate: 90
-version: 2.0.11
+state_management: []
+testing_frameworks: []
+version: 2.1.0

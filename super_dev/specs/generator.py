@@ -7,8 +7,8 @@ Spec-Driven Development 生成器
 创建时间：2025-12-30
 """
 
-from pathlib import Path
 import re
+from pathlib import Path
 
 from .manager import ChangeManager, SpecManager
 from .models import (

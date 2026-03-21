@@ -11,7 +11,6 @@ from typing import Any
 from .analyzer import ProjectAnalyzer
 from .repo_map import RepoMapBuilder
 
-
 SUPPORTED_SUFFIXES = {".py", ".js", ".ts", ".tsx", ".jsx"}
 
 

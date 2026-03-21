@@ -126,6 +126,9 @@ def test_resolve_pipeline_stage_selector_supports_aliases() -> None:
 
     assert cli._resolve_pipeline_stage_selector("research") == 0
     assert cli._resolve_pipeline_stage_selector("docs") == 1
+    assert cli._resolve_pipeline_stage_selector("prd") == 1
+    assert cli._resolve_pipeline_stage_selector("architecture") == 1
+    assert cli._resolve_pipeline_stage_selector("uiux") == 1
     assert cli._resolve_pipeline_stage_selector("spec") == 2
     assert cli._resolve_pipeline_stage_selector("frontend") == 3
     assert cli._resolve_pipeline_stage_selector("backend") == 4
@@ -168,3 +171,58 @@ def test_run_confirm_phase_updates_run_state_for_generic_phase(temp_project_dir,
     confirmations = run_state.get("phase_confirmations") or {}
     assert "frontend" in confirmations
     assert confirmations["frontend"]["status"] == "confirmed"
+
+
+def test_status_alias_routes_to_run_status(monkeypatch) -> None:
+    cli = SuperDevCLI()
+    called = {"status": False}
+
+    def _fake_status(_args):
+        called["status"] = True
+        return 0
+
+    monkeypatch.setattr(cli, "_cmd_run_status", _fake_status)
+    assert cli.run(["status"]) == 0
+    assert called["status"] is True
+
+
+def test_jump_alias_routes_to_run_from_stage(monkeypatch) -> None:
+    cli = SuperDevCLI()
+    called = {}
+
+    def _fake_jump(*, stage_selector: str, show_impact: bool):
+        called["stage_selector"] = stage_selector
+        called["show_impact"] = show_impact
+        return 0
+
+    monkeypatch.setattr(cli, "_cmd_run_from_stage", _fake_jump)
+    assert cli.run(["jump", "frontend"]) == 0
+    assert called == {"stage_selector": "frontend", "show_impact": True}
+
+
+def test_confirm_alias_routes_to_run_confirm_phase(monkeypatch) -> None:
+    cli = SuperDevCLI()
+    called = {}
+
+    def _fake_confirm(*, phase_name: str, comment: str, actor: str):
+        called["phase_name"] = phase_name
+        called["comment"] = comment
+        called["actor"] = actor
+        return 0
+
+    monkeypatch.setattr(cli, "_cmd_run_confirm_phase", _fake_confirm)
+    assert cli.run(["confirm", "docs", "--comment", "ok"]) == 0
+    assert called == {"phase_name": "docs", "comment": "ok", "actor": "cli-user"}
+
+
+def test_run_positional_stage_routes_to_targeted_refresh(monkeypatch) -> None:
+    cli = SuperDevCLI()
+    called = {"target": ""}
+
+    def _fake_refresh(target: str):
+        called["target"] = target
+        return 0
+
+    monkeypatch.setattr(cli, "_cmd_run_targeted_refresh", _fake_refresh)
+    assert cli.run(["run", "research"]) == 0
+    assert called["target"] == "research"

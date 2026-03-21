@@ -76,7 +76,7 @@ class TestIntegrationManager:
         assert antigravity.usage_mode == "native-slash"
         assert antigravity.trigger_command == '/super-dev "<需求描述>"'
         assert antigravity.host_protocol_mode == "official-workflow"
-        assert antigravity.host_protocol_summary == "GEMINI.md + commands + workflows + skills"
+        assert antigravity.host_protocol_summary == "官方 commands + workflows + skills"
         assert "GEMINI.md" in antigravity.integration_files
         assert ".agent/workflows/super-dev.md" in antigravity.integration_files
         assert ".gemini/commands/super-dev.md" in antigravity.official_project_surfaces

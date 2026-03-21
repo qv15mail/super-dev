@@ -3,7 +3,7 @@
 功能：商业级 UI Intelligence 推荐引擎
 作用：基于产品类型、行业和前端栈推荐 UI 方案，提供配色、字体、组件库和设计治理知识库
 创建时间：2025-12-30
-最后修改：2026-03-20
+最后修改：2026-03-21
 """
 
 from __future__ import annotations
@@ -444,20 +444,20 @@ class UIIntelligenceAdvisor:
         "micro-saas": {"primary": "#6366F1", "secondary": "#818CF8", "accent": "#059669", "background": "#F5F3FF", "text": "#1E1B4B", "card": "#FFFFFF", "muted": "#EBEFF9", "border": "#E0E7FF", "name": "Indigo Focus"},
         "b2b": {"primary": "#0F172A", "secondary": "#334155", "accent": "#0369A1", "background": "#F8FAFC", "text": "#020617", "card": "#FFFFFF", "muted": "#E8ECF1", "border": "#E2E8F0", "name": "Enterprise Navy"},
         "productivity": {"primary": "#0D9488", "secondary": "#14B8A6", "accent": "#EA580C", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F1F4", "border": "#99F6E4", "name": "Teal Efficiency"},
-        "collaboration": {"primary": "#6366F1", "secondary": "#818CF8", "accent": "#059669", "background": "#F5F3FF", "text": "#312E81", "card": "#FFFFFF", "muted": "#EBEFF9", "border": "#E0E7FF", "name": "Team Indigo"},
-        "ai-platform": {"primary": "#7C3AED", "secondary": "#A78BFA", "accent": "#0891B2", "background": "#FAF5FF", "text": "#1E1B4B", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "AI Violet"},
+        "collaboration": {"primary": "#7C3AED", "secondary": "#8B5CF6", "accent": "#059669", "background": "#F5F3FF", "text": "#312E81", "card": "#FFFFFF", "muted": "#EBEFF9", "border": "#E0E7FF", "name": "Team Indigo"},
+        "ai-platform": {"primary": "#A83AED", "secondary": "#A78BFA", "accent": "#0891B2", "background": "#FAF5FF", "text": "#1E1B4B", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "AI Violet"},
         "design-tool": {"primary": "#4F46E5", "secondary": "#6366F1", "accent": "#EA580C", "background": "#EEF2FF", "text": "#312E81", "card": "#FFFFFF", "muted": "#EBEEF8", "border": "#C7D2FE", "name": "Creative Indigo"},
         "knowledge-base": {"primary": "#475569", "secondary": "#64748B", "accent": "#2563EB", "background": "#F8FAFC", "text": "#1E293B", "card": "#FFFFFF", "muted": "#EAEFF3", "border": "#E2E8F0", "name": "Slate Knowledge"},
         # E-commerce & Marketplace
         "ecommerce": {"primary": "#059669", "secondary": "#10B981", "accent": "#EA580C", "background": "#ECFDF5", "text": "#064E3B", "card": "#FFFFFF", "muted": "#E8F1F3", "border": "#A7F3D0", "name": "Commerce Green"},
         "ecommerce-luxury": {"primary": "#1C1917", "secondary": "#44403C", "accent": "#A16207", "background": "#FAFAF9", "text": "#0C0A09", "card": "#FFFFFF", "muted": "#E8ECF0", "border": "#D6D3D1", "name": "Luxury Noir"},
-        "marketplace": {"primary": "#7C3AED", "secondary": "#A78BFA", "accent": "#16A34A", "background": "#FAF5FF", "text": "#4C1D95", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "Market Purple"},
+        "marketplace": {"primary": "#4F3AED", "secondary": "#A78BFA", "accent": "#16A34A", "background": "#FAF5FF", "text": "#4C1D95", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "Market Purple"},
         "subscription-box": {"primary": "#D946EF", "secondary": "#E879F9", "accent": "#EA580C", "background": "#FDF4FF", "text": "#86198F", "card": "#FFFFFF", "muted": "#F0EEF9", "border": "#F5D0FE", "name": "Unbox Magenta"},
         # Finance & Fintech
         "fintech": {"primary": "#F59E0B", "secondary": "#FBBF24", "accent": "#8B5CF6", "background": "#0F172A", "text": "#F8FAFC", "card": "#222735", "muted": "#272F42", "border": "#334155", "name": "Crypto Gold"},
-        "banking": {"primary": "#0F172A", "secondary": "#1E3A8A", "accent": "#A16207", "background": "#F8FAFC", "text": "#020617", "card": "#FFFFFF", "muted": "#E8ECF1", "border": "#E2E8F0", "name": "Bank Navy"},
+        "banking": {"primary": "#0E102A", "secondary": "#1E3A8A", "accent": "#A16207", "background": "#F8FAFC", "text": "#020617", "card": "#FFFFFF", "muted": "#E8ECF1", "border": "#E2E8F0", "name": "Bank Navy"},
         "insurance": {"primary": "#0369A1", "secondary": "#0EA5E9", "accent": "#16A34A", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E7EFF5", "border": "#BAE6FD", "name": "Trust Sky"},
-        "financial-dashboard": {"primary": "#0F172A", "secondary": "#1E293B", "accent": "#22C55E", "background": "#020617", "text": "#F8FAFC", "card": "#0E1223", "muted": "#1A1E2F", "border": "#334155", "name": "Dark Finance"},
+        "financial-dashboard": {"primary": "#0E1D2A", "secondary": "#1E293B", "accent": "#22C55E", "background": "#020617", "text": "#F8FAFC", "card": "#0E1223", "muted": "#1A1E2F", "border": "#334155", "name": "Dark Finance"},
         "analytics": {"primary": "#1E40AF", "secondary": "#3B82F6", "accent": "#D97706", "background": "#F8FAFC", "text": "#1E3A8A", "card": "#FFFFFF", "muted": "#E9EEF6", "border": "#DBEAFE", "name": "Data Blue"},
         # Healthcare & Wellness
         "healthcare": {"primary": "#0891B2", "secondary": "#22D3EE", "accent": "#059669", "background": "#ECFEFF", "text": "#164E63", "card": "#FFFFFF", "muted": "#E8F1F6", "border": "#A5F3FC", "name": "Medical Cyan"},
@@ -466,10 +466,10 @@ class UIIntelligenceAdvisor:
         "beauty-spa": {"primary": "#EC4899", "secondary": "#F9A8D4", "accent": "#8B5CF6", "background": "#FDF2F8", "text": "#831843", "card": "#FFFFFF", "muted": "#F1EEF5", "border": "#FBCFE8", "name": "Blush Pink"},
         # Education & Learning
         "education": {"primary": "#4F46E5", "secondary": "#818CF8", "accent": "#EA580C", "background": "#EEF2FF", "text": "#1E1B4B", "card": "#FFFFFF", "muted": "#EBEEF8", "border": "#C7D2FE", "name": "Learn Indigo"},
-        "e-learning": {"primary": "#0D9488", "secondary": "#2DD4BF", "accent": "#EA580C", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F1F4", "border": "#5EEAD4", "name": "Edu Teal"},
+        "e-learning": {"primary": "#0F766E", "secondary": "#14B8A6", "accent": "#EA580C", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F1F4", "border": "#5EEAD4", "name": "Edu Teal"},
         # Media & Entertainment
         "social-media": {"primary": "#E11D48", "secondary": "#FB7185", "accent": "#2563EB", "background": "#FFF1F2", "text": "#881337", "card": "#FFFFFF", "muted": "#F0ECF2", "border": "#FECDD3", "name": "Social Rose"},
-        "gaming": {"primary": "#7C3AED", "secondary": "#A78BFA", "accent": "#F43F5E", "background": "#0F0F23", "text": "#E2E8F0", "card": "#1E1C35", "muted": "#27273B", "border": "#4C1D95", "name": "Game Violet"},
+        "gaming": {"primary": "#D53AED", "secondary": "#A78BFA", "accent": "#F43F5E", "background": "#0F0F23", "text": "#E2E8F0", "card": "#1E1C35", "muted": "#27273B", "border": "#4C1D95", "name": "Game Violet"},
         "music": {"primary": "#1E1B4B", "secondary": "#4338CA", "accent": "#22C55E", "background": "#0F0F23", "text": "#F8FAFC", "card": "#1B1B30", "muted": "#27273B", "border": "#312E81", "name": "Sound Dark"},
         "video-streaming": {"primary": "#0F0F23", "secondary": "#1E1B4B", "accent": "#E11D48", "background": "#000000", "text": "#F8FAFC", "card": "#0C0C0D", "muted": "#181818", "border": "#312E81", "name": "Stream Black"},
         "podcast": {"primary": "#1E1B4B", "secondary": "#312E81", "accent": "#F97316", "background": "#0F0F23", "text": "#F8FAFC", "card": "#1B1B30", "muted": "#27273B", "border": "#4338CA", "name": "Voice Dark"},
@@ -478,9 +478,9 @@ class UIIntelligenceAdvisor:
         "creator-economy": {"primary": "#EC4899", "secondary": "#F472B6", "accent": "#EA580C", "background": "#FDF2F8", "text": "#831843", "card": "#FFFFFF", "muted": "#F1EEF5", "border": "#FBCFE8", "name": "Creator Pink"},
         # Professional Services
         "legal": {"primary": "#1E3A8A", "secondary": "#1E40AF", "accent": "#B45309", "background": "#F8FAFC", "text": "#0F172A", "card": "#FFFFFF", "muted": "#E9EEF5", "border": "#CBD5E1", "name": "Legal Blue"},
-        "government": {"primary": "#0F172A", "secondary": "#334155", "accent": "#0369A1", "background": "#F8FAFC", "text": "#020617", "card": "#FFFFFF", "muted": "#E8ECF1", "border": "#E2E8F0", "name": "Gov Navy"},
+        "government": {"primary": "#140E2A", "secondary": "#334155", "accent": "#0369A1", "background": "#F8FAFC", "text": "#020617", "card": "#FFFFFF", "muted": "#E8ECF1", "border": "#E2E8F0", "name": "Gov Navy"},
         "nonprofit": {"primary": "#0891B2", "secondary": "#22D3EE", "accent": "#EA580C", "background": "#ECFEFF", "text": "#164E63", "card": "#FFFFFF", "muted": "#E8F1F6", "border": "#A5F3FC", "name": "Impact Cyan"},
-        "consulting": {"primary": "#0F172A", "secondary": "#1E293B", "accent": "#2563EB", "background": "#F8FAFC", "text": "#020617", "card": "#FFFFFF", "muted": "#E8ECF1", "border": "#E2E8F0", "name": "Consult Navy"},
+        "consulting": {"primary": "#0E242A", "secondary": "#1E293B", "accent": "#2563EB", "background": "#F8FAFC", "text": "#020617", "card": "#FFFFFF", "muted": "#E8ECF1", "border": "#E2E8F0", "name": "Consult Navy"},
         # Real Estate & Hospitality
         "real-estate": {"primary": "#0F766E", "secondary": "#14B8A6", "accent": "#0369A1", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F0F3", "border": "#99F6E4", "name": "Property Teal"},
         "hotel": {"primary": "#1E3A8A", "secondary": "#3B82F6", "accent": "#A16207", "background": "#F8FAFC", "text": "#1E40AF", "card": "#FFFFFF", "muted": "#E9EEF5", "border": "#BFDBFE", "name": "Hotel Royal"},
@@ -500,13 +500,13 @@ class UIIntelligenceAdvisor:
         "portfolio": {"primary": "#18181B", "secondary": "#3F3F46", "accent": "#2563EB", "background": "#FAFAFA", "text": "#09090B", "card": "#FFFFFF", "muted": "#E8ECF0", "border": "#E4E4E7", "name": "Mono Zinc"},
         "luxury-brand": {"primary": "#1C1917", "secondary": "#44403C", "accent": "#A16207", "background": "#FAFAF9", "text": "#0C0A09", "card": "#FFFFFF", "muted": "#E8ECF0", "border": "#D6D3D1", "name": "Luxury Stone"},
         # Job & HR
-        "job-board": {"primary": "#0369A1", "secondary": "#0EA5E9", "accent": "#16A34A", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E7EFF5", "border": "#BAE6FD", "name": "Career Sky"},
+        "job-board": {"primary": "#0241A1", "secondary": "#0EA5E9", "accent": "#16A34A", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E7EFF5", "border": "#BAE6FD", "name": "Career Sky"},
         # Dashboard variants
         "dashboard": {"primary": "#1E40AF", "secondary": "#3B82F6", "accent": "#D97706", "background": "#F8FAFC", "text": "#1E3A8A", "card": "#FFFFFF", "muted": "#E9EEF6", "border": "#DBEAFE", "name": "Dashboard Blue"},
-        "admin": {"primary": "#0F172A", "secondary": "#334155", "accent": "#2563EB", "background": "#F8FAFC", "text": "#020617", "card": "#FFFFFF", "muted": "#E8ECF1", "border": "#E2E8F0", "name": "Admin Slate"},
+        "admin": {"primary": "#1B0E2A", "secondary": "#334155", "accent": "#2563EB", "background": "#F8FAFC", "text": "#020617", "card": "#FFFFFF", "muted": "#E8ECF1", "border": "#E2E8F0", "name": "Admin Slate"},
         # Landing & General
-        "landing": {"primary": "#2563EB", "secondary": "#3B82F6", "accent": "#EA580C", "background": "#FFFFFF", "text": "#111827", "card": "#F8FAFC", "muted": "#F1F5F9", "border": "#E5E7EB", "name": "Brand Blue"},
-        "general": {"primary": "#2563EB", "secondary": "#3B82F6", "accent": "#EA580C", "background": "#FFFFFF", "text": "#111827", "card": "#F8FAFC", "muted": "#F1F5F9", "border": "#E5E7EB", "name": "Professional Blue"},
+        "landing": {"primary": "#1D4ED8", "secondary": "#2563EB", "accent": "#EA580C", "background": "#FFFFFF", "text": "#111827", "card": "#F8FAFC", "muted": "#F1F5F9", "border": "#E5E7EB", "name": "Brand Blue"},
+        "general": {"primary": "#3B82F6", "secondary": "#60A5FA", "accent": "#EA580C", "background": "#FFFFFF", "text": "#111827", "card": "#F8FAFC", "muted": "#F1F5F9", "border": "#E5E7EB", "name": "Professional Blue"},
         # Construction & Automotive
         "construction": {"primary": "#64748B", "secondary": "#94A3B8", "accent": "#EA580C", "background": "#F8FAFC", "text": "#334155", "card": "#FFFFFF", "muted": "#EBF0F5", "border": "#E2E8F0", "name": "Build Slate"},
         "automotive": {"primary": "#1E293B", "secondary": "#334155", "accent": "#DC2626", "background": "#F8FAFC", "text": "#0F172A", "card": "#FFFFFF", "muted": "#E9EDF1", "border": "#E2E8F0", "name": "Auto Dark"},
@@ -517,36 +517,36 @@ class UIIntelligenceAdvisor:
         "home-services": {"primary": "#1E40AF", "secondary": "#3B82F6", "accent": "#EA580C", "background": "#EFF6FF", "text": "#1E3A8A", "card": "#FFFFFF", "muted": "#E9EEF6", "border": "#BFDBFE", "name": "Service Blue"},
         # Childcare & Senior Care
         "childcare": {"primary": "#F472B6", "secondary": "#FBCFE8", "accent": "#16A34A", "background": "#FDF2F8", "text": "#9D174D", "card": "#FFFFFF", "muted": "#F1F0F6", "border": "#FCE7F3", "name": "Care Pink"},
-        "senior-care": {"primary": "#0369A1", "secondary": "#38BDF8", "accent": "#16A34A", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E7EFF5", "border": "#E0F2FE", "name": "Elder Sky"},
+        "senior-care": {"primary": "#0290A1", "secondary": "#38BDF8", "accent": "#16A34A", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E7EFF5", "border": "#E0F2FE", "name": "Elder Sky"},
         # Medical & Health Services
         "medical-clinic": {"primary": "#0891B2", "secondary": "#22D3EE", "accent": "#16A34A", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F1F6", "border": "#CCFBF1", "name": "Clinic Teal"},
         "pharmacy": {"primary": "#15803D", "secondary": "#22C55E", "accent": "#0369A1", "background": "#F0FDF4", "text": "#14532D", "card": "#FFFFFF", "muted": "#E8F0F1", "border": "#BBF7D0", "name": "Pharma Green"},
-        "dental": {"primary": "#0EA5E9", "secondary": "#38BDF8", "accent": "#0EA5E9", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E8F2F8", "border": "#BAE6FD", "name": "Dental Sky"},
-        "veterinary": {"primary": "#0D9488", "secondary": "#14B8A6", "accent": "#EA580C", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F1F4", "border": "#99F6E4", "name": "Vet Teal"},
+        "dental": {"primary": "#0EA5E9", "secondary": "#38BDF8", "accent": "#059669", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E8F2F8", "border": "#BAE6FD", "name": "Dental Sky"},
+        "veterinary": {"primary": "#115E59", "secondary": "#0D9488", "accent": "#EA580C", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F1F4", "border": "#99F6E4", "name": "Vet Teal"},
         # Food & Beverage
         "florist": {"primary": "#15803D", "secondary": "#22C55E", "accent": "#EC4899", "background": "#F0FDF4", "text": "#14532D", "card": "#FFFFFF", "muted": "#E8F0F1", "border": "#BBF7D0", "name": "Bloom Green"},
-        "bakery-cafe": {"primary": "#92400E", "secondary": "#B45309", "accent": "#92400E", "background": "#FEF3C7", "text": "#78350F", "card": "#FFFFFF", "muted": "#EDEEF0", "border": "#FDE68A", "name": "Bake Amber"},
+        "bakery-cafe": {"primary": "#92400E", "secondary": "#B45309", "accent": "#DC2626", "background": "#FEF3C7", "text": "#78350F", "card": "#FFFFFF", "muted": "#EDEEF0", "border": "#FDE68A", "name": "Bake Amber"},
         "brewery": {"primary": "#7C2D12", "secondary": "#B91C1C", "accent": "#A16207", "background": "#FEF2F2", "text": "#450A0A", "card": "#FFFFFF", "muted": "#ECEDF0", "border": "#FECACA", "name": "Brew Red"},
         # Transport & Media
         "airline": {"primary": "#1E3A8A", "secondary": "#3B82F6", "accent": "#EA580C", "background": "#EFF6FF", "text": "#1E40AF", "card": "#FFFFFF", "muted": "#E9EEF5", "border": "#BFDBFE", "name": "Sky Royal"},
         "news-media": {"primary": "#DC2626", "secondary": "#EF4444", "accent": "#1E40AF", "background": "#FEF2F2", "text": "#450A0A", "card": "#FFFFFF", "muted": "#F0EDF1", "border": "#FECACA", "name": "News Red"},
         "magazine": {"primary": "#18181B", "secondary": "#3F3F46", "accent": "#EC4899", "background": "#FAFAFA", "text": "#09090B", "card": "#FFFFFF", "muted": "#E8ECF0", "border": "#E4E4E7", "name": "Editorial Mono"},
         # Freelancer & Agency
-        "freelancer": {"primary": "#6366F1", "secondary": "#818CF8", "accent": "#16A34A", "background": "#EEF2FF", "text": "#312E81", "card": "#FFFFFF", "muted": "#EBEFF9", "border": "#C7D2FE", "name": "Freelance Indigo"},
+        "freelancer": {"primary": "#4338CA", "secondary": "#6366F1", "accent": "#16A34A", "background": "#EEF2FF", "text": "#312E81", "card": "#FFFFFF", "muted": "#EBEFF9", "border": "#C7D2FE", "name": "Freelance Indigo"},
         "marketing-agency": {"primary": "#EC4899", "secondary": "#F472B6", "accent": "#0891B2", "background": "#FDF2F8", "text": "#831843", "card": "#FFFFFF", "muted": "#F1EEF5", "border": "#FBCFE8", "name": "Marketing Pink"},
-        "event-management": {"primary": "#7C3AED", "secondary": "#A78BFA", "accent": "#EA580C", "background": "#FAF5FF", "text": "#4C1D95", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "Event Purple"},
+        "event-management": {"primary": "#3A51ED", "secondary": "#A78BFA", "accent": "#EA580C", "background": "#FAF5FF", "text": "#4C1D95", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "Event Purple"},
         # Community & Membership
-        "membership": {"primary": "#7C3AED", "secondary": "#A78BFA", "accent": "#16A34A", "background": "#FAF5FF", "text": "#4C1D95", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "Community Purple"},
-        "newsletter": {"primary": "#0369A1", "secondary": "#0EA5E9", "accent": "#EA580C", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E7EFF5", "border": "#BAE6FD", "name": "Newsletter Sky"},
-        "digital-products": {"primary": "#6366F1", "secondary": "#818CF8", "accent": "#16A34A", "background": "#EEF2FF", "text": "#312E81", "card": "#FFFFFF", "muted": "#EBEFF9", "border": "#C7D2FE", "name": "Digital Indigo"},
-        "church": {"primary": "#7C3AED", "secondary": "#A78BFA", "accent": "#A16207", "background": "#FAF5FF", "text": "#4C1D95", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "Faith Purple"},
+        "membership": {"primary": "#ED3AD7", "secondary": "#A78BFA", "accent": "#16A34A", "background": "#FAF5FF", "text": "#4C1D95", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "Community Purple"},
+        "newsletter": {"primary": "#0219A1", "secondary": "#0EA5E9", "accent": "#EA580C", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E7EFF5", "border": "#BAE6FD", "name": "Newsletter Sky"},
+        "digital-products": {"primary": "#4F46E5", "secondary": "#6366F1", "accent": "#16A34A", "background": "#EEF2FF", "text": "#312E81", "card": "#FFFFFF", "muted": "#EBEFF9", "border": "#C7D2FE", "name": "Digital Indigo"},
+        "church": {"primary": "#ED3A51", "secondary": "#A78BFA", "accent": "#A16207", "background": "#FAF5FF", "text": "#4C1D95", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "Faith Purple"},
         # Web3 & Digital
         "nft-web3": {"primary": "#8B5CF6", "secondary": "#A78BFA", "accent": "#FBBF24", "background": "#0F0F23", "text": "#F8FAFC", "card": "#1E1D35", "muted": "#27273B", "border": "#4C1D95", "name": "Web3 Violet"},
-        "remote-work": {"primary": "#6366F1", "secondary": "#818CF8", "accent": "#059669", "background": "#F5F3FF", "text": "#312E81", "card": "#FFFFFF", "muted": "#EBEFF9", "border": "#E0E7FF", "name": "Remote Indigo"},
+        "remote-work": {"primary": "#5B21B6", "secondary": "#7C3AED", "accent": "#059669", "background": "#F5F3FF", "text": "#312E81", "card": "#FFFFFF", "muted": "#EBEFF9", "border": "#E0E7FF", "name": "Remote Indigo"},
         # Streaming & Music
         "music-streaming": {"primary": "#1E1B4B", "secondary": "#4338CA", "accent": "#22C55E", "background": "#0F0F23", "text": "#F8FAFC", "card": "#1B1B30", "muted": "#27273B", "border": "#312E81", "name": "Sound Indigo"},
         # Recruitment & Local
-        "recruitment": {"primary": "#0369A1", "secondary": "#0EA5E9", "accent": "#16A34A", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E7EFF5", "border": "#BAE6FD", "name": "Career Sky"},
+        "recruitment": {"primary": "#02A18A", "secondary": "#0EA5E9", "accent": "#16A34A", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E7EFF5", "border": "#BAE6FD", "name": "Career Sky"},
         "hyperlocal": {"primary": "#059669", "secondary": "#10B981", "accent": "#EA580C", "background": "#ECFDF5", "text": "#064E3B", "card": "#FFFFFF", "muted": "#E8F1F3", "border": "#A7F3D0", "name": "Local Green"},
         "online-course": {"primary": "#0D9488", "secondary": "#2DD4BF", "accent": "#EA580C", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F1F4", "border": "#5EEAD4", "name": "Course Teal"},
     }
@@ -1185,6 +1185,32 @@ class UIIntelligenceAdvisor:
         "default": "Meaningful CSS transitions only",
     }
 
+    @staticmethod
+    def generate_dark_variant(palette: dict[str, str]) -> dict[str, str]:
+        """从浅色配色方案自动生成暗色变体"""
+        bg = palette.get("background", "#FFFFFF")
+
+        # If already dark (background is dark), return as-is
+        bg_hex = bg.lstrip("#")
+        if len(bg_hex) == 6:
+            r, g, b = int(bg_hex[:2], 16), int(bg_hex[2:4], 16), int(bg_hex[4:6], 16)
+            luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+            if luminance < 0.4:
+                return dict(palette)  # Already dark
+
+        # Generate dark variant
+        return {
+            "primary": palette.get("primary", "#2563EB"),
+            "secondary": palette.get("secondary", "#3B82F6"),
+            "accent": palette.get("accent", "#EA580C"),
+            "background": "#0F172A",
+            "text": "#F8FAFC",
+            "card": "#1E293B",
+            "muted": "#334155",
+            "border": "#475569",
+            "name": palette.get("name", "Dark") + " Dark",
+        }
+
     def recommend(
         self,
         *,
@@ -1322,6 +1348,7 @@ class UIIntelligenceAdvisor:
             "ui_library_matrix": ui_library_matrix,
             "quality_checklist": quality_checklist,
             "color_palette": color_palette,
+            "color_palette_dark": self.generate_dark_variant(color_palette),
             "typography_preset": typography_preset,
             "pre_delivery_checklist": list(self.PRE_DELIVERY_CHECKLIST),
         }

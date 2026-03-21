@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from rich.console import Console
     from rich.panel import Panel
     from rich.table import Table
     RICH_AVAILABLE = True
@@ -26,8 +25,8 @@ except ImportError:
 
 from ..config.manager import ConfigManager, get_config_manager
 from ..exceptions import PhaseExecutionError, QualityGateError
-from ..utils import get_logger
 from ..terminal import create_console
+from ..utils import get_logger
 
 
 class Phase(Enum):
@@ -124,9 +123,14 @@ class WorkflowEngine:
         if not path.exists():
             return None
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, OSError):
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict) or "phase" not in data or "success" not in data:
+                self.logger.warning(f"检查点数据不完整，忽略: {path}")
+                return None
+            return data
+        except (json.JSONDecodeError, OSError) as e:
+            self.logger.warning(f"检查点文件损坏，忽略: {path}, 错误: {e}")
             return None
 
     def _clear_checkpoints(self) -> None:
@@ -169,7 +173,7 @@ class WorkflowEngine:
             # 检查点恢复：跳过已成功完成的阶段
             if resume:
                 checkpoint = self._load_checkpoint(phase)
-                if checkpoint and checkpoint.get("success"):
+                if checkpoint and checkpoint.get("success") and checkpoint.get("project") == self.config_manager.config.name:
                     self.logger.info(
                         f"恢复模式：跳过已完成阶段 {phase.value}",
                         extra={"phase": phase.value}

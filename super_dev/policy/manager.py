@@ -17,6 +17,7 @@ import yaml  # type: ignore[import-untyped]
 
 from ..catalogs import CICD_PLATFORM_IDS, HOST_TOOL_IDS
 from ..config import ProjectConfig
+from ..utils import get_logger
 
 
 @dataclass
@@ -45,6 +46,7 @@ class PipelinePolicyManager:
     def __init__(self, project_dir: Path):
         self.project_dir = Path(project_dir).resolve()
         self.policy_path = self.project_dir / self.POLICY_FILE
+        self.logger = get_logger("policy_manager")
 
     def load(self) -> PipelinePolicy:
         if not self.policy_path.exists():
@@ -52,7 +54,11 @@ class PipelinePolicyManager:
 
         try:
             loaded = yaml.safe_load(self.policy_path.read_text(encoding="utf-8"))
-        except Exception:
+        except yaml.YAMLError as e:
+            self.logger.warning(f"策略文件 YAML 解析失败: {e}")
+            return self._default_copy()
+        except Exception as e:
+            self.logger.warning(f"策略文件加载失败: {e}")
             return self._default_copy()
 
         raw = loaded if isinstance(loaded, dict) else {}
@@ -239,7 +245,11 @@ class PipelinePolicyManager:
         latest = max(candidates, key=lambda p: p.stat().st_mtime)
         try:
             payload = json.loads(latest.read_text(encoding="utf-8"))
-        except Exception:
+        except json.JSONDecodeError as e:
+            self.logger.warning(f"宿主兼容性报告解析失败: {e}")
+            return None
+        except Exception as e:
+            self.logger.warning(f"宿主兼容性报告加载失败: {e}")
             return None
         if not isinstance(payload, dict):
             return None

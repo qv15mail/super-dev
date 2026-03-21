@@ -19,6 +19,8 @@ from typing import Any
 
 import requests  # type: ignore[import-untyped]
 
+from ..utils import get_logger
+
 
 @dataclass
 class KnowledgeItem:
@@ -100,6 +102,7 @@ class KnowledgeAugmenter:
         cache_ttl_seconds: int | None = None,
     ):
         self.project_dir = Path(project_dir).resolve()
+        self.logger = get_logger("knowledge_augmenter")
         self.web_enabled = web_enabled
         self.docs_dir = self.project_dir / "docs"
         self.knowledge_dir = self.project_dir / "knowledge"
@@ -274,7 +277,7 @@ class KnowledgeAugmenter:
         primary_sources = research_summary.get("primary_sources", [])
         if isinstance(primary_sources, list) and primary_sources:
             for item in primary_sources:
-                if isinstance(item, (list, tuple)) and len(item) >= 2:
+                if isinstance(item, list | tuple) and len(item) >= 2:
                     lines.append(f"- {item[0]}: {item[1]} 次引用")
         else:
             lines.append("- 当前未识别到可统计域名")
@@ -346,7 +349,8 @@ class KnowledgeAugmenter:
             return None
         try:
             payload = json.loads(cache_file.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as e:
+            self.logger.warning(f"知识缓存文件解析失败: {cache_file}, 错误: {e}")
             return None
         if not isinstance(payload, dict):
             return None
@@ -417,7 +421,8 @@ class KnowledgeAugmenter:
             content = ""
             try:
                 content = file_path.read_text(encoding="utf-8", errors="ignore")
-            except Exception:
+            except Exception as e:
+                self.logger.warning(f"无法读取文件 {file_path}: {e}")
                 content = ""
             if not content:
                 continue
@@ -535,7 +540,8 @@ class KnowledgeAugmenter:
             return ""
         try:
             parsed = urllib.parse.urlparse(link)
-        except Exception:
+        except Exception as e:
+            self.logger.warning(f"URL 解析失败: {link}, 错误: {e}")
             return ""
         host = (parsed.netloc or "").lower()
         if host.startswith("www."):
@@ -560,6 +566,7 @@ class KnowledgeAugmenter:
         try:
             from ddgs import DDGS  # type: ignore
         except Exception:
+            self.logger.warning("ddgs 库未安装，跳过 DDGS 检索")
             return []
 
         results: list[KnowledgeItem] = []
@@ -585,7 +592,8 @@ class KnowledgeAugmenter:
                             source_domain=self._extract_domain(link),
                         )
                     )
-        except Exception:
+        except Exception as e:
+            self.logger.warning(f"DDGS 联网检索异常: {type(e).__name__}: {e}")
             return []
 
         return results
@@ -603,7 +611,17 @@ class KnowledgeAugmenter:
                 return []
             payload = response.text
             data = json.loads(payload)
-        except Exception:
+        except requests.exceptions.Timeout:
+            self.logger.warning(f"联网检索超时: {url}")
+            return []
+        except requests.exceptions.ConnectionError as e:
+            self.logger.warning(f"联网检索连接失败: {e}")
+            return []
+        except json.JSONDecodeError as e:
+            self.logger.warning(f"联网检索响应解析失败: {e}")
+            return []
+        except Exception as e:
+            self.logger.warning(f"联网检索异常: {type(e).__name__}: {e}")
             return []
 
         results: list[KnowledgeItem] = []

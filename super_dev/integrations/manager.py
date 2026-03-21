@@ -4,10 +4,10 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 import os
-from pathlib import Path
 import ssl
+from dataclasses import asdict, dataclass
+from pathlib import Path
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
@@ -83,6 +83,7 @@ class IntegrationManager:
         "claude-code",
         "cline",
         "jetbrains-ai",
+        "kilo-code",
         "kiro",
         "vscode-copilot",
     }
@@ -94,6 +95,7 @@ class IntegrationManager:
         "codebuddy-cli": "在项目目录启动 CodeBuddy CLI 会话后触发。",
         "codebuddy": "打开 CodeBuddy IDE 的 Agent Chat，在项目上下文内触发。",
         "codex-cli": "在项目目录完成接入后，重启 codex，然后在新的 Codex CLI 会话里触发。",
+        "copilot-cli": "在项目目录启动 Copilot CLI 会话后触发。",
         "cursor-cli": "在项目目录启动 Cursor CLI 当前会话后触发。",
         "cursor": "打开 Cursor 的 Agent Chat，并确保当前工作区就是目标项目。",
         "windsurf": "打开 Windsurf 的 Agent Chat 或 Workflow 入口，在项目上下文内触发。",
@@ -106,6 +108,7 @@ class IntegrationManager:
         "qoder-cli": "在项目目录启动 Qoder CLI 会话后触发。",
         "roo-code": "在 VS Code 的 Roo Code 聊天面板中触发。",
         "vscode-copilot": "在 VS Code Copilot Chat 绑定当前项目后触发。",
+        "kilo-code": "在 VS Code 的 Kilo Code 聊天面板中触发。",
         "kiro": "打开 Kiro IDE 的 Agent Chat 或 AI 面板，在项目上下文内触发。",
         "qoder": "打开 Qoder IDE 的 Agent Chat，在当前项目内触发。",
         "trae": "打开 Trae Agent Chat，在当前项目上下文内直接触发。",
@@ -144,6 +147,11 @@ class IntegrationManager:
             "不要输入 /super-dev，Codex 当前不走自定义 slash。",
             "实际依赖项目根 AGENTS.md 和 ~/.codex/skills/super-dev-core/SKILL.md。",
             "如果旧会话没加载新 Skill，重启 codex 再试。",
+        ],
+        "copilot-cli": [
+            "Copilot CLI 优先按 `.github/copilot-instructions.md` + `AGENTS.md` 注入项目约束。",
+            "当前按文本触发 `super-dev: <需求描述>` 适配，不走自定义 slash。",
+            "如果宿主未加载项目规则，重启 copilot 会话再试。",
         ],
         "cursor-cli": [
             "适合终端内连续执行研究、文档和编码。",
@@ -197,6 +205,10 @@ class IntegrationManager:
         "vscode-copilot": [
             "VS Code Copilot 建议使用 `.github/copilot-instructions.md` 固化流水线约束。",
             "当前按文本触发 `super-dev: <需求描述>` 适配，确保与 Copilot Chat 一致。",
+        ],
+        "kilo-code": [
+            "Kilo Code 优先使用 `.kilocode/rules/` 规则目录，确保项目约束在每次任务开始时自动注入。",
+            "当前按文本触发 `super-dev: <需求描述>` 适配，减少与内建 slash 的语义冲突。",
         ],
         "kiro": [
             "Kiro IDE 当前优先按 steering/rules + 宿主级 Skill 模式触发，不走 /super-dev。",
@@ -265,6 +277,9 @@ class IntegrationManager:
         "codebuddy-cli": [
             "CodeBuddy CLI 触发前确认当前终端已进入目标项目目录。",
         ],
+        "copilot-cli": [
+            "Copilot CLI 触发前确认当前终端已进入目标项目目录，并让新的会话读取 `.github/copilot-instructions.md`。",
+        ],
         "windsurf": [
             "Windsurf 触发前确认当前 Agent Chat / Workflow 绑定的是目标项目工作区。",
         ],
@@ -279,6 +294,9 @@ class IntegrationManager:
         ],
         "cline": [
             "Cline 触发前确认当前聊天绑定的是目标工作区，并让 `.clinerules/` 已被重新加载。",
+        ],
+        "kilo-code": [
+            "Kilo Code 触发前确认当前聊天绑定的是目标工作区，并让 `.kilocode/rules/` 已被重新加载。",
         ],
         "jetbrains-ai": [
             "JetBrains AI / Junie 触发前确认当前 IDE 已打开目标项目，并在新的 Agent 会话中加载 `.junie/AGENTS.md`。",
@@ -331,6 +349,11 @@ class IntegrationManager:
             description="Codex CLI 项目上下文注入",
             files=["AGENTS.md"],
         ),
+        "copilot-cli": IntegrationTarget(
+            name="copilot-cli",
+            description="GitHub Copilot CLI 指令注入",
+            files=[".github/copilot-instructions.md"],
+        ),
         "cursor-cli": IntegrationTarget(
             name="cursor-cli",
             description="Cursor CLI 项目规则注入",
@@ -339,7 +362,7 @@ class IntegrationManager:
         "windsurf": IntegrationTarget(
             name="windsurf",
             description="Windsurf IDE 规则注入",
-            files=[".windsurf/rules.md"],
+            files=[".windsurf/rules/super-dev.md"],
         ),
         "gemini-cli": IntegrationTarget(
             name="gemini-cli",
@@ -355,6 +378,11 @@ class IntegrationManager:
             name="jetbrains-ai",
             description="JetBrains Junie 项目规则注入",
             files=[".junie/AGENTS.md"],
+        ),
+        "kilo-code": IntegrationTarget(
+            name="kilo-code",
+            description="Kilo Code 规则注入",
+            files=[".kilocode/rules/super-dev.md"],
         ),
         "kimi-cli": IntegrationTarget(
             name="kimi-cli",
@@ -378,7 +406,7 @@ class IntegrationManager:
         ),
         "vscode-copilot": IntegrationTarget(
             name="vscode-copilot",
-            description="VS Code Copilot 仓库级指令注入",
+            description="GitHub Copilot 仓库级指令注入",
             files=[".github/copilot-instructions.md"],
         ),
         "opencode": IntegrationTarget(
@@ -431,7 +459,9 @@ class IntegrationManager:
         "aider",
         "cline",
         "codex-cli",
+        "copilot-cli",
         "jetbrains-ai",
+        "kilo-code",
         "kimi-cli",
         "kiro",
         "trae",
@@ -467,6 +497,10 @@ class IntegrationManager:
             "https://developers.openai.com/codex/guides/agents-md",
             "https://developers.openai.com/codex/skills",
         ),
+        "copilot-cli": (
+            "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-custom-instructions",
+            "https://docs.github.com/copilot/customizing-copilot/adding-custom-instructions-for-github-copilot",
+        ),
         "cursor-cli": (
             "https://docs.cursor.com/en/cli/overview",
             "https://docs.cursor.com/en/cli/reference/slash-commands",
@@ -485,6 +519,9 @@ class IntegrationManager:
         "jetbrains-ai": (
             "https://junie.jetbrains.com/docs/agent-skills.html",
             "https://www.jetbrains.com/help/junie/customize-guidelines.html",
+        ),
+        "kilo-code": (
+            "https://kilocode.ai/docs/features/rules",
         ),
         "kimi-cli": (
             "https://www.kimi.com/code/docs/en/kimi-cli/guides/interaction.html",
@@ -618,6 +655,14 @@ class IntegrationManager:
                 "Super Dev 已写入 rules、commands、agents 与 skills 接入面",
             ],
         },
+        "copilot-cli": {
+            "level": "experimental",
+            "reason": "Copilot CLI 按 copilot-instructions + AGENTS.md 接入，当前定位为实验级。",
+            "evidence": [
+                "官方文档公开 copilot-instructions.md 自定义指令机制",
+                "Super Dev 已写入 .github/copilot-instructions.md 接入面",
+            ],
+        },
         "cursor": {
             "level": "experimental",
             "reason": "IDE Agent Chat 能力可映射，但项目级 slash 行为仍需持续运行级验证。",
@@ -657,6 +702,14 @@ class IntegrationManager:
             "evidence": [
                 "官方文档公开 commands",
                 "Super Dev 已写入规则、Skill 与项目/全局命令文件",
+            ],
+        },
+        "kilo-code": {
+            "level": "experimental",
+            "reason": "Kilo Code 按 .kilocode/rules/ 规则目录适配，与 Roo Code 生态类似，但仍需更多真机验证。",
+            "evidence": [
+                "Kilo Code 支持项目级 .kilocode/rules/ 规则目录",
+                "Super Dev 已写入规则文件",
             ],
         },
         "kiro": {
@@ -1317,6 +1370,23 @@ class IntegrationManager:
 
         return surfaces
 
+    def remove(self, target: str) -> list[Path]:
+        """卸载指定宿主的 Super Dev 集成文件"""
+        surfaces = self.collect_managed_surface_paths(target=target)
+        removed: list[Path] = []
+        for _key, path in surfaces.items():
+            if path.exists():
+                try:
+                    path.unlink()
+                    removed.append(path)
+                    # 清理空父目录
+                    parent = path.parent
+                    if parent.exists() and not any(parent.iterdir()):
+                        parent.rmdir()
+                except OSError:
+                    pass
+        return removed
+
     def _adapter_mode(self, *, target: str, category: str, integration_files: list[str]) -> str:
         first_file = integration_files[0] if integration_files else ""
         if category == "cli":
@@ -1589,7 +1659,7 @@ class IntegrationManager:
             },
             "antigravity": {
                 "mode": "official-workflow",
-                "summary": "GEMINI.md + commands + workflows + skills",
+                "summary": "官方 commands + workflows + skills",
             },
             "codebuddy-cli": {
                 "mode": "official-skill",
@@ -1639,6 +1709,10 @@ class IntegrationManager:
                 "mode": "official-skill",
                 "summary": "官方 commands + skills",
             },
+            "kilo-code": {
+                "mode": "official-rules",
+                "summary": "官方 rules",
+            },
             "kiro": {
                 "mode": "official-steering",
                 "summary": "官方 project steering + global steering",
@@ -1646,6 +1720,10 @@ class IntegrationManager:
             "codex-cli": {
                 "mode": "official-skill",
                 "summary": "官方 AGENTS.md + 官方 Skills",
+            },
+            "copilot-cli": {
+                "mode": "official-context",
+                "summary": "官方 copilot-instructions + AGENTS",
             },
             "cursor-cli": {
                 "mode": "official-context",
@@ -1745,6 +1823,11 @@ class IntegrationManager:
                 "official_user_surfaces": ["~/Documents/Cline/Rules/super-dev.md"],
                 "observed_compatibility_surfaces": [],
             },
+            "kilo-code": {
+                "official_project_surfaces": [".kilocode/rules/super-dev.md"],
+                "official_user_surfaces": [],
+                "observed_compatibility_surfaces": [],
+            },
             "roo-code": {
                 "official_project_surfaces": [
                     ".roo/rules/super-dev.md",
@@ -1763,6 +1846,14 @@ class IntegrationManager:
                 "official_user_surfaces": ["~/.codex/skills/super-dev-core/SKILL.md"],
                 "observed_compatibility_surfaces": [],
             },
+            "copilot-cli": {
+                "official_project_surfaces": [
+                    ".github/copilot-instructions.md",
+                    "AGENTS.md",
+                ],
+                "official_user_surfaces": [],
+                "observed_compatibility_surfaces": [],
+            },
             "cursor-cli": {
                 "official_project_surfaces": [".cursor/rules/super-dev.mdc", ".cursor/commands/super-dev.md"],
                 "official_user_surfaces": ["~/.cursor/commands/super-dev.md"],
@@ -1775,7 +1866,7 @@ class IntegrationManager:
             },
             "windsurf": {
                 "official_project_surfaces": [
-                    ".windsurf/rules.md",
+                    ".windsurf/rules/super-dev.md",
                     ".windsurf/workflows/super-dev.md",
                     ".windsurf/skills/super-dev-core/SKILL.md",
                 ],
@@ -2130,19 +2221,36 @@ class IntegrationManager:
             return self._build_embedded_skill_content()
 
         if target in {"cursor", "cursor-cli"}:
+            rules_body = (
+                "# Super Dev Pipeline Rules\n"
+                "- When the user triggers `/super-dev ...`, enter Super Dev pipeline mode immediately.\n"
+                "- Start with research and write output/*-research.md as a real file in the repository.\n"
+                "- Always read and maintain output/*-prd.md, output/*-architecture.md, and output/*-uiux.md as source-of-truth project files.\n"
+                "- Summarize the three core documents to the user and wait for user confirmation before creating Spec/tasks or writing code.\n"
+                "- Create Spec/tasks only after confirmation.\n"
+                "- Execute frontend-first delivery before backend/database tasks, then run quality gate before release.\n"
+            )
             cursor_template = self.templates_dir / ".cursorrules.template"
             if cursor_template.exists():
                 body = cursor_template.read_text(encoding="utf-8")
-                return (
-                    f"{body}\n\n"
-                    "# Super Dev Pipeline Rules\n"
-                    "- When the user triggers `/super-dev ...`, enter Super Dev pipeline mode immediately.\n"
-                    "- Start with research and write output/*-research.md as a real file in the repository.\n"
-                    "- Always read and maintain output/*-prd.md, output/*-architecture.md, and output/*-uiux.md as source-of-truth project files.\n"
-                    "- Summarize the three core documents to the user and wait for user confirmation before creating Spec/tasks or writing code.\n"
-                    "- Create Spec/tasks only after confirmation.\n"
-                    "- Execute frontend-first delivery before backend/database tasks, then run quality gate before release.\n"
-                )
+                rules_body = f"{body}\n\n{rules_body}"
+            return (
+                "---\n"
+                'description: "Super Dev pipeline governance - research-first commercial-grade delivery. Activates when user says /super-dev or super-dev:"\n'
+                "alwaysApply: true\n"
+                "---\n\n"
+                f"{rules_body}"
+            )
+
+        if target == "kiro" and relative.endswith("steering/super-dev.md"):
+            frontmatter = (
+                "---\n"
+                "inclusion: always\n"
+                "name: super-dev\n"
+                "description: Super Dev pipeline governance for research-first commercial-grade delivery\n"
+                "---\n\n"
+            )
+            return frontmatter + self._generic_ide_rules(target)
 
         if target == "antigravity":
             if relative.endswith(".agent/workflows/super-dev.md"):
@@ -2156,6 +2264,7 @@ class IntegrationManager:
             "continue",
             "vscode-copilot",
             "jetbrains-ai",
+            "kilo-code",
             "roo-code",
             "augment",
             "qoder",
@@ -2169,6 +2278,7 @@ class IntegrationManager:
 
         if target in {
             "codex-cli",
+            "copilot-cli",
             "opencode",
             "gemini-cli",
             "kiro-cli",
@@ -2203,14 +2313,21 @@ class IntegrationManager:
             "- If the user requests quality or security remediation, first fix the issues, rerun quality gate and `super-dev release proof-pack`, and only then continue.\n"
             "- If a required artifact is only described in chat and not written into the repository, treat the step as incomplete.\n"
             "- Codex remains the execution host; Super Dev is the local governance workflow.\n"
-            "- Use local `super-dev` CLI only for governance actions such as doctor, review, quality, release readiness, or update; do not outsource the main coding workflow to the CLI.\n"
+            "- Use local `super-dev` CLI only for governance actions such as doctor, review, quality, release readiness, or update; do not outsource the main coding workflow to the CLI.\n\n"
+            "## Super Dev System Flow Contract\n"
+            "- SUPER_DEV_FLOW_CONTRACT_V1\n"
+            "- PHASE_CHAIN: research>docs>docs_confirm>spec>frontend>preview_confirm>backend>quality>delivery\n"
+            "- DOC_CONFIRM_GATE: required\n"
+            "- PREVIEW_CONFIRM_GATE: required\n"
+            "- HOST_PARITY: required\n"
         )
 
     def _build_claude_agent_content(self) -> str:
         return (
             "---\n"
             "name: super-dev-core\n"
-            "description: Activate the Super Dev pipeline for research-first, commercial-grade project delivery.\n"
+            "description: Activate the Super Dev pipeline for research-first, commercial-grade project delivery. Use when user says /super-dev or super-dev: followed by a requirement.\n"
+            "model: inherit\n"
             "---\n"
             "# Super Dev Core Subagent\n\n"
             "You are the Claude Code subagent that activates Super Dev governance mode.\n\n"
@@ -2496,7 +2613,15 @@ class IntegrationManager:
         )
 
     def _generic_ide_rules(self, target: str) -> str:
+        windsurf_frontmatter = ""
+        if target == "windsurf":
+            windsurf_frontmatter = (
+                "---\n"
+                "trigger: always_on\n"
+                "---\n\n"
+            )
         return (
+            f"{windsurf_frontmatter}"
             f"# Super Dev IDE Rules ({target})\n\n"
             "## Positioning\n"
             "- Super Dev is a host-level workflow governor, not an LLM platform.\n"

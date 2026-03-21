@@ -28,7 +28,7 @@ except ImportError:
 
 try:
     import requests
-    from rich.console import Console, Group
+    from rich.console import Group
     from rich.live import Live
     from rich.panel import Panel
     from rich.table import Table
@@ -44,10 +44,10 @@ from .catalogs import (
     FULL_FRONTEND_TEMPLATE_IDS,
     HOST_COMMAND_CANDIDATES,
     HOST_TOOL_IDS,
-    PRIMARY_HOST_TOOL_IDS,
     PIPELINE_BACKEND_IDS,
     PIPELINE_FRONTEND_TEMPLATE_IDS,
     PLATFORM_IDS,
+    PRIMARY_HOST_TOOL_IDS,
     host_path_candidates,
 )
 from .config import ConfigManager, ProjectConfig, get_config_manager
@@ -743,6 +743,16 @@ class SuperDevCLI:
             "--force",
             action="store_true",
             help="覆盖已存在文件并重装 Skill"
+        )
+        onboard_parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="预览将要写入的文件，不实际执行"
+        )
+        onboard_parser.add_argument(
+            "--stable-only",
+            action="store_true",
+            help="仅安装 Certified 和 Compatible 级别的宿主"
         )
 
         # doctor 命令 - 宿主接入诊断
@@ -1942,6 +1952,11 @@ class SuperDevCLI:
             description="运行控制命令（恢复、状态、阶段回跳、阶段确认）"
         )
         run_parser.add_argument(
+            "stage_selector",
+            nargs="?",
+            help="快捷阶段入口（如 research/prd/architecture/uiux/frontend/backend/quality）",
+        )
+        run_parser.add_argument(
             "--resume",
             action="store_true",
             help="恢复最近一次失败的 pipeline 运行",
@@ -1978,6 +1993,47 @@ class SuperDevCLI:
             "--json",
             action="store_true",
             help="状态输出使用 JSON 格式",
+        )
+
+        status_parser = subparsers.add_parser(
+            "status",
+            help="查看当前流程状态",
+            description="快捷别名，等同于 super-dev run --status",
+        )
+        status_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="状态输出使用 JSON 格式",
+        )
+
+        jump_parser = subparsers.add_parser(
+            "jump",
+            help="跳转到指定阶段",
+            description="快捷别名，等同于 super-dev run --jump <stage>",
+        )
+        jump_parser.add_argument(
+            "stage",
+            help="目标阶段（如 docs/frontend/backend/quality）",
+        )
+
+        confirm_parser = subparsers.add_parser(
+            "confirm",
+            help="确认指定阶段",
+            description="快捷别名，等同于 super-dev run --confirm <phase>",
+        )
+        confirm_parser.add_argument(
+            "phase",
+            help="需要确认的阶段（如 docs/preview/frontend/backend/quality）",
+        )
+        confirm_parser.add_argument(
+            "--comment",
+            default="",
+            help="阶段确认备注",
+        )
+        confirm_parser.add_argument(
+            "--actor",
+            default="cli-user",
+            help="阶段确认操作者",
         )
 
         policy_parser = subparsers.add_parser(
@@ -2448,7 +2504,7 @@ super-dev start --idea "你的需求"
                     self.console.print(f"[green]Repo Map 已保存到: {args.output}[/green]")
                 else:
                     paths = builder.write(report)
-                    self.console.print(f"[green]Repo Map 已生成[/green]")
+                    self.console.print("[green]Repo Map 已生成[/green]")
                     self.console.print(f"  Markdown: {paths['markdown']}")
                     self.console.print(f"  JSON: {paths['json']}")
                 return 0
@@ -3162,10 +3218,52 @@ super-dev start --idea "你的需求"
         self.console.print(f"  文件: {metrics_file}")
         return 0
 
+    # 阶段编号映射表
+    STAGE_NUMBER_MAP: dict[str, str] = {
+        "1": "research",
+        "2": "prd",
+        "3": "architecture",
+        "4": "uiux",
+        "5": "spec",
+        "6": "frontend",
+        "7": "backend",
+        "8": "quality",
+        "9": "delivery",
+    }
+
+    STAGE_LABELS: dict[str, str] = {
+        "research": "同类产品研究",
+        "prd": "产品需求文档",
+        "architecture": "架构设计",
+        "uiux": "UI/UX 设计",
+        "spec": "规范与任务分解",
+        "frontend": "前端开发",
+        "backend": "后端开发",
+        "quality": "质量检查",
+        "delivery": "交付打包",
+    }
+
+    # 每个环节对应的专家角色和职责
+    STAGE_EXPERTS: dict[str, dict[str, str]] = {
+        "research": {"role": "PM + ARCHITECT", "title": "产品经理 + 架构师", "duty": "需求解析、知识库增强、同类产品研究"},
+        "prd": {"role": "PM", "title": "产品经理", "duty": "需求分析、PRD 编写、用户故事、验收标准"},
+        "architecture": {"role": "ARCHITECT", "title": "架构师", "duty": "系统设计、技术选型、API 设计、数据库建模"},
+        "uiux": {"role": "UI + UX", "title": "UI/UX 设计师", "duty": "视觉设计、设计系统、组件规范、交互设计"},
+        "spec": {"role": "PM + CODE", "title": "产品经理 + 代码专家", "duty": "需求拆解、任务分解、优先级排序"},
+        "frontend": {"role": "CODE + UI", "title": "代码专家 + UI 设计师", "duty": "前端实现、组件开发、页面搭建"},
+        "backend": {"role": "CODE + DBA", "title": "代码专家 + 数据库专家", "duty": "后端实现、API 开发、数据库迁移"},
+        "quality": {"role": "QA + SECURITY", "title": "QA 专家 + 安全专家", "duty": "质量门禁、红队审查、测试验证"},
+        "delivery": {"role": "DEVOPS + QA", "title": "DevOps + QA 专家", "duty": "CI/CD 配置、发布演练、交付打包"},
+    }
+
     def _cmd_run(self, args) -> int:
-        """运行控制命令（恢复等）"""
+        """跳转到任意环节执行/重做（支持名称或数字 1-9）"""
         if getattr(args, "status", False):
             return self._cmd_run_status(args)
+
+        if getattr(args, "resume", False):
+            return self._cmd_run_resume(args)
+
         confirm_phase = str(getattr(args, "confirm_phase", "") or "").strip()
         if confirm_phase:
             return self._cmd_run_confirm_phase(
@@ -3179,12 +3277,103 @@ super-dev start --idea "你的需求"
         phase_stage = str(getattr(args, "phase", "") or "").strip()
         if phase_stage:
             return self._cmd_run_from_stage(stage_selector=phase_stage, show_impact=False)
-        if getattr(args, "resume", False):
-            return self._cmd_run_resume(args)
-        self.console.print(
-            "[yellow]请指定运行控制参数，例如: super-dev run --status / --resume / --phase frontend / --jump docs / --confirm docs[/yellow]"
+
+        stage_selector = str(getattr(args, "stage_selector", "") or "").strip()
+
+        # 数字映射：super-dev run 1 → research, super-dev run 4 → uiux
+        if stage_selector in self.STAGE_NUMBER_MAP:
+            stage_selector = self.STAGE_NUMBER_MAP[stage_selector]
+
+        if stage_selector:
+            normalized = stage_selector.lower()
+            label = self.STAGE_LABELS.get(normalized, normalized)
+
+            # 专家角色映射
+            expert_map = {
+                "research": ("PM + ARCHITECT", "产品经理 + 架构师"),
+                "prd": ("PM", "产品经理"),
+                "architecture": ("ARCHITECT", "架构师"),
+                "uiux": ("UI + UX", "UI/UX 设计师"),
+                "spec": ("PM + CODE", "产品经理 + 代码专家"),
+                "frontend": ("CODE + UI", "代码专家 + UI 设计师"),
+                "backend": ("CODE + DBA", "代码专家 + 数据库专家"),
+                "quality": ("QA + SECURITY", "QA 专家 + 安全专家"),
+                "delivery": ("DEVOPS + QA", "DevOps + QA 专家"),
+            }
+            expert_role, expert_title = expert_map.get(normalized, ("CODE", "代码专家"))
+
+            from rich.panel import Panel
+            self.console.print("")
+            self.console.print(Panel(
+                f"[bold cyan]Super Dev Run[/bold cyan]\n\n"
+                f"  [dim]环节[/dim]    {normalized} ({label})\n"
+                f"  [dim]专家[/dim]    [bold]{expert_role}[/bold] - {expert_title}",
+                border_style="cyan",
+                expand=True,
+                padding=(1, 2),
+            ))
+            self.console.print("")
+
+            if normalized in {"research", "prd", "architecture", "uiux"}:
+                return self._cmd_run_targeted_refresh(normalized)
+            return self._cmd_run_from_stage(stage_selector=normalized, show_impact=False)
+
+        # 没有指定阶段，显示环节菜单
+        from rich.panel import Panel
+        from rich.table import Table
+        self.console.print("")
+        table = Table(title="可用环节", expand=True, border_style="dim", title_style="bold cyan")
+        table.add_column("编号", style="bold cyan", width=6, justify="center")
+        table.add_column("专家", style="bold", min_width=16)
+        table.add_column("环节", style="bold")
+        table.add_column("说明", style="dim")
+
+        expert_short = {
+            "research": "PM + ARCHITECT",
+            "prd": "PM",
+            "architecture": "ARCHITECT",
+            "uiux": "UI + UX",
+            "spec": "PM + CODE",
+            "frontend": "CODE + UI",
+            "backend": "CODE + DBA",
+            "quality": "QA + SECURITY",
+            "delivery": "DEVOPS + QA",
+        }
+        for num, name in sorted(self.STAGE_NUMBER_MAP.items()):
+            table.add_row(num, expert_short.get(name, ""), name, self.STAGE_LABELS.get(name, ""))
+        self.console.print(table)
+        self.console.print("")
+        self.console.print("[cyan]用法示例:[/cyan]")
+        self.console.print("  super-dev run 4          UI/UX 设计师重新生成设计文档")
+        self.console.print("  super-dev run uiux       同上")
+        self.console.print("  super-dev run --resume   从上次中断处继续")
+        self.console.print("  super-dev run --status   查看流程状态")
+        self.console.print("")
+        return 0
+
+    def _cmd_status(self, args) -> int:
+        """快捷别名：查看当前流程状态"""
+        return self._cmd_run_status(args)
+
+    def _cmd_jump(self, args) -> int:
+        """快捷别名：跳转到指定阶段"""
+        stage = str(getattr(args, "stage", "") or "").strip()
+        if not stage:
+            self.console.print("[red]请指定目标阶段，例如: super-dev jump frontend[/red]")
+            return 1
+        return self._cmd_run_from_stage(stage_selector=stage, show_impact=True)
+
+    def _cmd_confirm(self, args) -> int:
+        """快捷别名：确认指定阶段"""
+        phase_name = str(getattr(args, "phase", "") or "").strip()
+        if not phase_name:
+            self.console.print("[red]请指定要确认的阶段，例如: super-dev confirm docs[/red]")
+            return 1
+        return self._cmd_run_confirm_phase(
+            phase_name=phase_name,
+            comment=str(getattr(args, "comment", "") or ""),
+            actor=str(getattr(args, "actor", "") or "cli-user"),
         )
-        return 1
 
     def _cmd_run_resume(self, args) -> int:
         """恢复最近一次 pipeline 运行"""
@@ -3389,6 +3578,102 @@ super-dev start --idea "你的需求"
         self.console.print(f"[green]✓[/green] 已确认阶段: {normalized}")
         return 0
 
+    def _cmd_run_targeted_refresh(self, target: str) -> int:
+        project_dir = Path.cwd()
+        config = get_config_manager(project_dir).config
+        project_name = self._sanitize_project_name(config.name or project_dir.name)
+        output_dir = project_dir / str(config.output_dir or "output")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        run_state = self._read_pipeline_run_state(project_dir) or {}
+        pipeline_args = run_state.get("pipeline_args") if isinstance(run_state, dict) else {}
+        if not isinstance(pipeline_args, dict):
+            pipeline_args = {}
+        description = (
+            str(pipeline_args.get("description", "")).strip()
+            or str(config.description or "").strip()
+            or project_name
+        )
+        domain = str(pipeline_args.get("domain", "")).strip() or str(config.domain or "")
+        frontend = str(pipeline_args.get("frontend", "")).strip() or self._normalize_pipeline_frontend(config.frontend)
+        backend = str(pipeline_args.get("backend", "")).strip() or str(config.backend or "node")
+        request_mode = str((run_state.get("context") or {}).get("request_mode", "")).strip() or "feature"
+
+        if target == "research":
+            import os
+
+            from .orchestrator.knowledge import KnowledgeAugmenter
+
+            disable_web = os.getenv("SUPER_DEV_DISABLE_WEB", "").strip().lower() in {"1", "true", "yes"}
+            augmenter = KnowledgeAugmenter(
+                project_dir=project_dir,
+                web_enabled=not disable_web,
+                allowed_web_domains=config.knowledge_allowed_domains,
+                cache_ttl_seconds=config.knowledge_cache_ttl_seconds,
+            )
+            bundle = augmenter.augment(requirement=description, domain=domain)
+            research_file = output_dir / f"{project_name}-research.md"
+            research_file.write_text(augmenter.to_markdown(bundle), encoding="utf-8")
+            cache_file = augmenter.save_bundle(
+                bundle=bundle,
+                output_dir=output_dir,
+                project_name=project_name,
+                requirement=description,
+                domain=domain,
+            )
+            self.console.print(f"[green]✓[/green] 已重跑 research: {research_file}")
+            self.console.print(f"[green]✓[/green] 知识缓存: {cache_file}")
+            return 0
+
+        from .creators import DocumentGenerator
+
+        knowledge_summary = {}
+        bundle_path = output_dir / "knowledge-cache" / f"{project_name}-knowledge-bundle.json"
+        if bundle_path.exists():
+            try:
+                knowledge_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+                if isinstance(knowledge_payload, dict):
+                    knowledge_summary = dict(knowledge_payload.get("research_summary") or {})
+                    enriched = str(knowledge_payload.get("enriched_requirement", "")).strip()
+                    if enriched:
+                        description = enriched
+            except Exception:
+                pass
+
+        generator = DocumentGenerator(
+            name=project_name,
+            description=description,
+            request_mode=request_mode,
+            platform=str(config.platform or "web"),
+            frontend=frontend,
+            backend=backend,
+            domain=domain,
+            ui_library=config.ui_library,
+            style_solution=config.style_solution,
+            state_management=list(config.state_management or []),
+            testing_frameworks=list(config.testing_frameworks or []),
+            language_preferences=list(config.language_preferences or []),
+            knowledge_summary=knowledge_summary,
+        )
+
+        target_map = {
+            "prd": (
+                output_dir / f"{project_name}-prd.md",
+                generator.generate_prd,
+            ),
+            "architecture": (
+                output_dir / f"{project_name}-architecture.md",
+                generator.generate_architecture,
+            ),
+            "uiux": (
+                output_dir / f"{project_name}-uiux.md",
+                generator.generate_uiux,
+            ),
+        }
+        file_path, factory = target_map[target]
+        file_path.write_text(factory(), encoding="utf-8")
+        self.console.print(f"[green]✓[/green] 已重跑 {target}: {file_path}")
+        return 0
+
     def _cmd_run_from_stage(self, *, stage_selector: str, show_impact: bool) -> int:
         project_dir = Path.cwd()
         run_state = self._read_pipeline_run_state(project_dir)
@@ -3447,6 +3732,9 @@ super-dev start --idea "你的需求"
             "docs": 1,
             "document": 1,
             "documents": 1,
+            "prd": 1,
+            "architecture": 1,
+            "uiux": 1,
             "spec": 2,
             "frontend": 3,
             "ui": 3,
@@ -6901,7 +7189,7 @@ super-dev start --idea "你的需求"
 
         def renderable() -> Group:
             subtitle = (
-                "Space 勾选，Enter 安装，↑/↓ 移动，A 全选，C 仅 CLI，I 仅 IDE，R 清空，Esc 取消\n"
+                "Space 勾选，Enter 安装，U 卸载选中，↑/↓ 移动，A 全选，C 仅 CLI，I 仅 IDE，R 清空，Esc 取消\n"
                 f"[{symbol('cursor')}] 当前光标  [{symbol('selected')}] 已选中  [{symbol('unselected')}] 未选中\n"
                 "slash 宿主用 /super-dev；非 slash 宿主用 super-dev: / super-dev："
             )
@@ -6984,6 +7272,32 @@ super-dev start --idea "你的需求"
                     live.update(renderable(), refresh=True)
                     continue
                 if key in ("r", "R"):
+                    selected.clear()
+                    live.update(renderable(), refresh=True)
+                    continue
+                if key in ("u", "U"):
+                    if not selected:
+                        status_message = "请先选中要卸载的宿主"
+                        live.update(renderable(), refresh=True)
+                        continue
+                    # 卸载选中宿主的 super-dev 集成
+                    from .skills import SkillManager
+                    skill_manager = SkillManager(Path.cwd())
+                    uninstalled_count = 0
+                    for target in sorted(selected):
+                        try:
+                            removed = integration_manager.remove(target=target)
+                            if removed:
+                                uninstalled_count += len(removed)
+                        except Exception:
+                            pass
+                        try:
+                            if skill_manager.skill_surface_available(target):
+                                skill_manager.uninstall("super-dev-core", target)
+                                uninstalled_count += 1
+                        except Exception:
+                            pass
+                    status_message = f"已从 {len(selected)} 个宿主卸载 Super Dev（{uninstalled_count} 个文件）"
                     selected.clear()
                     live.update(renderable(), refresh=True)
                     continue
@@ -7860,13 +8174,57 @@ super-dev start --idea "你的需求"
         if not targets:
             self.console.print("[red]未选择任何宿主工具[/red]")
             return 1
+
+        if getattr(args, 'stable_only', False):
+            stable_targets = []
+            for t in targets:
+                profile = integration_manager.get_adapter_profile(t)
+                cert = profile.certification_label.lower()
+                if cert.startswith("certified") or cert.startswith("compatible"):
+                    stable_targets.append(t)
+            if not stable_targets:
+                self.console.print("[yellow]未找到 Certified 或 Compatible 级别的宿主[/yellow]")
+                return 1
+            skipped = set(targets) - set(stable_targets)
+            if skipped:
+                self.console.print(f"[dim]跳过 Experimental 宿主: {', '.join(sorted(skipped))}[/dim]")
+            targets = stable_targets
+
         setattr(args, "_selected_targets", list(targets))
 
-        self.console.print("[cyan]开始执行 Onboard...[/cyan]")
+        self.console.print("")
+        from rich.panel import Panel
+        from rich.rule import Rule
+        self.console.print(Panel(
+            f"[bold cyan]Super Dev Onboard[/bold cyan]\n\n"
+            f"  [dim]项目[/dim]      {project_dir.name}\n"
+            f"  [dim]目标宿主[/dim]  {len(targets)} 个\n"
+            f"  [dim]版本[/dim]      {__version__}",
+            border_style="cyan",
+            expand=True,
+            padding=(1, 2),
+        ))
+        self.console.print("")
         has_error = False
-        for target in targets:
-            self.console.print(f"[cyan]- {target}[/cyan]")
+        for idx, target in enumerate(targets, 1):
+            protocol = integration_manager._protocol_profile(target=target)
+            protocol_summary = protocol.get("summary", "") if isinstance(protocol, dict) else ""
+            self.console.print(Rule(
+                f"[bold cyan] {idx}/{len(targets)} [/bold cyan] [bold]{target}[/bold]  [dim]{protocol_summary}[/dim]",
+                style="dim cyan",
+            ))
+            self.console.print("")
             profile = integration_manager.get_adapter_profile(target)
+
+            if getattr(args, "dry_run", False):
+                surfaces = integration_manager.collect_managed_surface_paths(target=target)
+                self.console.print("  [dim]将写入以下文件:[/dim]")
+                for key, path in surfaces.items():
+                    exists = path.exists()
+                    status = "[dim]已存在[/dim]" if exists else "[cyan]新建[/cyan]"
+                    self.console.print(f"    {status} {path}")
+                self.console.print("")
+                continue
 
             if not args.skip_integrate:
                 try:
@@ -7961,15 +8319,37 @@ super-dev start --idea "你的需求"
                 self.console.print("  [green]✓[/green] 宿主契约校验通过")
 
         self.console.print("")
+        if args.dry_run:
+            self.console.print(Panel(
+                "[bold cyan]Dry Run 完成[/bold cyan]\n\n"
+                "  以上为预览，未实际写入任何文件\n"
+                "  去掉 --dry-run 参数执行实际安装",
+                border_style="cyan",
+                expand=True,
+                padding=(1, 2),
+            ))
+            return 0
         if has_error:
-            self.console.print("[red]Onboard 完成（部分失败）[/red]")
+            self.console.print(Panel(
+                "[bold red]Onboard 完成（部分失败）[/bold red]\n\n"
+                "  请检查上方错误信息\n"
+                "  使用 [cyan]super-dev doctor[/cyan] 诊断并自动修复",
+                border_style="red",
+                expand=True,
+                padding=(1, 2),
+            ))
             return 1
 
-        self.console.print("[green]✓ Onboard 完成[/green]")
-        self.console.print("[cyan]接下来这样用:[/cyan]")
-        for line in self._build_onboard_next_steps(targets=targets):
-            self.console.print(f"  - {line}")
-        self.console.print("[dim]终端 super-dev \"你的需求\" 仅触发本地编排，不替代宿主会话编码[/dim]")
+        next_steps = self._build_onboard_next_steps(targets=targets)
+        steps_text = "\n".join(f"  [green]>[/green] {line}" for line in next_steps)
+        self.console.print(Panel(
+            f"[bold green]Onboard 完成[/bold green]\n\n"
+            f"[bold]接下来这样用:[/bold]\n\n{steps_text}\n\n"
+            f"[dim]提示: 终端 super-dev \"你的需求\" 仅触发本地编排，不替代宿主会话编码[/dim]",
+            border_style="green",
+            expand=True,
+            padding=(1, 2),
+        ))
         return 0
 
     def _cmd_doctor(self, args) -> int:
@@ -8064,6 +8444,18 @@ super-dev start --idea "你的需求"
             f"[cyan]流程一致性: {compatibility.get('flow_consistency_score', 0):.2f}/100 "
             f"({compatibility.get('flow_consistent_hosts', 0)}/{compatibility.get('total_hosts', 0)})[/cyan]"
         )
+        certified_count = sum(
+            1 for t in targets
+            if integration_manager.get_adapter_profile(t).certification_label.lower().startswith("certified")
+        )
+        compatible_count = sum(
+            1 for t in targets
+            if integration_manager.get_adapter_profile(t).certification_label.lower().startswith("compatible")
+        )
+        experimental_count = len(targets) - certified_count - compatible_count
+        self.console.print(
+            f"[cyan]认证分布: Certified {certified_count} / Compatible {compatible_count} / Experimental {experimental_count}[/cyan]"
+        )
         self.console.print("")
         if args.repair:
             self.console.print("[cyan]Repair 模式已执行[/cyan]")
@@ -8074,14 +8466,60 @@ super-dev start --idea "你的需求"
             else:
                 self.console.print("[dim]- 无需修复或未执行修复动作[/dim]")
             self.console.print("")
+        # 摘要表格
+        from rich.table import Table
+        summary_table = Table(
+            title="宿主接入状态",
+            expand=True,
+            show_lines=False,
+            border_style="dim",
+            title_style="bold cyan",
+        )
+        summary_table.add_column("宿主", style="bold", min_width=18)
+        summary_table.add_column("状态", justify="center", min_width=8)
+        summary_table.add_column("集成规则", justify="center")
+        summary_table.add_column("Skill", justify="center")
+        summary_table.add_column("Slash", justify="center")
+        summary_table.add_column("认证", justify="center", min_width=12)
+        summary_table.add_column("协议", style="dim")
+
+        for target in targets:
+            host = report["hosts"][target]
+            protocol = integration_manager._protocol_profile(target=target)
+            protocol_summary = protocol.get("summary", "") if isinstance(protocol, dict) else ""
+
+            status = "[green]已就绪[/green]" if host["ready"] else "[red]未安装[/red]"
+
+            integrate_ok = host.get("integrate_ok", True)
+            skill_ok = host.get("skill_ok", True)
+            slash_ok = host.get("slash_ok", True)
+
+            integrate_text = "[green]已安装[/green]" if integrate_ok else "[red]未安装[/red]"
+            skill_text = "[green]已安装[/green]" if skill_ok else ("[dim]不适用[/dim]" if not IntegrationManager.requires_skill(target) else "[red]未安装[/red]")
+            slash_text = "[green]已安装[/green]" if slash_ok else ("[dim]不适用[/dim]" if not integration_manager.supports_slash(target) else "[red]未安装[/red]")
+
+            profile = integration_manager.get_adapter_profile(target)
+            cert_label = profile.certification_label
+            if "certified" in cert_label.lower():
+                cert_text = f"[bold green]{cert_label}[/bold green]"
+            elif "compatible" in cert_label.lower():
+                cert_text = f"[cyan]{cert_label}[/cyan]"
+            else:
+                cert_text = f"[yellow]{cert_label}[/yellow]"
+
+            summary_table.add_row(target, status, integrate_text, skill_text, slash_text, cert_text, protocol_summary)
+
+        self.console.print(summary_table)
+        self.console.print("")
+
         for target in targets:
             host = report["hosts"][target]
             if host["ready"]:
                 self.console.print(f"[green]✓ {target}[/green] ready")
             else:
-                self.console.print(f"[yellow]! {target}[/yellow] not ready")
+                self.console.print(f"[red]✗ {target}[/red] [red]未安装[/red]")
                 for check_name in host.get("missing", []):
-                    self.console.print(f"  [yellow]- 缺失: {check_name}[/yellow]")
+                    self.console.print(f"  [red]- 缺失: {check_name}[/red]")
                 for suggestion in host.get("suggestions", []):
                     self.console.print(f"  [dim]建议: {suggestion}[/dim]")
             self._print_host_usage_guidance(
@@ -8110,6 +8548,8 @@ super-dev start --idea "你的需求"
             skip_slash=bool(args.skip_slash),
             yes=bool(args.yes),
             force=bool(args.force),
+            dry_run=False,
+            stable_only=False,
         )
         onboard_result = self._cmd_onboard(onboard_args)
         if onboard_result != 0:
@@ -9709,6 +10149,7 @@ super-dev start --idea "你的需求"
 
         elif args.spec_action == "quality":
             from rich.table import Table
+
             from .specs import SpecValidator
 
             validator = SpecValidator(project_dir)
@@ -9850,6 +10291,7 @@ super-dev start --idea "你的需求"
             "deploy", "create", "wizard", "design", "spec", "task", "pipeline", "run", "config", "skill", "integrate",
             "onboard", "doctor", "setup", "install", "start", "bootstrap", "detect", "policy", "update", "review", "release",
             "fix", "repo-map", "impact", "regression-guard", "dependency-graph",
+            "status", "jump", "confirm",
         }
         return first not in known_commands
 

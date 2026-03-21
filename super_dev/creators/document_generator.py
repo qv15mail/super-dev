@@ -204,7 +204,7 @@ class DocumentGenerator:
         return f"""# {self.name} - 产品需求文档 (PRD)
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.0.11
+> **版本**: v2.1.0
 > **状态**: 草稿
 
 ---
@@ -380,7 +380,7 @@ class DocumentGenerator:
 
 ## 8. 发布计划
 
-### 8.1 MVP (v2.0)
+### 8.1 MVP (v1.0)
 
 **时间**: 4 周
 **范围**: 核心功能 + 基础架构
@@ -446,7 +446,7 @@ class DocumentGenerator:
 
 | 版本 | 日期 | 变更内容 | 作者 |
 |:---|:---|:---|:---|
-| v2.0.11 | {datetime.now().strftime('%Y-%m-%d')} | 初始版本 | Super Dev |
+| v2.1.0 | {datetime.now().strftime('%Y-%m-%d')} | 初始版本 | Super Dev |
 """
 
     def generate_architecture(self) -> str:
@@ -454,7 +454,7 @@ class DocumentGenerator:
         return f"""# {self.name} - 架构设计文档
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.0.11
+> **版本**: v2.1.0
 > **架构师**: Super Dev ARCHITECT 专家
 
 ---
@@ -882,7 +882,7 @@ jobs:
         doc_parts.append(f"""# {self.name} - UI/UX 设计文档
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.0.11
+> **版本**: v2.1.0
 > **设计师**: Super Dev UI/UX 专家
 
 ---
@@ -1684,7 +1684,7 @@ const theme: ThemeConfig = {
 **禁止默认 Ant Design 风格直出**，必须重写 token 体系。
 """
         else:
-            return f"""- 必须在项目初始化时重写 design token（颜色、间距、圆角、字体）
+            return """- 必须在项目初始化时重写 design token（颜色、间距、圆角、字体）
 - 不允许使用组件库默认主题直接上线
 - 所有交互组件必须有 hover/focus/active/disabled 四态
 - 图标统一使用 Lucide / Heroicons，禁止 emoji
@@ -2003,7 +2003,7 @@ const theme: ThemeConfig = {
 3. **数据驱动决策**: 通过学习行为数据分析，帮助管理者精准识别教学短板、优化课程设置，提升整体教学质量
 4. **随时随地学习**: 基于 {self.platform.upper()} 平台，支持碎片化学习场景，学习进度跨设备同步
 """,
-            "healthcare": f"""
+            "healthcare": """
 **核心价值**:
 
 1. **就医流程优化**: 将挂号-就诊-取药全流程线上化，患者平均等待时间减少 70%，告别排队难题
@@ -2011,7 +2011,7 @@ const theme: ThemeConfig = {
 3. **精准诊疗辅助**: 基于历史数据和临床知识库提供诊断建议，降低误诊风险，提升诊疗质量
 4. **合规安全保障**: 严格遵循医疗数据安全标准（HIPAA / 《个人信息保护法》），确保患者隐私数据全链路加密
 """,
-            "ecommerce": f"""
+            "ecommerce": """
 **核心价值**:
 
 1. **转化率提升**: 通过个性化推荐和智能搜索，将商品发现到下单的转化率提升 35%，减少用户决策成本
@@ -2019,7 +2019,7 @@ const theme: ThemeConfig = {
 3. **全链路体验**: 从浏览、下单、支付到物流追踪、售后服务，每个环节都经过精心设计，NPS 目标 60+
 4. **数据赋能增长**: 实时销售数据分析、用户行为洞察、智能营销建议，帮助商家科学决策
 """,
-            "fintech": f"""
+            "fintech": """
 **核心价值**:
 
 1. **交易安全可靠**: 多重安全认证与实时风控系统，资金操作全链路加密，年欺诈率控制在 0.01% 以下
@@ -2027,7 +2027,7 @@ const theme: ThemeConfig = {
 3. **合规自动化**: 内置 KYC/AML 流程自动化、监管报告自动生成，合规工作量减少 80%
 4. **资产全景视图**: 跨账户、跨资产类别的统一资产面板，一目了然掌握财务状况
 """,
-            "recruitment": f"""
+            "recruitment": """
 **核心价值**:
 
 1. **匹配效率提升**: 智能简历解析与职位匹配算法，将人岗匹配准确率提升至 85%，招聘周期缩短 40%
@@ -2035,7 +2035,7 @@ const theme: ThemeConfig = {
 3. **招聘流程自动化**: 从职位发布、简历筛选到面试安排、录用通知，全流程线上化，HR 工作效率提升 60%
 4. **人才数据洞察**: 行业薪资趋势、人才流动分析、竞争对手招聘动态，帮助企业制定更有竞争力的人才策略
 """,
-            "content": f"""
+            "content": """
 **核心价值**:
 
 1. **内容消费效率**: 智能推荐算法匹配用户兴趣，内容发现效率提升 50%，减少信息噪音
@@ -2043,7 +2043,7 @@ const theme: ThemeConfig = {
 3. **社区活力**: 优质互动机制设计，用户日均停留时长提升 40%，核心用户 7 日留存率目标 55%+
 4. **内容变现通路**: 打通付费订阅、打赏、广告分成等多元变现渠道，让优质内容获得合理回报
 """,
-            "saas": f"""
+            "saas": """
 **核心价值**:
 
 1. **团队协作效率**: 统一工作平台消除信息孤岛，跨部门协作效率提升 45%，减少重复沟通
@@ -4764,7 +4764,7 @@ spec:
         lines.extend(["", "**核心来源域名**:"])
         if isinstance(sources, list) and sources:
             for item in sources[:5]:
-                if isinstance(item, (list, tuple)) and len(item) >= 2:
+                if isinstance(item, list | tuple) and len(item) >= 2:
                     lines.append(f"- {item[0]}: {item[1]} 次引用")
         else:
             lines.append("- 暂无可统计域名数据")

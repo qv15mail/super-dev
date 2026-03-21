@@ -8,6 +8,7 @@ import {
   FolderTree,
   LifeBuoy,
   Package,
+  RefreshCw,
   Search,
   Sparkles,
   Terminal,
@@ -64,6 +65,9 @@ type Content = {
   pipelineTitle: string;
   pipelineBody: string;
   pipelineSteps: PipelineStep[];
+  controlTitle: string;
+  controlBody: string;
+  controlCards: { title: string; body: string; code: string }[];
   operationsTitle: string;
   operationsBody: string;
   operationsCards: { title: string; body: string; bullets: string[] }[];
@@ -100,6 +104,7 @@ const zhContent: Content = {
     { id: 'triggers', label: '触发方式', icon: Command },
     { id: 'hosts', label: '宿主矩阵', icon: Terminal },
     { id: 'pipeline', label: '流水线', icon: Workflow },
+    { id: 'control', label: '流程控制', icon: RefreshCw },
     { id: 'operations', label: '知识与门禁', icon: FolderTree },
     { id: 'commands', label: '常用命令', icon: Package },
     { id: 'troubleshooting', label: '排障', icon: LifeBuoy },
@@ -203,6 +208,25 @@ const zhContent: Content = {
     { step: '08', title: '质量门禁', body: '执行 UI Review、红队、安全、性能和架构阈值检查。' },
     { step: '09', title: '交付与发布演练', body: '交付包 ready、演练 passed、release readiness 通过后才算完成。' },
   ],
+  controlTitle: '流程控制',
+  controlBody: '如果项目已经进入中后段，不需要从头再跑。你可以查看当前状态，回到某个阶段，直接跳到某个阶段，或者手动确认关键门后继续推进。',
+  controlCards: [
+    {
+      title: '回到三文档阶段',
+      body: '用户补需求、业务范围变化、或者需要重做方案时，直接回到 docs 阶段更新三文档，再继续后续流程。',
+      code: 'super-dev run prd\nsuper-dev run architecture\nsuper-dev run uiux\n# 或直接回到三文档阶段\nsuper-dev jump docs',
+    },
+    {
+      title: '回到前端 / 后端 / 质量阶段',
+      body: 'UI 重做、接口调整、交付前复检，都可以从对应阶段重新顺序推进，不必从 research 再跑一遍。',
+      code: 'super-dev run frontend\nsuper-dev run backend\nsuper-dev run quality',
+    },
+    {
+      title: '跳转与确认',
+      body: '如果你已经明确目标阶段，可以直接 jump；如果只是要清掉某个关键门，则使用 confirm。',
+      code: 'super-dev status\nsuper-dev jump quality\nsuper-dev confirm docs --comment "三文档已确认"\nsuper-dev confirm preview --comment "前端预览已确认"\nsuper-dev run --resume',
+    },
+  ],
   operationsTitle: '知识库与门禁',
   operationsBody: '本地知识库、确认门、运行验证和交付标准决定了这条流水线如何执行。',
   operationsCards: [
@@ -266,6 +290,11 @@ const zhContent: Content = {
       filename: 'Pipeline Gates',
     },
     {
+      title: '流程控制',
+      code: 'super-dev status\nsuper-dev run research\nsuper-dev run prd\nsuper-dev run architecture\nsuper-dev run uiux\nsuper-dev run frontend\nsuper-dev run backend\nsuper-dev run quality\nsuper-dev jump docs\nsuper-dev jump quality\nsuper-dev confirm docs --comment "三文档已确认"',
+      filename: 'Workflow Control',
+    },
+    {
       title: '质量 / 发布 / 更新',
       code: 'super-dev quality --type all\nsuper-dev release proof-pack\nsuper-dev release readiness --verify-tests\nsuper-dev update --check\nsuper-dev update',
       filename: 'Quality & Release',
@@ -302,6 +331,7 @@ const enContent: Content = {
     { id: 'triggers', label: 'Trigger Model', icon: Command },
     { id: 'hosts', label: 'Host Matrix', icon: Terminal },
     { id: 'pipeline', label: 'Pipeline', icon: Workflow },
+    { id: 'control', label: 'Workflow Control', icon: RefreshCw },
     { id: 'operations', label: 'Knowledge & Gates', icon: FolderTree },
     { id: 'commands', label: 'Commands', icon: Package },
     { id: 'troubleshooting', label: 'Troubleshooting', icon: LifeBuoy },
@@ -405,6 +435,25 @@ const enContent: Content = {
     { step: '08', title: 'Quality gates', body: 'Run UI review, red-team review, security, performance, and architecture threshold checks.' },
     { step: '09', title: 'Delivery & release rehearsal', body: 'Only finish after the delivery package is ready and release rehearsal passes.' },
   ],
+  controlTitle: 'Workflow control',
+  controlBody: 'If the project is already in a later stage, you do not need to restart from zero. Inspect the current state, return to a phase, jump to a phase, or manually clear a gate and continue.',
+  controlCards: [
+    {
+      title: 'Return to the three core docs',
+      body: 'When scope changes or the user adds requirements, move back to docs and update the PRD / Architecture / UI/UX set before continuing.',
+      code: 'super-dev run prd\nsuper-dev run architecture\nsuper-dev run uiux\n# or return to the docs stage\nsuper-dev jump docs',
+    },
+    {
+      title: 'Return to frontend / backend / quality',
+      body: 'Use phase control when the UI needs another pass, APIs must be realigned, or quality checks must be rerun before release.',
+      code: 'super-dev run frontend\nsuper-dev run backend\nsuper-dev run quality',
+    },
+    {
+      title: 'Jump and confirm',
+      body: 'Use jump when you already know the target phase. Use confirm when a workflow gate must be cleared manually.',
+      code: 'super-dev status\nsuper-dev jump quality\nsuper-dev confirm docs --comment "core docs approved"\nsuper-dev confirm preview --comment "preview approved"\nsuper-dev run --resume',
+    },
+  ],
   operationsTitle: 'Knowledge and gates',
   operationsBody: 'Local knowledge, approval gates, runtime verification, and delivery standards define how the workflow runs.',
   operationsCards: [
@@ -466,6 +515,11 @@ const enContent: Content = {
       title: 'Approve & resume',
       code: 'super-dev review docs --status confirmed --comment "core docs approved"\nsuper-dev run --resume',
       filename: 'Pipeline Gates',
+    },
+    {
+      title: 'Workflow control',
+      code: 'super-dev status\nsuper-dev run research\nsuper-dev run prd\nsuper-dev run architecture\nsuper-dev run uiux\nsuper-dev run frontend\nsuper-dev run backend\nsuper-dev run quality\nsuper-dev jump docs\nsuper-dev jump quality\nsuper-dev confirm docs --comment "core docs approved"',
+      filename: 'Workflow Control',
     },
     {
       title: 'Quality / release / update',
@@ -533,7 +587,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             <div className="max-w-[860px]">
               <div className="mb-5 flex flex-wrap items-center gap-2">
                 <Badge variant="version">{content.heroKicker}</Badge>
-                <Badge variant="certified">v2.0.11</Badge>
+                <Badge variant="certified">v2.1.0</Badge>
                 <Badge variant="compatible">{locale === 'en' ? 'Bilingual' : '中英双语'}</Badge>
               </div>
               <h1 className="max-w-[900px] text-4xl font-bold leading-[1.08] tracking-tight text-text-primary sm:text-5xl lg:text-[3.5rem]">
@@ -729,7 +783,19 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
               </div>
             </SectionShell>
 
-            <SectionShell id="operations" icon={FolderTree} label={content.sections[6].label} title={content.operationsTitle} body={content.operationsBody}>
+            <SectionShell id="control" icon={RefreshCw} label={content.sections[6].label} title={content.controlTitle} body={content.controlBody}>
+              <div className="grid gap-4 lg:grid-cols-3">
+                {content.controlCards.map((card) => (
+                  <div key={card.title} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
+                    <h3 className="mb-3 text-lg font-semibold text-text-primary">{card.title}</h3>
+                    <p className="mb-4 text-sm leading-7 text-text-secondary">{card.body}</p>
+                    <CodeBlock code={card.code} filename={locale === 'en' ? 'Control' : '控制'} />
+                  </div>
+                ))}
+              </div>
+            </SectionShell>
+
+            <SectionShell id="operations" icon={FolderTree} label={content.sections[7].label} title={content.operationsTitle} body={content.operationsBody}>
               <div className="space-y-4">
                 {content.operationsCards.map((card) => (
                   <div key={card.title} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
@@ -748,7 +814,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
               </div>
             </SectionShell>
 
-            <SectionShell id="commands" icon={Package} label={content.sections[7].label} title={content.commandsTitle} body={content.commandsBody}>
+            <SectionShell id="commands" icon={Package} label={content.sections[8].label} title={content.commandsTitle} body={content.commandsBody}>
               <div className="space-y-4">
                 {content.commands.map((command) => (
                   <div key={command.title} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
@@ -759,7 +825,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
               </div>
             </SectionShell>
 
-            <SectionShell id="troubleshooting" icon={LifeBuoy} label={content.sections[8].label} title={content.troubleshootingTitle} body={content.troubleshootingBody}>
+            <SectionShell id="troubleshooting" icon={LifeBuoy} label={content.sections[9].label} title={content.troubleshootingTitle} body={content.troubleshootingBody}>
               <div className="space-y-4">
                 <div className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
                   <h3 className="mb-4 text-lg font-semibold text-text-primary">{locale === 'en' ? 'Troubleshooting order' : '排查顺序'}</h3>

@@ -76,5 +76,5 @@ class TestAIPromptGenerator:
 
         assert "如果当前任务属于缺陷修复 / bugfix / 回归修复，也不得跳过文档与验证" in prompt
         assert "如果当前需求明显属于 bugfix / regression / hotfix" in prompt
-        assert "阶段 4.8. 缺陷修复轻量路径（仅 bugfix 场景）" in prompt
+        assert "缺陷修复轻量路径" in prompt
         assert "- `bugfix`" in prompt

@@ -45,9 +45,11 @@ class SkillManager:
         "aider": "~/.aider/skills",
         "claude-code": "~/.claude/skills",
         "cline": "~/.cline/skills",
+        "copilot-cli": "~/.copilot/skills",
         "cursor-cli": "~/.cursor/skills",
         "cursor": "~/.cursor/skills",
         "gemini-cli": "~/.gemini/skills",
+        "kilo-code": "~/.kilocode/skills",
         "kimi-cli": "~/.kimi/skills",
         "kiro-cli": "~/.kiro/skills",
         "kiro": "~/.kiro/skills",
@@ -160,8 +162,14 @@ class SkillManager:
         return source.startswith("http://") or source.startswith("https://") or source.endswith(".git")
 
     def _validate_git_source(self, source: str) -> None:
-        if source.startswith("-"):
-            raise ValueError("Invalid git source")
+        """验证 Git 源地址安全性"""
+        dangerous_chars = [";", "|", "&", "`", "$", "(", ")", "{", "}", "<", ">", "\n", "\r"]
+        if any(c in source for c in dangerous_chars):
+            raise ValueError(f"Git 源地址包含危险字符: {source}")
+        if source.startswith("-") or source.startswith("--"):
+            raise ValueError(f"Git 源地址不允许以 - 开头: {source}")
+        if not (source.startswith("https://") or source.startswith("http://") or source.endswith(".git")):
+            raise ValueError(f"Git 源地址格式无效，必须以 https:// 或 http:// 开头: {source}")
 
     def _install_from_git(
         self,
@@ -318,7 +326,7 @@ description: Super Dev pipeline governance for research-first, commercial-grade 
 ---
 # {skill_name} - Super Dev AI Coding Skill
 
-> 版本: 2.0.11 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
+> 版本: 2.0.12 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
 
 ---
 

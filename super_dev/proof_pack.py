@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,6 +18,8 @@ from typing import Any
 from .release_readiness import ReleaseReadinessEvaluator
 from .review_state import load_docs_confirmation, load_ui_revision
 from .specs import SpecValidator
+
+_logger = logging.getLogger("super_dev.proof_pack")
 
 
 @dataclass
@@ -431,7 +434,8 @@ class ProofPackBuilder:
             return ProofPackArtifact(name="Frontend Runtime", status="missing", summary="frontend runtime report missing")
         try:
             payload = json.loads(file_path.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as e:
+            _logger.debug(f"Failed to parse frontend runtime JSON: {e}")
             payload = {}
         passed = bool(payload.get("passed", False)) if isinstance(payload, dict) else False
         return ProofPackArtifact(
@@ -448,7 +452,8 @@ class ProofPackBuilder:
             return ProofPackArtifact(name="UI Review", status="missing", summary="UI review report missing")
         try:
             payload = json.loads(file_path.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as e:
+            _logger.debug(f"Failed to parse UI review JSON: {e}")
             payload = {}
         score = payload.get("score") if isinstance(payload, dict) else None
         critical = int(payload.get("critical_count", 0)) if isinstance(payload, dict) else 0
@@ -481,7 +486,8 @@ class ProofPackBuilder:
             return ProofPackArtifact(name="Delivery Manifest", status="missing", summary="delivery manifest missing")
         try:
             payload = json.loads(file_path.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as e:
+            _logger.debug(f"Failed to parse delivery manifest JSON: {e}")
             payload = {}
         ready = isinstance(payload, dict) and payload.get("status") == "ready"
         summary = f"status={payload.get('status', 'unknown')}" if isinstance(payload, dict) else "manifest unreadable"
@@ -500,7 +506,8 @@ class ProofPackBuilder:
             return ProofPackArtifact(name="Release Rehearsal", status="missing", summary="rehearsal report missing")
         try:
             payload = json.loads(file_path.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as e:
+            _logger.debug(f"Failed to parse rehearsal report JSON: {e}")
             payload = {}
         passed = bool(payload.get("passed", False)) if isinstance(payload, dict) else False
         summary = f"score={payload.get('score', 'unknown')}, passed={passed}" if isinstance(payload, dict) else "report unreadable"

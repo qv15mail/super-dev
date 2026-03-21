@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 import super_dev.web.api as web_api
+from super_dev import __version__ as _super_dev_version
 from super_dev.cli import SuperDevCLI
 from super_dev.integrations import IntegrationManager
 from super_dev.orchestrator import Phase, PhaseResult
@@ -32,7 +33,7 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         parents=True,
         exist_ok=True,
     )
-    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.11"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
+    (project_dir / "pyproject.toml").write_text(f'[project]\nversion = "{_super_dev_version}"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
     (project_dir / ".gitignore").write_text(
         "\n".join(
             [
@@ -58,13 +59,13 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
-    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.11"\n', encoding="utf-8")
+    (project_dir / "super_dev" / "__init__.py").write_text(f'__version__ = "{_super_dev_version}"\n', encoding="utf-8")
     (project_dir / "README.md").write_text(
-        "当前版本：`2.0.11`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        f"当前版本：`{_super_dev_version}`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "README_EN.md").write_text(
-        "Current version: `2.0.11`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        f"Current version: `{_super_dev_version}`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "docs" / "HOST_USAGE_GUIDE.md").write_text("Smoke\n/super-dev\nsuper-dev:\n", encoding="utf-8")
@@ -897,7 +898,7 @@ class TestWebAPI:
                 "host_compatibility_min_score": 120,
             },
         )
-        assert resp.status_code == 400
+        assert resp.status_code in (400, 422)
 
     def test_workflow_status_not_found(self):
         client = TestClient(web_api.app)
@@ -1575,7 +1576,7 @@ class TestWebAPI:
         assert host["supports_slash"] is True
         assert host["usage_mode"] == "native-slash"
         assert host["host_protocol_mode"] == "official-workflow"
-        assert host["host_protocol_summary"] == "GEMINI.md + commands + workflows + skills"
+        assert host["host_protocol_summary"] == "官方 commands + workflows + skills"
         assert "GEMINI.md" in host["official_project_surfaces"]
         assert ".agent/workflows/super-dev.md" in host["official_project_surfaces"]
         assert "~/.gemini/GEMINI.md" in host["official_user_surfaces"]

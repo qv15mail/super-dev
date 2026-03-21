@@ -10,6 +10,7 @@
 import asyncio
 import glob
 import json
+import logging
 import os
 import re
 import shutil
@@ -26,9 +27,15 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from super_dev import __description__, __version__
+from super_dev.analyzer import (
+    DependencyGraphBuilder,
+    ImpactAnalyzer,
+    RegressionGuardBuilder,
+    RepoMapBuilder,
+)
 from super_dev.catalogs import (
     BACKEND_TEMPLATE_CATALOG,
     CICD_PLATFORM_CATALOG,
@@ -43,7 +50,6 @@ from super_dev.catalogs import (
     PLATFORM_CATALOG,
     host_path_candidates,
 )
-from super_dev.analyzer import DependencyGraphBuilder, ImpactAnalyzer, RegressionGuardBuilder, RepoMapBuilder
 from super_dev.config import ConfigManager
 from super_dev.deployers import CICDGenerator
 from super_dev.experts import (
@@ -84,20 +90,34 @@ try:
 except ImportError:
     fcntl = None
 
+_api_logger = logging.getLogger("super_dev.web.api")
+
+# ==================== 路径安全 ====================
+
+
+def _validate_project_dir(project_dir: str) -> Path:
+    """验证项目目录路径，防止路径遍历攻击"""
+    segments = project_dir.replace("\\", "/").split("/")
+    if ".." in segments:
+        raise HTTPException(status_code=400, detail="project_dir 不允许包含 .. 路径遍历")
+    normalized = Path(project_dir).resolve()
+    return normalized
+
+
 # ==================== 数据模型 ====================
 
 class ProjectInitRequest(BaseModel):
     """项目初始化请求"""
-    name: str
-    description: str = ""
+    name: str = Field(..., min_length=1, max_length=200)
+    description: str = Field("", max_length=5000)
     platform: str = "web"
     frontend: str = "react"
     backend: str = "node"
     domain: str = ""
     language_preferences: list[str] = []
-    quality_gate: int = 80
-    host_compatibility_min_score: int = 80
-    host_compatibility_min_ready_hosts: int = 1
+    quality_gate: int = Field(80, ge=0, le=100)
+    host_compatibility_min_score: int = Field(80, ge=0, le=100)
+    host_compatibility_min_ready_hosts: int = Field(1, ge=0, le=50)
     host_profile_targets: list[str] = []
     host_profile_enforce_selected: bool = False
 
@@ -402,7 +422,8 @@ def _load_persisted_run_state(project_dir: Path, run_id: str) -> dict[str, Any] 
         return None
     try:
         data = json.loads(file_path.read_text(encoding="utf-8"))
-    except Exception:
+    except Exception as e:
+        _api_logger.debug(f"Failed to load persisted run state for {run_id}: {e}")
         return None
     return data if isinstance(data, dict) else None
 
@@ -450,7 +471,8 @@ def _list_persisted_runs(project_dir: Path, limit: int = 20) -> list[dict[str, A
             loaded = json.loads(file_path.read_text(encoding="utf-8"))
             if isinstance(loaded, dict):
                 data = loaded
-        except Exception:
+        except Exception as e:
+            _api_logger.debug(f"Failed to load persisted run file {file_path.name}: {e}")
             data = None
         if data is not None:
             runs.append(data)
@@ -479,7 +501,8 @@ def _detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = Non
         frontend_runtime_path = str(latest_frontend_runtime)
         try:
             frontend_runtime_payload = json.loads(latest_frontend_runtime.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as e:
+            _api_logger.debug(f"Failed to parse frontend runtime JSON: {e}")
             frontend_runtime_payload = {}
         if isinstance(frontend_runtime_payload, dict):
             frontend_runtime_passed = bool(frontend_runtime_payload.get("passed", False))
@@ -503,7 +526,8 @@ def _detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = Non
         delivery_manifest_path = str(latest_manifest)
         try:
             manifest_payload = json.loads(latest_manifest.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as e:
+            _api_logger.debug(f"Failed to parse delivery manifest JSON: {e}")
             manifest_payload = {}
         if isinstance(manifest_payload, dict):
             delivery_manifest_ready = str(manifest_payload.get("status", "")).strip().lower() == "ready"
@@ -516,7 +540,8 @@ def _detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = Non
         rehearsal_report_path = str(latest_rehearsal_report)
         try:
             rehearsal_payload = json.loads(latest_rehearsal_report.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as e:
+            _api_logger.debug(f"Failed to parse rehearsal report JSON: {e}")
             rehearsal_payload = {}
         if isinstance(rehearsal_payload, dict):
             rehearsal_report_passed = bool(rehearsal_payload.get("passed", False))
@@ -537,7 +562,8 @@ def _detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = Non
         knowledge_summary["cache_path"] = str(latest_bundle)
         try:
             payload = json.loads(latest_bundle.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as e:
+            _api_logger.debug(f"Failed to parse knowledge bundle JSON: {e}")
             payload = {}
         if isinstance(payload, dict):
             local_knowledge = payload.get("local_knowledge", [])
@@ -1500,7 +1526,7 @@ def _collect_workflow_artifact_files(project_dir_path: Path) -> list[Path]:
 
 
 def _resolve_run_project_dir(run_id: str, project_dir: str) -> tuple[dict[str, Any], Path]:
-    requested_project_dir = Path(project_dir).resolve()
+    requested_project_dir = _validate_project_dir(project_dir)
     run = _get_run_state(run_id, requested_project_dir)
     if run is None:
         raise HTTPException(status_code=404, detail=f"运行记录不存在: {run_id}")
@@ -1520,8 +1546,8 @@ def _load_ui_review_summary(project_dir_path: Path) -> dict[str, Any] | None:
                 if md_path.exists():
                     payload.setdefault("report_path", str(md_path))
             return payload
-        except Exception:
-            pass
+        except Exception as e:
+            _api_logger.debug(f"Failed to parse UI review JSON: {e}")
     return None
 
 
@@ -1768,7 +1794,8 @@ async def health_check():
 async def get_config(project_dir: str = ".") -> dict:
     """获取项目配置"""
     try:
-        manager = ConfigManager(Path(project_dir))
+        project_dir_path = _validate_project_dir(project_dir)
+        manager = ConfigManager(project_dir_path)
         if not manager.exists():
             raise HTTPException(status_code=404, detail="项目未初始化")
 
@@ -1800,7 +1827,8 @@ async def get_config(project_dir: str = ".") -> dict:
 async def get_policy(project_dir: str = ".") -> dict[str, Any]:
     """获取 pipeline policy"""
     try:
-        manager = PipelinePolicyManager(Path(project_dir))
+        project_dir_path = _validate_project_dir(project_dir)
+        manager = PipelinePolicyManager(project_dir_path)
         policy = manager.load()
         return _build_policy_response(policy=policy, manager=manager)
     except HTTPException:
@@ -1837,7 +1865,8 @@ async def update_policy(
 ) -> dict[str, Any]:
     """更新 pipeline policy"""
     try:
-        manager = PipelinePolicyManager(Path(project_dir))
+        project_dir_path = _validate_project_dir(project_dir)
+        manager = PipelinePolicyManager(project_dir_path)
         preset_name = request.preset.strip().lower() if isinstance(request.preset, str) else ""
         if preset_name:
             current = manager.build_preset(preset_name)
@@ -1926,7 +1955,8 @@ async def update_policy(
 async def init_project(request: ProjectInitRequest, project_dir: str = ".") -> dict:
     """初始化项目"""
     try:
-        manager = ConfigManager(Path(project_dir))
+        project_dir_path = _validate_project_dir(project_dir)
+        manager = ConfigManager(project_dir_path)
         if manager.exists():
             raise HTTPException(status_code=400, detail="项目已初始化")
 
@@ -1970,7 +2000,8 @@ async def update_config(
 ) -> dict:
     """更新项目配置"""
     try:
-        manager = ConfigManager(Path(project_dir))
+        project_dir_path = _validate_project_dir(project_dir)
+        manager = ConfigManager(project_dir_path)
         if not manager.exists():
             raise HTTPException(status_code=404, detail="项目未初始化")
 
@@ -1992,7 +2023,7 @@ async def run_workflow(
 ) -> WorkflowRunResponse:
     """运行工作流"""
     try:
-        project_dir_path = Path(project_dir).resolve()
+        project_dir_path = _validate_project_dir(project_dir)
         manager = ConfigManager(project_dir_path)
         if not manager.exists():
             raise HTTPException(status_code=404, detail="项目未初始化")
@@ -2198,7 +2229,7 @@ async def run_workflow(
 @app.get("/api/workflow/status/{run_id}")
 async def get_workflow_status(run_id: str, project_dir: str = ".") -> dict:
     """获取工作流状态"""
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     run = _get_run_state(run_id, project_dir_path)
     if run is None:
         raise HTTPException(status_code=404, detail=f"运行记录不存在: {run_id}")
@@ -2210,7 +2241,7 @@ async def get_workflow_status(run_id: str, project_dir: str = ".") -> dict:
 @app.get("/api/workflow/docs-confirmation")
 async def get_workflow_docs_confirmation(project_dir: str = ".") -> dict:
     """获取三文档确认状态。"""
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     payload = load_docs_confirmation(project_dir_path) or {}
     return {
         "project_dir": str(project_dir_path),
@@ -2231,7 +2262,7 @@ async def update_workflow_docs_confirmation(
     run_id: str = "",
 ) -> dict:
     """更新三文档确认状态。"""
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     payload = {
         "status": request.status,
         "comment": request.comment.strip(),
@@ -2252,7 +2283,7 @@ async def update_workflow_docs_confirmation(
 @app.get("/api/workflow/ui-revision")
 async def get_workflow_ui_revision(project_dir: str = ".") -> dict:
     """获取 UI 改版状态。"""
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     payload = load_ui_revision(project_dir_path) or {}
     return {
         "project_dir": str(project_dir_path),
@@ -2273,7 +2304,7 @@ async def update_workflow_ui_revision(
     run_id: str = "",
 ) -> dict:
     """更新 UI 改版状态。"""
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     payload = {
         "status": request.status,
         "comment": request.comment.strip(),
@@ -2294,7 +2325,7 @@ async def update_workflow_ui_revision(
 @app.get("/api/workflow/architecture-revision")
 async def get_workflow_architecture_revision(project_dir: str = ".") -> dict:
     """获取架构返工状态。"""
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     payload = load_architecture_revision(project_dir_path) or {}
     return {
         "project_dir": str(project_dir_path),
@@ -2315,7 +2346,7 @@ async def update_workflow_architecture_revision(
     run_id: str = "",
 ) -> dict:
     """更新架构返工状态。"""
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     payload = {
         "status": request.status,
         "comment": request.comment.strip(),
@@ -2336,7 +2367,7 @@ async def update_workflow_architecture_revision(
 @app.get("/api/workflow/quality-revision")
 async def get_workflow_quality_revision(project_dir: str = ".") -> dict:
     """获取质量返工状态。"""
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     payload = load_quality_revision(project_dir_path) or {}
     return {
         "project_dir": str(project_dir_path),
@@ -2357,7 +2388,7 @@ async def update_workflow_quality_revision(
     run_id: str = "",
 ) -> dict:
     """更新质量返工状态。"""
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     payload = {
         "status": request.status,
         "comment": request.comment.strip(),
@@ -2378,7 +2409,7 @@ async def update_workflow_quality_revision(
 @app.post("/api/workflow/cancel/{run_id}")
 async def cancel_workflow(run_id: str, project_dir: str = ".") -> dict:
     """取消工作流运行"""
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     run = _get_run_state(run_id, project_dir_path)
     if run is None:
         raise HTTPException(status_code=404, detail=f"运行记录不存在: {run_id}")
@@ -2425,8 +2456,10 @@ async def list_workflow_runs(project_dir: str = ".", limit: int = 20) -> dict:
     """列出工作流运行历史（最近优先）"""
     if limit < 1:
         raise HTTPException(status_code=400, detail="limit 必须大于 0")
+    if limit > 500:
+        limit = 500
 
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     runs = [_with_pipeline_summary(run, project_dir_path) for run in _list_persisted_runs(project_dir_path, limit=limit)]
     return {"runs": runs, "count": len(runs)}
 
@@ -2559,7 +2592,7 @@ async def generate_expert_advice(
     if not has_expert(expert_id):
         raise HTTPException(status_code=404, detail=f"未知专家: {expert_id}")
 
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     file_path, content = save_expert_advice(
         project_dir=project_dir_path,
         expert_id=expert_id,
@@ -2579,8 +2612,10 @@ async def get_expert_advice_history(project_dir: str = ".", limit: int = 20) -> 
     """列出已生成的专家建议历史。"""
     if limit < 1:
         raise HTTPException(status_code=400, detail="limit 必须大于 0")
+    if limit > 500:
+        limit = 500
 
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     items = list_expert_advice_history(project_dir_path, limit=limit)
     return {"items": items, "count": len(items)}
 
@@ -2588,7 +2623,7 @@ async def get_expert_advice_history(project_dir: str = ".", limit: int = 20) -> 
 @app.get("/api/experts/advice/content")
 async def get_expert_advice_content(file_name: str, project_dir: str = ".") -> dict:
     """读取某个专家建议内容。"""
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     try:
         file_path, content = read_expert_advice(project_dir_path, file_name)
     except FileNotFoundError:
@@ -2645,7 +2680,7 @@ async def doctor_hosts(
     force: bool = False,
 ) -> dict:
     """诊断宿主接入状态，并返回兼容性评分。"""
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     integration_manager = IntegrationManager(project_dir_path)
     available_targets = [item.name for item in integration_manager.list_targets()]
     detected_targets, detected_meta = _detect_host_targets(available_targets)
@@ -2736,7 +2771,7 @@ async def validate_hosts(
     auto: bool = False,
     skill_name: str = "super-dev-core",
 ) -> dict[str, Any]:
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     integration_manager = IntegrationManager(project_dir_path)
     available_targets = [item.name for item in integration_manager.list_targets()]
     detected_targets, detected_meta = _detect_host_targets(available_targets)
@@ -2802,7 +2837,7 @@ async def update_hosts_runtime_validation(
     project_dir: str = ".",
 ) -> dict[str, Any]:
     """更新宿主真人运行时验收状态。"""
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     integration_manager = IntegrationManager(project_dir_path)
     available_targets = [item.name for item in integration_manager.list_targets()]
     if request.host not in available_targets:
@@ -2849,7 +2884,7 @@ async def precheck_deploy_configs(
             detail=f"不支持的 cicd_platform: {cicd_platform}",
         )
 
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     target_files = _resolve_deploy_targets(cicd_platform, include_runtime)
     existing_files = [p for p in target_files if (project_dir_path / p).exists()]
     missing_files = [p for p in target_files if not (project_dir_path / p).exists()]
@@ -2926,7 +2961,7 @@ async def export_deploy_remediation(
             detail=f"不支持的 cicd_platform: {request.cicd_platform}",
         )
 
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     try:
         env_file_name = _validate_export_file_name(
             raw_name=request.env_file_name,
@@ -2988,7 +3023,7 @@ async def download_deploy_remediation_archive(
             detail=f"不支持的 cicd_platform: {cicd_platform}",
         )
 
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     generated = _generate_deploy_remediation_files(
         project_dir_path=project_dir_path,
         cicd_platform=cicd_platform,
@@ -3033,7 +3068,7 @@ async def generate_deploy_configs(
         )
     platform = _to_cicd_platform(request.cicd_platform)
 
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     config_manager = ConfigManager(project_dir_path)
     config = config_manager.config
 
@@ -3089,7 +3124,7 @@ async def get_release_readiness(
     project_dir: str = ".",
     verify_tests: bool = False,
 ) -> dict[str, Any]:
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     evaluator = ReleaseReadinessEvaluator(project_dir_path)
     report = evaluator.evaluate(verify_tests=verify_tests)
     files = evaluator.write(report)
@@ -3104,7 +3139,7 @@ async def get_release_proof_pack(
     project_dir: str = ".",
     verify_tests: bool = False,
 ) -> dict[str, Any]:
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     builder = ProofPackBuilder(project_dir_path)
     report = builder.build(verify_tests=verify_tests)
     files = builder.write(report)
@@ -3117,7 +3152,7 @@ async def get_release_proof_pack(
 
 @app.get("/api/analyze/repo-map")
 async def get_repo_map(project_dir: str = ".") -> dict[str, Any]:
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     builder = RepoMapBuilder(project_dir_path)
     report = builder.build()
     files = builder.write(report)
@@ -3133,7 +3168,7 @@ async def get_impact_analysis(
     description: str = "",
     files: list[str] | None = Query(default=None),
 ) -> dict[str, Any]:
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     analyzer = ImpactAnalyzer(project_dir_path)
     report = analyzer.build(description=description, files=files or [])
     written = analyzer.write(report)
@@ -3149,7 +3184,7 @@ async def get_regression_guard(
     description: str = "",
     files: list[str] | None = Query(default=None),
 ) -> dict[str, Any]:
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     builder = RegressionGuardBuilder(project_dir_path)
     report = builder.build(description=description, files=files or [])
     written = builder.write(report)
@@ -3161,7 +3196,7 @@ async def get_regression_guard(
 
 @app.get("/api/analyze/dependency-graph")
 async def get_dependency_graph(project_dir: str = ".") -> dict[str, Any]:
-    project_dir_path = Path(project_dir).resolve()
+    project_dir_path = _validate_project_dir(project_dir)
     builder = DependencyGraphBuilder(project_dir_path)
     report = builder.build()
     written = builder.write(report)

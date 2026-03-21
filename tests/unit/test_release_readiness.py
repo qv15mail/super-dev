@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from super_dev import __version__
 from super_dev.release_readiness import ReleaseReadinessEvaluator
 from super_dev.specs.generator import SpecGenerator
 
@@ -11,7 +12,7 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         parents=True,
         exist_ok=True,
     )
-    (project_dir / "pyproject.toml").write_text('[project]\nversion = "2.0.11"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
+    (project_dir / "pyproject.toml").write_text(f'[project]\nversion = "{__version__}"\n[project.scripts]\nsuper-dev = "super_dev.cli:main"\n', encoding="utf-8")
     (project_dir / ".gitignore").write_text(
         "\n".join(
             [
@@ -37,13 +38,13 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
-    (project_dir / "super_dev" / "__init__.py").write_text('__version__ = "2.0.11"\n', encoding="utf-8")
+    (project_dir / "super_dev" / "__init__.py").write_text(f'__version__ = "{__version__}"\n', encoding="utf-8")
     (project_dir / "README.md").write_text(
-        "当前版本：`2.0.11`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        f"当前版本：`{__version__}`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "README_EN.md").write_text(
-        "Current version: `2.0.11`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
+        f"Current version: `{__version__}`\npip install -U super-dev\nuv tool install super-dev\n/super-dev\nsuper-dev:\nsuper-dev update\n",
         encoding="utf-8",
     )
     (project_dir / "docs" / "HOST_USAGE_GUIDE.md").write_text(

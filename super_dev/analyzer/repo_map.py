@@ -9,7 +9,6 @@ from typing import Any
 
 from .analyzer import ProjectAnalyzer
 
-
 ENTRYPOINT_CANDIDATES = [
     "main.py",
     "app.py",

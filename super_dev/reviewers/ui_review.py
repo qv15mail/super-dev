@@ -10,6 +10,7 @@ UI 审查器 - 审查商业级 UI/UX 完成度
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import subprocess
@@ -21,6 +22,8 @@ from typing import Any
 from PIL import Image
 
 from ..design import UIIntelligenceAdvisor
+
+_logger = logging.getLogger("super_dev.reviewers.ui_review")
 
 
 @dataclass
@@ -617,7 +620,8 @@ class UIReviewReviewer:
                 text=True,
                 timeout=45,
             )
-        except Exception:
+        except Exception as e:
+            _logger.debug(f"Failed to capture preview screenshot: {e}")
             return None
 
         return screenshot_path if screenshot_path.exists() else None
@@ -631,7 +635,8 @@ class UIReviewReviewer:
                 width, height = rgb.size
                 sample = rgb.resize((min(220, width), min(220, height)))
                 pixels = list(sample.getdata())
-        except Exception:
+        except Exception as e:
+            _logger.debug(f"Failed to analyze screenshot: {e}")
             return {}
 
         if not pixels:
@@ -670,7 +675,8 @@ class UIReviewReviewer:
             import yaml  # type: ignore[import-untyped]
 
             return yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-        except Exception:
+        except Exception as e:
+            _logger.debug(f"Failed to load project config: {e}")
             return {}
 
     def _infer_product_type(self, description: str) -> str:
@@ -810,5 +816,6 @@ def shutil_which(command: str) -> str | None:
         import shutil
 
         return shutil.which(command)
-    except Exception:
+    except Exception as e:
+        _logger.debug(f"Failed to check command availability for {command}: {e}")
         return None

@@ -105,9 +105,42 @@ class AIPromptGenerator:
 
 ---
 
+## 多专家 Agent 架构
+
+Super Dev 内置 10 位专家 Agent，每位专家有独立的角色定义、专业目标、思维框架和质量标准。在不同阶段以不同专家的专业身份工作。
+
+### 阶段-专家映射
+
+| 阶段 | 主导专家 | 专业视角 |
+|:---|:---|:---|
+| 研究 | PM + ARCHITECT | 用户价值分析 + 技术可行性评估 |
+| PRD | PM | 需求拆解、用户故事、验收标准、商业规则 |
+| 架构 | ARCHITECT + DBA | 系统设计、技术选型、API 契约、数据建模 |
+| UI/UX | UI + UX | 视觉系统、设计 Token、组件规范、交互设计 |
+| Spec | PM + CODE | 任务分解、优先级排序、依赖分析 |
+| 前端 | CODE + UI | 组件实现、页面搭建、状态管理、交互还原 |
+| 后端 | CODE + DBA | API 实现、数据层、认证授权、性能优化 |
+| 质量 | QA + SECURITY | 测试策略、安全审查、质量门禁、合规检查 |
+| 交付 | DEVOPS + QA | CI/CD、部署配置、发布演练、交付打包 |
+
+### 专家角色画像
+
+{self._build_expert_profiles_section()}
+
+### 执行规则
+
+1. **角色切换**: 进入每个阶段时，必须以该阶段主导专家的身份、目标和思维框架工作
+2. **交叉审查**: 每个专家完成工作后，下一阶段的专家应验证前序产出是否满足自己的需求
+3. **冲突解决**: 当两个专家视角冲突时（如 ARCHITECT 要简单但 SECURITY 要复杂），以用户价值和安全底线为判断标准
+4. **知识传递**: 每个阶段的产出是下一阶段的输入，专家必须读取前序文档后再开始工作
+
+---
+
 ## 强制执行顺序
 
-### 阶段 0. 同类产品研究
+### 阶段 0. 同类产品研究（PM + ARCHITECT 专家主导）
+
+> 以产品经理的市场洞察 + 架构师的技术评估双重视角工作
 
 1. 如果当前宿主支持联网 / browse / search / web，请先使用宿主原生能力搜索与本需求相近的产品、官网、案例、文档或体验流程。
 2. 同时读取当前项目内的本地知识上下文：
@@ -127,7 +160,9 @@ class AIPromptGenerator:
    - 不应照搬的缺点与本项目的差异化方向
 5. 将研究结论写入 `output/{self.name}-research.md`，并在后续 PRD / 架构 / UIUX 中继承这些结论。
 
-### 阶段 1. 冻结核心文档
+### 阶段 1. 冻结核心文档（PM + ARCHITECT + UI/UX 专家协作）
+
+> PRD 由 PM 专家主导（关注用户价值、商业规则）；架构由 ARCHITECT 专家主导（关注技术选型、系统边界）；UIUX 由 UI/UX 设计师主导（关注视觉系统、组件规范、品牌一致性）
 
 1. 先完整读取 `output/*-research.md`
 1.0 先读取 `.super-dev/WORKFLOW.md` 与 `output/{self.name}-bootstrap.md`（若存在），确认该仓库已经完成 bootstrap，以及固定触发方式、阶段顺序和产物路径。
@@ -150,46 +185,60 @@ class AIPromptGenerator:
 3. 如果用户提出修改意见，先只修改文档并再次汇报，不得跳过确认门。
 4. **未经用户明确确认，不得创建 `.super-dev/changes/*`、不得开始前端、不得开始后端、不得声称进入实现阶段。**
 
-### 阶段 2. 创建 Spec 与任务
+### 阶段 2. 创建 Spec 与任务（PM + CODE 专家协作）
+
+> 以产品经理的需求拆解能力 + 代码专家的技术评估能力协作
 
 1. 仅在用户明确确认三份文档后，才允许创建 `.super-dev/changes/*/proposal.md` 与 `tasks.md`
 2. Spec 必须完整继承 research、PRD、架构、UIUX 中已经冻结的结论
 3. 创建 Spec 后，向用户说明本次 change id、任务总数、前后端实施顺序
 
-### 阶段 3. 前端优先实现并运行验证
+### 阶段 3. 前端优先实现并运行验证（CODE + UI 专家协作）
+
+> 以代码专家的工程能力 + UI 设计师的视觉标准协作，确保实现还原设计稿且代码质量达标
 
 1. 依据 `.super-dev/changes/*/tasks.md` 先实现前端骨架、关键页面和核心交互
 2. 前端必须先达到可运行、可演示、可审查状态，再进入后端主实现
 3. 必须主动运行前端并修复明显错误，再向用户汇报预览方式、页面状态与剩余风险
 
-### 阶段 4. 后端、联调、测试与交付
+### 阶段 4. 后端、联调、测试与交付（CODE + DBA + QA + DEVOPS 专家协作）
+
+> 代码专家负责 API 实现，DBA 专家负责数据层和迁移，QA 专家负责测试策略，DEVOPS 专家负责部署配置
 
 1. 在前端主流程可运行后，再实现后端 API、数据层、认证与联调
 2. 每完成一项任务立即标记 `[x]`
 3. 完成测试、质量门禁、交付清单后，才可以宣称项目完成
 
-### 阶段 4.5. UI 改版返工（用户提出 UI 不满意时强制执行）
+### 阶段 4.5. UI 改版返工（UI + UX 专家主导）
+
+> 切换回 UI/UX 设计师身份，从设计系统层面重新审视，而不是从代码层面打补丁
 
 1. 当用户明确表示 UI 不满意、需要改版、要重做视觉、页面太 AI 味时，禁止直接改 CSS 或局部样式。
 2. 必须先回到 `output/*-uiux.md`，更新视觉方向、字体系统、版式节奏、组件状态、CTA 层级或信任设计。
 3. 然后重做前端实现，并重新执行 frontend runtime 与 UI review。
 4. 只有在 UI 改版通过后，才允许继续后续交付动作。
 
-### 阶段 4.6. 架构返工（用户提出架构问题时强制执行）
+### 阶段 4.6. 架构返工（ARCHITECT + DBA 专家主导）
+
+> 切换回架构师身份，从系统全局视角重新评估，而不是在实现层面打补丁
 
 1. 当用户明确表示架构不合理、模块边界错误、技术方案需要重构、接口设计需要调整时，禁止直接跳到实现细节。
 2. 必须先回到 `output/*-architecture.md`，更新系统边界、模块拆分、依赖关系、接口契约、容错与扩展方案。
 3. 然后同步调整 Spec / tasks 与相关实现方案，再继续执行。
 4. 只有在架构返工通过后，才允许恢复后续实施动作。
 
-### 阶段 4.7. 质量返工（用户要求整改质量/安全问题时强制执行）
+### 阶段 4.7. 质量返工（QA + SECURITY 专家主导）
+
+> 切换回 QA 和安全专家身份，以质量和安全视角审视所有产出
 
 1. 当用户明确表示质量不达标、安全问题未解决、交付证据不完整、测试或门禁结果不可接受时，禁止直接宣称完成。
 2. 必须先修复相关质量问题，并重新执行 quality gate 与 release proof-pack。
 3. 如问题涉及文档、架构或 UI，同步回写对应 `output/*` 文档。
 4. 只有在质量返工通过后，才允许继续交付或恢复后续动作。
 
-### 阶段 4.8. 缺陷修复轻量路径（仅 bugfix 场景）
+### 阶段 4.8. 缺陷修复轻量路径（RCA + CODE 专家协作）
+
+> RCA 专家负责根因分析和风险评估，代码专家负责修复实现
 
 1. 如果当前需求是修复已有问题，仍然必须输出文档，但文档应聚焦于：问题现象、复现条件、影响范围、根因假设、修复边界、回归风险。
 2. 轻量 bugfix 文档也必须真实写入项目：
@@ -408,6 +457,23 @@ project-root/
         if len(collapsed) <= limit:
             return collapsed
         return collapsed[:limit].rstrip() + "\n[...内容已截断，请继续阅读源文档...]"
+
+    def _build_expert_profiles_section(self) -> str:
+        """构建专家画像段落，注入 AI 提示词"""
+        from ..orchestrator.experts import ExpertRole, get_expert_prompt_section
+
+        key_experts = [
+            ExpertRole.PM,
+            ExpertRole.ARCHITECT,
+            ExpertRole.UI,
+            ExpertRole.SECURITY,
+            ExpertRole.CODE,
+            ExpertRole.QA,
+        ]
+        sections = []
+        for role in key_experts:
+            sections.append(get_expert_prompt_section(role))
+        return "\n".join(sections)
 
     def _infer_product_type(self, description: str) -> str:
         text = description.lower()

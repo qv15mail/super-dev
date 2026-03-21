@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .impact import ImpactAnalyzer, ImpactAnalysisReport
+from .impact import ImpactAnalysisReport, ImpactAnalyzer
 
 
 @dataclass

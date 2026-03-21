@@ -53,7 +53,7 @@ def test_delivery_packager_ready(temp_project_dir: Path) -> None:
     name = "demo"
     _seed_required_files(temp_project_dir, name)
 
-    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.11")
+    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.12")
     result = packager.package(cicd_platform="all")
 
     assert result["status"] == "ready"
@@ -87,7 +87,7 @@ def test_delivery_packager_incomplete_without_migrations(temp_project_dir: Path)
         if file_path.is_file():
             file_path.unlink()
 
-    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.11")
+    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.12")
     result = packager.package(cicd_platform="all")
 
     assert result["status"] == "incomplete"
@@ -107,7 +107,7 @@ def test_delivery_packager_incomplete_with_pending_spec_tasks(temp_project_dir: 
         encoding="utf-8",
     )
 
-    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.11")
+    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.12")
     result = packager.package(cicd_platform="all")
 
     assert result["status"] == "incomplete"
@@ -127,7 +127,7 @@ def test_delivery_packager_uses_named_change_tasks_only(temp_project_dir: Path) 
         encoding="utf-8",
     )
 
-    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.11")
+    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.12")
     result = packager.package(cicd_platform="all")
 
     assert result["status"] == "ready"
@@ -143,7 +143,7 @@ def test_delivery_packager_incomplete_without_frontend_runtime_report(temp_proje
     (temp_project_dir / "output" / f"{name}-frontend-runtime.md").unlink()
     (temp_project_dir / "output" / f"{name}-frontend-runtime.json").unlink()
 
-    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.11")
+    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.0.12")
     result = packager.package(cicd_platform="all")
 
     assert result["status"] == "incomplete"

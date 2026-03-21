@@ -794,6 +794,11 @@ class QualityGateChecker:
         else:
             details = f"{detail_prefix}; 未发现明显 UI 商业级违例"
 
+        from ..design.ui_intelligence import UIIntelligenceAdvisor
+
+        checklist = UIIntelligenceAdvisor.PRE_DELIVERY_CHECKLIST
+        details += f" | 交付检查清单 ({len(checklist)} 项): " + "; ".join(checklist[:3]) + "..."
+
         return QualityCheck(
             name="UI 商业完成度",
             category="ui_quality",
@@ -1708,11 +1713,34 @@ class QualityGateChecker:
         """生成改进建议"""
         recommendations: list[str] = []
 
+        fix_command_map = [
+            ("PRD 文档", "运行 `super-dev run` 生成文档"),
+            ("架构文档", "运行 `super-dev run` 生成文档"),
+            ("UI/UX 文档", "运行 `super-dev run` 生成文档"),
+            ("安全", "运行 `super-dev quality --type security` 查看详情"),
+            ("测试", "运行 `pytest` 执行测试"),
+            ("Spec 任务", "运行 `super-dev spec list` 查看任务状态"),
+            ("宿主兼容性", "运行 `super-dev doctor --repair` 修复"),
+            ("演练", "运行 `super-dev release readiness` 检查"),
+            ("UI 质量", "运行 `super-dev review ui` 查看 UI 审查报告"),
+        ]
+
         for check in checks:
             if check.status == CheckStatus.FAILED:
-                recommendations.append(f"修复: {check.description}")
+                prefix = "修复"
             elif check.status == CheckStatus.WARNING:
-                recommendations.append(f"建议: {check.description}")
+                prefix = "建议"
+            else:
+                continue
+
+            description = check.description
+            fix_hint = ""
+            for keyword, command in fix_command_map:
+                if keyword in description:
+                    fix_hint = f" [修复: {command}]"
+                    break
+
+            recommendations.append(f"{prefix}: {description}{fix_hint}")
 
         return recommendations
 

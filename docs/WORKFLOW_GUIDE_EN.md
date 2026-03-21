@@ -1,4 +1,4 @@
-# Super Dev Workflow Guide (2.0.11)
+# Super Dev Workflow Guide (2.0.12)
 
 This is the practical handbook for running Super Dev in real projects. It covers:
 
@@ -43,6 +43,37 @@ Additional rules:
 - Bugfix work does not skip documentation; it follows a lighter patch path that captures symptoms, reproduction steps, impact scope, and regression risk before implementation.
 - The analysis stage excludes non-project source directories such as `.venv`, `site-packages`, and `node_modules`.
 - When the requirement is ambiguous, PRD should surface clarification questions first, and architecture should include a key sequence diagram by default.
+
+### Workflow control
+
+If the project is already in a later stage, you do not need to restart from zero.
+
+You can move the workflow back to a phase or jump directly to a phase:
+
+```bash
+super-dev status
+super-dev run research
+super-dev run prd
+super-dev run architecture
+super-dev run uiux
+super-dev run frontend
+super-dev run backend
+super-dev run quality
+super-dev jump docs
+super-dev jump frontend
+super-dev jump backend
+super-dev jump quality
+super-dev confirm docs --comment "core docs approved"
+super-dev confirm preview --comment "preview approved"
+super-dev run --resume
+```
+
+Usage:
+
+- `run <phase>`: rerun the selected phase or related document stage
+- `jump <phase>`: go directly to that phase and print impact hints
+- `confirm <phase>`: manually clear a gate
+- `--resume`: continue the paused workflow
 
 The document confirmation gate can be handled in the Web console or directly from the terminal:
 
