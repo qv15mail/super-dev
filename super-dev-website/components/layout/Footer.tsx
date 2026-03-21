@@ -108,7 +108,7 @@ export function Footer({ locale = 'zh' }: FooterProps) {
             >
               <span className="relative h-7 w-7 overflow-hidden rounded-lg border border-border-default/80 bg-bg-secondary/70 ring-1 ring-white/5 transition-all duration-150 group-hover:border-accent-blue/60">
                 <img
-                  src={assetPath('/super-dev-icon.svg')}
+                  src={assetPath('/logo.png')}
                   alt=""
                   className="h-full w-full object-cover"
                   aria-hidden="true"

@@ -106,9 +106,9 @@ export function Nav({ locale = 'zh' }: NavProps) {
             className="flex items-center gap-2.5 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue rounded-md"
             aria-label={copy.ariaHome}
           >
-            <span className="relative h-7 w-7 overflow-hidden rounded-lg border border-border-default/80 bg-bg-secondary/70 ring-1 ring-white/5 transition-all duration-150 group-hover:border-accent-blue/60">
+            <span className="relative h-10 w-10 overflow-hidden rounded-xl border border-border-default/80 bg-bg-secondary/70 ring-1 ring-white/5 transition-all duration-150 group-hover:border-accent-blue/60">
               <img
-                src={assetPath('/super-dev-icon.svg')}
+                src={assetPath('/logo.png')}
                 alt=""
                 className="h-full w-full object-cover"
                 aria-hidden="true"

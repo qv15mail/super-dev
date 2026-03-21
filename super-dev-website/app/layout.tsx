@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     icon: [
       { url: `${SITE_URL}favicon.svg`, type: 'image/svg+xml' },
       { url: `${SITE_URL}icon.svg`, type: 'image/svg+xml' },
-      { url: `${SITE_URL}super-dev-icon.svg`, type: 'image/svg+xml' },
+      { url: `${SITE_URL}logo.png`, type: 'image/svg+xml' },
     ],
     shortcut: `${SITE_URL}favicon.svg`,
     apple: `${SITE_URL}apple-icon.svg`,
@@ -59,7 +59,7 @@ export const metadata: Metadata = {
     description: '宿主继续负责编码与执行，Super Dev 负责完整开发流程和交付门禁。',
     images: [
       {
-        url: `${SITE_URL}super-dev-icon.svg`,
+        url: `${SITE_URL}logo.png`,
         width: 1200,
         height: 1200,
         alt: 'Super Dev — AI 编码工具的流程治理层',
@@ -70,7 +70,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Super Dev — AI 编码工具的流程治理层',
     description: '宿主继续负责编码与执行，Super Dev 负责完整开发流程和交付门禁。',
-    images: [`${SITE_URL}super-dev-icon.svg`],
+    images: [`${SITE_URL}logo.png`],
   },
   robots: {
     index: true,

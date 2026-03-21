@@ -40,6 +40,7 @@ const config: Config = {
       animation: {
         'marquee': 'marquee 40s linear infinite',
         'marquee2': 'marquee2 40s linear infinite',
+        'scroll': 'scroll 50s linear infinite',
         'fade-up': 'fadeUp 0.6s ease forwards',
         'blink': 'blink 1s step-end infinite',
       },
@@ -51,6 +52,10 @@ const config: Config = {
         marquee2: {
           '0%': { transform: 'translateX(100%)' },
           '100%': { transform: 'translateX(0%)' },
+        },
+        scroll: {
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-50%)' },
         },
         fadeUp: {
           '0%': { opacity: '0', transform: 'translateY(16px)' },

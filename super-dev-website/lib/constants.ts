@@ -31,9 +31,13 @@ export const HOSTS: Host[] = [
   { name: 'OpenCode', abbr: 'O', status: 'experimental', trigger: 'slash', protocol: 'commands + skills' },
   { name: 'Qoder CLI', abbr: 'Q', status: 'compatible', trigger: 'slash', protocol: 'commands + skills' },
   { name: 'Qoder', abbr: 'Q', status: 'experimental', trigger: 'slash', protocol: 'commands + rules + skills' },
-  { name: 'VS Code Copilot', abbr: 'V', status: 'experimental', trigger: 'text', protocol: 'copilot-instructions + AGENTS.md' },
+  { name: 'GitHub Copilot', abbr: 'G', status: 'experimental', trigger: 'text', protocol: 'copilot-instructions + AGENTS.md' },
   { name: 'Windsurf', abbr: 'W', status: 'experimental', trigger: 'slash', protocol: 'workflows + skills' },
   { name: 'Trae', abbr: 'T', status: 'compatible', trigger: 'text', protocol: 'project rules + compatibility skill' },
+  { name: 'Copilot CLI', abbr: 'C', status: 'experimental', trigger: 'text', protocol: 'copilot-instructions + AGENTS' },
+  { name: 'Roo Code', abbr: 'R', status: 'experimental', trigger: 'text', protocol: 'commands + rules + modes' },
+  { name: 'Kilo Code', abbr: 'K', status: 'experimental', trigger: 'text', protocol: 'rules' },
+  { name: 'Cline', abbr: 'C', status: 'experimental', trigger: 'text', protocol: '.clinerules + AGENTS' },
 ];
 
 export const SLASH_HOSTS = HOSTS.filter((host) => host.trigger === 'slash');
@@ -41,16 +45,16 @@ export const TEXT_TRIGGER_HOSTS = HOSTS.filter((host) => host.trigger === 'text'
 
 export const STATS = {
   zh: [
-    { value: '16', label: '主推宿主' },
-    { value: '12', label: '流水线阶段' },
-    { value: '3', label: '关键门禁' },
-    { value: 'MIT', label: '开源许可' },
+    { value: '20', label: '适配宿主' },
+    { value: '10', label: '专家 Agent' },
+    { value: '9', label: '流水线阶段' },
+    { value: '119', label: '配色方案' },
   ],
   en: [
-    { value: '16', label: 'Primary hosts' },
-    { value: '12', label: 'Pipeline phases' },
-    { value: '3', label: 'Critical gates' },
-    { value: 'MIT', label: 'License' },
+    { value: '20', label: 'Host integrations' },
+    { value: '10', label: 'Expert agents' },
+    { value: '9', label: 'Pipeline stages' },
+    { value: '119', label: 'Color palettes' },
   ],
 } as const;
 

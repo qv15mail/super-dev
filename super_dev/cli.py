@@ -8889,8 +8889,17 @@ super-dev start --idea "你的需求"
             self.console.print("[red]升级失败，请根据上面的命令手动执行[/red]")
             return completed.returncode
 
-        self.console.print("[green]✓ 升级命令已执行完成[/green]")
-        self.console.print("[dim]请重新打开终端或重新进入宿主会话，再执行 super-dev --version 验证版本[/dim]")
+        from rich.panel import Panel
+        self.console.print("")
+        self.console.print(Panel(
+            "[bold green]升级完成[/bold green]\n\n"
+            "  [bold]请关闭当前终端，重新打开后再使用 super-dev[/bold]\n\n"
+            "  [dim]当前进程仍加载旧版本代码，必须重启终端才能生效[/dim]\n"
+            "  [dim]验证: super-dev --version[/dim]",
+            border_style="green",
+            expand=True,
+            padding=(1, 2),
+        ))
         return 0
 
     def _fetch_latest_pypi_version(self) -> str | None:

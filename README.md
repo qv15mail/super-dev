@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="docs/assets/super-dev-logo.svg" alt="Super Dev - AI PIPELINE ORCHESTRATOR" width="600">
+<img src="docs/assets/super-dev-logo.png" alt="Super Dev - AI PIPELINE ORCHESTRATOR" width="600">
 
 ### 面向商业级交付的 AI 开发编排工具
 

@@ -1,4 +1,4 @@
-import { Archive, BadgeCheck, BookCopy, PackageCheck, ShieldCheck } from 'lucide-react';
+import { Archive, BadgeCheck, BookCopy, PackageCheck, ShieldCheck, Users } from 'lucide-react';
 import type { SiteLocale } from '@/lib/site-locale';
 
 const COPY = {
@@ -12,6 +12,7 @@ const COPY = {
       { icon: BookCopy, title: '本地知识库优先', body: 'knowledge/ 和 knowledge bundle 会优先进入 research、三文档、Spec、质量与交付。'},
       { icon: ShieldCheck, title: 'UI Review、Spec Quality 与 Release Readiness', body: '运行验证、质量门禁、Spec Quality 和发布检查都会明确产出结果，方便判断项目是否达到交付标准。'},
       { icon: Archive, title: '交付产物可审计', body: 'Repo Map、Dependency Graph、Impact Analysis、Regression Guard、Proof Pack 等交付证据都会落盘，便于复盘、交接和审查。'},
+      { icon: Users, title: '10 专家 Agent 协作', body: 'PM、架构师、UI/UX、安全、代码、DBA、QA、DevOps、RCA 十位专家各司其职，每个阶段以对应专家的专业标准约束宿主产出。'},
     ],
   },
   en: {
@@ -24,6 +25,7 @@ const COPY = {
       { icon: BookCopy, title: 'Local knowledge first', body: 'knowledge/ and knowledge bundles are reused in research, the three core docs, spec generation, quality, and delivery.'},
       { icon: ShieldCheck, title: 'UI Review, Spec Quality, and Release Readiness', body: 'The work is not done when code is generated. It must pass runtime validation, quality gates, spec-quality scoring, and release checks.'},
       { icon: Archive, title: 'Auditable delivery artifacts', body: 'Repo Map, Dependency Graph, Impact Analysis, Regression Guard, Proof Pack, and release artifacts are written to disk.'},
+      { icon: Users, title: '10-Expert Agent Collaboration', body: 'PM, Architect, UI/UX, Security, Code, DBA, QA, DevOps, and RCA experts each govern their stage, constraining host output to professional standards.'},
     ],
   },
 } as const;

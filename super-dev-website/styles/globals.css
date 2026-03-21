@@ -100,3 +100,5 @@
     scroll-behavior: auto !important;
   }
 }
+
+.group:hover .pause { animation-play-state: paused; }

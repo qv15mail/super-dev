@@ -1,7 +1,7 @@
 export type SiteLocale = 'zh' | 'en';
 
-export const SITE_BASE_PATH = process.env.NODE_ENV === 'production' ? '/super-dev' : '';
-export const SITE_URL = 'https://shangyankeji.github.io/super-dev/';
+export const SITE_BASE_PATH = '';
+export const SITE_URL = 'https://superdev.goder.ai/';
 
 export function assetPath(path: string): string {
   if (!path) return SITE_BASE_PATH || '/';

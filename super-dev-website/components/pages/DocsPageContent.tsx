@@ -93,8 +93,8 @@ const zhContent: Content = {
   heroBody:
     '这份文档说明安装方式、宿主接入、触发方式、流水线、代码库理解、回归守卫、知识库、门禁和交付要求。',
   heroStats: [
-    { label: '主推宿主', value: '16' },
-    { label: '触发模型', value: '2 种' },
+    { label: '适配宿主', value: '20' },
+    { label: '专家 Agent', value: '10' },
     { label: '核心阶段', value: '9 段' },
   ],
   sections: [
@@ -123,7 +123,7 @@ const zhContent: Content = {
   installBullets: [
     'pip 或 uv 会自动安装 Super Dev 的 Python 依赖。',
     '不会自动安装 Claude Code、Cursor、Trae、Gemini CLI、VS Code Copilot 等宿主本体。',
-    '终端输入 super-dev 后，会进入宿主安装引导，并把 16 个主推宿主的对应协议面写入宿主和项目。',
+    '终端输入 super-dev 后，会进入宿主安装引导，并把 20 个适配宿主的对应协议面写入宿主和项目。',
   ],
   installCode:
     'pip install -U super-dev\n# 或\nuv tool install super-dev\n\n# 打开安装引导\nsuper-dev\n\n# 更新到最新版\nsuper-dev update',

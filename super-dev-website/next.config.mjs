@@ -8,15 +8,16 @@
 
 
 const isDev = process.env.NODE_ENV !== 'production';
+const useCustomDomain = process.env.CUSTOM_DOMAIN === '1';
 const repoName = 'super-dev';
-const basePath = isDev ? '' : `/${repoName}`;
+const basePath = isDev || useCustomDomain ? '' : `/${repoName}`;
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'export',
   trailingSlash: true,
   basePath,
-  assetPrefix: isDev ? undefined : `${basePath}/`,
+  assetPrefix: isDev || useCustomDomain ? undefined : `${basePath}/`,
   images: {
     unoptimized: true,
     formats: ['image/avif', 'image/webp'],

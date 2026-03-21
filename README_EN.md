@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="docs/assets/super-dev-logo.svg" alt="Super Dev - AI PIPELINE ORCHESTRATOR" width="600">
+<img src="docs/assets/super-dev-logo.png" alt="Super Dev - AI PIPELINE ORCHESTRATOR" width="600">
 
 ### AI Pipeline Orchestrator for Commercial-Grade Delivery
 
