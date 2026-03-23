@@ -1,4 +1,4 @@
-# Super Dev 集成指南（2.0.12）
+# Super Dev 集成指南（2.1.1）
 
 > 宿主详细试用方式、是否支持 `/super-dev`、各宿主的正确入口，请优先查看：
 > [HOST_USAGE_GUIDE.md](/Users/weiyou/Documents/kaifa/super-dev/docs/HOST_USAGE_GUIDE.md)
@@ -149,7 +149,7 @@ super-dev task run <change_id>
 
 ### 1. 我只想用“super-dev 需求”模式
 
-可以，`2.0.12` 默认就是该模式。只要第一个参数不是子命令，就会自动进入完整流水线。
+可以，`2.1.1` 默认就是该模式。只要第一个参数不是子命令，就会自动进入完整流水线。
 
 ### 2. 我要给特定平台补装 Skill
 

@@ -6,6 +6,6 @@
 最后修改：2025-12-30
 """
 
-__version__ = "2.0.12"
+__version__ = "2.1.1"
 __author__ = "Excellent"
 __description__ = "超级开发战队 - 一个宿主内 AI 开发治理与编排工具"

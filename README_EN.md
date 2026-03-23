@@ -19,7 +19,7 @@
 
 ## Version
 
-Current version: `2.0.12`
+Current version: `2.1.1`
 
 ---
 
@@ -97,7 +97,7 @@ super-dev doctor              # diagnostics with certification grading
 
 ### 1. 10-Expert Agent Architecture
 
-v2.0.12 introduces ten domain-expert agents. Each expert is automatically injected into AI prompts at the corresponding pipeline stage, constraining the host to professional-grade output:
+v2.1.1 introduces ten domain-expert agents. Each expert is automatically injected into AI prompts at the corresponding pipeline stage, constraining the host to professional-grade output:
 
 | Expert | Role | Injection Stages |
 |--------|------|-----------------|
@@ -261,13 +261,13 @@ This generates `.super-dev/WORKFLOW.md` and `output/*-bootstrap.md` to lock down
 ### 3. Pin a specific version
 
 ```bash
-pip install super-dev==2.0.12
+pip install super-dev==2.1.1
 ```
 
 ### 4. Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.12
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.1.1
 ```
 
 ### 5. Source install for development
