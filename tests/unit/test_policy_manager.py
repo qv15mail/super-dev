@@ -47,8 +47,8 @@ def test_policy_manager_enterprise_preset(temp_project_dir: Path) -> None:
     assert policy_file.exists()
     loaded = manager.load()
     assert loaded.require_host_profile is True
-    assert loaded.enforce_required_hosts_ready is True
-    assert loaded.required_hosts
+    assert loaded.enforce_required_hosts_ready is False
+    assert loaded.required_hosts == []
 
 
 def test_validate_pipeline_args_blocks_skip_flags(temp_project_dir: Path) -> None:
@@ -115,7 +115,24 @@ def test_validate_pipeline_args_requires_latest_host_report_when_enforced(temp_p
 
 def test_validate_pipeline_args_checks_required_host_readiness(temp_project_dir: Path) -> None:
     manager = PipelinePolicyManager(temp_project_dir)
-    manager.ensure_exists(preset="enterprise", force=True)
+    manager.policy_path.parent.mkdir(parents=True, exist_ok=True)
+    manager.policy_path.write_text(
+        (
+            "require_redteam: true\n"
+            "require_quality_gate: true\n"
+            "require_rehearsal_verify: true\n"
+            "min_quality_threshold: 85\n"
+            "allowed_cicd_platforms:\n"
+            "  - github\n"
+            "require_host_profile: true\n"
+            "required_hosts:\n"
+            "  - codex-cli\n"
+            "  - claude-code\n"
+            "enforce_required_hosts_ready: true\n"
+            "min_required_host_score: 85\n"
+        ),
+        encoding="utf-8",
+    )
     config = ConfigManager(temp_project_dir).create(
         name="demo",
         host_profile_targets=["codex-cli", "claude-code"],

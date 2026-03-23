@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { HOSTS, STATS } from '@/lib/constants';
 import type { SiteLocale } from '@/lib/site-locale';
 
@@ -54,7 +55,14 @@ function HostLogo({ name }: { name: string }) {
   const content = (
     <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border-muted bg-bg-secondary/50 px-4 py-2 opacity-70 transition-opacity duration-200 hover:opacity-100 cursor-pointer" title={name}>
       {iconSrc ? (
-        <img src={iconSrc} alt={name} width={20} height={20} className="h-5 w-5 rounded" />
+        <Image
+          src={iconSrc}
+          alt={name}
+          width={20}
+          height={20}
+          className="h-5 w-5 rounded"
+          unoptimized
+        />
       ) : (
         <span className="flex h-5 w-5 items-center justify-center rounded bg-bg-tertiary text-xs font-mono font-bold text-text-muted">{initial}</span>
       )}

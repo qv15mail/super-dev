@@ -321,6 +321,33 @@ class SuperDevCLI:
             help="以 JSON 格式输出",
         )
 
+        feature_checklist_parser = subparsers.add_parser(
+            "feature-checklist",
+            help="审计 PRD 范围覆盖率",
+            description="基于 PRD、tasks 和 gap 证据生成功能清单，区分流程完成与范围完成。",
+        )
+        feature_checklist_parser.add_argument(
+            "path",
+            nargs="?",
+            default=".",
+            help="项目路径 (默认为当前目录)",
+        )
+        feature_checklist_parser.add_argument(
+            "-o", "--output",
+            help="输出报告路径（默认为 output/<project>-feature-checklist.md 或 .json）",
+        )
+        feature_checklist_parser.add_argument(
+            "-f", "--format",
+            choices=["json", "markdown", "text"],
+            default="text",
+            help="输出格式",
+        )
+        feature_checklist_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 格式输出",
+        )
+
         impact_parser = subparsers.add_parser(
             "impact",
             help="分析变更影响范围",
@@ -2534,6 +2561,75 @@ super-dev start --idea "你的需求"
                 self.console.print(traceback.format_exc())
             return 1
 
+    def _cmd_feature_checklist(self, args) -> int:
+        """审计 PRD 范围覆盖率。"""
+        from .analyzer import FeatureChecklistBuilder
+
+        project_path = Path(args.path).resolve()
+        if not project_path.exists():
+            self.console.print(f"[red]项目不存在: {project_path}[/red]")
+            return 1
+
+        try:
+            builder = FeatureChecklistBuilder(project_path)
+            report = builder.build()
+            output_format = "json" if args.json else args.format
+
+            if output_format == "json":
+                output = json.dumps(report.to_dict(), ensure_ascii=False, indent=2)
+                if args.output:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                else:
+                    builder.write(report)
+                    sys.stdout.write(output + "\n")
+                return 0
+
+            self.console.print(f"[cyan]正在审计范围覆盖率: {project_path}[/cyan]")
+
+            if output_format == "markdown":
+                output = report.to_markdown()
+                if args.output:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                    self.console.print(f"[green]Feature Checklist 已保存到: {args.output}[/green]")
+                else:
+                    paths = builder.write(report)
+                    self.console.print("[green]Feature Checklist 已生成[/green]")
+                    self.console.print(f"  Markdown: {paths['markdown']}")
+                    self.console.print(f"  JSON: {paths['json']}")
+                return 0
+
+            paths = builder.write(report)
+            coverage_text = (
+                f"{report.coverage_rate:.1f}%"
+                if report.coverage_rate is not None
+                else "unknown"
+            )
+            self.console.print("[green]Feature Checklist 已生成[/green]")
+            self.console.print(f"  项目: {report.project_name}")
+            self.console.print(f"  状态: {report.status}")
+            self.console.print(f"  覆盖率: {coverage_text}")
+            self.console.print(f"  Markdown: {paths['markdown']}")
+            self.console.print(f"  JSON: {paths['json']}")
+            self.console.print(f"  功能项总数: {report.total_features}")
+            self.console.print(f"  已覆盖: {report.covered_count}")
+            self.console.print(f"  规划中: {report.planned_count}")
+            self.console.print(f"  缺失: {report.missing_count}")
+            self.console.print(f"  未知: {report.unknown_count}")
+            self.console.print(f"  高优先级缺口: {report.high_priority_gap_count}")
+            self.console.print("")
+            self.console.print(f"[cyan]{report.summary}[/cyan]")
+            return 0
+
+        except Exception as e:
+            self.console.print(f"[red]Feature Checklist 生成失败: {e}[/red]")
+            self.logger.error(
+                "Feature Checklist 生成失败",
+                extra={"error_type": type(e).__name__, "error_message": str(e), "traceback": traceback.format_exc()},
+            )
+            if '--debug' in sys.argv or '-d' in sys.argv:
+                self.console.print(traceback.format_exc())
+            return 1
+
     def _cmd_impact(self, args) -> int:
         """分析变更影响范围。"""
         from .analyzer import ImpactAnalyzer
@@ -3473,6 +3569,12 @@ super-dev start --idea "你的需求"
             "description": str((run_state.get("pipeline_args") or {}).get("description", "")).strip(),
             "failed_stage": str(run_state.get("failed_stage", "")).strip(),
             "resume_from_stage": str(run_state.get("resume_from_stage", "")).strip(),
+            "full_gate_passed": bool(run_state.get("full_gate_passed", False)),
+            "skipped_gates": list(run_state.get("skipped_gates") or []),
+            "scope_coverage_status": str(run_state.get("scope_coverage_status", "")).strip() or "unknown",
+            "scope_coverage_rate": run_state.get("scope_coverage_rate"),
+            "scope_gap_count": int(run_state.get("scope_gap_count", 0) or 0),
+            "scope_high_priority_gap_count": int(run_state.get("scope_high_priority_gap_count", 0) or 0),
             "docs_confirmation": docs_state,
             "ui_revision": ui_state,
             "architecture_revision": architecture_state,
@@ -3494,6 +3596,17 @@ super-dev start --idea "你的需求"
         self.console.print(f"  当前需求: {payload['description'] or '-'}")
         self.console.print(f"  失败阶段: {payload['failed_stage'] or '-'}")
         self.console.print(f"  恢复起点: {payload['resume_from_stage'] or '-'}")
+        self.console.print(f"  全门禁通过: {'是' if payload['full_gate_passed'] else '否'}")
+        self.console.print(
+            "  跳过门禁: "
+            + (", ".join(payload["skipped_gates"]) if payload["skipped_gates"] else "-")
+        )
+        scope_rate = payload["scope_coverage_rate"]
+        scope_rate_text = f"{float(scope_rate):.1f}%" if isinstance(scope_rate, (int, float)) else "-"
+        self.console.print(f"  范围覆盖状态: {payload['scope_coverage_status']}")
+        self.console.print(f"  范围覆盖率: {scope_rate_text}")
+        self.console.print(f"  范围缺口: {payload['scope_gap_count']}")
+        self.console.print(f"  高优先级缺口: {payload['scope_high_priority_gap_count']}")
         self.console.print(f"  文档确认: {self._docs_confirmation_label(docs_state['status'])}")
         self.console.print(f"  UI 改版: {self._review_status_label(ui_state['status'], review_type='ui')}")
         self.console.print(
@@ -3720,6 +3833,13 @@ super-dev start --idea "你的需求"
         if quality_state.get("status") == "revision_requested":
             return 'super-dev review quality --status confirmed --comment "质量返工已通过"'
         status = str(run_state.get("status", "")).strip().lower()
+        skipped_gates = list(run_state.get("skipped_gates") or [])
+        scope_status = str(run_state.get("scope_coverage_status", "")).strip().lower()
+        high_priority_scope_gaps = int(run_state.get("scope_high_priority_gap_count", 0) or 0)
+        if scope_status in {"partial", "unknown"} or high_priority_scope_gaps > 0:
+            return "super-dev feature-checklist"
+        if status == "success" and skipped_gates:
+            return "按当前策略补跑被跳过的红队 / 质量 / 发布演练门禁"
         if status in {"failed", "running", "waiting_confirmation", "waiting_ui_revision", "waiting_architecture_revision", "waiting_quality_revision"}:
             return "super-dev run --resume"
         return "super-dev run --phase frontend"
@@ -3798,23 +3918,54 @@ super-dev start --idea "你的需求"
             self.console.print("[cyan]可用策略预设:[/cyan]")
             self.console.print("  - default: 默认策略（兼顾灵活性）")
             self.console.print("  - balanced: 团队协作增强（要求 host profile）")
-            self.console.print("  - enterprise: 商业级强治理（required hosts + ready 校验）")
+            self.console.print("  - enterprise: 商业级强治理（默认启用更高质量阈值与 host profile）")
             return 0
 
         if action == "init":
             preset = str(getattr(args, "preset", "default") or "default")
             force = bool(getattr(args, "force", False))
+            existed_before = manager.policy_path.exists()
             path = manager.ensure_exists(preset=preset, force=force)
-            self.console.print(f"[green]✓[/green] 已生成策略文件: {path}")
-            self.console.print(f"[dim]预设: {preset} | force={force}[/dim]")
+            if existed_before and not force:
+                action_label = "策略文件已存在，保留原配置"
+            elif force and existed_before:
+                action_label = "已覆盖策略文件"
+            else:
+                action_label = "已生成策略文件"
+            self.console.print(f"[green]✓[/green] {action_label}: {path}")
+            self.console.print(f"[dim]预设: {preset}[/dim]")
+            if force:
+                self.console.print("[dim]说明: --force 仅表示覆盖已有 policy 文件，不代表策略“强制级别”。[/dim]")
+            elif existed_before:
+                self.console.print("[dim]说明: 未使用 --force；若文件已存在，本次不会覆盖旧策略。[/dim]")
             return 0
 
         policy = manager.load()
         self.console.print("[cyan]当前流水线策略:[/cyan]")
-        self.console.print(json.dumps(policy.__dict__, ensure_ascii=False, indent=2))
+        self.console.print(f"  - 红队审查: {'开启' if policy.require_redteam else '关闭'}")
+        self.console.print(f"  - 质量门禁: {'开启' if policy.require_quality_gate else '关闭'}")
+        self.console.print(f"  - 发布演练验证: {'开启' if policy.require_rehearsal_verify else '关闭'}")
+        self.console.print(f"  - 最低质量阈值: {policy.min_quality_threshold}")
+        self.console.print(
+            "  - 允许的 CI/CD 平台: "
+            + (", ".join(policy.allowed_cicd_platforms) if policy.allowed_cicd_platforms else "未限制")
+        )
+        self.console.print(f"  - 宿主画像要求: {'开启' if policy.require_host_profile else '关闭'}")
+        self.console.print(
+            "  - 关键宿主列表: "
+            + (", ".join(policy.required_hosts) if policy.required_hosts else "未配置（如需强校验，请手动填写）")
+        )
+        self.console.print(
+            f"  - 关键宿主就绪校验: {'开启' if policy.enforce_required_hosts_ready else '关闭'}"
+        )
+        self.console.print(f"  - 关键宿主最低分: {policy.min_required_host_score}")
         self.console.print(f"[dim]策略文件: {manager.policy_path}[/dim]")
         if not manager.policy_path.exists():
             self.console.print("[yellow]提示: 当前使用内置默认策略，执行 super-dev policy init 可写入文件[/yellow]")
+        elif policy.require_host_profile and not policy.required_hosts:
+            self.console.print(
+                "[yellow]提示: 当前策略要求宿主画像，但尚未指定关键宿主；如需强校验，请在 .super-dev/policy.yaml 中填写 required_hosts。[/yellow]"
+            )
         return 0
 
     def _cmd_preview(self, args) -> int:
@@ -4986,6 +5137,7 @@ super-dev start --idea "你的需求"
         resume_audit_payload: dict[str, Any] | None = None
         resume_audit_files: dict[str, Path] | None = None
         stage_output_evidence: list[str] = []
+        stage_execution_state: dict[str, dict[str, Any]] = {}
 
         def _start_stage(stage: str, title: str) -> None:
             nonlocal current_stage, current_stage_title, stage_started_at
@@ -4994,12 +5146,17 @@ super-dev start --idea "你的需求"
             stage_started_at = time.perf_counter()
 
         def _record_stage(success: bool, details: dict[str, Any] | None = None) -> None:
-            nonlocal stage_output_evidence
+            nonlocal stage_output_evidence, stage_execution_state
             if not current_stage:
                 return
             normalized_details = details or {}
             stage_outputs = self._extract_stage_artifacts(normalized_details)
             stage_notes = self._extract_stage_notes(normalized_details)
+            stage_execution_state[current_stage] = {
+                "success": success,
+                "title": current_stage_title,
+                "details": normalized_details,
+            }
             telemetry.record_stage(
                 stage=current_stage,
                 title=current_stage_title,
@@ -6097,11 +6254,54 @@ super-dev start --idea "你的需求"
 
             metric_files = _finalize_metrics(success=True)
             contract_files = _finalize_contract(success=True)
+            from .analyzer import FeatureChecklistBuilder
+
+            feature_checklist_builder = FeatureChecklistBuilder(project_dir)
+            feature_coverage_report = feature_checklist_builder.build()
+            feature_checklist_files = feature_checklist_builder.write(feature_coverage_report)
+            gate_stage_ids = ("5", "6", "12")
+            skipped_gates = [
+                stage_execution_state[stage]["title"]
+                for stage in gate_stage_ids
+                if bool(stage_execution_state.get(stage, {}).get("details", {}).get("skipped", False))
+            ]
+            full_gate_passed = not skipped_gates
+            scope_fully_implemented = feature_coverage_report.status == "ready"
+            scope_has_high_priority_gap = feature_coverage_report.high_priority_gap_count > 0
+            if full_gate_passed and scope_fully_implemented:
+                completion_title = "流程完成（全门禁通过，范围完成）"
+                completion_style = "green"
+            elif full_gate_passed:
+                completion_title = "流程完成（全门禁通过，范围存在缺口）"
+                completion_style = "yellow"
+            else:
+                completion_title = "流程完成（存在跳过门禁）"
+                completion_style = "yellow"
 
             # ========== 完成 ==========
             self.console.print(f"[cyan]{'=' * 60}[/cyan]")
-            self.console.print("[green]✓ 流水线完成！[/green]")
+            self.console.print(f"[{completion_style}]✓ {completion_title}[/{completion_style}]")
             self.console.print(f"[cyan]{'=' * 60}[/cyan]")
+            self.console.print("")
+            if full_gate_passed:
+                if scope_fully_implemented:
+                    self.console.print("[green]交付状态: 当前运行已完成，且红队 / 质量 / 演练门禁均已通过，当前范围覆盖率未发现显式缺口。[/green]")
+                else:
+                    self.console.print("[yellow]交付状态: 当前运行已完成，且门禁已通过；但这不等于 PRD 全量范围已实现完成。[/yellow]")
+            else:
+                self.console.print("[yellow]交付状态: 当前运行已完成，但存在跳过门禁；这不等于严格意义上的“全部通过”。[/yellow]")
+                self.console.print(f"[yellow]已跳过门禁: {', '.join(skipped_gates)}[/yellow]")
+            coverage_text = (
+                f"{feature_coverage_report.coverage_rate:.1f}%"
+                if feature_coverage_report.coverage_rate is not None
+                else "unknown"
+            )
+            self.console.print(
+                f"[cyan]范围覆盖率:[/cyan] {coverage_text} | 状态: {feature_coverage_report.status} | "
+                f"高优先级缺口: {feature_coverage_report.high_priority_gap_count}"
+            )
+            if not scope_fully_implemented or scope_has_high_priority_gap:
+                self.console.print(f"[yellow]{feature_coverage_report.summary}[/yellow]")
             self.console.print("")
             self.console.print("[cyan]生成的文件:[/cyan]")
             self.console.print("  文档:")
@@ -6161,6 +6361,10 @@ super-dev start --idea "你的需求"
             for file_path in migration_files.keys():
                 self.console.print(f"    - {file_path}")
             self.console.print("")
+            self.console.print("  范围覆盖审计:")
+            self.console.print(f"    - {Path(str(feature_checklist_files['markdown'])).relative_to(project_dir)}")
+            self.console.print(f"    - {Path(str(feature_checklist_files['json'])).relative_to(project_dir)}")
+            self.console.print("")
             self.console.print("  项目交付包:")
             self.console.print(
                 f"    - {Path(str(delivery_outputs['manifest_file'])).relative_to(project_dir)}"
@@ -6189,6 +6393,10 @@ super-dev start --idea "你的需求"
             self.console.print("  6. 执行并保存发布演练报告用于上线审批")
             self.console.print("  7. 使用 output/delivery/* 作为对外交付包")
             self.console.print(f"  8. 查看 pipeline 指标: output/{project_name}-pipeline-metrics.md")
+            if not full_gate_passed:
+                self.console.print("  9. 若要获得严格意义上的全门禁通过，请重新执行被跳过的红队 / 质量 / 演练阶段")
+            elif not scope_fully_implemented:
+                self.console.print("  9. 若要确认 PRD 范围是否真正实现完成，请查看 feature checklist 并补齐高优先级缺口")
             self.console.print("")
             self.console.print("[cyan]可观测性:[/cyan]")
             self.console.print(f"  - 指标 JSON: {metric_files['json']}")
@@ -6205,6 +6413,13 @@ super-dev start --idea "你的需求"
                 {
                     "metrics_file": str(metric_files["json"]),
                     "contract_file": str(contract_files["json"]),
+                    "full_gate_passed": full_gate_passed,
+                    "skipped_gates": skipped_gates,
+                    "scope_coverage_status": feature_coverage_report.status,
+                    "scope_coverage_rate": feature_coverage_report.coverage_rate,
+                    "scope_gap_count": feature_coverage_report.missing_count + feature_coverage_report.unknown_count,
+                    "scope_high_priority_gap_count": feature_coverage_report.high_priority_gap_count,
+                    "scope_feature_checklist_file": str(feature_checklist_files["json"]),
                 },
             )
             _flush_resume_audit(status="success")
@@ -10299,7 +10514,7 @@ super-dev start --idea "你的需求"
             "init", "analyze", "workflow", "studio", "expert", "quality", "metrics", "preview",
             "deploy", "create", "wizard", "design", "spec", "task", "pipeline", "run", "config", "skill", "integrate",
             "onboard", "doctor", "setup", "install", "start", "bootstrap", "detect", "policy", "update", "review", "release",
-            "fix", "repo-map", "impact", "regression-guard", "dependency-graph",
+            "fix", "repo-map", "feature-checklist", "impact", "regression-guard", "dependency-graph",
             "status", "jump", "confirm",
         }
         return first not in known_commands

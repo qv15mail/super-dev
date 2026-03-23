@@ -61,6 +61,7 @@ docs/plans/
 artifacts/
 .super-dev/runs/
 .super-dev/review-state/
+/.super-dev/policy.yaml
 
 # Host runtime / onboarding artifacts (project-local generated files)
 /.agent/

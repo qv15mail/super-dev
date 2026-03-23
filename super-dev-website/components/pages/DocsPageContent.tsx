@@ -237,8 +237,8 @@ const zhContent: Content = {
     },
     {
       title: '改动前先看影响范围',
-      body: '接手旧仓库、修改登录流、重构 API 或动关键状态流前，先跑 impact，把受影响模块和回归重点确认清楚。',
-      bullets: ['super-dev repo-map', 'super-dev impact "变更描述" --files ...', '先看 blast radius 再动手'],
+      body: '接手旧仓库、修改登录流、重构 API 或动关键状态流前，先跑 repo-map、feature-checklist 和 impact，把范围覆盖率、受影响模块和回归重点确认清楚。',
+      bullets: ['super-dev repo-map', 'super-dev feature-checklist', 'super-dev impact "变更描述" --files ...'],
     },
     {
       title: '代码库理解与回归守卫',
@@ -257,7 +257,7 @@ const zhContent: Content = {
     },
   ],
   commandsTitle: '常用命令',
-  commandsBody: '这里整理最常用的命令组：安装与引导、宿主接入、代码库理解、影响分析、回归守卫、缺陷修复、确认门、质量检查、发布检查和更新。',
+  commandsBody: '这里整理最常用的命令组：安装与引导、宿主接入、范围覆盖审计、代码库理解、影响分析、回归守卫、缺陷修复、确认门、质量检查、发布检查和更新。',
   commands: [
     {
       title: '安装与引导',
@@ -271,7 +271,7 @@ const zhContent: Content = {
     },
     {
       title: '代码库理解与影响分析',
-      code: 'super-dev repo-map\nsuper-dev dependency-graph\nsuper-dev impact "修改登录流程" --files services/auth.py\nsuper-dev regression-guard "修改登录流程" --files services/auth.py',
+      code: 'super-dev repo-map\nsuper-dev feature-checklist\nsuper-dev dependency-graph\nsuper-dev impact "修改登录流程" --files services/auth.py\nsuper-dev regression-guard "修改登录流程" --files services/auth.py',
       filename: 'Codebase Intelligence',
     },
     {
@@ -464,8 +464,8 @@ const enContent: Content = {
     },
     {
       title: 'Inspect impact before changing critical flows',
-      body: 'Before refactoring a mature repo, changing auth, reshaping APIs, or touching major state flows, run impact analysis so the host starts with the likely blast radius.',
-      bullets: ['super-dev repo-map', 'super-dev impact "change description" --files ...', 'review scope before coding'],
+      body: 'Before refactoring a mature repo, changing auth, reshaping APIs, or touching major state flows, run repo-map, feature-checklist, and impact analysis so the host starts with scope truth instead of guesses.',
+      bullets: ['super-dev repo-map', 'super-dev feature-checklist', 'super-dev impact "change description" --files ...'],
     },
     {
       title: 'Codebase intelligence and regression guard',
@@ -484,7 +484,7 @@ const enContent: Content = {
     },
   ],
   commandsTitle: 'Commands',
-  commandsBody: 'Keep the critical commands visible: install, onboarding, codebase intelligence, impact analysis, regression guard, bugfix, approval, quality, release checks, and update.',
+  commandsBody: 'Keep the critical commands visible: install, onboarding, scope coverage audit, codebase intelligence, impact analysis, regression guard, bugfix, approval, quality, release checks, and update.',
   commands: [
     {
       title: 'Install & bootstrap',
@@ -498,7 +498,7 @@ const enContent: Content = {
     },
     {
       title: 'Codebase intelligence & impact',
-      code: 'super-dev repo-map\nsuper-dev dependency-graph\nsuper-dev impact "Change the login flow" --files services/auth.py\nsuper-dev regression-guard "Change the login flow" --files services/auth.py',
+      code: 'super-dev repo-map\nsuper-dev feature-checklist\nsuper-dev dependency-graph\nsuper-dev impact "Change the login flow" --files services/auth.py\nsuper-dev regression-guard "Change the login flow" --files services/auth.py',
       filename: 'Codebase Intelligence',
     },
     {
@@ -587,7 +587,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             <div className="max-w-[860px]">
               <div className="mb-5 flex flex-wrap items-center gap-2">
                 <Badge variant="version">{content.heroKicker}</Badge>
-                <Badge variant="certified">v2.1.0</Badge>
+                <Badge variant="certified">v2.0.12</Badge>
                 <Badge variant="compatible">{locale === 'en' ? 'Bilingual' : '中英双语'}</Badge>
               </div>
               <h1 className="max-w-[900px] text-4xl font-bold leading-[1.08] tracking-tight text-text-primary sm:text-5xl lg:text-[3.5rem]">

@@ -100,8 +100,8 @@ class PipelinePolicyManager:
                 min_quality_threshold=85,
                 allowed_cicd_platforms=["github", "gitlab", "azure"],
                 require_host_profile=True,
-                required_hosts=["codex-cli", "claude-code"],
-                enforce_required_hosts_ready=True,
+                required_hosts=[],
+                enforce_required_hosts_ready=False,
                 min_required_host_score=85,
             )
         raise ValueError(f"未知策略预设: {name}，可选: {', '.join(self.PRESET_NAMES)}")

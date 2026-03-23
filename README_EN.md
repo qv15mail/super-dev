@@ -19,7 +19,7 @@
 
 ## Version
 
-Current version: `2.1.0`
+Current version: `2.0.12`
 
 ---
 
@@ -97,7 +97,7 @@ super-dev doctor              # diagnostics with certification grading
 
 ### 1. 10-Expert Agent Architecture
 
-v2.1.0 introduces ten domain-expert agents. Each expert is automatically injected into AI prompts at the corresponding pipeline stage, constraining the host to professional-grade output:
+v2.0.12 introduces ten domain-expert agents. Each expert is automatically injected into AI prompts at the corresponding pipeline stage, constraining the host to professional-grade output:
 
 | Expert | Role | Injection Stages |
 |--------|------|-----------------|
@@ -171,6 +171,7 @@ The host expands documents based on actual project needs. Final document scope d
 ### 7. Codebase Intelligence and Change Analysis
 
 - `repo-map`: generates a codebase map with suggested reading order.
+- `feature-checklist`: audits PRD feature coverage so pipeline completion is distinct from full scope completion.
 - `dependency-graph`: outputs module dependencies and critical paths.
 - `impact`: analyzes blast radius of changes, risk levels, and recommended actions.
 - `regression-guard`: converts impact analysis into an executable regression checklist.
@@ -182,7 +183,7 @@ The host expands documents based on actual project needs. Final document scope d
 - `resume-audit`: resume execution audit trail.
 - `delivery manifest/report/archive`: delivery package.
 - `proof-pack`: delivery evidence bundle with executive summary.
-- `release readiness` and `Spec Quality`: unified release scoring panel.
+- `release readiness`, `Spec Quality`, and `Scope Coverage`: unified release scoring panel.
 
 ### 9. Knowledge Base
 
@@ -197,7 +198,7 @@ The host expands documents based on actual project needs. Final document scope d
 - Three presets: `default`, `balanced`, `enterprise`.
 - Mandatory red-team and quality gate enforcement.
 - Minimum quality thresholds and CI/CD whitelist.
-- Required-host validation and readiness score hard checks.
+- Enterprise policy raises the quality bar, requires host profiling, and can enforce required hosts when configured.
 - Configurable via `super-dev.yaml` policy section.
 
 ---
@@ -260,13 +261,13 @@ This generates `.super-dev/WORKFLOW.md` and `output/*-bootstrap.md` to lock down
 ### 3. Pin a specific version
 
 ```bash
-pip install super-dev==2.1.0
+pip install super-dev==2.0.12
 ```
 
 ### 4. Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.1.0
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.0.12
 ```
 
 ### 5. Source install for development

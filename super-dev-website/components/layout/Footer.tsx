@@ -5,6 +5,7 @@
  * 创建时间：2026-03-08
  * 最后修改：2026-03-08
  */
+import Image from 'next/image';
 import Link from 'next/link';
 import { Github } from 'lucide-react';
 import { assetPath, localizedPath, type SiteLocale } from '@/lib/site-locale';
@@ -107,11 +108,14 @@ export function Footer({ locale = 'zh' }: FooterProps) {
               aria-label="Super Dev 首页"
             >
               <span className="relative h-7 w-7 overflow-hidden rounded-lg border border-border-default/80 bg-bg-secondary/70 ring-1 ring-white/5 transition-all duration-150 group-hover:border-accent-blue/60">
-                <img
+                <Image
                   src={assetPath('/logo.png')}
                   alt=""
-                  className="h-full w-full object-cover"
+                  fill
+                  sizes="28px"
+                  className="object-cover"
                   aria-hidden="true"
+                  unoptimized
                 />
               </span>
               <span className="font-mono font-bold text-text-primary text-base">Super Dev</span>
@@ -161,7 +165,19 @@ export function Footer({ locale = 'zh' }: FooterProps) {
           ))}
         </div>
 
-        <div className="mt-12 pt-6 border-t border-border-muted flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="mt-12 pt-8 border-t border-border-muted flex flex-col items-center gap-4">
+          <p className="text-sm text-text-muted">{locale === 'zh' ? '扫码加入 Super Dev 微信交流群' : 'Join Super Dev WeChat Group'}</p>
+          <Image
+            src={assetPath('/qun.jpg')}
+            alt="WeChat Group"
+            width={192}
+            height={192}
+            className="w-48 rounded-xl border border-border-default h-auto"
+            unoptimized
+          />
+        </div>
+
+        <div className="mt-8 pt-6 border-t border-border-muted flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-text-muted">&copy; {currentYear} shangyankeji. MIT License.</p>
           <p className="text-xs text-text-muted">
             {copy.builtWith}{' '}

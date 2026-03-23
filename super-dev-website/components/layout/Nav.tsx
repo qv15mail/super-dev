@@ -7,6 +7,7 @@
  * 最后修改：2026-03-08
  */
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Github, Menu, X, Star } from 'lucide-react';
@@ -107,11 +108,14 @@ export function Nav({ locale = 'zh' }: NavProps) {
             aria-label={copy.ariaHome}
           >
             <span className="relative h-10 w-10 overflow-hidden rounded-xl border border-border-default/80 bg-bg-secondary/70 ring-1 ring-white/5 transition-all duration-150 group-hover:border-accent-blue/60">
-              <img
+              <Image
                 src={assetPath('/logo.png')}
                 alt=""
-                className="h-full w-full object-cover"
+                fill
+                sizes="40px"
+                className="object-cover"
                 aria-hidden="true"
+                unoptimized
               />
             </span>
             <span className="font-mono font-bold text-text-primary text-base tracking-tight">

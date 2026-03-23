@@ -385,6 +385,7 @@ description: Super Dev pipeline governance for research-first, commercial-grade 
 - 当用户明确表示 UI 不满意、要求改版、重做视觉、页面太 AI 味时，必须先更新 `output/*-uiux.md`，再重做前端，并重新执行 frontend runtime 与 UI review。
 - 当用户明确表示架构不合理、模块边界错误、技术方案需要重构时，必须先更新 `output/*-architecture.md`，再同步调整 Spec / tasks 与实现方案。
 - 当用户明确表示质量不达标、安全问题未解决或交付证据不完整时，必须先修复问题，重新执行 quality gate 与 `super-dev release proof-pack`，再继续后续动作。
+- 若当前项目启用了 policy / 强治理策略，不得默认建议关闭红队、降低质量阈值或跳过门禁；只有在用户明确要求降级治理强度时，才可说明风险后调整 policy。
 
 ## Super Dev System Flow Contract
 

@@ -116,6 +116,22 @@ def _prepare_proof_pack_project(project_dir: Path) -> None:
         json.dumps({"project_name": project_dir.name, "risk_level": "medium"}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    (output_dir / f"{project_dir.name}-prd.md").write_text(
+        "\n".join(
+            [
+                "# PRD",
+                "",
+                "## 2. 功能范围",
+                "",
+                "### 用户登录",
+                "- 支持邮箱密码登录",
+                "",
+                "### 运营看板",
+                "- 提供运营数据概览",
+            ]
+        ),
+        encoding="utf-8",
+    )
     (output_dir / "delivery" / f"{project_dir.name}-delivery-manifest.json").write_text(
         json.dumps({"status": "ready"}, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -150,6 +166,10 @@ def _prepare_proof_pack_project(project_dir: Path) -> None:
         description="proof pack spec quality",
     )
     generator.scaffold_change_artifacts(change.id)
+    (project_dir / ".super-dev" / "changes" / change.id / "tasks.md").write_text(
+        "# Tasks\n\n- [x] 支持邮箱密码登录\n- [x] 提供运营数据概览\n",
+        encoding="utf-8",
+    )
 
 
 class TestCLIInit:
@@ -1677,9 +1697,10 @@ class TestCLISkillAndIntegrate:
             show_result = cli.run(["policy", "show"])
             assert show_result == 0
             output = capsys.readouterr().out
-            assert "require_redteam" in output
-            assert "min_quality_threshold" in output
-            assert "enforce_required_hosts_ready" in output
+            assert "红队审查: 开启" in output
+            assert "最低质量阈值: 85" in output
+            assert "关键宿主列表: 未配置" in output
+            assert "关键宿主就绪校验: 关闭" in output
         finally:
             os.chdir(original_cwd)
 
@@ -1823,6 +1844,72 @@ class TestCLIPipeline:
             assert result == 0
             assert (temp_project_dir / "output" / f"{temp_project_dir.name}-impact-analysis.md").exists()
             assert (temp_project_dir / "output" / f"{temp_project_dir.name}-impact-analysis.json").exists()
+        finally:
+            os.chdir(original_cwd)
+
+    def test_feature_checklist_command_generates_artifacts(self, temp_project_dir: Path):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            output_dir = temp_project_dir / "output"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            (output_dir / f"{temp_project_dir.name}-prd.md").write_text(
+                "\n".join(
+                    [
+                        "# PRD",
+                        "",
+                        "## 2. 功能范围",
+                        "",
+                        "### 用户登录",
+                        "- 支持邮箱密码登录",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            change_dir = temp_project_dir / ".super-dev" / "changes" / "demo-change"
+            change_dir.mkdir(parents=True, exist_ok=True)
+            (change_dir / "tasks.md").write_text("# Tasks\n\n- [x] 用户登录\n", encoding="utf-8")
+
+            cli = SuperDevCLI()
+            result = cli.run(["feature-checklist"])
+
+            assert result == 0
+            assert (output_dir / f"{temp_project_dir.name}-feature-checklist.md").exists()
+            assert (output_dir / f"{temp_project_dir.name}-feature-checklist.json").exists()
+        finally:
+            os.chdir(original_cwd)
+
+    def test_feature_checklist_json_output_is_strict_json(self, temp_project_dir: Path, capsys):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            output_dir = temp_project_dir / "output"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            (output_dir / f"{temp_project_dir.name}-prd.md").write_text(
+                "\n".join(
+                    [
+                        "# PRD",
+                        "",
+                        "## 2. 功能范围",
+                        "",
+                        "### 用户登录",
+                        "- 支持邮箱密码登录",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            change_dir = temp_project_dir / ".super-dev" / "changes" / "demo-change"
+            change_dir.mkdir(parents=True, exist_ok=True)
+            (change_dir / "tasks.md").write_text("# Tasks\n\n- [x] 用户登录\n", encoding="utf-8")
+
+            cli = SuperDevCLI()
+            result = cli.run(["feature-checklist", "--json"])
+            captured = capsys.readouterr()
+
+            assert result == 0
+            payload = json.loads(captured.out)
+            assert payload["project_name"] == temp_project_dir.name
+            assert payload["status"] in {"ready", "partial", "unknown"}
         finally:
             os.chdir(original_cwd)
 
@@ -2205,7 +2292,7 @@ class TestCLIPipeline:
         finally:
             os.chdir(original_cwd)
 
-    def test_pipeline_skip_rehearsal_verify(self, temp_project_dir: Path, monkeypatch):
+    def test_pipeline_skip_rehearsal_verify(self, temp_project_dir: Path, monkeypatch, capsys):
         original_cwd = os.getcwd()
         os.chdir(temp_project_dir)
         monkeypatch.setenv("SUPER_DEV_DISABLE_WEB", "1")
@@ -2233,6 +2320,10 @@ class TestCLIPipeline:
                 ["pipeline", "构建一个支持登录和看板的平台", "--skip-rehearsal-verify"]
             )
             assert result == 0
+            output = capsys.readouterr().out
+            assert "流程完成（存在跳过门禁）" in output
+            assert "这不等于严格意义上的“全部通过”" in output
+            assert "已跳过门禁: 发布演练验证" in output
             assert any((temp_project_dir / "output").glob("*-frontend-runtime.json"))
             rehearsal_dir = temp_project_dir / "output" / "rehearsal"
             assert any(rehearsal_dir.glob("*-launch-rehearsal.md"))
@@ -2800,6 +2891,7 @@ class TestCLIRunControl:
             assert payload["ready_count"] == payload["total_count"]
             assert payload["summary"]["blocking_count"] == 0
             assert any(artifact["name"] == "Spec Quality" for artifact in payload["artifacts"])
+            assert any(artifact["name"] == "Scope Coverage" for artifact in payload["artifacts"])
             assert any(artifact["name"] == "Repo Map" for artifact in payload["artifacts"])
             assert any(artifact["name"] == "Dependency Graph" for artifact in payload["artifacts"])
             assert any(artifact["name"] == "Impact Analysis" for artifact in payload["artifacts"])

@@ -143,3 +143,41 @@ def test_release_readiness_fails_when_latest_spec_contains_tbd_placeholders(temp
     spec_check = next(check for check in report.checks if check.name == "Spec Quality")
     assert spec_check.passed is False
     assert "placeholder-change" in spec_check.detail
+
+
+def test_release_readiness_fails_when_scope_coverage_has_high_priority_gap(temp_project_dir: Path) -> None:
+    _prepare_release_ready_project(temp_project_dir)
+    output_dir = temp_project_dir / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / f"{temp_project_dir.name}-prd.md").write_text(
+        "\n".join(
+            [
+                "# PRD",
+                "",
+                "## 2. 功能范围",
+                "",
+                "### 用户登录",
+                "- 支持邮箱密码登录",
+                "",
+                "### Canvas 工作台",
+                "- 提供交互式画布编辑",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / f"{temp_project_dir.name}-research.md").write_text(
+        "| 优先级 | 事项 | 工作量 |\n|:---:|:---|:---|\n| P0 | Canvas 工作台 | 大 |\n",
+        encoding="utf-8",
+    )
+    change_dir = temp_project_dir / ".super-dev" / "changes" / "release-hardening-finalization"
+    (change_dir / "tasks.md").write_text(
+        "# Tasks\n\n- [x] 用户登录\n- [ ] Canvas 工作台\n",
+        encoding="utf-8",
+    )
+
+    evaluator = ReleaseReadinessEvaluator(temp_project_dir)
+    report = evaluator.evaluate(verify_tests=False)
+
+    scope_check = next(check for check in report.checks if check.name == "Scope Coverage")
+    assert scope_check.passed is False
+    assert "high_priority_gaps=1" in scope_check.detail

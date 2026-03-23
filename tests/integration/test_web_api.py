@@ -83,7 +83,7 @@ def _prepare_proof_pack_project(project_dir: Path) -> None:
     output_dir = project_dir / "output"
     (output_dir / "delivery").mkdir(parents=True, exist_ok=True)
     (output_dir / "rehearsal").mkdir(parents=True, exist_ok=True)
-    for suffix in ("research", "prd", "architecture", "uiux"):
+    for suffix in ("research", "architecture", "uiux"):
         (output_dir / f"{project_dir.name}-{suffix}.md").write_text("# ok\n", encoding="utf-8")
     (output_dir / f"{project_dir.name}-frontend-runtime.json").write_text('{"passed": true}', encoding="utf-8")
     (output_dir / f"{project_dir.name}-ui-review.json").write_text(
@@ -109,6 +109,22 @@ def _prepare_proof_pack_project(project_dir: Path) -> None:
     (output_dir / f"{project_dir.name}-regression-guard.md").write_text("# Regression Guard\n\nok\n", encoding="utf-8")
     (output_dir / f"{project_dir.name}-regression-guard.json").write_text(
         json.dumps({"project_name": project_dir.name, "risk_level": "medium"}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (output_dir / f"{project_dir.name}-prd.md").write_text(
+        "\n".join(
+            [
+                "# PRD",
+                "",
+                "## 2. 功能范围",
+                "",
+                "### 用户登录",
+                "- 支持邮箱密码登录",
+                "",
+                "### 运营看板",
+                "- 提供运营数据概览",
+            ]
+        ),
         encoding="utf-8",
     )
     (output_dir / "delivery" / f"{project_dir.name}-delivery-manifest.json").write_text(
@@ -145,6 +161,10 @@ def _prepare_proof_pack_project(project_dir: Path) -> None:
         description="proof pack spec quality",
     )
     generator.scaffold_change_artifacts(change.id)
+    (project_dir / ".super-dev" / "changes" / change.id / "tasks.md").write_text(
+        "# Tasks\n\n- [x] 支持邮箱密码登录\n- [x] 提供运营数据概览\n",
+        encoding="utf-8",
+    )
 
 
 class TestWebAPI:

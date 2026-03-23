@@ -11,6 +11,7 @@ from super_dev.analyzer import (
     ArchitectureReport,
     Dependency,
     DesignPattern,
+    FeatureChecklistBuilder,
     ImpactAnalyzer,
     PatternType,
     ProjectAnalyzer,
@@ -515,6 +516,90 @@ class TestRepoMapBuilder:
         markdown = files["markdown"].read_text(encoding="utf-8")
         assert "# Repo Map" in markdown
         assert "Likely Entry Points" in markdown
+
+
+class TestFeatureChecklistBuilder:
+    def test_build_feature_checklist_with_explicit_gap(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / f"{temp_project_dir.name}-prd.md").write_text(
+            "\n".join(
+                [
+                    "# PRD",
+                    "",
+                    "## 2. 功能范围",
+                    "",
+                    "### 用户登录",
+                    "- 支持邮箱密码登录",
+                    "",
+                    "### 数据看板",
+                    "- 提供运营数据面板",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        change_dir = temp_project_dir / ".super-dev" / "changes" / "demo-change"
+        change_dir.mkdir(parents=True, exist_ok=True)
+        (change_dir / "tasks.md").write_text(
+            "\n".join(
+                [
+                    "# Tasks",
+                    "",
+                    "- [x] 用户登录",
+                    "- [ ] 数据看板",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (output_dir / f"{temp_project_dir.name}-research.md").write_text(
+            "| 优先级 | 事项 | 说明 |\n|:---:|:---|:---|\n| P1 | 数据看板 | 未实现 |\n",
+            encoding="utf-8",
+        )
+
+        builder = FeatureChecklistBuilder(temp_project_dir)
+        report = builder.build()
+        files = builder.write(report)
+
+        assert report.status == "partial"
+        assert report.high_priority_gap_count == 1
+        assert report.missing_count >= 1
+        assert report.total_features >= 2
+        assert files["markdown"].exists()
+        assert files["json"].exists()
+        markdown = files["markdown"].read_text(encoding="utf-8")
+        assert "# Feature Checklist" in markdown
+        assert "数据看板" in markdown
+
+    def test_feature_checklist_ignores_host_runtime_validation_noise(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / f"{temp_project_dir.name}-prd.md").write_text(
+            "\n".join(
+                [
+                    "# PRD",
+                    "",
+                    "## 2. 功能需求",
+                    "",
+                    "### 用户登录",
+                    "- 支持邮箱密码登录",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        change_dir = temp_project_dir / ".super-dev" / "changes" / "demo-change"
+        change_dir.mkdir(parents=True, exist_ok=True)
+        (change_dir / "tasks.md").write_text("# Tasks\n\n- [x] 支持邮箱密码登录\n", encoding="utf-8")
+        (output_dir / f"{temp_project_dir.name}-host-runtime-validation.md").write_text(
+            "# Host Runtime Validation Matrix\n\n## Current Blockers\n\n- **trae** (validation) 宿主尚未完成真人运行时验收\n",
+            encoding="utf-8",
+        )
+
+        builder = FeatureChecklistBuilder(temp_project_dir)
+        report = builder.build()
+
+        assert report.status == "ready"
+        assert report.high_priority_gap_count == 0
+        assert not any("真人运行时验收" in item.title for item in report.items)
 
 
 class TestImpactAnalyzer:

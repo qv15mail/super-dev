@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .analyzer import FeatureChecklistBuilder
 from .release_readiness import ReleaseReadinessEvaluator
 from .review_state import load_docs_confirmation, load_ui_revision
 from .specs import SpecValidator
@@ -73,6 +74,7 @@ class ProofPackReport:
         preferred = {
             "Docs Confirmation",
             "Spec Quality",
+            "Scope Coverage",
             "Frontend Runtime",
             "UI Review",
             "Delivery Manifest",
@@ -92,6 +94,9 @@ class ProofPackReport:
         if spec_quality and spec_quality.status != "ready":
             change_id = str(spec_quality.details.get("change_id", "<change_id>"))
             actions.append(f"先执行 `super-dev spec quality {change_id}` 并补齐 proposal/spec/tasks/validation 的缺口。")
+        scope_coverage = artifact_names.get("Scope Coverage")
+        if scope_coverage and scope_coverage.status != "ready":
+            actions.append("先执行 `super-dev feature-checklist`，补齐高优先级未实现项，或把未落地能力明确降级到后续版本。")
         ui_revision = artifact_names.get("UI Revision State")
         if ui_revision and ui_revision.status != "ready":
             actions.append("先完成 UI 改版闭环：更新 UIUX 文档、重做前端、重新执行 frontend runtime 与 UI review。")
@@ -243,6 +248,7 @@ class ProofPackBuilder:
                 self._docs_confirmation_artifact(),
                 self._ui_revision_artifact(),
                 self._spec_quality_artifact(),
+                self._scope_coverage_artifact(),
                 self._repo_map_artifact(),
                 self._dependency_graph_artifact(),
                 self._impact_analysis_artifact(),
@@ -528,5 +534,26 @@ class ProofPackBuilder:
             status="ready" if report.passed else "pending",
             summary=f"score={report.score}/100, passed={report.passed}",
             path=str(files["json"]),
+            details=report.to_dict(),
+        )
+
+    def _scope_coverage_artifact(self) -> ProofPackArtifact:
+        builder = FeatureChecklistBuilder(self.project_dir)
+        report = builder.build()
+        paths = builder.write(report)
+        coverage_text = (
+            f"{report.coverage_rate:.1f}%"
+            if report.coverage_rate is not None
+            else "unknown"
+        )
+        ready = report.status == "ready"
+        return ProofPackArtifact(
+            name="Scope Coverage",
+            status="ready" if ready else "pending",
+            summary=(
+                f"status={report.status}, coverage={coverage_text}, "
+                f"high_priority_gaps={report.high_priority_gap_count}"
+            ),
+            path=str(paths["json"]),
             details=report.to_dict(),
         )

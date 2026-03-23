@@ -1852,7 +1852,7 @@ async def list_policy_presets() -> dict[str, Any]:
             },
             {
                 "id": "enterprise",
-                "description": "商业级强治理（required hosts + ready 校验）",
+                "description": "商业级强治理（更高质量阈值 + host profile，可按项目配置关键宿主）",
             },
         ]
     }

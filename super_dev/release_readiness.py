@@ -21,6 +21,7 @@ from . import __version__
 from .catalogs import HOST_TOOL_IDS
 from .integrations import IntegrationManager
 from .skills import SkillManager
+from .analyzer import FeatureChecklistBuilder
 from .specs import SpecValidator
 
 
@@ -156,6 +157,7 @@ class ReleaseReadinessEvaluator:
                 self._check_packaging_entrypoints(),
                 self._check_release_spec_exists(),
                 self._check_spec_quality(),
+                self._check_scope_coverage(),
             ]
         )
         if verify_tests:
@@ -344,6 +346,44 @@ class ReleaseReadinessEvaluator:
         )
         return ReleaseReadinessCheck(
             name="Spec Quality",
+            passed=passed,
+            detail=detail,
+            severity="high" if not passed else "low",
+            recommendation=recommendation,
+        )
+
+    def _check_scope_coverage(self) -> ReleaseReadinessCheck:
+        builder = FeatureChecklistBuilder(self.project_dir)
+        report = builder.build()
+        builder.write(report)
+
+        coverage_text = (
+            f"{report.coverage_rate:.1f}%"
+            if report.coverage_rate is not None
+            else "unknown"
+        )
+        detail = (
+            f"status={report.status}, coverage={coverage_text}, "
+            f"high_priority_gaps={report.high_priority_gap_count}, missing={report.missing_count}, unknown={report.unknown_count}"
+        )
+
+        if report.status == "unknown":
+            return ReleaseReadinessCheck(
+                name="Scope Coverage",
+                passed=True,
+                detail=detail,
+                severity="low",
+                recommendation="如需确认 PRD 全量覆盖率，先执行 `super-dev feature-checklist` 生成范围完成度报告。",
+            )
+
+        passed = report.high_priority_gap_count == 0 and report.missing_count == 0
+        recommendation = (
+            "先补齐 P0/P1 缺口或把未实现能力明确降级为后续版本，再重新执行 `super-dev feature-checklist`。"
+            if not passed
+            else "当前范围覆盖率未发现高优先级缺口。"
+        )
+        return ReleaseReadinessCheck(
+            name="Scope Coverage",
             passed=passed,
             detail=detail,
             severity="high" if not passed else "low",

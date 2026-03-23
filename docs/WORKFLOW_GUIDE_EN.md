@@ -187,6 +187,7 @@ super-dev start --idea "<requirement>"  # recommended machine-side bootstrap
 super-dev "<requirement>"               # local governance entry, not host replacement
 super-dev pipeline "<requirement>"      # advanced explicit mode
 super-dev repo-map                      # generate a codebase map before working on an existing repo
+super-dev feature-checklist             # audit PRD-wide feature coverage and separate pipeline completion from full scope completion
 super-dev dependency-graph              # generate the dependency graph and critical paths before large refactors
 super-dev impact "Change the login flow" --files services/auth.py   # inspect impact before touching critical flows
 super-dev regression-guard "Change the login flow" --files services/auth.py   # turn impact into an executable regression checklist
@@ -350,13 +351,29 @@ A change is considered release-ready only if all are true:
 5. Delivery manifest reports `ready`.
 6. `super-dev release proof-pack` aggregates the delivery evidence set.
 
-`release proof-pack` and `release readiness` also ingest the active change's `spec quality` result so the unified release panel includes proposal/spec/plan/tasks/checklist/validation maturity.
+`release proof-pack` and `release readiness` also ingest the active change's `spec quality` result so the unified release panel includes proposal/spec/plan/tasks/checklist/validation maturity. They now also ingest `feature-checklist` so pipeline completion is separate from full PRD scope completion.
 
 To confirm that a host really completed research, wrote the three core docs to disk, and stopped at the confirmation gate, run:
 
 ```bash
 super-dev integrate validate --auto
 ```
+
+If the system says the pipeline is complete but your gap analysis still lists major unimplemented items, run:
+
+```bash
+super-dev feature-checklist
+```
+
+This outputs:
+- `coverage_rate`
+- `high_priority_gap_count`
+- `missing / unknown` feature items
+
+Use it to distinguish:
+- `Pipeline Completed`
+- `Delivery Ready`
+- `Scope Coverage`
 
 Run full preflight before tagging:
 
@@ -409,7 +426,8 @@ Recommended enterprise flow:
 
 1. Initialize policy with `super-dev policy init --preset enterprise --force`.
 2. Run `super-dev detect --auto --save-profile` before pipeline execution.
-3. Keep `enforce_required_hosts_ready=true` and set `min_required_host_score` based on team baseline.
+3. Populate `required_hosts` with the hosts your team actually uses.
+4. Enable `enforce_required_hosts_ready=true` only when you want hard host readiness enforcement, then set `min_required_host_score`.
 
 Interactive installer (default, multi-select hosts):
 

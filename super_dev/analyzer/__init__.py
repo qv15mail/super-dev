@@ -12,6 +12,7 @@ from .dependency_graph import (
     DependencyNode,
 )
 from .detectors import detect_project_type, detect_tech_stack
+from .feature_checklist import FeatureChecklistBuilder, FeatureChecklistItem, FeatureCoverageReport
 from .impact import ImpactAnalysisReport, ImpactAnalyzer, ImpactItem
 from .models import (
     ArchitecturePattern,
@@ -40,6 +41,9 @@ __all__ = [
     "RepoMapBuilder",
     "RepoMapItem",
     "RepoMapReport",
+    "FeatureChecklistBuilder",
+    "FeatureChecklistItem",
+    "FeatureCoverageReport",
     "ImpactAnalyzer",
     "ImpactAnalysisReport",
     "ImpactItem",
