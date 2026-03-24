@@ -138,12 +138,17 @@ export default definePluginEntry({
     api.registerTool({
       name: "super_dev_review",
       label: "Super Dev Review",
-      description: "Run a targeted review: docs, ui, architecture, or quality.",
+      description: "Run a targeted review or confirm a gate. Types: docs, ui, architecture, quality. Pass status='confirmed' to approve a gate.",
       parameters: Type.Object({
         type: Type.String({ description: "Review type: docs, ui, architecture, quality" }),
+        status: Type.Optional(Type.String({ description: "Set status: confirmed, revision_requested" })),
+        comment: Type.Optional(Type.String({ description: "Comment for the review action" })),
       }),
       async execute(_id: string, params: Record<string, unknown>) {
-        return formatToolResult(await invokeSuperDev(["review", params.type as string], { cwd: cwd(), bin: bin(), timeout: timeout() }));
+        const args = ["review", params.type as string];
+        if (params.status) args.push("--status", params.status as string);
+        if (params.comment) args.push("--comment", params.comment as string);
+        return formatToolResult(await invokeSuperDev(args, { cwd: cwd(), bin: bin(), timeout: timeout() }));
       },
     });
 
