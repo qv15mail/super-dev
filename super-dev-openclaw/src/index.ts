@@ -8,8 +8,8 @@
 
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { Type } from "@sinclair/typebox";
-import { invokeSuperDev, formatToolResult } from "./utils/subprocess.js";
-import { resolvePluginConfig } from "./types.js";
+import { invokeSuperDev, formatToolResult } from "./utils/subprocess";
+import { resolvePluginConfig } from "./types";
 
 export default definePluginEntry({
   id: "super-dev",
