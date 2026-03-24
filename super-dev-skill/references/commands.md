@@ -4,10 +4,14 @@
 
 ```bash
 # 0-1 新项目：完整流水线
-super-dev pipeline "需求描述" --frontend next --backend node --platform web --domain fintech
+super-dev pipeline "需求描述" --frontend react --backend node --platform web --domain fintech
+super-dev "需求描述"                    # 等价于 pipeline
 
-# 1-N 已有项目：初始化
-super-dev init --frontend react-vite --backend python
+# 缺陷修复（轻量路径）
+super-dev fix "修复登录页 bug"
+
+# 1-N 已有项目：初始化（name 为必填位置参数）
+super-dev init my-project -f react-vite -b python
 
 # 跳转到指定阶段
 super-dev run research          # 按名称
@@ -43,8 +47,9 @@ super-dev spec validate <id>    # 验证格式
 ## 质量与审查
 
 ```bash
-super-dev quality               # 质量门禁检查
-super-dev quality --threshold 90 # 指定阈值
+super-dev quality               # 运行所有质量检查
+super-dev quality -t code       # 只检查代码质量
+super-dev quality -t all        # 检查所有维度
 super-dev review docs           # 文档审查
 super-dev review ui             # UI 审查
 super-dev review architecture   # 架构审查
@@ -70,8 +75,10 @@ super-dev expert RCA "故障根因分析"
 ```bash
 super-dev release readiness     # 发布就绪度检查
 super-dev release proof-pack    # 生成交付证明包
-super-dev deploy                # 生成 CI/CD 配置
-super-dev deploy --platform github  # 指定平台
+super-dev deploy                # 生成部署配置
+super-dev deploy --cicd github  # 生成 GitHub Actions
+super-dev deploy --docker       # 生成 Dockerfile
+super-dev deploy --rehearsal    # 生成发布演练清单
 ```
 
 ## 配置管理
@@ -97,6 +104,6 @@ super-dev feature-checklist     # PRD 范围覆盖率
 
 **平台**: web, mobile, wechat, desktop
 **前端**: next, react-vite, vue-vite, nuxt, remix, angular, sveltekit, astro, solid, qwik, gatsby
-**后端**: node, python, go, java, rust, php, ruby, csharp, kotlin, swift
+**后端**: node, python, go, java, rust, php, ruby, csharp, kotlin, swift, elixir, scala, dart
 **领域**: fintech, ecommerce, medical, social, iot, education
 **CI/CD**: github, gitlab, jenkins, azure, bitbucket

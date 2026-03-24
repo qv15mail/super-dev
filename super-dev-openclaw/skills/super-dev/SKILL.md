@@ -103,21 +103,23 @@ Super Dev 流水线已激活，当前不是普通聊天模式。
 
 ## 六、完整流水线阶段（9 阶段 + 2 门禁）
 
+CLI 阶段编号为 1-9（`super-dev run 1` 到 `super-dev run 9`）：
+
 ```
-Stage 0: research
-Stage 1: docs (PRD + architecture + UIUX)
+Stage 1: research（需求增强 + 竞品研究）
+Stage 2: docs（PRD + architecture + UIUX）
     [DOC_CONFIRM_GATE] -- 必须暂停等待用户确认
-Stage 2: spec
-Stage 3: frontend
+Stage 3: spec（任务拆解）
+Stage 4: frontend（前端优先实现）
     [PREVIEW_CONFIRM_GATE] -- 必须暂停等待用户确认
-Stage 4: backend
-Stage 5: redteam (红队审查)
-Stage 6: quality (质量门禁)
-Stage 7: code-review + AI prompts
-Stage 8: delivery (CI/CD + 交付包)
+Stage 5: backend（后端 + 数据库 + 测试）
+Stage 6: quality（红队审查 + 质量门禁）
+Stage 7: code-review（代码审查 + AI 提示词）
+Stage 8: deploy（CI/CD + 迁移 + 发布演练）
+Stage 9: delivery（交付包 + 就绪度检查）
 ```
 
-### Stage 0: 需求增强（Research）
+### Stage 1: 需求增强（Research）
 
 **你应该做的：**
 1. 读取本地知识库（见第五节）
@@ -127,13 +129,13 @@ Stage 8: delivery (CI/CD + 交付包)
 
 **告知用户：**
 ```
-[Stage 0/8] 需求增强已完成
+[Stage 1/9] 需求增强已完成
   产出: output/{project}-research.md
   知识缓存: output/knowledge-cache/{project}-knowledge-bundle.json
   本地知识命中: {N} 条 | 联网研究: {M} 条
 ```
 
-### Stage 1: 三份核心文档
+### Stage 2: 三份核心文档
 
 **你应该做的：**
 1. 流水线自动生成 PRD、架构、UIUX 文档
@@ -145,7 +147,7 @@ Stage 8: delivery (CI/CD + 交付包)
 
 **告知用户：**
 ```
-[Stage 1/8] 三份核心文档已完成
+[Stage 2/9] 三份核心文档已完成
   PRD: output/{project}-prd.md
   架构: output/{project}-architecture.md
   UI/UX: output/{project}-uiux.md
@@ -178,14 +180,14 @@ Stage 8: delivery (CI/CD + 交付包)
 **如果用户说"确认"或"可以继续"：**
 调用 `exec command:"super-dev review docs --status confirmed --comment '用户已确认'"` 然后 `exec command:"super-dev run --resume"`
 
-### Stage 2: Spec 创建
+### Stage 3: Spec 创建
 
 **你应该做的：**
 1. 调用 `super_dev_spec propose` 或 `exec command:"super-dev spec propose"`
 2. 确认 `.super-dev/changes/*/proposal.md` 和 `.super-dev/changes/*/tasks.md` 已生成
 3. 展示任务清单给用户
 
-### Stage 3: 前端实现
+### Stage 4: 前端实现
 
 **你应该做的：**
 1. 按任务清单实现前端（先交付，做到可预览）
@@ -207,21 +209,21 @@ Stage 8: delivery (CI/CD + 交付包)
   3. 不满意请说明修改要求，我会更新 UIUX 文档并重做前端
 ```
 
-### Stage 4: 后端实现
+### Stage 5: 后端实现
 
 **你应该做的：**
 1. 实现 API、数据层、迁移脚本
 2. 运行单元测试和集成测试
 3. 确保前后端联调通过
 
-### Stage 5: 红队审查
+### Stage 6: 质量检查（含红队审查）
 
 **你应该做的：**
 1. 调用 `exec command:"super-dev quality"` 触发完整质量检查（含红队审查）
 2. 检查产出 `output/*-redteam.md`
 3. 如有 high/critical 问题，必须修复后才能继续
 
-### Stage 6: 质量门禁
+### -- 质量门禁评分
 
 **你应该做的：**
 1. 确认质量评分达到阈值（默认 80 分）
@@ -242,7 +244,7 @@ Stage 8: delivery (CI/CD + 交付包)
   4. 然后执行: super-dev run --resume
 ```
 
-### Stage 7-8: 代码审查 + 交付
+### Stage 7-9: 代码审查 + 部署 + 交付
 
 **你应该做的：**
 1. 调用 `exec command:"super-dev deploy"` 生成 CI/CD 配置
@@ -252,7 +254,7 @@ Stage 8: delivery (CI/CD + 交付包)
 
 **最终展示模板：**
 ```
-[Stage 8/8] 交付完成
+[Stage 9/9] 交付完成
 
 发布就绪度: {score}/100
 CI/CD: {platform} 配置已生成
@@ -347,27 +349,36 @@ exec command:"super-dev run 6"            # 按编号跳转
 所有治理动作通过 exec 或已注册的 Plugin Tool 完成：
 
 ```bash
-# 完整流水线
-super-dev pipeline "需求描述" --frontend next --backend node --platform web
+# 完整流水线（0-1 新项目）
+super-dev pipeline "需求描述" --frontend react --backend node --platform web
+super-dev "需求描述"                    # 等价于 pipeline
 
-# 项目初始化
-super-dev init --frontend react-vite --backend python
+# 缺陷修复（轻量路径）
+super-dev fix "修复登录页 bug"
+
+# 项目初始化（1-N 已有项目）
+super-dev init my-project -f react-vite -b python
 
 # 状态与恢复
-super-dev status
-super-dev run --resume
-super-dev run frontend
-super-dev run 6
+super-dev status                        # 查看流水线状态
+super-dev run --resume                  # 从中断处继续
+super-dev run frontend                  # 跳转到前端阶段（继续执行后续）
+super-dev run 6                         # 按编号跳转（1=research...9=delivery）
+super-dev jump frontend                 # 快捷跳转
+super-dev confirm docs                  # 快捷确认门禁
 
 # Spec 管理
-super-dev spec list
-super-dev spec show <id>
-super-dev spec propose
-super-dev spec validate <id>
+super-dev spec list                     # 列出活跃变更
+super-dev spec show <change-id>         # 查看详情
+super-dev spec propose <change-id> --title "标题" --description "描述"
+super-dev spec scaffold <change-id>     # 生成实现骨架
+super-dev spec validate <change-id>     # 验证格式
+super-dev task list                     # 列出 Spec 任务
+super-dev task run <change-id>          # 执行 Spec 任务
 
 # 质量与审查
-super-dev quality
-super-dev quality --threshold 90
+super-dev quality                       # 运行所有检查
+super-dev quality -t code               # 只检查代码质量
 super-dev review docs --status confirmed --comment "已确认"
 super-dev review ui --status confirmed
 super-dev review architecture --status confirmed
@@ -379,16 +390,36 @@ super-dev expert ARCHITECT "微服务边界"
 super-dev expert SECURITY "API 安全审计"
 
 # 发布与交付
-super-dev release readiness
-super-dev release proof-pack
-super-dev deploy --platform github
+super-dev release readiness             # 发布就绪度检查
+super-dev release proof-pack            # 生成交付证明包
+super-dev deploy --cicd github          # 生成 CI/CD 配置
+super-dev deploy --docker               # 生成 Dockerfile
+super-dev deploy --rehearsal            # 生成发布演练清单
+
+# 代码库分析（增量开发重要）
+super-dev analyze                       # 分析项目结构和技术栈
+super-dev repo-map                      # 生成代码库地图
+super-dev dependency-graph              # 依赖图与关键路径
+super-dev impact "变更描述"              # 变更影响范围分析
+super-dev regression-guard "变更描述"    # 回归检查清单
+super-dev feature-checklist             # PRD 范围覆盖率
 
 # 配置
-super-dev config list
-super-dev config set quality_gate 90
+super-dev config list                   # 列出所有配置
+super-dev config get quality_gate       # 获取指定配置
+super-dev config set quality_gate 90    # 设置配置
 
 # 诊断
-super-dev doctor --host openclaw
+super-dev doctor --host openclaw        # 诊断指定宿主
+super-dev doctor                        # 诊断所有宿主
+
+# 设计系统
+super-dev design generate               # 生成设计系统
+super-dev design tokens                 # 生成设计 token
+
+# 治理策略
+super-dev policy show                   # 查看当前策略
+super-dev policy presets                # 列出策略预设
 ```
 
 ---
@@ -399,15 +430,20 @@ super-dev doctor --host openclaw
 
 | 文件 | 阶段 | 说明 |
 |------|------|------|
-| `*-research.md` | Stage 0 | 竞品研究报告 |
-| `*-prd.md` | Stage 1 | 产品需求文档 |
-| `*-architecture.md` | Stage 1 | 架构设计文档 |
-| `*-uiux.md` | Stage 1 | UI/UX 设计规范 |
-| `*-execution-plan.md` | Stage 1 | 执行路线图 |
-| `*-redteam.md` | Stage 5 | 红队审查报告 |
+| `*-research.md` | Stage 1 | 竞品研究报告 |
+| `*-prd.md` | Stage 2 | 产品需求文档 |
+| `*-architecture.md` | Stage 2 | 架构设计文档 |
+| `*-uiux.md` | Stage 2 | UI/UX 设计规范 |
+| `*-execution-plan.md` | Stage 2 | 执行路线图 |
+| `*-frontend-blueprint.md` | Stage 2 | 前端页面蓝图 |
+| `*-redteam.md` | Stage 6 | 红队审查报告 |
 | `*-quality-gate.md` | Stage 6 | 质量门禁报告 |
+| `*-ui-review.md` / `.json` | Stage 6 | UI 审查评分 |
 | `*-code-review.md` | Stage 7 | 代码审查指南 |
-| `*-release-readiness.md` | Stage 8 | 发布就绪度报告 |
+| `*-ai-prompt.md` | Stage 7 | AI 编码提示词 |
+| `*-pipeline-metrics.json` | 全流程 | 流水线指标 |
+| `*-release-readiness.md` | Stage 9 | 发布就绪度报告 |
+| `rehearsal/*-launch-rehearsal.md` | Stage 8 | 发布演练报告 |
 
 ### .super-dev/ 目录（状态与 Spec）
 
@@ -425,10 +461,14 @@ super-dev doctor --host openclaw
 1. **所有产物必须真实写入文件**，不能只在聊天里描述。
 2. **两个门禁必须暂停**，未经用户确认不得跳过。
 3. **前端先交付**，做到可预览再做后端。
-4. **UI 避免 AI 生成感**：禁止紫粉渐变主题、emoji 作为图标、纯默认字体。
+4. **UI 避免 AI 生成感**：禁止紫粉渐变主题、emoji 作为图标、纯默认系统字体直出。
 5. **UI 必须遵循 output/*-uiux.md**，优先使用其中推荐的组件库和设计系统。
-6. **安全/性能约束来自红队报告**，必须在实现中落地。
-7. **质量门禁阈值必须达标**（默认 80 分），未达标不得交付。
+6. **UI 实现前必须先定义**：typography 字体系统、颜色 token、间距 token、栅格系统、组件状态矩阵（hover/active/focus/disabled），然后再实现页面。
+7. **优先真实内容**：优先使用真实截图、信任模块、证据点和任务流，而非装饰性 hero section。
+8. **页面必须提供可访问交互**：focus 态、hover/active 态、reduced-motion 支持。
+9. **安全/性能约束来自红队报告**，必须在实现中落地。
+10. **质量门禁阈值必须达标**（默认 80 分），未达标不得交付。
+11. **每次回复包含**：当前阶段、本次变更文件路径、下一步动作。
 
 ---
 
