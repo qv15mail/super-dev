@@ -6,20 +6,17 @@
  * 最后修改：2026-03-24
  */
 
+import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { Type } from "@sinclair/typebox";
 import { invokeSuperDev, formatToolResult } from "./utils/subprocess.js";
 import { resolvePluginConfig } from "./types.js";
 
-/**
- * 内联 definePluginEntry 逻辑，避免对 openclaw SDK 的运行时路径依赖。
- * OpenClaw 加载插件时只需要 default export 是 { id, name, description, register } 对象。
- */
-export default {
+export default definePluginEntry({
   id: "super-dev",
   name: "Super Dev Pipeline",
   description:
     "AI development orchestration - research-first, commercial-grade delivery pipeline with 10 expert roles",
-  register(api: { pluginConfig?: Record<string, unknown>; registerTool: (...args: unknown[]) => void }) {
+  register(api: any) {
     const config = () => resolvePluginConfig(api.pluginConfig);
     const cwd = () => config().projectDir || process.cwd();
     const bin = () => config().superDevBin;
@@ -194,4 +191,4 @@ export default {
       { optional: true },
     );
   },
-};
+});
