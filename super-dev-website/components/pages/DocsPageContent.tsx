@@ -123,7 +123,7 @@ const zhContent: Content = {
   installBullets: [
     'pip 或 uv 会自动安装 Super Dev 的 Python 依赖。',
     '不会自动安装 Claude Code、Cursor、Trae、Gemini CLI、VS Code Copilot 等宿主本体。',
-    '终端输入 super-dev 后，会进入宿主安装引导，并把 20 个适配宿主的对应协议面写入宿主和项目。',
+    '终端输入 super-dev 后，会进入宿主安装引导，并把 21 个适配宿主的对应协议面写入宿主和项目。',
   ],
   installCode:
     'pip install -U super-dev\n# 或\nuv tool install super-dev\n\n# 打开安装引导\nsuper-dev\n\n# 更新到最新版\nsuper-dev update',
@@ -587,7 +587,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             <div className="max-w-[860px]">
               <div className="mb-5 flex flex-wrap items-center gap-2">
                 <Badge variant="version">{content.heroKicker}</Badge>
-                <Badge variant="certified">v2.1.1</Badge>
+                <Badge variant="certified">v2.1.2</Badge>
                 <Badge variant="compatible">{locale === 'en' ? 'Bilingual' : '中英双语'}</Badge>
               </div>
               <h1 className="max-w-[900px] text-4xl font-bold leading-[1.08] tracking-tight text-text-primary sm:text-5xl lg:text-[3.5rem]">
