@@ -200,6 +200,61 @@ def test_run_confirm_phase_updates_run_state_for_generic_phase(temp_project_dir,
     assert confirmations["frontend"]["status"] == "confirmed"
 
 
+def test_run_confirm_phase_initializes_status_when_missing(temp_project_dir, monkeypatch) -> None:
+    cli = SuperDevCLI()
+    monkeypatch.chdir(temp_project_dir)
+
+    code = cli._cmd_run_confirm_phase(
+        phase_name="frontend",
+        comment="前端预览已通过",
+        actor="tester",
+    )
+    assert code == 0
+
+    run_state = cli._read_pipeline_run_state(temp_project_dir) or {}
+    assert run_state["status"] == "running"
+    assert run_state["status_normalized"] == "running"
+
+
+def test_run_status_recommendation_treats_missing_scope_status_as_unknown() -> None:
+    cli = SuperDevCLI()
+
+    recommendation = cli._run_status_recommendation(
+        run_state={"status": "running"},
+        docs_state={"status": "confirmed"},
+        preview_state={"status": "confirmed"},
+        ui_state={"status": "confirmed"},
+        architecture_state={"status": "confirmed"},
+        quality_state={"status": "confirmed"},
+    )
+
+    assert recommendation == "super-dev feature-checklist"
+
+
+def test_run_status_uses_running_for_existing_confirmation_only_state(
+    temp_project_dir, monkeypatch, capsys
+) -> None:
+    cli = SuperDevCLI()
+    monkeypatch.chdir(temp_project_dir)
+    cli._write_pipeline_run_state(
+        temp_project_dir,
+        {
+            "phase_confirmations": {
+                "frontend": {
+                    "status": "confirmed",
+                    "actor": "tester",
+                }
+            }
+        },
+    )
+
+    code = cli._cmd_run_status(type("Args", (), {"json": True})())
+
+    assert code == 0
+    output = capsys.readouterr().out
+    assert '"status": "running"' in output
+
+
 def test_status_alias_routes_to_run_status(monkeypatch) -> None:
     cli = SuperDevCLI()
     called = {"status": False}
