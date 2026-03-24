@@ -1,0 +1,39 @@
+{
+  "id": "super-dev",
+  "name": "Super Dev Pipeline",
+  "description": "AI development orchestration - research-first, commercial-grade delivery pipeline with 10 expert roles",
+  "version": "2.1.2",
+  "skills": ["./skills"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "projectDir": {
+        "type": "string",
+        "description": "Project working directory (defaults to current working directory)",
+        "default": ""
+      },
+      "superDevBin": {
+        "type": "string",
+        "description": "super-dev CLI executable path (resolved from PATH by default)",
+        "default": "super-dev"
+      },
+      "qualityThreshold": {
+        "type": "number",
+        "description": "Quality gate score threshold (0-100)",
+        "default": 80
+      },
+      "timeout": {
+        "type": "number",
+        "description": "CLI command timeout in milliseconds",
+        "default": 300000
+      },
+      "language": {
+        "type": "string",
+        "description": "Output language preference",
+        "enum": ["zh", "en"],
+        "default": "zh"
+      }
+    }
+  }
+}

@@ -1,11 +1,13 @@
 const analyticsStore = [];
+let nextAnalyticsId = 1;
 
 function listAnalytics() {
-  return analyticsStore;
+  return [...analyticsStore];
 }
 
 function createAnalytics(payload) {
-  const record = { id: analyticsStore.length + 1, ...payload };
+  const { id, ...safePayload } = payload;
+  const record = { id: nextAnalyticsId++, ...safePayload };
   analyticsStore.push(record);
   return record;
 }

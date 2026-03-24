@@ -7,6 +7,7 @@
 """
 
 import csv
+import logging
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -103,7 +104,7 @@ class CodeGenerator:
                     )
                     self.snippets.append(snippet)
                 except Exception as e:
-                    print(f"Warning: Failed to parse snippet: {e}")
+                    logging.getLogger(__name__).warning(f"Failed to parse snippet: {e}")
 
     def _parse_props(self, props_str: str) -> dict[str, str]:
         """解析 props 字符串"""

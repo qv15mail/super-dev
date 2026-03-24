@@ -32,6 +32,7 @@ class SkillManager:
         "codex-cli": "~/.codex/skills",
         "iflow": "~/.iflow/skills",
         "jetbrains-ai": "~/.junie/skills",
+        "openclaw": "~/.openclaw/skills",
         "opencode": "~/.config/opencode/skills",
         "qoder-cli": "~/.qoder/skills",
         "qoder": "~/.qoderwork/skills",

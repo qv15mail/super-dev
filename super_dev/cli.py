@@ -97,7 +97,7 @@ class SuperDevCLI:
     """Super Dev 命令行接口"""
 
     def __init__(self):
-        self.console = create_console() if RICH_AVAILABLE else None
+        self.console = create_console()
         self.parser = self._create_parser()
         self.logger = get_logger('cli', level='WARNING')  # CLI只记录WARNING及以上级别
 
@@ -3398,16 +3398,19 @@ super-dev start --idea "你的需求"
             }
             expert_role, expert_title = expert_map.get(normalized, ("CODE", "代码专家"))
 
-            from rich.panel import Panel
             self.console.print("")
-            self.console.print(Panel(
-                f"[bold cyan]Super Dev Run[/bold cyan]\n\n"
-                f"  [dim]环节[/dim]    {normalized} ({label})\n"
-                f"  [dim]专家[/dim]    [bold]{expert_role}[/bold] - {expert_title}",
-                border_style="cyan",
-                expand=True,
-                padding=(1, 2),
+            if RICH_AVAILABLE:
+                from rich.panel import Panel
+                self.console.print(Panel(
+                    f"[bold cyan]Super Dev Run[/bold cyan]\n\n"
+                    f"  [dim]环节[/dim]    {normalized} ({label})\n"
+                    f"  [dim]专家[/dim]    [bold]{expert_role}[/bold] - {expert_title}",
+                    border_style="cyan",
+                    expand=True,
+                    padding=(1, 2),
             ))
+            else:
+                self.console.print(f"Super Dev Run: {normalized} ({label}) | {expert_role} - {expert_title}")
             self.console.print("")
 
             if normalized in {"research", "prd", "architecture", "uiux"}:
@@ -3602,7 +3605,7 @@ super-dev start --idea "你的需求"
             + (", ".join(payload["skipped_gates"]) if payload["skipped_gates"] else "-")
         )
         scope_rate = payload["scope_coverage_rate"]
-        scope_rate_text = f"{float(scope_rate):.1f}%" if isinstance(scope_rate, (int, float)) else "-"
+        scope_rate_text = f"{float(scope_rate):.1f}%" if isinstance(scope_rate, int | float) else "-"
         self.console.print(f"  范围覆盖状态: {payload['scope_coverage_status']}")
         self.console.print(f"  范围覆盖率: {scope_rate_text}")
         self.console.print(f"  范围缺口: {payload['scope_gap_count']}")
@@ -5361,6 +5364,16 @@ super-dev start --idea "你的需求"
                 knowledge_cache_exists=knowledge_cache_file.exists(),
             )
 
+            # 初始化 resume 跳过时可能未赋值的变量
+            knowledge_bundle: dict | None = None
+            cicd_files: dict[str, str] = {}
+            remediation_outputs: dict = {"env_file": "", "checklist_file": "", "items_count": 0}
+            migration_files: dict[str, str] = {}
+            delivery_outputs: dict = {
+                "manifest_file": "", "report_file": "", "archive_file": "", "status": "skipped",
+            }
+            task_execution_summary = None
+
             # ========== 第 0 阶段: 需求增强 ==========
             _start_stage("0", "需求增强")
             if _should_skip_for_resume(0):
@@ -6329,9 +6342,13 @@ super-dev start --idea "你的需求"
                 self.console.print("    - backend/src/*")
                 self.console.print("    - backend/API_CONTRACT.md")
                 self.console.print("    - backend/migrations/*.sql")
-                if task_execution_summary is not None:
+                if task_execution_summary is not None and task_execution_summary.report_file:
+                    try:
+                        rel = Path(str(task_execution_summary.report_file)).relative_to(project_dir)
+                    except ValueError:
+                        rel = Path(str(task_execution_summary.report_file)).name
                     self.console.print(
-                        f"    - {Path(str(task_execution_summary.report_file)).relative_to(project_dir)}"
+                        f"    - {rel}"
                     )
                 self.console.print("")
             self.console.print("  CI/CD:")
@@ -8705,9 +8722,9 @@ super-dev start --idea "你的需求"
 
             status = "[green]已就绪[/green]" if host["ready"] else "[red]未安装[/red]"
 
-            integrate_ok = host.get("integrate_ok", True)
-            skill_ok = host.get("skill_ok", True)
-            slash_ok = host.get("slash_ok", True)
+            integrate_ok = bool(host.get("checks", {}).get("integrate", {}).get("ok", True))
+            skill_ok = bool(host.get("checks", {}).get("skill", {}).get("ok", True))
+            slash_ok = bool(host.get("checks", {}).get("slash", {}).get("ok", True))
 
             integrate_text = "[green]已安装[/green]" if integrate_ok else "[red]未安装[/red]"
             skill_text = "[green]已安装[/green]" if skill_ok else ("[dim]不适用[/dim]" if not IntegrationManager.requires_skill(target) else "[red]未安装[/red]")
@@ -9119,10 +9136,10 @@ super-dev start --idea "你的需求"
 
     def _fetch_latest_pypi_version(self) -> str | None:
         try:
-            response = requests.get("https://pypi.org/pypi/super-dev/json", timeout=10)
+            response = requests.get("https://pypi.org/pypi/super-dev/json", timeout=10)  # type: ignore[name-defined]
             response.raise_for_status()
             payload = response.json()
-        except Exception:
+        except (Exception, NameError):
             return None
         info = payload.get("info", {})
         version = info.get("version")
@@ -11326,6 +11343,7 @@ super-dev start --idea "你的需求"
             domain=domain,
             name=direct_overrides.get("name"),
             cicd=cicd,
+            mode=direct_overrides.get("mode", "feature"),
             skip_redteam=bool(direct_overrides.get("skip_redteam", False)),
             skip_scaffold=bool(direct_overrides.get("skip_scaffold", False)),
             skip_quality_gate=bool(direct_overrides.get("skip_quality_gate", False)),

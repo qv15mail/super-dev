@@ -8,8 +8,12 @@ Spec-Driven Development 数据模型
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class ChangeStatus(Enum):
@@ -104,8 +108,8 @@ class Spec:
     purpose: str = ""         # 规范目的
     requirements: list[Requirement] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
-    created_at: datetime = field(default_factory=datetime.now)
-    updated_at: datetime = field(default_factory=datetime.now)
+    created_at: datetime = field(default_factory=_utcnow)
+    updated_at: datetime = field(default_factory=_utcnow)
 
     @property
     def slug(self) -> str:
@@ -301,8 +305,8 @@ class Change:
     tasks: list[Task] = field(default_factory=list)
     spec_deltas: list[SpecDelta] = field(default_factory=list)
     design_notes: str = ""    # 设计笔记 (可选)
-    created_at: datetime = field(default_factory=datetime.now)
-    updated_at: datetime = field(default_factory=datetime.now)
+    created_at: datetime = field(default_factory=_utcnow)
+    updated_at: datetime = field(default_factory=_utcnow)
 
     @property
     def is_completed(self) -> bool:

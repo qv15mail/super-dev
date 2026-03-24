@@ -203,15 +203,18 @@ class TokenGenerator:
         elif max_val == b:
             h = 60 * (((r - g) / delta) + 4)
 
-        # Saturation
+        # Lightness (computed first, needed for saturation)
+        lightness_ratio: float = (max_val + min_val) / 2
+
+        # Saturation (HSL formula)
         s: float = 0.0
-        if max_val == 0:
+        if delta == 0:
             s = 0
         else:
-            s = (delta / max_val) * 100
+            s = (delta / (1 - abs(2 * lightness_ratio - 1))) * 100
 
-        # Lightness
-        lightness: float = ((max_val + min_val) / 2) * 100
+        # Lightness as percentage
+        lightness: float = lightness_ratio * 100
 
         return (round(h), round(s), round(lightness))
 

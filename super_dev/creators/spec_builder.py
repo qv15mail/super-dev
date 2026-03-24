@@ -54,12 +54,12 @@ class SpecBuilder:
         )
 
         # 2. 添加需求到变更
-        for req in requirements:
+        for idx, req in enumerate(requirements):
             self.spec_generator.add_requirement_to_change(
                 change_id=change_id,
-                spec_name=req['spec_name'],
-                requirement_name=req['req_name'],
-                description=req['description'],
+                spec_name=req.get('spec_name', change_id),
+                requirement_name=req.get('req_name', f'req-{idx}'),
+                description=req.get('description', ''),
                 scenarios=req.get('scenarios', []),
                 delta_type=DeltaType.ADDED
             )
@@ -137,7 +137,7 @@ class SpecBuilder:
                         spec_refs=[f"{delta.spec_name}::*"],
                     )
                 )
-        major += 1
+            major += 1
 
         # 后端与数据任务
         if backend != 'none':
@@ -153,7 +153,7 @@ class SpecBuilder:
                         spec_refs=[f"{delta.spec_name}::*"],
                     )
                 )
-        major += 1
+            major += 1
 
         # 联调与稳定性任务
         tasks.append(

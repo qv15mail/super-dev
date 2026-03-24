@@ -19,7 +19,7 @@
 
 ## Version
 
-Current version: `2.1.1`
+Current version: `2.1.2`
 
 ---
 
@@ -326,15 +326,15 @@ Shows the responsibility boundaries and call relationships of core source direct
 
 ---
 
-## 20 Host Support
+## 21 Host Support
 
-Super Dev integrates with 9 CLI hosts and 11 IDE hosts under three certification levels:
+Super Dev integrates with 10 CLI hosts and 11 IDE hosts under three certification levels:
 
 - **Certified**: fully aligned integration model; recommended for production use.
 - **Compatible**: complete integration path; awaiting extended real-world validation.
 - **Experimental**: functional integration; needs broader production testing.
 
-### CLI Hosts (9)
+### CLI Hosts (10)
 
 | Host | Trigger | Onboard Command |
 |------|---------|-----------------|
@@ -342,6 +342,7 @@ Super Dev integrates with 9 CLI hosts and 11 IDE hosts under three certification
 | Codex CLI | `super-dev: your requirement` | `super-dev onboard --host codex-cli` |
 | Gemini CLI | `/super-dev your requirement` | `super-dev onboard --host gemini-cli` |
 | OpenCode | `/super-dev your requirement` | `super-dev onboard --host opencode` |
+| OpenClaw | `/super-dev your requirement` | `openclaw plugins install @super-dev/openclaw-plugin` |
 | Kiro CLI | `/super-dev your requirement` | `super-dev onboard --host kiro-cli` |
 | Cursor CLI | `/super-dev your requirement` | `super-dev onboard --host cursor-cli` |
 | Qoder CLI | `/super-dev your requirement` | `super-dev onboard --host qoder-cli` |
@@ -617,6 +618,51 @@ super-dev onboard --host roo-code --force --yes
 super-dev onboard --host kilo-code --force --yes
 super-dev onboard --host cline --force --yes
 ```
+
+#### OpenClaw (Native Plugin)
+
+OpenClaw integrates via its native Plugin SDK -- no `super-dev onboard` needed, just install the npm plugin.
+
+**Installation:**
+```bash
+# Step 1: Install super-dev CLI
+pip install super-dev
+
+# Step 2: Install the OpenClaw plugin
+openclaw plugins install @super-dev/openclaw-plugin
+```
+
+**Trigger:**
+
+In the OpenClaw Agent chat panel, make sure your working directory is the target project, then type:
+```text
+super-dev: your requirement
+```
+or
+```text
+/super-dev your requirement
+```
+
+**10 registered tools:**
+
+| Tool | Purpose |
+|------|---------|
+| `super_dev_pipeline` | Run the full pipeline |
+| `super_dev_init` | Initialize project |
+| `super_dev_status` | Check pipeline status |
+| `super_dev_quality` | Quality gate check |
+| `super_dev_spec` | Spec management |
+| `super_dev_config` | Configuration management |
+| `super_dev_review` | Docs/UI/architecture review |
+| `super_dev_release` | Release readiness check |
+| `super_dev_expert` | Expert consultation (10 roles) |
+| `super_dev_run` | Generic CLI passthrough |
+
+**Notes:**
+1. The plugin bridges to `super-dev` CLI via subprocess, so `pip install super-dev` is required.
+2. Restart the OpenClaw Gateway or start a new session after installing for the plugin and skill to take effect.
+3. The plugin ships a built-in SKILL.md so the agent understands the pipeline protocol automatically.
+4. Run `super-dev doctor --host openclaw` to verify integration status.
 
 ---
 

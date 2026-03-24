@@ -153,6 +153,7 @@ HOST_TOOL_CATALOG: list[dict[str, str]] = [
     {"id": "kiro", "name": "Kiro"},
     {"id": "qoder", "name": "Qoder"},
     {"id": "trae", "name": "Trae"},
+    {"id": "openclaw", "name": "OpenClaw"},
 ]
 
 HOST_TOOL_IDS: tuple[str, ...] = tuple(item["id"] for item in HOST_TOOL_CATALOG)
@@ -196,6 +197,7 @@ CLI_HOST_TOOL_IDS: tuple[str, ...] = (
     "iflow",
     "kimi-cli",
     "kiro-cli",
+    "openclaw",
     "opencode",
     "qoder-cli",
 )
@@ -225,6 +227,7 @@ HOST_COMMAND_CANDIDATES: dict[str, list[str]] = {
     "qoder-cli": ["qoder", "qoder-cli"],
     "roo-code": ["roo", "roo-code"],
     "cursor": ["cursor"],
+    "openclaw": ["openclaw", "openclaw-cli"],
     "qoder": ["qoder"],
     "trae": ["trae"],
 }

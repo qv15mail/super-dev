@@ -8,6 +8,7 @@
 最后修改：2025-01-04
 """
 
+import logging
 from datetime import datetime
 
 from .requirement_parser import RequirementParser
@@ -4332,48 +4333,50 @@ spec:
 """
 
     def _render_ui_intelligence_summary(self, profile: dict) -> str:
+        lib = profile.get("primary_library", {})
+        stack = profile.get("component_stack", {})
         lines = [
-            f"- **界面定位**: {profile['surface']}",
-            f"- **信息密度**: {profile['information_density']}",
-            f"- **行业语气**: {profile['industry_tone']}",
-            f"- **首选组件生态**: {profile['primary_library']['name']}",
-            f"- **表单基线**: {profile['component_stack']['form']}",
-            f"- **数据展示基线**: {profile['component_stack']['table']} / {profile['component_stack']['chart']}",
+            f"- **界面定位**: {profile.get('surface', 'N/A')}",
+            f"- **信息密度**: {profile.get('information_density', 'N/A')}",
+            f"- **行业语气**: {profile.get('industry_tone', 'N/A')}",
+            f"- **首选组件生态**: {lib.get('name', 'N/A')}",
+            f"- **表单基线**: {stack.get('form', 'N/A')}",
+            f"- **数据展示基线**: {stack.get('table', 'N/A')} / {stack.get('chart', 'N/A')}",
             "",
             "**优先原则**:",
         ]
-        lines.extend(f"- {item}" for item in profile["benchmark_principles"])
+        lines.extend(f"- {item}" for item in profile.get("benchmark_principles", []))
         lines.extend(["", "**设计知识库关键词**:"])
-        lines.append("- " + " / ".join(profile["knowledge_keywords"]))
+        lines.append("- " + " / ".join(profile.get("knowledge_keywords", [])))
         return "\n".join(lines)
 
     def _render_component_ecosystem(self, profile: dict) -> str:
-        primary = profile["primary_library"]
+        primary = profile.get("primary_library", {})
         lines = [
-            f"#### 首选方案: {primary['name']}",
+            f"#### 首选方案: {primary.get('name', 'N/A')}",
             "",
-            f"**适用原因**: {primary['rationale']}",
+            f"**适用原因**: {primary.get('rationale', 'N/A')}",
             "",
             "**核心能力**:",
         ]
-        lines.extend(f"- {item}" for item in primary["strengths"])
+        lines.extend(f"- {item}" for item in primary.get("strengths", []))
         lines.extend(
             [
                 "",
                 "**实现注意事项**:",
             ]
         )
-        lines.extend(f"- {item}" for item in primary["notes"])
+        lines.extend(f"- {item}" for item in primary.get("notes", []))
         lines.extend(
             [
                 "",
                 "#### 配套技术基线",
                 "",
-                f"- **表单与验证**: {profile['component_stack']['form']}",
-                f"- **图表能力**: {profile['component_stack']['chart']}",
-                f"- **表格/数据工作区**: {profile['component_stack']['table']}",
-                f"- **图标体系**: {profile['component_stack']['icons']}",
-                f"- **动效能力**: {profile['component_stack']['motion']}",
+                f"- **表单与验证**: {profile.get('component_stack', {}).get('form', 'N/A')}",
+                f"- **图表能力**: {profile.get('component_stack', {}).get('chart', 'N/A')}",
+                f"- **表格/数据工作区**: {profile.get('component_stack', {}).get('table', 'N/A')}",
+                f"- **图标体系**: {profile.get('component_stack', {}).get('icons', 'N/A')}",
+                f"- **动效能力**: {profile.get('component_stack', {}).get('motion', 'N/A')}",
             ]
         )
 
@@ -4381,7 +4384,7 @@ spec:
         if alternatives:
             lines.extend(["", "#### 可选备选方案", ""])
             for item in alternatives:
-                lines.append(f"- **{item['name']}**: {item['rationale']}")
+                lines.append(f"- **{item.get('name', 'N/A')}**: {item.get('rationale', 'N/A')}")
         matrix = profile.get("ui_library_matrix", [])
         if matrix:
             lines.extend(
@@ -4598,7 +4601,7 @@ spec:
 
         except Exception as e:
             # 如果设计引擎失败，返回空推荐
-            print(f"Warning: Design engine failed: {e}")
+            logging.getLogger(__name__).warning(f"Design engine failed: {e}")
             return {
                 'styles': [],
                 'colors': None,

@@ -292,8 +292,8 @@ class SpecValidator:
             "warnings": len(quality_validation.warnings),
         }
 
-        total_weight = sum(int(item.get("weight", 0)) for item in checks.values())
-        earned = sum(int(item.get("weight", 0)) for item in checks.values() if bool(item.get("passed", False)))
+        total_weight = sum(int(str(item.get("weight", 0))) for item in checks.values())
+        earned = sum(int(str(item.get("weight", 0))) for item in checks.values() if bool(item.get("passed", False)))
         score = (earned / total_weight * 100) if total_weight > 0 else 0.0
 
         if score >= 90:
@@ -533,10 +533,12 @@ class SpecValidator:
         has_description = False
 
         for line in content.split("\n"):
-            if re.match(r"^##\s+", line):
+            if re.match(r"^#\s+", line) and not re.match(r"^##", line):
+                has_title = True
+            elif re.match(r"^##\s+", line):
                 if "description" in line.lower():
                     has_description = True
-                elif "title" in line.lower() or line.startswith("# "):
+                elif "title" in line.lower():
                     has_title = True
 
         if not has_title:

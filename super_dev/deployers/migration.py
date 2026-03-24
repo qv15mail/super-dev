@@ -389,7 +389,7 @@ class MigrationGenerator:
             schema_lines.append(f'model {entity.name.capitalize()} {{')
             for col in entity.columns:
                 schema_lines.append(f'  {col.name} {self._prisma_type(col.type)}'
-                                   f'{"" if col.nullable else "?"}')
+                                   f'{"?" if col.nullable else ""}')
             schema_lines.append("}")
             schema_lines.append("")
 
@@ -437,7 +437,7 @@ class MigrationGenerator:
                     decorator = "@PrimaryGeneratedColumn('uuid')"
                 else:
                     col_type = self._typeorm_type(col.type)
-                    decorator = f"@Column({{ type: '{col_type}'{{ nullable: {str(col.nullable).lower()} }} }})"
+                    decorator = f"@Column({{ type: '{col_type}', nullable: {str(col.nullable).lower()} }})"
 
                 entity_lines.append(f"  {decorator}")
                 entity_lines.append(f"  {col.name}: {self._typescript_type(col.type)};")
@@ -545,17 +545,13 @@ class MigrationGenerator:
         for entity in self.entities:
             migration_lines.append('    op.create_table(')
             migration_lines.append(f'        "{entity.name}",')
-            migration_lines.append("        sa.Column(")
 
-            for i, col in enumerate(entity.columns):
+            for col in entity.columns:
                 col_type = self._sqlalchemy_type(col.type)
-                migration_lines.append(f'            "{col.name}", {col_type}, ')
-                migration_lines.append(f'            nullable={col.nullable}, ')
-                migration_lines.append(f'            primary_key={col.primary_key}, ')
-                if i < len(entity.columns) - 1:
-                    migration_lines.append("        ),")
-                else:
-                    migration_lines.append("        ),")
+                migration_lines.append(
+                    f'        sa.Column("{col.name}", {col_type}, '
+                    f'nullable={col.nullable}, primary_key={col.primary_key}),'
+                )
             migration_lines.append("    )")
             migration_lines.append("")
 
@@ -575,7 +571,7 @@ class MigrationGenerator:
 
     def _generate_django_migration(self) -> dict[str, str]:
         """生成 Django 迁移"""
-        timestamp = datetime.datetime.now().strftime("%Y%d%m%H%M%S")
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
         # models.py
         models_lines = [

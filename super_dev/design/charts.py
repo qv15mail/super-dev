@@ -7,6 +7,7 @@
 """
 
 import csv
+import logging
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -31,7 +32,7 @@ class DataType(str, Enum):
     """数据类型"""
     CONTINUOUS = "Continuous"
     DISCRETE = "Discrete"
-    PART_TO_WHOLE = "Part-to-whale"
+    PART_TO_WHOLE = "Part-to-whole"
     TWO_DIMENSIONAL = "Two-dimensional"
     THREE_DIMENSIONAL = "Three-dimensional"
     SEQUENTIAL = "Sequential"
@@ -117,7 +118,7 @@ class ChartRecommender:
                     )
                     self.chart_types.append(chart_type)
                 except Exception as e:
-                    print(f"Warning: Failed to parse chart type: {e}")
+                    logging.getLogger(__name__).warning(f"Failed to parse chart type: {e}")
 
     def _get_default_chart_types(self) -> list[ChartType]:
         """获取默认图表类型（当 CSV 不存在时）"""

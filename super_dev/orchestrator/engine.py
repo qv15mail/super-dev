@@ -109,7 +109,7 @@ class WorkflowEngine:
             "success": result.success,
             "duration": result.duration,
             "quality_score": result.quality_score,
-            "errors": result.errors,
+            "errors": [str(e) for e in result.errors],
             "timestamp": datetime.now().isoformat(),
             "project": self.config_manager.config.name,
         }
@@ -625,17 +625,18 @@ class WorkflowEngine:
             self.config_manager.config.host_compatibility_min_ready_hosts,
         )
 
-        # 重新加载红队报告（如果存在）
-        redteam_report = None
-        try:
-            reviewer = RedTeamReviewer(
-                project_dir=self.project_dir,
-                name=name,
-                tech_stack=tech_stack,
-            )
-            redteam_report = reviewer.review()
-        except Exception as e:
-            self.logger.warning(f"红队报告加载失败，跳过: {e}")
+        # 优先复用已有红队报告，避免重复执行
+        redteam_report = context.quality_reports.get("redteam")
+        if redteam_report is None:
+            try:
+                reviewer = RedTeamReviewer(
+                    project_dir=self.project_dir,
+                    name=name,
+                    tech_stack=tech_stack,
+                )
+                redteam_report = reviewer.review()
+            except Exception as e:
+                self.logger.warning(f"红队报告加载失败，跳过: {e}")
 
         dispatcher = ExpertDispatcher(self.project_dir)
         expert_output = dispatcher.dispatch_quality_gate(
@@ -876,7 +877,7 @@ class WorkflowEngine:
         url = f"https://api.duckduckgo.com/?q={encoded_query}&format=json&no_html=1&skip_disambig=1"
 
         # 在线程池中执行阻塞 IO
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         response_text = await loop.run_in_executor(
             None,
             lambda: self._http_get(url, timeout=5)
@@ -920,7 +921,7 @@ class WorkflowEngine:
             "max_results": max_results,
         }).encode("utf-8")
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         response_text = await loop.run_in_executor(
             None,
             lambda: self._http_post(

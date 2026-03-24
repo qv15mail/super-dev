@@ -409,7 +409,7 @@ class QualityGateChecker:
         # 检查 PRD 是否存在
         prd_path = self.project_dir / "output" / f"{self.name}-prd.md"
         if prd_path.exists():
-            content = prd_path.read_text(encoding="utf-8")
+            content = prd_path.read_text(encoding="utf-8", errors="ignore")
             # 简单检查文档完整性
             has_vision = "产品愿景" in content or "vision" in content.lower()
             has_features = "功能需求" in content or "features" in content.lower()
@@ -441,7 +441,7 @@ class QualityGateChecker:
         # 检查架构文档是否存在
         arch_path = self.project_dir / "output" / f"{self.name}-architecture.md"
         if arch_path.exists():
-            content = arch_path.read_text(encoding="utf-8")
+            content = arch_path.read_text(encoding="utf-8", errors="ignore")
             has_tech_stack = "技术栈" in content or "tech stack" in content.lower()
             has_database = "数据库" in content or "database" in content.lower()
             has_api = "API" in content
@@ -1177,9 +1177,12 @@ class QualityGateChecker:
             self.project_dir / ".eslintrc.json"
         ).exists()
         has_pylint = (self.project_dir / "pylint.ini").exists()
-        has_black = (self.project_dir / "pyproject.toml").exists() and "black" in (
-            self.project_dir / "pyproject.toml"
-        ).read_text(encoding='utf-8')
+        try:
+            has_black = (self.project_dir / "pyproject.toml").exists() and "black" in (
+                self.project_dir / "pyproject.toml"
+            ).read_text(encoding='utf-8', errors='ignore')
+        except OSError:
+            has_black = False
 
         if has_eslint or has_pylint or has_black:
             checks.append(QualityCheck(

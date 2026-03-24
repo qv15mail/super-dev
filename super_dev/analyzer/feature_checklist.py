@@ -362,7 +362,6 @@ class FeatureChecklistBuilder:
             return explicit_gaps
 
         result: list[FeatureChecklistItem] = []
-        gap_lookup = {gap.title: gap for gap in explicit_gaps}
         for feature in features:
             state = "unknown"
             priority = ""

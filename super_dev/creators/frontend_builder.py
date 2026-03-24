@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 from pathlib import Path
 
@@ -53,7 +54,7 @@ class FrontendScaffoldBuilder:
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{self.name} · Frontend Blueprint</title>
+    <title>{html.escape(self.name)} · Frontend Blueprint</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Sora:wght@400;600;700&display=swap" rel="stylesheet" />
@@ -65,7 +66,7 @@ class FrontendScaffoldBuilder:
       <nav class="topbar">
         <div class="brand">
           <span class="brand-mark">SD</span>
-          <span>{self.name}</span>
+          <span>{html.escape(self.name)}</span>
         </div>
         <div class="top-actions">
           <a href="#trust">客户证明</a>
@@ -603,6 +604,7 @@ body {
             "docs": docs,
         }
         payload_str = json.dumps(payload, ensure_ascii=False, indent=2)
+        payload_str = payload_str.replace("</", "<\\/")
         return f"""const DATA = {payload_str};
 
 const docContainer = document.getElementById("doc-links");

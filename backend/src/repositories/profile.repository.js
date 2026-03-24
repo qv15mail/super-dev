@@ -1,11 +1,13 @@
 const profileStore = [];
+let nextProfileId = 1;
 
 function listProfile() {
-  return profileStore;
+  return [...profileStore];
 }
 
 function createProfile(payload) {
-  const record = { id: profileStore.length + 1, ...payload };
+  const { id, ...safePayload } = payload;
+  const record = { id: nextProfileId++, ...safePayload };
   profileStore.push(record);
   return record;
 }

@@ -160,10 +160,39 @@ def patch_console_print(console: Console) -> Console:
     return console
 
 
-def create_console() -> Console | None:
-    """创建兼容当前终端编码的 Console。"""
+class FallbackConsole:
+    """当 rich 不可用时的降级 Console，提供基本 print 功能。"""
+
+    def print(self, *args: Any, **kwargs: Any) -> None:
+        """降级为内置 print，忽略 rich 专用参数。"""
+        rich_only_keys = {"style", "highlight", "markup", "justify", "overflow", "end"}
+        filtered = {k: v for k, v in kwargs.items() if k not in rich_only_keys}
+        texts = []
+        for arg in args:
+            text = str(arg)
+            # 移除 rich markup 标签
+            import re
+            text = re.sub(r"\[/?[a-zA-Z_ ]+\]", "", text)
+            texts.append(normalize_terminal_text(text))
+        print(*texts, **filtered)
+
+    def rule(self, title: str = "", **kwargs: Any) -> None:
+        line = f"--- {title} ---" if title else "---"
+        print(normalize_terminal_text(line))
+
+    def log(self, *args: Any, **kwargs: Any) -> None:
+        self.print(*args, **kwargs)
+
+    @property
+    def width(self) -> int:
+        import shutil
+        return shutil.get_terminal_size().columns
+
+
+def create_console() -> Console | FallbackConsole:
+    """创建兼容当前终端编码的 Console。rich 不可用时返回 FallbackConsole。"""
     if not RICH_AVAILABLE:
-        return None
+        return FallbackConsole()
     initialize_terminal_output()
     console = Console(safe_box=not supports_unicode_output())
     return patch_console_print(console)

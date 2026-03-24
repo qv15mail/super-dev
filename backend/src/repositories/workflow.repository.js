@@ -1,11 +1,13 @@
 const workflowStore = [];
+let nextWorkflowId = 1;
 
 function listWorkflow() {
-  return workflowStore;
+  return [...workflowStore];
 }
 
 function createWorkflow(payload) {
-  const record = { id: workflowStore.length + 1, ...payload };
+  const { id, ...safePayload } = payload;
+  const record = { id: nextWorkflowId++, ...safePayload };
   workflowStore.push(record);
   return record;
 }

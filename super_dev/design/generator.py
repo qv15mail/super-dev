@@ -153,8 +153,14 @@ class DesignSystemGenerator:
 
         # 生成或使用指定的美学方向
         if aesthetic:
-            direction = AestheticDirectionType[aesthetic.upper()]
-            aesthetic_config = self.aesthetic_engine.generate_direction(direction)
+            try:
+                direction = AestheticDirectionType[aesthetic.upper()]
+            except KeyError:
+                direction = None
+            if direction is not None:
+                aesthetic_config = self.aesthetic_engine.generate_direction(direction)
+            else:
+                aesthetic_config = self.aesthetic_engine.generate_direction()
         else:
             aesthetic_config = self.aesthetic_engine.generate_direction()
 

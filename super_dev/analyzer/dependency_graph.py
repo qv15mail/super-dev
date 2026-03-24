@@ -128,8 +128,9 @@ class DependencyGraphBuilder:
         module_index = self._build_module_index(files)
         edges = self._build_edges(files, module_index, path_index)
         inbound, outbound = self._degree(edges)
-        critical_nodes = self._critical_nodes(path_index, inbound, outbound)
-        critical_paths = self._critical_paths(edges, critical_nodes)
+        repo_map = self.repo_map_builder.build()
+        critical_nodes = self._critical_nodes(path_index, inbound, outbound, repo_map=repo_map)
+        critical_paths = self._critical_paths(edges, critical_nodes, repo_map=repo_map)
 
         summary = (
             f"The dependency graph highlights `{len(path_index)}` source nodes and `{len(edges)}` internal import edges. "
@@ -298,8 +299,11 @@ class DependencyGraphBuilder:
         path_index: dict[str, Path],
         inbound: dict[str, int],
         outbound: dict[str, int],
+        repo_map: object | None = None,
     ) -> list[DependencyNode]:
-        entry_paths = {item.path for item in self.repo_map_builder.build().entry_points}
+        if repo_map is None:
+            repo_map = self.repo_map_builder.build()
+        entry_paths = {item.path for item in repo_map.entry_points}
         nodes: list[DependencyNode] = []
         for rel in path_index:
             in_count = inbound.get(rel, 0)
@@ -317,11 +321,14 @@ class DependencyGraphBuilder:
         self,
         edges: list[DependencyEdge],
         critical_nodes: list[DependencyNode],
+        repo_map: object | None = None,
     ) -> list[CriticalPath]:
         adjacency: dict[str, list[str]] = defaultdict(list)
         for edge in edges:
             adjacency[edge.source].append(edge.target)
-        entry_points = [item.path for item in self.repo_map_builder.build().entry_points]
+        if repo_map is None:
+            repo_map = self.repo_map_builder.build()
+        entry_points = [item.path for item in repo_map.entry_points]
         targets = [item.path for item in critical_nodes[:5] if item.role != "entry-point"]
         paths: list[CriticalPath] = []
         for entry in entry_points[:5]:

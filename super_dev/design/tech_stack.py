@@ -7,6 +7,7 @@
 """
 
 import csv
+import logging
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -147,7 +148,7 @@ class TechStackEngine:
                     )
                     self.practices.append(practice)
                 except Exception as e:
-                    print(f"Warning: Failed to parse practice: {e}")
+                    logging.getLogger(__name__).warning(f"Failed to parse practice: {e}")
 
     def _load_patterns(self, csv_path: Path):
         """加载设计模式数据"""
@@ -166,7 +167,7 @@ class TechStackEngine:
                     )
                     self.patterns.append(pattern)
                 except Exception as e:
-                    print(f"Warning: Failed to parse pattern: {e}")
+                    logging.getLogger(__name__).warning(f"Failed to parse pattern: {e}")
 
     def _load_performance(self, csv_path: Path):
         """加载性能建议数据"""
@@ -185,7 +186,7 @@ class TechStackEngine:
                     )
                     self.performance_tips.append(tip)
                 except Exception as e:
-                    print(f"Warning: Failed to parse performance tip: {e}")
+                    logging.getLogger(__name__).warning(f"Failed to parse performance tip: {e}")
 
     def _get_default_practices(self) -> list[TechBestPractice]:
         """获取默认最佳实践"""

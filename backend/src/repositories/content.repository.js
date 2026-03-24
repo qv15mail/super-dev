@@ -1,11 +1,13 @@
 const contentStore = [];
+let nextContentId = 1;
 
 function listContent() {
-  return contentStore;
+  return [...contentStore];
 }
 
 function createContent(payload) {
-  const record = { id: contentStore.length + 1, ...payload };
+  const { id, ...safePayload } = payload;
+  const record = { id: nextContentId++, ...safePayload };
   contentStore.push(record);
   return record;
 }

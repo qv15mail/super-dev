@@ -269,7 +269,7 @@ class UIReviewReviewer:
             else:
                 strengths.append("UI/UX 文档已覆盖 Web/H5/微信小程序/APP/桌面端 五端口径。")
 
-        expected_library = profile["primary_library"]["name"].lower()
+        expected_library = profile.get("primary_library", {}).get("name", "").lower()
         package_json = self._read_package_json()
         dependency_blob = json.dumps(package_json, ensure_ascii=False).lower() if package_json else ""
         if package_json:
@@ -475,7 +475,8 @@ class UIReviewReviewer:
                 )
                 score -= 8
 
-            if preview_summary["trust_hits"] < 2 and self._infer_product_type(description) in {"landing", "saas", "ecommerce"}:
+            product_type = self._infer_product_type(description)
+            if preview_summary["trust_hits"] < 2 and product_type in {"landing", "saas", "ecommerce"}:
                 findings.append(
                     UIReviewFinding(
                         level="medium",
@@ -486,7 +487,7 @@ class UIReviewReviewer:
                     )
                 )
                 score -= 8
-            else:
+            elif preview_summary["trust_hits"] >= 2:
                 strengths.append("预览页已体现一定的信任/说明信号。")
 
             if preview_summary["landmarks"] < 3:
@@ -549,7 +550,7 @@ class UIReviewReviewer:
 
         return UIReviewReport(
             project_name=self.name,
-            score=max(0, score),
+            score=max(0, min(100, score)),
             findings=findings,
             strengths=strengths,
             notes=notes,
@@ -664,7 +665,10 @@ class UIReviewReviewer:
     def _read_package_json(self) -> dict[str, Any] | None:
         for candidate in (self.project_dir / "package.json", self.project_dir / "frontend" / "package.json"):
             if candidate.exists():
-                return json.loads(candidate.read_text(encoding="utf-8"))
+                try:
+                    return json.loads(candidate.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    return None
         return None
 
     def _load_project_config(self) -> dict[str, Any]:

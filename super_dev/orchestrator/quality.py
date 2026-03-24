@@ -265,6 +265,12 @@ class QualityScorer:
         )
         return score
 
+    def score_delivery(self) -> int:
+        """delivery 阶段综合评分：代码审查指南 + AI 提示词"""
+        code_review_score = self.score_code_review()
+        ai_prompt_score = self.score_ai_prompt()
+        return (code_review_score + ai_prompt_score) // 2
+
     def score_cicd(self) -> int:
         """第 9 阶段：CI/CD 配置评分"""
         # 检查 .github/workflows 或类似目录
@@ -309,7 +315,7 @@ class QualityScorer:
             "ai_prompt": self.score_ai_prompt,
             "deployment": self.score_cicd,
             "migration": self.score_migration,
-            "delivery": self.score_ai_prompt,
+            "delivery": self.score_delivery,
         }
         fn = scorers.get(phase_name.lower())
         if fn:

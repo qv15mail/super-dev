@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from xml.sax.saxutils import escape as xml_escape
 
 
 class ImplementationScaffoldBuilder:
@@ -1441,7 +1442,7 @@ class ImplementationScaffoldBuilder:
             "http://maven.apache.org/xsd/maven-4.0.0.xsd\">\n"
             "  <modelVersion>4.0.0</modelVersion>\n"
             "  <groupId>com.superdev</groupId>\n"
-            f"  <artifactId>{self.name}-backend</artifactId>\n"
+            f"  <artifactId>{xml_escape(self.name)}-backend</artifactId>\n"
             "  <version>0.1.0</version>\n"
             "  <parent>\n"
             "    <groupId>org.springframework.boot</groupId>\n"

@@ -154,7 +154,7 @@ class SpecGenerator:
             raise FileNotFoundError(f"变更不存在: {change_id}")
 
         tasks = []
-        task_id = [1, 1]  # [major, minor]
+        task_id = [1, 0]  # [major, minor]
 
         # 根据规范增量生成任务
         for delta in change.spec_deltas:
@@ -213,8 +213,9 @@ class SpecGenerator:
             elif current_section == "overview" and line.strip():
                 description += line.strip() + "\n"
 
-        # 创建变更 ID
-        change_id = title.lower().replace(" ", "-").replace("/", "-")[:50]
+        # 创建变更 ID（只保留安全字符）
+        import re
+        change_id = re.sub(r"[^a-z0-9_-]+", "-", title.lower()).strip("-")[:50]
 
         change = self.create_change(
             change_id=change_id,

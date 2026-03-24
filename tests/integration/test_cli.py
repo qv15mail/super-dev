@@ -57,6 +57,7 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
                 "/.opencode/",
                 "/.qoder/",
                 "/.trae/",
+                "/.openclaw/",
                 "/.windsurf/",
                 "/GEMINI.md",
             ]

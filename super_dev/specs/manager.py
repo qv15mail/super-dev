@@ -57,7 +57,7 @@ class SpecManager:
         """保存规范"""
         spec_path = self.get_spec_path(spec.name)
         spec_path.parent.mkdir(parents=True, exist_ok=True)
-        spec.updated_at = datetime.now()
+        spec.updated_at = datetime.now(timezone.utc)
         spec_path.write_text(spec.to_markdown(), encoding="utf-8")
 
     def list_specs(self) -> list[str]:
@@ -71,9 +71,10 @@ class SpecManager:
 
     def delete_spec(self, spec_name: str):
         """删除规范"""
+        import shutil
         spec_path = self.get_spec_path(spec_name)
         if spec_path.exists():
-            spec_path.parent.parent.rmdir()
+            shutil.rmtree(spec_path.parent)
 
     def _parse_spec(self, spec_name: str, content: str) -> Spec:
         """从 Markdown 解析规范"""
@@ -203,7 +204,7 @@ class ChangeManager:
         """保存变更"""
         change_path = self.get_change_path(change.id)
         change_path.mkdir(parents=True, exist_ok=True)
-        change.updated_at = datetime.now()
+        change.updated_at = datetime.now(timezone.utc)
 
         # 保存提案
         if change.proposal:
@@ -290,12 +291,15 @@ class ChangeManager:
 
             spec_manager.save_spec(spec)
 
-        # 移动到归档
+        # 更新状态并保存，然后移动到归档
+        change.status = ChangeStatus.ARCHIVED
+        self.save_change(change)
+
         archive_dir = self.changes_dir.parent / "archive" / change_id
+        archive_dir.parent.mkdir(parents=True, exist_ok=True)
         import shutil
         shutil.move(str(self.get_change_path(change_id)), str(archive_dir))
 
-        change.status = ChangeStatus.ARCHIVED
         return change
 
     def _parse_proposal(self, content: str) -> Proposal:

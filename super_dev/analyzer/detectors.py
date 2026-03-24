@@ -74,18 +74,7 @@ def detect_project_type(project_path: Path) -> ProjectCategory:
     if (project_path / "android").exists() or (project_path / "ios").exists():
         return ProjectCategory.MOBILE
 
-    # 检查 Electron 项目
-    if package_json.exists():
-        try:
-            with open(package_json, encoding="utf-8") as f:
-                data = json.load(f)
-                deps = data.get("dependencies", {})
-                dev_deps = data.get("devDependencies", {})
-
-                if "electron" in deps or "electron" in dev_deps:
-                    return ProjectCategory.DESKTOP
-        except (OSError, json.JSONDecodeError):
-            pass
+    # Electron 检测已移入 _detect_node_project_type
 
     return ProjectCategory.UNKNOWN
 
@@ -101,6 +90,10 @@ def _detect_node_project_type(project_path: Path) -> ProjectCategory:
             dev_deps = data.get("devDependencies", {})
 
             all_deps = {**deps, **dev_deps}
+
+            # 检测 Electron 桌面应用
+            if "electron" in all_deps:
+                return ProjectCategory.DESKTOP
 
             # 检测前端框架
             frontend_frameworks = [
@@ -354,30 +347,48 @@ def _detect_node_tech_stack(project_path: Path, category: ProjectCategory) -> Te
 def _detect_python_tech_stack(project_path: Path, category: ProjectCategory) -> TechStack:
     """检测 Python 技术栈"""
     requirements_txt = project_path / "requirements.txt"
+    pyproject_toml = project_path / "pyproject.toml"
 
     dependencies = []
     framework = FrameworkType.UNKNOWN
     testing_framework = ""
 
-    # 解析依赖
+    # 解析 requirements.txt
     if requirements_txt.exists():
         try:
             with open(requirements_txt, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if line and not line.startswith("#"):
-                        # 解析 requirement
                         match = re.match(r"^([a-zA-Z0-9_-]+)([>=<~]+(.+))?", line)
                         if match:
                             name = match.group(1)
                             version = match.group(3) or ""
                             dependencies.append(
-                                Dependency(
-                                    name=name,
-                                    version=version,
-                                    type="prod",
-                                )
+                                Dependency(name=name, version=version, type="prod")
                             )
+        except OSError:
+            pass
+
+    # 解析 pyproject.toml 依赖（补充 requirements.txt 未覆盖的情况）
+    if pyproject_toml.exists() and not dependencies:
+        try:
+            content = pyproject_toml.read_text(encoding="utf-8", errors="ignore")
+            in_deps = False
+            for line in content.split("\n"):
+                stripped = line.strip()
+                if stripped in ("[project.dependencies]", "dependencies = ["):
+                    in_deps = True
+                    continue
+                if in_deps:
+                    if stripped.startswith("[") or stripped == "]":
+                        in_deps = False
+                        continue
+                    dep_match = re.match(r'"?([a-zA-Z0-9_-]+)', stripped)
+                    if dep_match:
+                        dependencies.append(
+                            Dependency(name=dep_match.group(1), version="", type="prod")
+                        )
         except OSError:
             pass
 

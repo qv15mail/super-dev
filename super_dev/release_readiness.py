@@ -18,10 +18,10 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
+from .analyzer import FeatureChecklistBuilder
 from .catalogs import HOST_TOOL_IDS
 from .integrations import IntegrationManager
 from .skills import SkillManager
-from .analyzer import FeatureChecklistBuilder
 from .specs import SpecValidator
 
 

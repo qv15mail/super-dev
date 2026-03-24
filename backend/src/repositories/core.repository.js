@@ -1,11 +1,13 @@
 const coreStore = [];
+let nextCoreId = 1;
 
 function listCore() {
-  return coreStore;
+  return [...coreStore];
 }
 
 function createCore(payload) {
-  const record = { id: coreStore.length + 1, ...payload };
+  const { id, ...safePayload } = payload;
+  const record = { id: nextCoreId++, ...safePayload };
   coreStore.push(record);
   return record;
 }

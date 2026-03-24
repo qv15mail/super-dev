@@ -19,7 +19,7 @@
 
 ## 版本
 
-当前版本：`2.1.1`
+当前版本：`2.1.2`
 
 ---
 
@@ -438,9 +438,9 @@ super-dev bootstrap --name my-project --platform web --frontend next --backend n
 
 ---
 
-## 20 宿主支持
+## 21 宿主支持
 
-### CLI 宿主（9 个）
+### CLI 宿主（10 个）
 
 | 宿主 | 触发方式 | 安装命令 |
 |------|----------|----------|
@@ -448,6 +448,7 @@ super-dev bootstrap --name my-project --platform web --frontend next --backend n
 | Codex CLI | `super-dev: 需求` | `super-dev onboard --host codex-cli` |
 | Gemini CLI | `/super-dev 需求` | `super-dev onboard --host gemini-cli` |
 | OpenCode | `/super-dev 需求` | `super-dev onboard --host opencode` |
+| OpenClaw | `/super-dev 需求` | `openclaw plugins install @super-dev/openclaw-plugin` |
 | Kiro CLI | `/super-dev 需求` | `super-dev onboard --host kiro-cli` |
 | Cursor CLI | `/super-dev 需求` | `super-dev onboard --host cursor-cli` |
 | Qoder CLI | `/super-dev 需求` | `super-dev onboard --host qoder-cli` |
@@ -906,6 +907,52 @@ super-dev: 你的需求
 2. 接入会写入项目级 `.clinerules/` 目录下的规则文件。
 3. 建议先用 `super-dev doctor --host cline` 做一次确认。
 4. 在同一个 Agent Chat 会话里完成整条流水线效果最佳。
+
+#### 21. OpenClaw (原生插件)
+
+OpenClaw 通过原生 Plugin SDK 集成，无需 `super-dev onboard`，直接安装 npm 插件即可。
+
+安装：
+```bash
+# 第一步：安装 super-dev CLI
+pip install super-dev
+
+# 第二步：安装 OpenClaw 插件
+openclaw plugins install @super-dev/openclaw-plugin
+```
+
+触发位置：
+在 OpenClaw Agent 对话面板中，确保当前工作区为目标项目后触发。
+
+触发命令：
+```text
+super-dev: 你的需求
+```
+或
+```text
+/super-dev 你的需求
+```
+
+插件提供 10 个专用 Tool：
+
+| Tool | 功能 |
+|------|------|
+| `super_dev_pipeline` | 启动完整流水线 |
+| `super_dev_init` | 项目初始化 |
+| `super_dev_status` | 查看流水线状态 |
+| `super_dev_quality` | 质量门禁检查 |
+| `super_dev_spec` | Spec 管理 |
+| `super_dev_config` | 配置管理 |
+| `super_dev_review` | 文档/UI/架构审查 |
+| `super_dev_release` | 发布就绪度检查 |
+| `super_dev_expert` | 专家咨询 (10 角色) |
+| `super_dev_run` | 通用命令透传 |
+
+补充说明：
+1. 插件通过 CLI subprocess 桥接调用 `super-dev`，因此必须先 `pip install super-dev`。
+2. 安装后建议重启 OpenClaw Gateway 或新开会话，让 Plugin 和 Skill 生效。
+3. 插件内嵌 SKILL.md，OpenClaw Agent 会自动理解流水线协议。
+4. 使用 `super-dev doctor --host openclaw` 检查集成状态。
 
 ---
 

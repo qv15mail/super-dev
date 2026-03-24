@@ -31,7 +31,7 @@ class AIPromptGenerator:
         project_config: dict = {}
         if config_path.exists():
             with open(config_path, encoding="utf-8") as f:
-                project_config = yaml.safe_load(f)
+                project_config = yaml.safe_load(f) or {}
 
         description = project_config.get("description", "见 PRD 文档")
         frontend = project_config.get("frontend", "react")
@@ -519,22 +519,24 @@ project-root/
         return "modern"
 
     def _render_ui_profile(self, profile: dict) -> str:
+        lib = profile.get("primary_library", {})
+        stack = profile.get("component_stack", {})
         lines = [
-            f"- **首选组件生态**: {profile['primary_library']['name']}",
-            f"- **表单与验证**: {profile['component_stack']['form']}",
-            f"- **数据展示**: {profile['component_stack']['table']} / {profile['component_stack']['chart']}",
-            f"- **图标体系**: {profile['component_stack']['icons']}",
-            f"- **动效基线**: {profile['component_stack']['motion']}",
-            f"- **页面定位**: {profile['surface']}",
-            f"- **信息密度**: {profile['information_density']}",
+            f"- **首选组件生态**: {lib.get('name', 'N/A')}",
+            f"- **表单与验证**: {stack.get('form', 'N/A')}",
+            f"- **数据展示**: {stack.get('table', 'N/A')} / {stack.get('chart', 'N/A')}",
+            f"- **图标体系**: {stack.get('icons', 'N/A')}",
+            f"- **动效基线**: {stack.get('motion', 'N/A')}",
+            f"- **页面定位**: {profile.get('surface', 'N/A')}",
+            f"- **信息密度**: {profile.get('information_density', 'N/A')}",
             "",
             "**必须优先落实的模块**:",
         ]
-        lines.extend(f"- {item}" for item in profile["component_priorities"])
+        lines.extend(f"- {item}" for item in profile.get("component_priorities", []))
         lines.extend(["", "**必须出现的信任/转化模块**:"])
-        lines.extend(f"- {item}" for item in profile["trust_modules"][:8])
+        lines.extend(f"- {item}" for item in profile.get("trust_modules", [])[:8])
         lines.extend(["", "**明确禁止**:"])
-        lines.extend(f"- {item}" for item in profile["banned_patterns"][:6])
+        lines.extend(f"- {item}" for item in profile.get("banned_patterns", [])[:6])
         ui_matrix = profile.get("ui_library_matrix", [])
         if ui_matrix:
             lines.extend(["", "**多端组件库映射**:"])

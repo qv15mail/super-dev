@@ -7,6 +7,7 @@
 """
 
 import csv
+import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -166,7 +167,7 @@ class LandingPatternGenerator:
                 keywords=row.get("keywords", "").split(",") if row.get("keywords") else []
             )
         except Exception as e:
-            print(f"Warning: Failed to parse pattern: {e}")
+            logging.getLogger(__name__).warning(f"Failed to parse pattern: {e}")
             return None
 
     def _infer_section_type(self, name: str) -> str:

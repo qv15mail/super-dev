@@ -1,11 +1,13 @@
 const operationStore = [];
+let nextOperationId = 1;
 
 function listOperation() {
-  return operationStore;
+  return [...operationStore];
 }
 
 function createOperation(payload) {
-  const record = { id: operationStore.length + 1, ...payload };
+  const { id, ...safePayload } = payload;
+  const record = { id: nextOperationId++, ...safePayload };
   operationStore.push(record);
   return record;
 }

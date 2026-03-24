@@ -759,7 +759,7 @@ class ExpertDispatcher:
             "django": ORMType.DJANGO,
             "mongoose": ORMType.MONGOOSE,
         }
-        return mapping.get((orm or "").strip().lower())
+        return mapping.get((orm or "").strip().lower(), ORMType.PRISMA)
 
     def _render_generated_files_markdown(self, title: str, generated_files: dict[str, str]) -> str:
         lines = [

@@ -6,6 +6,7 @@
 最后修改：2025-12-30
 """
 
+import dataclasses
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
@@ -141,6 +142,10 @@ class ConfigManager:
 
         # 合并默认配置
         config_data: dict[str, Any] = {**self.DEFAULT_CONFIG, **data}
+
+        # 过滤掉 ProjectConfig 不支持的字段，避免 TypeError
+        valid_fields = {f.name for f in dataclasses.fields(ProjectConfig)}
+        config_data = {k: v for k, v in config_data.items() if k in valid_fields}
 
         return ProjectConfig(**cast(dict[str, Any], config_data))
 

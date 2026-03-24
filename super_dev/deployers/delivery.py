@@ -63,7 +63,7 @@ class DeliveryPackager:
             )
 
         spec_task_summary = self._collect_spec_task_summary()
-        if spec_task_summary["task_files"] > 0:
+        if int(spec_task_summary["task_files"]) > 0:
             if int(spec_task_summary["pending"]) > 0:
                 target_change = str(spec_task_summary.get("target_change", "")).strip()
                 target_path = ".super-dev/changes/*/tasks.md"

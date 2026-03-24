@@ -571,27 +571,27 @@ class KnowledgeAugmenter:
 
         results: list[KnowledgeItem] = []
         try:
-            with DDGS() as ddgs:
-                entries = ddgs.text(query, max_results=max_results)
-                for index, entry in enumerate(entries):
-                    if not isinstance(entry, dict):
-                        continue
-                    link = str(entry.get("href", "")).strip()
-                    results.append(
-                        KnowledgeItem(
-                            source="web",
-                            title=str(entry.get("title", "web-result")).strip(),
-                            snippet=str(entry.get("body", "")).strip()[:220],
-                            link=link,
-                            score=float(max_results - index),
-                            evidence_level=self._infer_evidence_level(
-                                str(entry.get("title", "web-result")),
-                                str(entry.get("body", "")),
-                                link,
-                            ),
-                            source_domain=self._extract_domain(link),
-                        )
+            ddgs = DDGS()
+            entries = ddgs.text(query, max_results=max_results)
+            for index, entry in enumerate(entries):
+                if not isinstance(entry, dict):
+                    continue
+                link = str(entry.get("href", "")).strip()
+                results.append(
+                    KnowledgeItem(
+                        source="web",
+                        title=str(entry.get("title", "web-result")).strip(),
+                        snippet=str(entry.get("body", "")).strip()[:220],
+                        link=link,
+                        score=float(max_results - index),
+                        evidence_level=self._infer_evidence_level(
+                            str(entry.get("title", "web-result")),
+                            str(entry.get("body", "")),
+                            link,
+                        ),
+                        source_domain=self._extract_domain(link),
                     )
+                )
         except Exception as e:
             self.logger.warning(f"DDGS 联网检索异常: {type(e).__name__}: {e}")
             return []

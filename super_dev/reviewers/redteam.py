@@ -230,7 +230,7 @@ class RedTeamReport:
             lines.append("无 P0 级别问题。")
         else:
             for idx, issue_item in enumerate(p0_issues, 1):
-                issue_type = "安全" if issue_item in self.security_issues else "性能" if issue_item in self.performance_issues else "架构"
+                issue_type = "安全" if isinstance(issue_item, SecurityIssue) else "性能" if isinstance(issue_item, PerformanceIssue) else "架构"
                 lines.append(f"{idx}. [{issue_type}] {issue_item.description}")
                 lines.append(f"   - 建议: {issue_item.recommendation}")
                 lines.append("")
@@ -249,7 +249,7 @@ class RedTeamReport:
             lines.append("无 P1 级别问题。")
         else:
             for idx, issue_item in enumerate(p1_issues, 1):
-                issue_type = "安全" if issue_item in self.security_issues else "性能" if issue_item in self.performance_issues else "架构"
+                issue_type = "安全" if isinstance(issue_item, SecurityIssue) else "性能" if isinstance(issue_item, PerformanceIssue) else "架构"
                 lines.append(f"{idx}. [{issue_type}] {issue_item.description}")
                 lines.append(f"   - 建议: {issue_item.recommendation}")
                 lines.append("")

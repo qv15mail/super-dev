@@ -112,6 +112,7 @@ class IntegrationManager:
         "kiro": "打开 Kiro IDE 的 Agent Chat 或 AI 面板，在项目上下文内触发。",
         "qoder": "打开 Qoder IDE 的 Agent Chat，在当前项目内触发。",
         "trae": "打开 Trae Agent Chat，在当前项目上下文内直接触发。",
+        "openclaw": "在 OpenClaw Agent 对话面板中，确保当前工作区为目标项目后触发。",
     }
     HOST_USAGE_NOTES: dict[str, list[str]] = {
         "antigravity": [
@@ -227,6 +228,12 @@ class IntegrationManager:
             "安装后建议新开一个 Trae Agent Chat，让新的规则与 Skill 一起生效。",
             "随后按 output/* 与 .super-dev/changes/*/tasks.md 推进开发。",
         ],
+        "openclaw": [
+            "OpenClaw 通过原生 Plugin SDK 集成，安装插件后 10 个专用 Tool 自动注册。",
+            "项目内会写入 `.openclaw/rules/super-dev.md` 和 `.openclaw/commands/super-dev.md`。",
+            "用户级 Skill 会安装到 `~/.openclaw/skills/super-dev-core/SKILL.md`。",
+            "安装后建议重启 OpenClaw Gateway 或开启新会话，让 Plugin 和 Skill 一起生效。",
+        ],
     }
     HOST_PRECONDITION_GUIDANCE: dict[str, list[str]] = {
         "iflow": [
@@ -306,6 +313,9 @@ class IntegrationManager:
         ],
         "vscode-copilot": [
             "VS Code Copilot 触发前确认当前工作区就是目标项目，并让新的 Chat 会话读取项目级说明文件。",
+        ],
+        "openclaw": [
+            "OpenClaw 触发前确认当前工作区就是目标项目，并确保 super-dev CLI 已安装在 PATH 中。",
         ],
     }
 
@@ -434,6 +444,11 @@ class IntegrationManager:
             description="Trae IDE 项目规则 + 宿主 Skill 注入",
             files=[".trae/project_rules.md", ".trae/rules.md"],
         ),
+        "openclaw": IntegrationTarget(
+            name="openclaw",
+            description="OpenClaw Agent 平台原生插件集成",
+            files=[".openclaw/rules/super-dev.md"],
+        ),
     }
     SLASH_COMMAND_FILES: dict[str, str] = {
         "antigravity": ".gemini/commands/super-dev.md",
@@ -450,6 +465,7 @@ class IntegrationManager:
         "qoder": ".qoder/commands/super-dev.md",
         "roo-code": ".roo/commands/super-dev.md",
         "cursor": ".cursor/commands/super-dev.md",
+        "openclaw": ".openclaw/commands/super-dev.md",
     }
     GLOBAL_SLASH_COMMAND_FILES: dict[str, str] = {
         "antigravity": ".gemini/commands/super-dev.md",
@@ -559,6 +575,10 @@ class IntegrationManager:
         ),
         "trae": (
             "https://docs.trae.ai/docs/what-is-trae-rules",
+        ),
+        "openclaw": (
+            "https://docs.openclaw.ai/plugins/building-plugins",
+            "https://docs.openclaw.ai/tools/skills",
         ),
     }
     OFFICIAL_DOCS: dict[str, str] = {
@@ -726,6 +746,16 @@ class IntegrationManager:
             "evidence": [
                 "官方文档公开 Commands 且支持项目级 .qoder/commands/",
                 "Super Dev 已同时写入 .qoder/rules.md 与 .qoder/commands/super-dev.md",
+            ],
+        },
+        "openclaw": {
+            "level": "compatible",
+            "reason": "OpenClaw 原生插件 SDK 支持 Tool 注册与 Skill 系统，通过 plugin 内嵌 SKILL.md + CLI subprocess 桥接完成接入。",
+            "evidence": [
+                "OpenClaw Plugin SDK 提供 definePluginEntry / registerTool / configSchema 机制",
+                "Super Dev 通过 CLI subprocess 桥接保证功能完整性",
+                "插件内嵌 SKILL.md 提供完整流水线行为指令",
+                "官方文档公开 Plugin 与 Skills 开发指南",
             ],
         },
     }
@@ -1611,8 +1641,8 @@ class IntegrationManager:
             )
         else:
             extra = [item for item in guidance if isinstance(item, str) and item.strip()]
-            if extra:
-                items[0]["guidance"] = list(dict.fromkeys([*items[0]["guidance"], *extra])) if items else extra
+            if extra and items:
+                items[0]["guidance"] = list(dict.fromkeys([*items[0]["guidance"], *extra]))
 
         if not items:
             return {
@@ -1748,6 +1778,10 @@ class IntegrationManager:
             "trae": {
                 "mode": "compatibility-skill",
                 "summary": "官方 rules + 兼容 Skill",
+            },
+            "openclaw": {
+                "mode": "official-skill",
+                "summary": "官方 Plugin SDK + Skills",
             },
         }
         return mapping.get(target, {"mode": "none", "summary": ""})
@@ -1946,6 +1980,16 @@ class IntegrationManager:
                     "~/.trae/rules.md",
                     "~/.trae/skills/super-dev-core/SKILL.md",
                 ],
+            },
+            "openclaw": {
+                "official_project_surfaces": [
+                    ".openclaw/rules/super-dev.md",
+                    ".openclaw/commands/super-dev.md",
+                ],
+                "official_user_surfaces": [
+                    "~/.openclaw/skills/super-dev-core/SKILL.md",
+                ],
+                "observed_compatibility_surfaces": [],
             },
         }
         return by_target.get(
@@ -2287,6 +2331,7 @@ class IntegrationManager:
             "codebuddy-cli",
             "iflow",
             "aider",
+            "openclaw",
         }:
             return self._generic_cli_rules(target)
 

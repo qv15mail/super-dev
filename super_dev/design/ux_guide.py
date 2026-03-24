@@ -7,6 +7,7 @@
 """
 
 import csv
+import logging
 import random
 from dataclasses import dataclass
 from enum import Enum
@@ -89,7 +90,7 @@ class UXGuideEngine:
                     )
                     self.guidelines.append(guideline)
                 except Exception as e:
-                    print(f"Warning: Failed to parse UX guideline: {e}")
+                    logging.getLogger(__name__).warning(f"Failed to parse UX guideline: {e}")
 
     def _get_default_guidelines(self) -> list[UXGuideline]:
         """获取默认指南（当 CSV 不存在时）"""
