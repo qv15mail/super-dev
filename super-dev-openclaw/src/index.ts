@@ -6,17 +6,20 @@
  * 最后修改：2026-03-24
  */
 
-import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { Type } from "@sinclair/typebox";
 import { invokeSuperDev, formatToolResult } from "./utils/subprocess.js";
 import { resolvePluginConfig } from "./types.js";
 
-export default definePluginEntry({
+/**
+ * 内联 definePluginEntry 逻辑，避免对 openclaw SDK 的运行时路径依赖。
+ * OpenClaw 加载插件时只需要 default export 是 { id, name, description, register } 对象。
+ */
+export default {
   id: "super-dev",
   name: "Super Dev Pipeline",
   description:
     "AI development orchestration - research-first, commercial-grade delivery pipeline with 10 expert roles",
-  register(api) {
+  register(api: { pluginConfig?: Record<string, unknown>; registerTool: (...args: unknown[]) => void }) {
     const config = () => resolvePluginConfig(api.pluginConfig);
     const cwd = () => config().projectDir || process.cwd();
     const bin = () => config().superDevBin;
@@ -37,7 +40,7 @@ export default definePluginEntry({
         domain: Type.Optional(Type.String({ description: "Domain: fintech, ecommerce, medical, social, iot, education" })),
         mode: Type.Optional(Type.String({ description: "Mode: feature or bugfix" })),
       }),
-      async execute(_id, params) {
+      async execute(_id: string, params: Record<string, unknown>) {
         const args = ["pipeline", params.requirement as string];
         if (params.name) args.push("--name", params.name as string);
         if (params.frontend) args.push("--frontend", params.frontend as string);
@@ -61,7 +64,7 @@ export default definePluginEntry({
         domain: Type.Optional(Type.String({ description: "Business domain" })),
         name: Type.Optional(Type.String({ description: "Project name" })),
       }),
-      async execute(_id, params) {
+      async execute(_id: string, params: Record<string, unknown>) {
         const args = ["init"];
         if (params.frontend) args.push("--frontend", params.frontend as string);
         if (params.backend) args.push("--backend", params.backend as string);
@@ -91,7 +94,7 @@ export default definePluginEntry({
       parameters: Type.Object({
         threshold: Type.Optional(Type.Number({ description: "Quality score threshold (0-100)" })),
       }),
-      async execute(_id, params) {
+      async execute(_id: string, params: Record<string, unknown>) {
         const args = ["quality"];
         if (params.threshold !== undefined) args.push("--threshold", String(params.threshold));
         return formatToolResult(await invokeSuperDev(args, { cwd: cwd(), bin: bin(), timeout: timeout() }));
@@ -108,7 +111,7 @@ export default definePluginEntry({
         specId: Type.Optional(Type.String({ description: "Spec or change ID" })),
         requirement: Type.Optional(Type.String({ description: "Requirement description (for propose)" })),
       }),
-      async execute(_id, params) {
+      async execute(_id: string, params: Record<string, unknown>) {
         const args = ["spec", params.action as string];
         if (params.specId) args.push(params.specId as string);
         if (params.requirement) args.push(params.requirement as string);
@@ -126,7 +129,7 @@ export default definePluginEntry({
         key: Type.Optional(Type.String({ description: "Config key" })),
         value: Type.Optional(Type.String({ description: "Config value (for set)" })),
       }),
-      async execute(_id, params) {
+      async execute(_id: string, params: Record<string, unknown>) {
         const args = ["config", (params.action as string) ?? "list"];
         if (params.key) args.push(params.key as string);
         if ((params.action as string) === "set" && params.value) args.push(params.value as string);
@@ -142,7 +145,7 @@ export default definePluginEntry({
       parameters: Type.Object({
         type: Type.String({ description: "Review type: docs, ui, architecture, quality" }),
       }),
-      async execute(_id, params) {
+      async execute(_id: string, params: Record<string, unknown>) {
         return formatToolResult(await invokeSuperDev(["review", params.type as string], { cwd: cwd(), bin: bin(), timeout: timeout() }));
       },
     });
@@ -155,7 +158,7 @@ export default definePluginEntry({
       parameters: Type.Object({
         action: Type.String({ description: "Subcommand: readiness or proof-pack" }),
       }),
-      async execute(_id, params) {
+      async execute(_id: string, params: Record<string, unknown>) {
         return formatToolResult(await invokeSuperDev(["release", params.action as string], { cwd: cwd(), bin: bin(), timeout: timeout() }));
       },
     });
@@ -169,7 +172,7 @@ export default definePluginEntry({
         role: Type.String({ description: "Expert role" }),
         question: Type.String({ description: "Question for the expert" }),
       }),
-      async execute(_id, params) {
+      async execute(_id: string, params: Record<string, unknown>) {
         return formatToolResult(await invokeSuperDev(["expert", params.role as string, params.question as string], { cwd: cwd(), bin: bin(), timeout: timeout() }));
       },
     });
@@ -183,7 +186,7 @@ export default definePluginEntry({
         parameters: Type.Object({
           command: Type.String({ description: "CLI command string (e.g. 'run frontend')" }),
         }),
-        async execute(_id, params) {
+        async execute(_id: string, params: Record<string, unknown>) {
           const parts = (params.command as string).split(/\s+/).filter(Boolean);
           return formatToolResult(await invokeSuperDev(parts, { cwd: cwd(), bin: bin(), timeout: timeout() }));
         },
@@ -191,4 +194,4 @@ export default definePluginEntry({
       { optional: true },
     );
   },
-});
+};
