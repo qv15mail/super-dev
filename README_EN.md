@@ -628,9 +628,12 @@ OpenClaw integrates via its native Plugin SDK -- no `super-dev onboard` needed, 
 # Step 1: Install super-dev CLI
 pip install super-dev
 
-# Step 2: Install the OpenClaw plugin
-openclaw plugins install @super-dev/openclaw-plugin
+# Step 2: Install the OpenClaw plugin (pick one)
+openclaw plugins install @super-dev/openclaw-plugin  # npm plugin (13 Tools)
+clawhub install super-dev                            # ClawHub Skill (instructions only)
 ```
+
+ClawHub page: https://clawhub.ai/shangyankeji/super-dev
 
 **Trigger:**
 

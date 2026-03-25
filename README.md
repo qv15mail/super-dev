@@ -917,9 +917,12 @@ OpenClaw 通过原生 Plugin SDK 集成，无需 `super-dev onboard`，直接安
 # 第一步：安装 super-dev CLI
 pip install super-dev
 
-# 第二步：安装 OpenClaw 插件
-openclaw plugins install @super-dev/openclaw-plugin
+# 第二步：安装 OpenClaw 插件（二选一）
+openclaw plugins install @super-dev/openclaw-plugin  # npm 插件（含 13 Tool）
+clawhub install super-dev                            # ClawHub Skill（纯指令）
 ```
+
+ClawHub 页面: https://clawhub.ai/shangyankeji/super-dev
 
 触发位置：
 在 OpenClaw Agent 对话面板中，确保当前工作区为目标项目后触发。
