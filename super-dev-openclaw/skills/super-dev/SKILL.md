@@ -7,7 +7,7 @@ metadata: {"openclaw":{"requires":{"bins":["super-dev"]},"homepage":"https://sup
 
 # Super Dev - AI 开发编排 Skill (OpenClaw 完整版)
 
-> 版本: 2.1.2 | 安装: `pip install super-dev` | 官网: https://superdev.goder.ai
+> 版本: 2.1.3 | 安装: `pip install super-dev` | 官网: https://superdev.goder.ai
 
 ---
 

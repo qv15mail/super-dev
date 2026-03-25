@@ -19,7 +19,7 @@
 
 ## 版本
 
-当前版本：`2.1.2`
+当前版本：`2.1.3`
 
 ---
 
@@ -304,13 +304,13 @@ super-dev
 ### 3. 指定版本安装
 
 ```bash
-pip install super-dev==2.1.1
+pip install super-dev==2.1.3
 ```
 
 ### 4. GitHub 指定标签安装
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.1.1
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.1.3
 ```
 
 ### 5. 源码开发安装
@@ -933,20 +933,23 @@ super-dev: 你的需求
 /super-dev 你的需求
 ```
 
-插件提供 10 个专用 Tool：
+插件提供 13 个专用 Tool：
 
 | Tool | 功能 |
 |------|------|
 | `super_dev_pipeline` | 启动完整流水线 |
 | `super_dev_init` | 项目初始化 |
 | `super_dev_status` | 查看流水线状态 |
-| `super_dev_quality` | 质量门禁检查 |
-| `super_dev_spec` | Spec 管理 |
-| `super_dev_config` | 配置管理 |
-| `super_dev_review` | 文档/UI/架构审查 |
-| `super_dev_release` | 发布就绪度检查 |
+| `super_dev_quality` | 质量检查（按类型） |
+| `super_dev_spec` | Spec 管理（propose/list/show/scaffold/validate） |
+| `super_dev_config` | 配置管理（list/get/set） |
+| `super_dev_review` | 审查与门禁确认（docs/ui/architecture/quality） |
+| `super_dev_release` | 发布就绪度 / 交付证明包 |
 | `super_dev_expert` | 专家咨询 (10 角色) |
-| `super_dev_run` | 通用命令透传 |
+| `super_dev_deploy` | CI/CD 配置 / Dockerfile / 发布演练 |
+| `super_dev_analyze` | 项目分析（技术栈/依赖/结构） |
+| `super_dev_doctor` | 环境诊断 |
+| `super_dev_run` | 通用命令透传（可选） |
 
 补充说明：
 1. 插件通过 CLI subprocess 桥接调用 `super-dev`，因此必须先 `pip install super-dev`。

@@ -19,7 +19,7 @@
 
 ## Version
 
-Current version: `2.1.2`
+Current version: `2.1.3`
 
 ---
 
@@ -261,13 +261,13 @@ This generates `.super-dev/WORKFLOW.md` and `output/*-bootstrap.md` to lock down
 ### 3. Pin a specific version
 
 ```bash
-pip install super-dev==2.1.1
+pip install super-dev==2.1.3
 ```
 
 ### 4. Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.1.1
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.1.3
 ```
 
 ### 5. Source install for development
@@ -643,20 +643,23 @@ or
 /super-dev your requirement
 ```
 
-**10 registered tools:**
+**13 registered tools:**
 
 | Tool | Purpose |
 |------|---------|
 | `super_dev_pipeline` | Run the full pipeline |
 | `super_dev_init` | Initialize project |
 | `super_dev_status` | Check pipeline status |
-| `super_dev_quality` | Quality gate check |
-| `super_dev_spec` | Spec management |
-| `super_dev_config` | Configuration management |
-| `super_dev_review` | Docs/UI/architecture review |
-| `super_dev_release` | Release readiness check |
+| `super_dev_quality` | Quality check (by type) |
+| `super_dev_spec` | Spec management (propose/list/show/scaffold/validate) |
+| `super_dev_config` | Configuration management (list/get/set) |
+| `super_dev_review` | Review and gate confirmation (docs/ui/architecture/quality) |
+| `super_dev_release` | Release readiness / proof-pack |
 | `super_dev_expert` | Expert consultation (10 roles) |
-| `super_dev_run` | Generic CLI passthrough |
+| `super_dev_deploy` | CI/CD config / Dockerfile / release rehearsal |
+| `super_dev_analyze` | Project analysis (tech stack/deps/structure) |
+| `super_dev_doctor` | Environment diagnostics |
+| `super_dev_run` | Generic CLI passthrough (optional) |
 
 **Notes:**
 1. The plugin bridges to `super-dev` CLI via subprocess, so `pip install super-dev` is required.

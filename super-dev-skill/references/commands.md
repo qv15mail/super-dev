@@ -37,11 +37,12 @@ super-dev metrics               # 流水线指标
 ## Spec 管理
 
 ```bash
-super-dev spec list             # 列出活跃变更
-super-dev spec show <id>        # 查看详情
-super-dev spec propose          # 创建提案
-super-dev spec scaffold <id>    # 生成骨架
-super-dev spec validate <id>    # 验证格式
+super-dev spec list                                          # 列出活跃变更
+super-dev spec show <change-id>                              # 查看详情
+super-dev spec propose <change-id> --title "标题" --description "描述"  # 创建提案
+super-dev spec scaffold <change-id>                          # 生成实现骨架
+super-dev spec scaffold <change-id> --force                  # 强制重新生成
+super-dev spec validate <change-id>                          # 验证格式
 ```
 
 ## 质量与审查

@@ -45,7 +45,7 @@ export default definePluginEntry({
         frontend: Type.Optional(Type.String({ description: "Frontend: react, vue, angular, svelte, none" })),
         backend: Type.Optional(Type.String({ description: "Backend: node, python, go, java, rust, php, ruby, csharp, kotlin, swift, elixir, scala, dart, none" })),
         platform: Type.Optional(Type.String({ description: "Platform: web, mobile, wechat, desktop" })),
-        domain: Type.Optional(Type.String({ description: "Domain: fintech, ecommerce, medical, social, iot, education" })),
+        domain: Type.Optional(Type.String({ description: "Domain: fintech, ecommerce, medical, social, iot, education, auth, content, saas" })),
         mode: Type.Optional(Type.String({ description: "Mode: feature (default) or bugfix" })),
       }),
       async execute(_id: string, params: Record<string, unknown>) {
@@ -75,7 +75,7 @@ export default definePluginEntry({
         frontend: Type.Optional(Type.String({ description: "Frontend framework: next, react-vite, vue-vite, etc." })),
         backend: Type.Optional(Type.String({ description: "Backend framework: node, python, go, etc." })),
         platform: Type.Optional(Type.String({ description: "Platform: web, mobile, wechat, desktop" })),
-        domain: Type.Optional(Type.String({ description: "Business domain: fintech, ecommerce, medical, etc." })),
+        domain: Type.Optional(Type.String({ description: "Domain: fintech, ecommerce, medical, social, iot, education, auth, content, saas" })),
       }),
       async execute(_id: string, params: Record<string, unknown>) {
         const name = params.name;
@@ -129,12 +129,15 @@ export default definePluginEntry({
     api.registerTool({
       name: "super_dev_spec",
       label: "Super Dev Spec",
-      description: "Manage specs and changes. Actions: list, show, propose, scaffold, validate, view, archive.",
+      description: "Manage specs and changes. Actions: init, list, show, propose, add-req, scaffold, quality, validate, view, archive.",
       parameters: Type.Object({
-        action: Type.String({ description: "Subcommand: list, show, propose, scaffold, validate, view, archive" }),
-        changeId: Type.Optional(Type.String({ description: "Change ID (required for show/propose/scaffold/validate)" })),
+        action: Type.String({ description: "Subcommand: init, list, show, propose, add-req, scaffold, quality, validate, view, archive" }),
+        changeId: Type.Optional(Type.String({ description: "Change ID (required for show/propose/scaffold/validate/add-req)" })),
         title: Type.Optional(Type.String({ description: "Change title (required for propose)" })),
         description: Type.Optional(Type.String({ description: "Change description (required for propose)" })),
+        motivation: Type.Optional(Type.String({ description: "Change motivation (for propose)" })),
+        impact: Type.Optional(Type.String({ description: "Impact description (for propose)" })),
+        force: Type.Optional(Type.Boolean({ description: "Force overwrite (for scaffold)" })),
       }),
       async execute(_id: string, params: Record<string, unknown>) {
         const action = String(params.action || "list");
@@ -143,7 +146,10 @@ export default definePluginEntry({
         if (action === "propose") {
           if (params.title) args.push("--title", String(params.title));
           if (params.description) args.push("--description", String(params.description));
+          if (params.motivation) args.push("--motivation", String(params.motivation));
+          if (params.impact) args.push("--impact", String(params.impact));
         }
+        if (action === "scaffold" && params.force) args.push("--force");
         return formatToolResult(await invokeSuperDev(args, { cwd: cwd(), bin: bin(), timeout: timeout() }));
       },
     });

@@ -26,22 +26,25 @@ or
 /super-dev Build an online education platform
 ```
 
-The agent will activate the Super Dev pipeline and walk through: research -> PRD -> architecture -> UIUX -> spec -> frontend -> backend -> quality -> delivery.
+The agent will activate the Super Dev pipeline and walk through: research -> docs -> spec -> frontend -> backend -> quality -> delivery.
 
-## Registered Tools
+## Registered Tools (13)
 
 | Tool | Purpose |
 |------|---------|
-| `super_dev_pipeline` | Run the full 9-stage pipeline |
-| `super_dev_init` | Initialize Super Dev in an existing project |
-| `super_dev_status` | Check pipeline status and outputs |
-| `super_dev_quality` | Run quality gate check (0-100 score) |
-| `super_dev_spec` | Manage specs: list, show, propose, scaffold, validate |
-| `super_dev_config` | View or modify project config (super-dev.yaml) |
-| `super_dev_review` | Run targeted review: docs, ui, architecture, quality |
+| `super_dev_pipeline` | Run the full 9-stage pipeline from requirement description |
+| `super_dev_init` | Initialize Super Dev in an existing project (creates super-dev.yaml) |
+| `super_dev_status` | Check pipeline status, completed phases, and blocking gates |
+| `super_dev_quality` | Run quality check by type: prd, architecture, ui, code, all |
+| `super_dev_spec` | Manage specs: list, show, propose, scaffold, validate, archive |
+| `super_dev_config` | View or modify project config: list, get, set |
+| `super_dev_review` | Run review or confirm a gate: docs, ui, architecture, quality |
 | `super_dev_release` | Check release readiness or generate proof-pack |
 | `super_dev_expert` | Consult an expert: PM, ARCHITECT, UI, UX, SECURITY, CODE, DBA, QA, DEVOPS, RCA |
-| `super_dev_run` | Run any super-dev CLI command directly |
+| `super_dev_deploy` | Generate CI/CD config, Dockerfile, or release rehearsal |
+| `super_dev_analyze` | Analyze project structure, tech stack, and dependencies |
+| `super_dev_doctor` | Run health check and diagnostics for host integration |
+| `super_dev_run` | Run any super-dev CLI command directly (optional, fallback) |
 
 ## Configuration
 
@@ -80,7 +83,12 @@ In your OpenClaw config (`~/.openclaw/openclaw.json`):
 OpenClaw Agent -> Plugin (TypeScript) -> child_process.execFile -> super-dev (Python CLI)
 ```
 
-The plugin registers 10 tools that bridge OpenClaw to the `super-dev` Python CLI via subprocess. The built-in SKILL.md teaches the agent the pipeline protocol (phase chain, confirmation gates, knowledge contracts).
+The plugin registers 13 tools that bridge OpenClaw to the `super-dev` Python CLI via subprocess. The built-in SKILL.md (481 lines) teaches the agent the complete pipeline protocol including:
+- 9 pipeline stages with per-stage execution guidance
+- 2 mandatory confirmation gates (DOC_CONFIRM_GATE + PREVIEW_CONFIRM_GATE)
+- UI/architecture/quality rework protocols
+- Resume/status/jump flow control
+- First-response contract matching Claude Code experience
 
 ## Requirements
 
