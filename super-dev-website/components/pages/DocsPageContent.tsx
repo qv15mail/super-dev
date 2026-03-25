@@ -126,7 +126,7 @@ const zhContent: Content = {
     '终端输入 super-dev 后，会进入宿主安装引导，并把 21 个适配宿主的对应协议面写入宿主和项目。',
   ],
   installCode:
-    'pip install -U super-dev\n# 或\nuv tool install super-dev\n\n# 打开安装引导\nsuper-dev\n\n# 更新到最新版\nsuper-dev update',
+    'pip install -U super-dev\n# 或\nuv tool install super-dev\n\n# 打开安装引导\nsuper-dev\n\n# OpenClaw 用户额外安装\nopenclaw plugins install @super-dev/openclaw-plugin\n# 或安装 ClawHub Skill\nclawhub install super-dev\n\n# 更新到最新版\nsuper-dev update',
   surfacesTitle: '宿主接入面',
   surfacesBody:
     '不同宿主会读取不同的官方接入面。安装引导会把这些面写到项目级和用户级路径里，让宿主知道何时进入 Super Dev 流水线。',
@@ -179,6 +179,7 @@ const zhContent: Content = {
         { host: 'cursor-cli', protocol: '官方 commands + rules', grade: 'Compatible', trigger: '/super-dev' },
         { host: 'qoder-cli', protocol: '官方 commands + skills', grade: 'Compatible', trigger: '/super-dev' },
         { host: 'codebuddy-cli', protocol: '官方 commands + skills', grade: 'Compatible', trigger: '/super-dev' },
+        { host: 'openclaw', protocol: 'Plugin SDK + ClawHub Skill', grade: 'Compatible', trigger: '/super-dev' },
       ],
     },
     {
@@ -353,7 +354,7 @@ const enContent: Content = {
     'Running super-dev opens the host installer and writes the required protocol surfaces for the 16 primary host profiles.',
   ],
   installCode:
-    'pip install -U super-dev\n# or\nuv tool install super-dev\n\n# open the installer\nsuper-dev\n\n# update later\nsuper-dev update',
+    'pip install -U super-dev\n# or\nuv tool install super-dev\n\n# open the installer\nsuper-dev\n\n# OpenClaw users: install plugin or skill\nopenclaw plugins install @super-dev/openclaw-plugin\n# or\nclawhub install super-dev\n\n# update later\nsuper-dev update',
   surfacesTitle: 'Integration surfaces',
   surfacesBody:
     'The installer writes the required project-level and user-level surfaces so the host can recognize and execute the Super Dev workflow.',
@@ -406,6 +407,7 @@ const enContent: Content = {
         { host: 'cursor-cli', protocol: 'official commands + rules', grade: 'Compatible', trigger: '/super-dev' },
         { host: 'qoder-cli', protocol: 'official commands + skills', grade: 'Compatible', trigger: '/super-dev' },
         { host: 'codebuddy-cli', protocol: 'official commands + skills', grade: 'Compatible', trigger: '/super-dev' },
+        { host: 'openclaw', protocol: 'Plugin SDK + ClawHub Skill', grade: 'Compatible', trigger: '/super-dev' },
       ],
     },
     {
