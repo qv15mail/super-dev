@@ -27,7 +27,9 @@ const COPY = {
     nav: [
       { label: '功能', href: '/#features' },
       { label: '宿主', href: '/#hosts' },
+      { label: '案例', href: '/showcase' },
       { label: '文档', href: '/docs' },
+      { label: '更新', href: '/changelog' },
     ],
     start: '开始使用',
     mobileOpen: '打开菜单',
@@ -40,7 +42,9 @@ const COPY = {
     nav: [
       { label: 'Features', href: '/#features' },
       { label: 'Hosts', href: '/#hosts' },
+      { label: 'Showcase', href: '/showcase' },
       { label: 'Docs', href: '/docs' },
+      { label: 'Changelog', href: '/changelog' },
     ],
     start: 'Get Started',
     mobileOpen: 'Open menu',
