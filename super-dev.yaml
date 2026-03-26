@@ -53,4 +53,4 @@ platform: web
 quality_gate: 90
 state_management: []
 testing_frameworks: []
-version: 2.1.3
+version: 2.1.4
