@@ -46,7 +46,7 @@ export function HeroSection({ locale = 'zh' }: { locale?: SiteLocale }) {
       <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-14 px-4 pb-20 sm:px-6 lg:grid lg:grid-cols-[minmax(0,1fr)_520px] lg:items-center lg:gap-16 lg:pb-24">
         <div className="flex flex-col gap-7">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="version">v2.1.4</Badge>
+            <Badge variant="version">v2.1.5</Badge>
             <Badge variant="certified">{copy.openSource}</Badge>
             <a
               href={GITHUB_REPO_URL}
