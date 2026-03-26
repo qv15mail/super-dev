@@ -17,9 +17,9 @@ from super_dev.orchestrator import WorkflowContext, WorkflowEngine
 def reset_global_config_manager():
     """重置全局配置管理器（每个测试前）"""
     from super_dev.config import manager
-    manager._global_config_manager = None
+    manager._global_config_managers.clear()
     yield
-    manager._global_config_manager = None
+    manager._global_config_managers.clear()
 
 
 @pytest.fixture(autouse=True)

@@ -519,7 +519,7 @@ class ProofPackBuilder:
         summary = f"score={payload.get('score', 'unknown')}, passed={passed}" if isinstance(payload, dict) else "report unreadable"
         return ProofPackArtifact(
             name="Release Rehearsal",
-            status="ready",
+            status="ready" if passed else "pending",
             summary=summary,
             path=str(file_path),
             details=payload if isinstance(payload, dict) else {},

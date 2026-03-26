@@ -182,6 +182,8 @@ class ConfigManager:
             ProjectConfig: 新创建的配置对象
         """
         config_data: dict[str, Any] = {**self.DEFAULT_CONFIG, **kwargs}
+        valid_fields = {f.name for f in dataclasses.fields(ProjectConfig)}
+        config_data = {k: v for k, v in config_data.items() if k in valid_fields}
         candidate = ProjectConfig(**cast(dict[str, Any], config_data))
         errors = self._collect_validation_errors(candidate)
         if errors:
@@ -244,6 +246,8 @@ class ConfigManager:
         # 合并现有配置
         current_data: dict[str, Any] = dict(self.config.__dict__)
         updated_data: dict[str, Any] = {**current_data, **converted_kwargs}
+        valid_fields = {f.name for f in dataclasses.fields(ProjectConfig)}
+        updated_data = {k: v for k, v in updated_data.items() if k in valid_fields}
 
         candidate = ProjectConfig(**cast(dict[str, Any], updated_data))
         errors = self._collect_validation_errors(candidate)

@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 from collections.abc import Callable
 from typing import Any
@@ -171,7 +172,6 @@ class FallbackConsole:
         for arg in args:
             text = str(arg)
             # 移除 rich markup 标签
-            import re
             text = re.sub(r"\[/?[a-zA-Z_ ]+\]", "", text)
             texts.append(normalize_terminal_text(text))
         print(*texts, **filtered)

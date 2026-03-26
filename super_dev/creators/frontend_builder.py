@@ -78,10 +78,10 @@ class FrontendScaffoldBuilder:
       <header class="hero">
         <div class="hero-copy">
           <p class="eyebrow">Super Dev Frontend First Delivery</p>
-          <h1>{self.name}</h1>
-          <p class="summary">{self.description}</p>
+          <h1>{html.escape(self.name)}</h1>
+          <p class="summary">{html.escape(self.description)}</p>
           <div class="meta">
-            <span>Framework: {self.frontend}</span>
+            <span>Framework: {html.escape(self.frontend)}</span>
             <span>Mode: 需求文档驱动</span>
             <span>Status: Ready</span>
           </div>

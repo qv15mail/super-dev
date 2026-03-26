@@ -42,6 +42,9 @@ class SpecManager:
 
     def get_spec_path(self, spec_name: str) -> Path:
         """获取规范文件路径"""
+        resolved = (self.specs_dir / spec_name / "spec.md").resolve()
+        if not str(resolved).startswith(str(self.specs_dir.resolve())):
+            raise ValueError(f"Invalid spec name: {spec_name}")
         return self.specs_dir / spec_name / "spec.md"
 
     def load_spec(self, spec_name: str) -> Spec | None:
@@ -140,6 +143,9 @@ class ChangeManager:
 
     def get_change_path(self, change_id: str) -> Path:
         """获取变更目录路径"""
+        resolved = (self.changes_dir / change_id).resolve()
+        if not str(resolved).startswith(str(self.changes_dir.resolve())):
+            raise ValueError(f"Invalid change ID: {change_id}")
         return self.changes_dir / change_id
 
     def load_change(self, change_id: str) -> Change | None:

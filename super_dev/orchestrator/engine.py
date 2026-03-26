@@ -11,7 +11,7 @@ import json
 import traceback
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -110,7 +110,7 @@ class WorkflowEngine:
             "duration": result.duration,
             "quality_score": result.quality_score,
             "errors": [str(e) for e in result.errors],
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "project": self.config_manager.config.name,
         }
         path = self._checkpoint_dir / f"{phase.value}.json"
@@ -1065,7 +1065,7 @@ class WorkflowEngine:
         report_path = output_dir / f"workflow_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
 
         report_data = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "project": self.config_manager.config.name,
             "results": {
                 phase.value: {

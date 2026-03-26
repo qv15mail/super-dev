@@ -666,7 +666,7 @@ class MigrationGenerator:
                 f"    tableName: '{entity.name}',",
                 "    timestamps: true,",
                 "  });",
-                "  return {entity.name.capitalize()};",
+                f"  return {entity.name.capitalize()};",
                 "};",
                 "",
             ])
@@ -882,7 +882,7 @@ class MigrationGenerator:
             "json": "object",
             "bytes": "Buffer",
         }
-        return type_map.get(col_type.lower().split("(")[0], "any")
+        return type_map.get(col_type.lower().split("(")[0], "unknown")
 
     def _typeorm_type(self, col_type: str) -> str:
         """转换为 TypeORM 类型"""

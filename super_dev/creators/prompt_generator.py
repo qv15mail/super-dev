@@ -556,7 +556,7 @@ project-root/
         """读取生成的文档"""
         doc_path = self.project_dir / "output" / f"{self.name}-{doc_type}.md"
         if doc_path.exists():
-            return doc_path.read_text(encoding="utf-8")
+            return doc_path.read_text(encoding="utf-8", errors="ignore")
         return None
 
     def _read_change_spec(self) -> tuple[str, str]:
@@ -583,7 +583,7 @@ project-root/
 
         tasks_path = self.project_dir / ".super-dev" / "changes" / change.id / "tasks.md"
         if tasks_path.exists():
-            content += tasks_path.read_text(encoding="utf-8")
+            content += tasks_path.read_text(encoding="utf-8", errors="ignore")
         else:
             content += "\n请查看 tasks.md 文件"
 

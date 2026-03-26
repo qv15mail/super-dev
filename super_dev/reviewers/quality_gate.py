@@ -1698,7 +1698,7 @@ class QualityGateChecker:
         if not checks:
             return 0
 
-        return sum(c.score for c in checks) // len(checks)
+        return round(sum(c.score for c in checks) / len(checks))
 
     def _calculate_weighted_score(self, checks: list[QualityCheck]) -> float:
         """计算加权分"""

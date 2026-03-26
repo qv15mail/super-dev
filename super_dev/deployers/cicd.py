@@ -559,7 +559,7 @@ deploy:prod:
         stage('Security Scan') {{
             steps {{
                 sh 'trivy fs --format json --output trivy-results.json .'
-                recordIssues toolexpression: [tool: 'trivy'])
+                recordIssues(tools: [trivy(pattern: 'trivy-results.json')])
             }}
         }}
 

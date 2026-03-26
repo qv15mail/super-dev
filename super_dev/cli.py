@@ -6377,9 +6377,14 @@ super-dev start --idea "你的需求"
             for file_path in cicd_files.keys():
                 self.console.print(f"    - {file_path}")
             self.console.print("")
-            self.console.print("  部署修复模板:")
-            self.console.print(f"    - {Path(remediation_outputs['env_file']).name}")
-            self.console.print(f"    - {Path(remediation_outputs['checklist_file']).relative_to(project_dir)}")
+            if remediation_outputs.get("env_file"):
+                self.console.print("  部署修复模板:")
+                self.console.print(f"    - {Path(remediation_outputs['env_file']).name}")
+                if remediation_outputs.get("checklist_file"):
+                    try:
+                        self.console.print(f"    - {Path(remediation_outputs['checklist_file']).relative_to(project_dir)}")
+                    except ValueError:
+                        self.console.print(f"    - {Path(remediation_outputs['checklist_file']).name}")
             per_platform_files = remediation_outputs.get("per_platform_files")
             if isinstance(per_platform_files, list):
                 for item in per_platform_files:
@@ -9107,8 +9112,9 @@ super-dev start --idea "你的需求"
 
     def _cmd_clean(self, args) -> int:
         """清理历史产物文件"""
+        from .config import get_config_manager
         project_dir = Path.cwd()
-        output_dir = project_dir / self.config_manager.config.output_dir
+        output_dir = project_dir / get_config_manager(project_dir).config.output_dir
 
         if not output_dir.exists():
             self.console.print("[yellow]output/ 目录不存在，无需清理[/yellow]")
@@ -9130,25 +9136,39 @@ super-dev start --idea "你的需求"
         if args.all:
             files_to_delete = all_files
         else:
-            # 按项目名分组，每组保留最近 keep 个
+            # 按项目名分组，每组保留最近 keep 个文件
+            import re as _re
             from collections import defaultdict
+
+            # 已知的产物后缀模式
+            artifact_suffixes = [
+                "-prd", "-architecture", "-uiux", "-research", "-execution-plan",
+                "-frontend-blueprint", "-redteam", "-quality-gate", "-code-review",
+                "-ai-prompt", "-release-readiness", "-pipeline-metrics",
+                "-ui-review", "-proof-pack", "-contract-report", "-knowledge-bundle",
+                "-frontend-runtime", "-repo-map", "-dependency-graph",
+                "-feature-checklist", "-resume-audit", "-rehearsal-report",
+            ]
+
             groups: dict[str, list[Path]] = defaultdict(list)
             for f in all_files:
-                # 提取项目名前缀（如 my-project-prd.md -> my-project）
                 name = f.stem
-                for suffix in ["-prd", "-architecture", "-uiux", "-research", "-execution-plan",
-                               "-frontend-blueprint", "-redteam", "-quality-gate", "-code-review",
-                               "-ai-prompt", "-release-readiness", "-pipeline-metrics",
-                               "-ui-review", "-proof-pack", "-contract-report"]:
+                matched = False
+                for suffix in artifact_suffixes:
                     if name.endswith(suffix):
                         name = name[: -len(suffix)]
+                        matched = True
                         break
+                if not matched:
+                    # 尝试正则提取（处理未知后缀）
+                    m = _re.match(r"^(.+?)(?:-[a-z]+-[a-z]+)$", name)
+                    if m:
+                        name = m.group(1)
                 groups[name].append(f)
 
             files_to_delete = []
-            for group_name, group_files in groups.items():
+            for _group_name, group_files in groups.items():
                 group_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
-                # 每组中属于同一次运行的文件（修改时间相近）算一批
                 keep_count = args.keep
                 if len(group_files) > keep_count:
                     files_to_delete.extend(group_files[keep_count:])
