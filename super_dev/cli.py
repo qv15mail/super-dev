@@ -1062,6 +1062,28 @@ class SuperDevCLI:
             help="升级方式（默认: auto）"
         )
 
+        clean_parser = subparsers.add_parser(
+            "clean",
+            help="清理历史产物文件",
+            description="清理 output/ 目录中的历史产物文件，保留最近一次运行的结果"
+        )
+        clean_parser.add_argument(
+            "--all",
+            action="store_true",
+            help="删除 output/ 目录下的所有产物文件"
+        )
+        clean_parser.add_argument(
+            "--keep",
+            type=int,
+            default=1,
+            help="保留最近 N 次运行的产物（默认: 1）"
+        )
+        clean_parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="只显示将要删除的文件，不实际删除"
+        )
+
         review_parser = subparsers.add_parser(
             "review",
             help="管理文档确认等评审状态",
@@ -9083,6 +9105,91 @@ super-dev start --idea "你的需求"
 
         return 0
 
+    def _cmd_clean(self, args) -> int:
+        """清理历史产物文件"""
+        project_dir = Path.cwd()
+        output_dir = project_dir / self.config_manager.config.output_dir
+
+        if not output_dir.exists():
+            self.console.print("[yellow]output/ 目录不存在，无需清理[/yellow]")
+            return 0
+
+        # 收集所有产物文件（按修改时间排序）
+        artifact_extensions = {".md", ".json", ".html", ".css", ".js", ".tar.gz", ".zip"}
+        all_files: list[Path] = []
+        for f in output_dir.rglob("*"):
+            if f.is_file() and (f.suffix in artifact_extensions or ".tar" in f.name):
+                all_files.append(f)
+
+        if not all_files:
+            self.console.print("[green]output/ 目录已是干净状态[/green]")
+            return 0
+
+        all_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+
+        if args.all:
+            files_to_delete = all_files
+        else:
+            # 按项目名分组，每组保留最近 keep 个
+            from collections import defaultdict
+            groups: dict[str, list[Path]] = defaultdict(list)
+            for f in all_files:
+                # 提取项目名前缀（如 my-project-prd.md -> my-project）
+                name = f.stem
+                for suffix in ["-prd", "-architecture", "-uiux", "-research", "-execution-plan",
+                               "-frontend-blueprint", "-redteam", "-quality-gate", "-code-review",
+                               "-ai-prompt", "-release-readiness", "-pipeline-metrics",
+                               "-ui-review", "-proof-pack", "-contract-report"]:
+                    if name.endswith(suffix):
+                        name = name[: -len(suffix)]
+                        break
+                groups[name].append(f)
+
+            files_to_delete = []
+            for group_name, group_files in groups.items():
+                group_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+                # 每组中属于同一次运行的文件（修改时间相近）算一批
+                keep_count = args.keep
+                if len(group_files) > keep_count:
+                    files_to_delete.extend(group_files[keep_count:])
+
+        if not files_to_delete:
+            self.console.print(f"[green]无需清理（当前保留最近 {args.keep} 次运行的产物）[/green]")
+            return 0
+
+        self.console.print(f"[cyan]将清理 {len(files_to_delete)} 个文件：[/cyan]")
+        for f in files_to_delete[:20]:
+            try:
+                rel = f.relative_to(project_dir)
+            except ValueError:
+                rel = f.name
+            self.console.print(f"  [dim]{rel}[/dim]")
+        if len(files_to_delete) > 20:
+            self.console.print(f"  [dim]... 及其他 {len(files_to_delete) - 20} 个文件[/dim]")
+
+        if args.dry_run:
+            self.console.print("[yellow]--dry-run 模式，未实际删除[/yellow]")
+            return 0
+
+        deleted = 0
+        for f in files_to_delete:
+            try:
+                f.unlink()
+                deleted += 1
+            except OSError:
+                pass
+
+        # 清理空目录
+        for d in sorted(output_dir.rglob("*"), reverse=True):
+            if d.is_dir() and not any(d.iterdir()):
+                try:
+                    d.rmdir()
+                except OSError:
+                    pass
+
+        self.console.print(f"[green]已清理 {deleted} 个文件[/green]")
+        return 0
+
     def _cmd_update(self, args) -> int:
         latest_version = self._fetch_latest_pypi_version()
         if latest_version is None:
@@ -9111,15 +9218,40 @@ super-dev start --idea "你的需求"
         self.console.print(f"[cyan]升级方式[/cyan]: {method}")
         command = self._build_update_command(method=method)
         self.console.print(f"[dim]执行命令: {' '.join(command)}[/dim]")
-        try:
-            completed = subprocess.run(command, check=False)
-        except FileNotFoundError:
-            self.console.print(f"[red]未找到升级工具: {method}[/red]")
-            return 1
 
-        if completed.returncode != 0:
-            self.console.print("[red]升级失败，请根据上面的命令手动执行[/red]")
-            return completed.returncode
+        # Windows 下 uv tool upgrade 可能因文件锁定失败，提供重试机制
+        max_retries = 3 if sys.platform == "win32" and method == "uv" else 1
+        completed = None
+        for attempt in range(max_retries):
+            try:
+                completed = subprocess.run(command, check=False)
+                if completed.returncode == 0:
+                    break
+                if attempt < max_retries - 1 and sys.platform == "win32":
+                    self.console.print(
+                        f"[yellow]升级失败（尝试 {attempt + 1}/{max_retries}），"
+                        "Windows 下文件可能被占用，等待 2 秒后重试...[/yellow]"
+                    )
+                    import time
+                    time.sleep(2)
+            except FileNotFoundError:
+                self.console.print(f"[red]未找到升级工具: {method}[/red]")
+                return 1
+
+        if completed is None or completed.returncode != 0:
+            if sys.platform == "win32" and method == "uv":
+                self.console.print("")
+                self.console.print(
+                    "[red]升级失败：Windows 下 super-dev.exe 可能被其他进程占用[/red]\n"
+                    "[yellow]请按以下步骤操作：[/yellow]\n"
+                    "  1. 关闭所有使用 super-dev 的终端窗口\n"
+                    "  2. 打开新的终端\n"
+                    "  3. 执行: uv tool upgrade super-dev\n"
+                    "  [dim]如果仍然失败，尝试: uv tool install super-dev --force --reinstall[/dim]"
+                )
+            else:
+                self.console.print("[red]升级失败，请根据上面的命令手动执行[/red]")
+            return completed.returncode if completed else 1
 
         from rich.panel import Panel
         self.console.print("")
@@ -10532,7 +10664,7 @@ super-dev start --idea "你的需求"
             "deploy", "create", "wizard", "design", "spec", "task", "pipeline", "run", "config", "skill", "integrate",
             "onboard", "doctor", "setup", "install", "start", "bootstrap", "detect", "policy", "update", "review", "release",
             "fix", "repo-map", "feature-checklist", "impact", "regression-guard", "dependency-graph",
-            "status", "jump", "confirm",
+            "status", "jump", "confirm", "clean",
         }
         return first not in known_commands
 
