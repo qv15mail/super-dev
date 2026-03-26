@@ -228,8 +228,8 @@ export default definePluginEntry({
       async execute(_id: string, params: Record<string, unknown>) {
         const role = String(params.role);
         const question = String(params.question);
-        // expert 的 prompt 是 nargs=*，需要按空格拆分传入
-        const args = ["expert", role, ...question.split(/\s+/).filter(Boolean)];
+        // expert 的 prompt 是 nargs=*，加 -- 防止 question 中的 --flag 被 argparse 误解析
+        const args = ["expert", role, "--", ...question.split(/\s+/).filter(Boolean)];
         return formatToolResult(await invokeSuperDev(args, { cwd: cwd(), bin: bin(), timeout: timeout() }));
       },
     });

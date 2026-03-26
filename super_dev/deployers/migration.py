@@ -388,8 +388,9 @@ class MigrationGenerator:
         for entity in self.entities:
             schema_lines.append(f'model {entity.name.capitalize()} {{')
             for col in entity.columns:
-                schema_lines.append(f'  {col.name} {self._prisma_type(col.type)}'
-                                   f'{"?" if col.nullable else ""}')
+                nullable_mark = "?" if col.nullable else ""
+                pk_decorator = " @id @default(uuid())" if col.primary_key else ""
+                schema_lines.append(f'  {col.name} {self._prisma_type(col.type)}{nullable_mark}{pk_decorator}')
             schema_lines.append("}")
             schema_lines.append("")
 
@@ -449,7 +450,7 @@ class MigrationGenerator:
         migration_lines = [
             "import { MigrationInterface, QueryRunner, Table } from 'typeorm';",
             "",
-            f"export class Init{timestamp} {{",
+            f"export class Init{timestamp} implements MigrationInterface {{",
             f"    name = 'Init{timestamp}';",
             "",
             "    public async up(queryRunner: QueryRunner): Promise<void> {",

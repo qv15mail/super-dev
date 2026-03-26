@@ -1144,7 +1144,7 @@ class QualityGateChecker:
             )
 
         pending = total - completed
-        completion_rate = int((completed / total) * 100)
+        completion_rate = int((completed / total) * 100) if total else 0
         if pending == 0 and in_progress == 0:
             return QualityCheck(
                 name="Spec任务完成度",
@@ -1383,7 +1383,7 @@ class QualityGateChecker:
             total_hosts = self._coerce_int(profile.get("total_hosts"), default=0)
             bounded_score = self._coerce_int(profile.get("bounded_score"), default=0)
             details = (
-                f"{latest.name} | profile={profile['label']} | overall={overall_score:.2f} | "
+                f"{latest.name} | profile={profile.get('label', 'unknown')} | overall={overall_score:.2f} | "
                 f"ready={ready_hosts}/{total_hosts}"
             )
 

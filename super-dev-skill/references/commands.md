@@ -106,5 +106,5 @@ super-dev feature-checklist     # PRD 范围覆盖率
 **平台**: web, mobile, wechat, desktop
 **前端**: next, react-vite, vue-vite, nuxt, remix, angular, sveltekit, astro, solid, qwik, gatsby
 **后端**: node, python, go, java, rust, php, ruby, csharp, kotlin, swift, elixir, scala, dart
-**领域**: fintech, ecommerce, medical, social, iot, education
+**领域**: fintech, ecommerce, medical, social, iot, education, auth, content, saas
 **CI/CD**: github, gitlab, jenkins, azure, bitbucket

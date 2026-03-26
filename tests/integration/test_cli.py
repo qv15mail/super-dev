@@ -2927,3 +2927,64 @@ class TestCLIRunControl:
             assert "passed=False" in rehearsal["summary"]
         finally:
             os.chdir(original_cwd)
+
+
+class TestCLIClean:
+    def test_clean_empty_output(self, temp_project_dir):
+        original = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["clean"])
+            assert result == 0
+        finally:
+            os.chdir(original)
+
+    def test_clean_dry_run(self, temp_project_dir):
+        original = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            out = temp_project_dir / "output"
+            out.mkdir()
+            (out / "test-prd.md").write_text("x")
+            (out / "test-architecture.md").write_text("x")
+            cli = SuperDevCLI()
+            result = cli.run(["clean", "--dry-run"])
+            assert result == 0
+            assert (out / "test-prd.md").exists()
+            assert (out / "test-architecture.md").exists()
+        finally:
+            os.chdir(original)
+
+    def test_clean_all(self, temp_project_dir):
+        original = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            out = temp_project_dir / "output"
+            out.mkdir()
+            (out / "test-prd.md").write_text("x")
+            (out / "test-architecture.md").write_text("x")
+            cli = SuperDevCLI()
+            result = cli.run(["clean", "--all"])
+            assert result == 0
+            remaining = list(out.glob("*"))
+            assert len(remaining) == 0
+        finally:
+            os.chdir(original)
+
+    def test_clean_keep_default(self, temp_project_dir):
+        original = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            out = temp_project_dir / "output"
+            out.mkdir()
+            (out / "test-prd.md").write_text("x")
+            (out / "test-architecture.md").write_text("x")
+            import time
+            time.sleep(0.05)
+            (out / "test-uiux.md").write_text("y")
+            cli = SuperDevCLI()
+            result = cli.run(["clean"])
+            assert result == 0
+        finally:
+            os.chdir(original)

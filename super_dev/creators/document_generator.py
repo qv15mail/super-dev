@@ -4486,19 +4486,19 @@ spec:
 
     def _render_page_blueprints(self, profile: dict) -> str:
         lines: list[str] = []
-        for blueprint in profile["page_blueprints"]:
+        for blueprint in profile.get("page_blueprints", []):
             lines.extend(
                 [
-                    f"#### {blueprint['page']}",
+                    f"#### {blueprint.get('page', '未命名页面')}",
                     "",
                     "**推荐模块顺序**:",
                 ]
             )
-            lines.extend(f"- {section}" for section in blueprint["sections"])
+            lines.extend(f"- {section}" for section in blueprint.get("sections", []))
             lines.extend(
                 [
                     "",
-                    f"**设计重点**: {blueprint['focus']}",
+                    f"**设计重点**: {blueprint.get('focus', '无')}",
                     "",
                 ]
             )
@@ -4506,16 +4506,16 @@ spec:
 
     def _render_visual_assets_strategy(self, profile: dict) -> str:
         lines = [
-            f"- **图标库**: {profile['component_stack']['icons']}，禁止 emoji 代替功能图标。",
-            f"- **图表策略**: {profile['component_stack']['chart']}，图表先服务决策，再考虑视觉装饰。",
+            f"- **图标库**: {profile.get('component_stack', {}).get('icons', 'Lucide')}，禁止 emoji 代替功能图标。",
+            f"- **图表策略**: {profile.get('component_stack', {}).get('chart', 'Recharts')}，图表先服务决策，再考虑视觉装饰。",
             "- **品牌/合作方 Logo**: 统一使用官方 SVG 或可信来源矢量资产，避免猜测版图形。",
             "- **截图策略**: 对外页面优先使用真实产品截图、流程图或数据示意，而不是空洞插画。",
             "",
             "**优先落地的组件模块**:",
         ]
-        lines.extend(f"- {item}" for item in profile["component_priorities"])
+        lines.extend(f"- {item}" for item in profile.get("component_priorities", []))
         lines.extend(["", "**明确禁止**:"])
-        lines.extend(f"- {item}" for item in profile["banned_patterns"][:6])
+        lines.extend(f"- {item}" for item in profile.get("banned_patterns", [])[:6])
         return "\n".join(lines)
 
     def _get_design_recommendations(self) -> dict:
@@ -5017,7 +5017,7 @@ spec:
         return (
             "- UI 的首要目标不是“好看”，而是让用户快速理解产品价值、任务状态与下一步动作。\n"
             "- 所有页面都应体现商业级完成度：品牌感、层级感、信息密度、状态完整度与信任表达。\n"
-            f"- 当前项目应以“{profile['surface']}”为第一交付目标，并采用 {profile['information_density']} 密度策略组织信息。\n"
+            f"- 当前项目应以“{profile.get('surface', 'Web')}”为第一交付目标，并采用 {profile.get('information_density', '中等')} 密度策略组织信息。\n"
             "- 先解决页面结构、CTA、数据层级和组件一致性，再打磨视觉细节。\n"
             "- 对外页面强调品牌、信任与转化，对内页面强调效率、清晰度和低认知负担。"
         )
@@ -5034,7 +5034,7 @@ spec:
         profile = profile or self._get_ui_intelligence()
         return (
             "- 桌面端使用明确的 12 栏或等价栅格系统，控制内容宽度与节奏。\n"
-            f"- 当前项目采用 {profile['information_density']} 信息密度，按页面目标决定视觉节奏与操作密度。\n"
+            f"- 当前项目采用 {profile.get('information_density', '中等')} 信息密度，按页面目标决定视觉节奏与操作密度。\n"
             "- 控制不同页面的密度等级，避免同一产品里既过空又过挤。\n"
             "- 侧边栏、头部、主体区、辅助区、底部应有稳定布局规则。"
         )
@@ -5054,7 +5054,7 @@ spec:
         profile = profile or self._get_ui_intelligence()
         return (
             "- 动效只服务于层级切换、状态反馈、焦点引导，不用作廉价装饰。\n"
-            f"- 推荐实现基线: {profile['component_stack']['motion']}。\n"
+            f"- 推荐实现基线: {profile.get('component_stack', {}).get('motion', 'framer-motion')}。\n"
             "- 列表进入、面板展开、Toast 反馈、模态切换应采用统一时长与缓动曲线。\n"
             "- 对关键提交动作提供即时反馈，对长操作提供进度提示。\n"
             "- 必须兼容 reduced-motion，必要时降级为无动画但保留状态反馈。"
@@ -5070,5 +5070,5 @@ spec:
             "",
             "**当前项目必须优先出现的信任/转化模块**:",
         ]
-        lines.extend(f"- {item}" for item in profile["trust_modules"][:8])
+        lines.extend(f"- {item}" for item in profile.get("trust_modules", [])[:8])
         return "\n".join(lines)

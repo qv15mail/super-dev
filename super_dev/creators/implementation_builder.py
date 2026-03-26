@@ -1057,6 +1057,7 @@ class ImplementationScaffoldBuilder:
         return files
 
     def _build_react_app(self, modules: list[str]) -> str:
+        safe_name = self.name.replace("<", "&lt;").replace(">", "&gt;").replace("{", "&#123;").replace("}", "&#125;")
         imports = [f"import {self._to_component(module)} from './modules/{module}';" for module in modules]
         cards = [
             (
@@ -1075,7 +1076,7 @@ class ImplementationScaffoldBuilder:
             "export default function App() {\n"
             "  return (\n"
             "    <main style={{maxWidth: 960, margin: '40px auto', fontFamily: \"'Plus Jakarta Sans','Noto Sans SC','PingFang SC','Segoe UI',sans-serif\"}}>\n"
-            f"      <h1>{self.name} 实现骨架</h1>\n"
+            f"      <h1>{safe_name} 实现骨架</h1>\n"
             "      <p>该页面由 Super Dev 自动生成，按模块分区承接需求实现。</p>\n"
             "      <div style={{display: 'grid', gap: 12}}>\n"
             + "\n".join(cards)
@@ -1479,6 +1480,7 @@ class ImplementationScaffoldBuilder:
         )
 
     def _build_vue_app(self, modules: list[str]) -> str:
+        safe_name = self.name.replace("<", "&lt;").replace(">", "&gt;").replace("{", "&#123;").replace("}", "&#125;")
         imports = [f"import {self._to_component(module)} from './modules/{module}.vue';" for module in modules]
         cards = [
             (
@@ -1492,7 +1494,7 @@ class ImplementationScaffoldBuilder:
         return (
             "<template>\n"
             "  <main class=\"shell\">\n"
-            f"    <h1>{self.name} 实现骨架</h1>\n"
+            f"    <h1>{safe_name} 实现骨架</h1>\n"
             "    <div class=\"grid\">\n"
             + "\n".join(cards)
             + "\n"
@@ -1522,6 +1524,7 @@ class ImplementationScaffoldBuilder:
         )
 
     def _build_svelte_app(self, modules: list[str]) -> str:
+        safe_name = self.name.replace("<", "&lt;").replace(">", "&gt;").replace("{", "&#123;").replace("}", "&#125;")
         imports = [f"import {self._to_component(module)} from './modules/{module}.svelte';" for module in modules]
         cards = [
             (
@@ -1536,7 +1539,7 @@ class ImplementationScaffoldBuilder:
             "\n".join(imports)
             + "\n\n"
             f"<main class=\"shell\">\n"
-            f"  <h1>{self.name} 实现骨架</h1>\n"
+            f"  <h1>{safe_name} 实现骨架</h1>\n"
             "  <div class=\"grid\">\n"
             + "\n".join(cards)
             + "\n"
@@ -1559,6 +1562,7 @@ class ImplementationScaffoldBuilder:
         )
 
     def _build_angular_component(self, modules: list[str], module_requirements: dict[str, list[str]]) -> str:
+        safe_name = self.name.replace("<", "&lt;").replace(">", "&gt;").replace("{", "&#123;").replace("}", "&#125;")
         sections = []
         for module_name in modules:
             req_items = "".join(
@@ -1581,7 +1585,7 @@ class ImplementationScaffoldBuilder:
             "  selector: 'app-root',\n"
             "  template: `\n"
             f"    <main style=\"max-width:960px;margin:40px auto;font-family:'Plus Jakarta Sans','Noto Sans SC','PingFang SC','Segoe UI',sans-serif;\">\n"
-            f"      <h1>{self.name} 实现骨架</h1>\n"
+            f"      <h1>{safe_name} 实现骨架</h1>\n"
             f"{' '.join(sections)}\n"
             "    </main>\n"
             "  `,\n"

@@ -214,7 +214,6 @@ class SpecGenerator:
                 description += line.strip() + "\n"
 
         # 创建变更 ID（只保留安全字符）
-        import re
         change_id = re.sub(r"[^a-z0-9_-]+", "-", title.lower()).strip("-")[:50]
 
         change = self.create_change(

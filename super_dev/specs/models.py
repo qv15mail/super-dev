@@ -57,7 +57,7 @@ class Scenario:
             lines.append(f"- WHEN {self.when}")
         if self.then:
             lines.append(f"- THEN {self.then}")
-        return "\n".join(lines) if lines else "- DETAIL REQUIRED"
+        return "\n".join(lines) if lines else ""
 
 
 @dataclass

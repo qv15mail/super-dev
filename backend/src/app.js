@@ -14,6 +14,15 @@ const PORT = process.env.PORT || 3001;
 // 中间件
 app.use(express.json());
 
+// CORS（开发环境跨域支持）
+app.use((_req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  if (_req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 // 路由注册
 app.use('/api/content', require('./routes/content.route'));
 app.use('/api/profile', require('./routes/profile.route'));

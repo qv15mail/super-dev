@@ -355,7 +355,8 @@ class WorkflowEngine:
         if asyncio.iscoroutinefunction(handler):
             return await handler(context)
         else:
-            return handler(context)
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(None, handler, context)
 
     _execute_handler = _execute_handler_async
 

@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import os
-import ssl
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from urllib import error as urllib_error
@@ -1124,7 +1123,8 @@ class IntegrationManager:
                 req = urllib_request.Request(url, headers=headers, method=method)
                 open_kwargs: dict[str, object] = {"timeout": timeout_seconds}
                 if not strict_tls:
-                    open_kwargs["context"] = ssl._create_unverified_context()
+                    # 不降级到不安全连接，跳过此尝试
+                    continue
                 with urllib_request.urlopen(req, **open_kwargs) as resp:
                     status = int(getattr(resp, "status", 200))
                     content = ""
