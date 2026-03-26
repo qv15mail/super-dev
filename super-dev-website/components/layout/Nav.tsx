@@ -2,15 +2,15 @@
 /**
  * 开发：Excellent（11964948@qq.com）
  * 功能：顶部导航栏
- * 作用：固定导航、响应式汉堡菜单、GitHub Star 数显示、多语言切换
+ * 作用：固定导航、响应式汉堡菜单、GitHub Star 数显示、官方群弹窗
  * 创建时间：2026-03-08
- * 最后修改：2026-03-08
+ * 最后修改：2026-03-26
  */
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { Github, Menu, X, Star } from 'lucide-react';
+// usePathname removed - no longer needed after handleGetStarted removal
+import { Github, Menu, X, Star, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { LocaleSwitch } from '@/components/ui/LocaleSwitch';
@@ -31,7 +31,8 @@ const COPY = {
       { label: '文档', href: '/docs' },
       { label: '更新', href: '/changelog' },
     ],
-    start: '开始使用',
+    start: '官方交流群',
+    qrTitle: '扫码加入 Super Dev 官方交流群',
     mobileOpen: '打开菜单',
     mobileClose: '关闭菜单',
     ariaHome: 'Super Dev 首页',
@@ -46,7 +47,8 @@ const COPY = {
       { label: 'Docs', href: '/docs' },
       { label: 'Changelog', href: '/changelog' },
     ],
-    start: 'Get Started',
+    start: 'Community',
+    qrTitle: 'Scan to join the Super Dev community group',
     mobileOpen: 'Open menu',
     mobileClose: 'Close menu',
     ariaHome: 'Super Dev home',
@@ -56,10 +58,9 @@ const COPY = {
 } as const;
 
 export function Nav({ locale = 'zh' }: NavProps) {
-  const pathname = usePathname();
-  const router = useRouter();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
   const stars = useGithubStars();
   const copy = COPY[locale];
   const navLinks = copy.nav.map((link) => ({ ...link, href: localizedPath(locale, link.href) }));
@@ -83,14 +84,7 @@ export function Nav({ locale = 'zh' }: NavProps) {
     setMobileOpen(false);
   }
 
-  function handleGetStarted() {
-    const homePath = localizedPath(locale, '/');
-    if (pathname === homePath || pathname === `${homePath}/`) {
-      document.getElementById('get-started')?.scrollIntoView({ behavior: 'smooth' });
-      return;
-    }
-    router.push(localizedPath(locale, '/#get-started'));
-  }
+  // handleGetStarted 已移除，改为弹出官方群二维码
 
   return (
     <>
@@ -158,7 +152,8 @@ export function Nav({ locale = 'zh' }: NavProps) {
               <Star size={12} aria-hidden="true" />
               <span className="font-mono">{formatStarCount(stars)}</span>
             </a>
-            <Button variant="primary" size="sm" onClick={handleGetStarted}>
+            <Button variant="primary" size="sm" onClick={() => setQrOpen(true)}>
+              <Users size={14} aria-hidden="true" className="mr-1.5" />
               {copy.start}
             </Button>
           </div>
@@ -210,13 +205,55 @@ export function Nav({ locale = 'zh' }: NavProps) {
                 className="w-full"
                 onClick={() => {
                   handleMobileClose();
-                  handleGetStarted();
+                  setQrOpen(true);
                 }}
               >
+                <Users size={16} aria-hidden="true" className="mr-2" />
                 {copy.start}
               </Button>
             </div>
           </nav>
+        </div>
+      )}
+
+      {/* 官方群二维码弹窗 */}
+      {qrOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setQrOpen(false)}
+          role="dialog"
+          aria-label={copy.qrTitle}
+        >
+          <div
+            className="relative bg-bg-primary border border-border-default rounded-2xl p-8 max-w-sm mx-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="absolute top-3 right-3 p-1 text-text-muted hover:text-text-primary transition-colors rounded-md"
+              onClick={() => setQrOpen(false)}
+              aria-label={locale === 'zh' ? '关闭' : 'Close'}
+            >
+              <X size={20} aria-hidden="true" />
+            </button>
+            <div className="text-center">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent-blue/10 border border-accent-blue/20 mb-4">
+                <Users size={14} className="text-accent-blue" aria-hidden="true" />
+                <span className="text-sm text-accent-blue font-medium">{copy.start}</span>
+              </div>
+              <h3 className="text-lg font-bold text-text-primary mb-2">{copy.qrTitle}</h3>
+              <Image
+                src={assetPath('/qun.png')}
+                alt="WeChat Group QR Code"
+                width={240}
+                height={240}
+                className="w-60 h-60 rounded-xl border border-border-default mx-auto mt-4 object-cover"
+                unoptimized
+              />
+              <p className="text-xs text-text-muted mt-4">
+                {locale === 'zh' ? '微信扫码，和开发者一起交流' : 'Scan with WeChat to join'}
+              </p>
+            </div>
+          </div>
         </div>
       )}
     </>

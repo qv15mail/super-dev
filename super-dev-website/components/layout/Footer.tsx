@@ -165,19 +165,7 @@ export function Footer({ locale = 'zh' }: FooterProps) {
           ))}
         </div>
 
-        <div className="mt-12 pt-8 border-t border-border-muted flex flex-col items-center gap-4">
-          <p className="text-sm text-text-muted">{locale === 'zh' ? '扫码加入 Super Dev 微信交流群' : 'Join Super Dev WeChat Group'}</p>
-          <Image
-            src={assetPath('/qun.jpg')}
-            alt="WeChat Group"
-            width={192}
-            height={192}
-            className="w-48 rounded-xl border border-border-default h-auto"
-            unoptimized
-          />
-        </div>
-
-        <div className="mt-8 pt-6 border-t border-border-muted flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="mt-12 pt-6 border-t border-border-muted flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-text-muted">&copy; {currentYear} shangyankeji. MIT License.</p>
           <p className="text-xs text-text-muted">
             {copy.builtWith}{' '}
