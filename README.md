@@ -19,7 +19,7 @@
 
 ## 版本
 
-当前版本：`2.1.3`
+当前版本：`2.1.5`
 
 ---
 
@@ -304,13 +304,13 @@ super-dev
 ### 3. 指定版本安装
 
 ```bash
-pip install super-dev==2.1.3
+pip install super-dev==2.1.5
 ```
 
 ### 4. GitHub 指定标签安装
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.1.3
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.1.5
 ```
 
 ### 5. 源码开发安装

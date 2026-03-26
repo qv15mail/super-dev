@@ -19,7 +19,7 @@
 
 ## Version
 
-Current version: `2.1.3`
+Current version: `2.1.5`
 
 ---
 
@@ -261,13 +261,13 @@ This generates `.super-dev/WORKFLOW.md` and `output/*-bootstrap.md` to lock down
 ### 3. Pin a specific version
 
 ```bash
-pip install super-dev==2.1.3
+pip install super-dev==2.1.5
 ```
 
 ### 4. Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.1.3
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.1.5
 ```
 
 ### 5. Source install for development
