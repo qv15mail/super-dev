@@ -520,3 +520,453 @@ class ChangeManager:
                     ))
 
         return deltas
+
+    # ------------------------------------------------------------------
+    # Spec Template Differentiation
+    # ------------------------------------------------------------------
+
+    SPEC_TEMPLATES: dict[str, dict[str, str]] = {
+        "feature": {
+            "title_prefix": "Feature",
+            "sections": (
+                "## Description\n\n"
+                "Describe the new feature and its user-facing value.\n\n"
+                "## Motivation\n\n"
+                "Why is this feature needed? What problem does it solve?\n\n"
+                "## Impact\n\n"
+                "Which modules / APIs / UI pages will be affected?\n\n"
+                "## Acceptance Criteria\n\n"
+                "- [ ] Criterion 1\n"
+                "- [ ] Criterion 2\n\n"
+                "## Tasks\n\n"
+                "- [ ] Design\n"
+                "- [ ] Implementation\n"
+                "- [ ] Testing\n"
+                "- [ ] Documentation\n"
+            ),
+        },
+        "bugfix": {
+            "title_prefix": "Bugfix",
+            "sections": (
+                "## Bug Description\n\n"
+                "Describe the incorrect behavior.\n\n"
+                "## Steps to Reproduce\n\n"
+                "1. Step one\n"
+                "2. Step two\n\n"
+                "## Expected Behavior\n\n"
+                "What should happen instead.\n\n"
+                "## Root Cause Analysis\n\n"
+                "Preliminary analysis of the root cause.\n\n"
+                "## Fix Plan\n\n"
+                "- [ ] Identify affected code paths\n"
+                "- [ ] Implement fix\n"
+                "- [ ] Add regression test\n"
+                "- [ ] Verify in staging\n"
+            ),
+        },
+        "refactor": {
+            "title_prefix": "Refactor",
+            "sections": (
+                "## Refactoring Scope\n\n"
+                "What code / modules will be restructured?\n\n"
+                "## Motivation\n\n"
+                "Why is this refactoring necessary? (tech debt, performance, maintainability)\n\n"
+                "## Constraints\n\n"
+                "- No functional behavior change\n"
+                "- All existing tests must pass\n\n"
+                "## Plan\n\n"
+                "- [ ] Audit current code structure\n"
+                "- [ ] Design target structure\n"
+                "- [ ] Incremental migration steps\n"
+                "- [ ] Validate with existing test suite\n"
+            ),
+        },
+        "migration": {
+            "title_prefix": "Migration",
+            "sections": (
+                "## Migration Target\n\n"
+                "What is being migrated (framework, database, API version, etc.)?\n\n"
+                "## Current State\n\n"
+                "Describe the current setup and version.\n\n"
+                "## Target State\n\n"
+                "Describe the desired setup and version.\n\n"
+                "## Rollback Plan\n\n"
+                "How to revert if migration fails.\n\n"
+                "## Steps\n\n"
+                "- [ ] Backup current state\n"
+                "- [ ] Run migration in staging\n"
+                "- [ ] Validate data integrity\n"
+                "- [ ] Deploy to production\n"
+                "- [ ] Monitor for 24h\n"
+            ),
+        },
+    }
+
+    def create_change_from_template(
+        self,
+        change_id: str,
+        title: str,
+        template_type: str = "feature",
+    ) -> Change:
+        """根据类型模板创建变更提案"""
+        template = self.SPEC_TEMPLATES.get(template_type, self.SPEC_TEMPLATES["feature"])
+        prefix = template["title_prefix"]
+        full_title = f"[{prefix}] {title}" if not title.startswith(f"[{prefix}]") else title
+
+        proposal = Proposal(
+            title=full_title,
+            description=f"Auto-generated {template_type} proposal for: {title}",
+        )
+
+        change = Change(
+            id=change_id,
+            title=full_title,
+            status=ChangeStatus.DRAFT,
+            proposal=proposal,
+        )
+
+        # Save with template content
+        change_path = self.get_change_path(change_id)
+        change_path.mkdir(parents=True, exist_ok=True)
+
+        proposal_path = change_path / "proposal.md"
+        proposal_path.write_text(
+            f"# {full_title}\n\n{template['sections']}",
+            encoding="utf-8",
+        )
+
+        self.save_change(change)
+        return change
+
+    # ------------------------------------------------------------------
+    # Spec Dependency Analysis
+    # ------------------------------------------------------------------
+
+    def analyze_dependencies(self) -> dict[str, list[dict[str, str]]]:
+        """
+        分析所有变更之间的依赖关系。
+
+        检查 tasks.md 中的 'Depends on:' 声明以及 spec_refs 交叉引用，
+        构建依赖图并检测循环依赖。
+
+        Returns:
+            包含依赖图和问题列表的字典
+        """
+        changes = self.list_changes()
+        dependency_graph: dict[str, list[str]] = {}
+        reverse_deps: dict[str, list[str]] = {}
+        issues: list[dict[str, str]] = []
+
+        for change in changes:
+            change_deps: set[str] = set()
+
+            # Extract dependencies from tasks
+            for task in change.tasks:
+                for dep in task.dependencies:
+                    # Deps may reference task IDs from other changes
+                    dep_stripped = dep.strip()
+                    if dep_stripped:
+                        change_deps.add(dep_stripped)
+
+            # Extract dependencies from spec deltas (cross-references)
+            for delta in change.spec_deltas:
+                for req in delta.requirements:
+                    for scenario in req.scenarios:
+                        given = (scenario.given or "").lower()
+                        if "depends on" in given or "requires" in given:
+                            # Try to extract referenced change/spec
+                            for other in changes:
+                                if other.id != change.id and other.id in given:
+                                    change_deps.add(other.id)
+
+            dependency_graph[change.id] = sorted(change_deps)
+
+            for dep_id in change_deps:
+                if dep_id not in reverse_deps:
+                    reverse_deps[dep_id] = []
+                reverse_deps[dep_id].append(change.id)
+
+        # Detect circular dependencies
+        visited: set[str] = set()
+        rec_stack: set[str] = set()
+
+        def _has_cycle(node: str, path: list[str]) -> list[str] | None:
+            visited.add(node)
+            rec_stack.add(node)
+            for neighbor in dependency_graph.get(node, []):
+                if neighbor in dependency_graph:  # Only check known changes
+                    if neighbor not in visited:
+                        result = _has_cycle(neighbor, path + [neighbor])
+                        if result:
+                            return result
+                    elif neighbor in rec_stack:
+                        return path + [neighbor]
+            rec_stack.discard(node)
+            return None
+
+        for change_id in dependency_graph:
+            if change_id not in visited:
+                cycle = _has_cycle(change_id, [change_id])
+                if cycle:
+                    issues.append({
+                        "severity": "high",
+                        "message": f"循环依赖: {' -> '.join(cycle)}",
+                        "fix": "移除或重构循环引用中的某个依赖",
+                    })
+
+        # Check for missing dependencies
+        all_change_ids = {c.id for c in changes}
+        all_task_ids: set[str] = set()
+        for change in changes:
+            for task in change.tasks:
+                all_task_ids.add(task.id)
+
+        for change_id, deps in dependency_graph.items():
+            for dep in deps:
+                if dep not in all_change_ids and dep not in all_task_ids:
+                    issues.append({
+                        "severity": "medium",
+                        "message": f"变更 '{change_id}' 依赖未知的 '{dep}'",
+                        "fix": f"确认 '{dep}' 是否存在，或移除该依赖声明",
+                    })
+
+        return {
+            "dependency_graph": {k: v for k, v in dependency_graph.items() if v},
+            "reverse_dependencies": reverse_deps,
+            "issues": issues,
+            "total_changes": len(changes),
+            "changes_with_deps": len([v for v in dependency_graph.values() if v]),
+        }
+
+    # ------------------------------------------------------------------
+    # Spec Time Estimation
+    # ------------------------------------------------------------------
+
+    COMPLEXITY_HOURS: dict[str, dict[str, float]] = {
+        "planning": {"low": 1.0, "medium": 2.0, "high": 4.0},
+        "frontend": {"low": 2.0, "medium": 6.0, "high": 16.0},
+        "backend": {"low": 2.0, "medium": 8.0, "high": 20.0},
+        "integration": {"low": 1.0, "medium": 3.0, "high": 8.0},
+        "testing": {"low": 1.0, "medium": 4.0, "high": 10.0},
+        "documentation": {"low": 0.5, "medium": 1.5, "high": 3.0},
+    }
+
+    def estimate_change_effort(self, change_id: str) -> dict[str, object]:
+        """
+        基于任务复杂度给出粗略工时估算。
+
+        通过分析任务数量、任务分组（前端/后端/测试等）和描述关键词推断复杂度。
+
+        Args:
+            change_id: 变更 ID
+
+        Returns:
+            包含工时估算详情的字典
+        """
+        change = self.load_change(change_id)
+        if not change:
+            return {"error": f"变更不存在: {change_id}"}
+
+        estimates: list[dict[str, object]] = []
+        total_hours = 0.0
+
+        group_map: dict[str, str] = {
+            "1": "planning",
+            "2": "frontend",
+            "3": "backend",
+            "4": "integration",
+            "5": "testing",
+            "6": "documentation",
+        }
+
+        for task in change.tasks:
+            group_key = task.id.split(".")[0]
+            category = group_map.get(group_key, "integration")
+
+            # Estimate complexity from task attributes
+            complexity = self._estimate_task_complexity(task)
+            hours = self.COMPLEXITY_HOURS.get(category, self.COMPLEXITY_HOURS["integration"])[complexity]
+
+            # Adjust for dependencies
+            if task.dependencies:
+                hours *= 1.2  # 20% overhead for coordination
+
+            estimates.append({
+                "task_id": task.id,
+                "title": task.title,
+                "category": category,
+                "complexity": complexity,
+                "estimated_hours": round(hours, 1),
+                "status": task.status.value,
+            })
+            total_hours += hours
+
+        # Add buffer (15% for unknowns)
+        buffer_hours = total_hours * 0.15
+        grand_total = total_hours + buffer_hours
+
+        # Group by category
+        by_category: dict[str, float] = {}
+        for est in estimates:
+            cat = str(est["category"])
+            by_category[cat] = by_category.get(cat, 0.0) + float(est["estimated_hours"])
+
+        return {
+            "change_id": change_id,
+            "title": change.title,
+            "task_count": len(change.tasks),
+            "estimates": estimates,
+            "by_category": {k: round(v, 1) for k, v in by_category.items()},
+            "subtotal_hours": round(total_hours, 1),
+            "buffer_hours": round(buffer_hours, 1),
+            "total_hours": round(grand_total, 1),
+            "estimated_days": round(grand_total / 8, 1),
+            "confidence": "low" if len(change.tasks) < 3 else "medium" if len(change.tasks) < 10 else "high",
+        }
+
+    def _estimate_task_complexity(self, task: Task) -> str:
+        """根据任务描述和引用推断复杂度"""
+        desc = (task.description or "").lower() + " " + task.title.lower()
+        high_keywords = [
+            "migration", "架构", "重构", "database", "security", "认证", "auth",
+            "payment", "支付", "integration", "集成", "performance", "性能",
+            "deployment", "部署", "infra", "基础设施",
+        ]
+        medium_keywords = [
+            "api", "接口", "component", "组件", "page", "页面", "form", "表单",
+            "crud", "list", "列表", "filter", "筛选", "search", "搜索",
+        ]
+
+        if any(kw in desc for kw in high_keywords):
+            return "high"
+        if any(kw in desc for kw in medium_keywords):
+            return "medium"
+        if task.spec_refs and len(task.spec_refs) > 2:
+            return "high"
+        return "low"
+
+    # ------------------------------------------------------------------
+    # Spec Change Impact Analysis
+    # ------------------------------------------------------------------
+
+    def analyze_change_impact(self, change_id: str) -> dict[str, object]:
+        """
+        分析变更对现有代码和其他变更的影响。
+
+        检查 spec deltas 涉及的规范、任务中引用的文件路径，
+        以及与其他活跃变更之间的潜在冲突。
+
+        Args:
+            change_id: 变更 ID
+
+        Returns:
+            包含影响分析结果的字典
+        """
+        change = self.load_change(change_id)
+        if not change:
+            return {"error": f"变更不存在: {change_id}"}
+
+        affected_specs: list[str] = []
+        affected_files: list[str] = []
+        affected_modules: set[str] = set()
+        potential_conflicts: list[dict[str, str]] = []
+
+        # 1. Analyze spec delta impact
+        spec_manager = SpecManager(self.project_dir)
+        for delta in change.spec_deltas:
+            affected_specs.append(delta.spec_name)
+            existing_spec = spec_manager.load_spec(delta.spec_name)
+            if existing_spec:
+                if delta.delta_type == DeltaType.MODIFIED:
+                    for req in delta.requirements:
+                        for existing_req in existing_spec.requirements:
+                            if existing_req.name == req.name:
+                                affected_modules.add(f"spec:{delta.spec_name}/{req.name}")
+                elif delta.delta_type == DeltaType.REMOVED:
+                    for req in delta.requirements:
+                        affected_modules.add(f"spec:{delta.spec_name}/{req.name} (REMOVED)")
+
+        # 2. Analyze task references
+        for task in change.tasks:
+            for ref in task.spec_refs:
+                affected_files.append(ref)
+                # Infer module from file path
+                parts = ref.replace("\\", "/").split("/")
+                for part in parts:
+                    if part in ("src", "lib", "app", "components", "pages", "routes", "services"):
+                        idx = parts.index(part)
+                        if idx + 1 < len(parts):
+                            affected_modules.add(parts[idx + 1])
+
+        # 3. Check for conflicts with other active changes
+        all_changes = self.list_changes()
+        for other in all_changes:
+            if other.id == change_id:
+                continue
+            if other.status in (ChangeStatus.ARCHIVED,):
+                continue
+
+            # Check spec overlap
+            other_specs = {d.spec_name for d in other.spec_deltas}
+            overlap = set(affected_specs) & other_specs
+            if overlap:
+                potential_conflicts.append({
+                    "change_id": other.id,
+                    "title": other.title,
+                    "conflict_type": "spec_overlap",
+                    "details": f"共同修改的规范: {', '.join(overlap)}",
+                })
+
+            # Check file reference overlap
+            other_files = set()
+            for task in other.tasks:
+                other_files.update(task.spec_refs)
+            file_overlap = set(affected_files) & other_files
+            if file_overlap:
+                potential_conflicts.append({
+                    "change_id": other.id,
+                    "title": other.title,
+                    "conflict_type": "file_overlap",
+                    "details": f"共同引用的文件: {', '.join(list(file_overlap)[:5])}",
+                })
+
+        # 4. Risk assessment
+        risk_factors: list[str] = []
+        risk_level = "low"
+
+        if len(change.spec_deltas) > 3:
+            risk_factors.append(f"涉及 {len(change.spec_deltas)} 个规范变更，范围较大")
+            risk_level = "medium"
+
+        has_removal = any(d.delta_type == DeltaType.REMOVED for d in change.spec_deltas)
+        if has_removal:
+            risk_factors.append("包含规范删除操作，可能影响下游依赖")
+            risk_level = "high"
+
+        if potential_conflicts:
+            risk_factors.append(f"与 {len(potential_conflicts)} 个活跃变更存在潜在冲突")
+            risk_level = "high" if len(potential_conflicts) > 2 else "medium"
+
+        if len(change.tasks) > 15:
+            risk_factors.append(f"包含 {len(change.tasks)} 个任务，变更粒度较大，建议拆分")
+
+        return {
+            "change_id": change_id,
+            "title": change.title,
+            "risk_level": risk_level,
+            "risk_factors": risk_factors,
+            "affected_specs": affected_specs,
+            "affected_files": affected_files,
+            "affected_modules": sorted(affected_modules),
+            "potential_conflicts": potential_conflicts,
+            "spec_deltas_summary": [
+                {
+                    "spec": d.spec_name,
+                    "type": d.delta_type.value,
+                    "requirements_count": len(d.requirements),
+                }
+                for d in change.spec_deltas
+            ],
+            "task_count": len(change.tasks),
+            "completed_tasks": len([t for t in change.tasks if t.status == TaskStatus.COMPLETED]),
+        }

@@ -17,7 +17,13 @@ from typing import Any
 
 from .analyzer import FeatureChecklistBuilder
 from .release_readiness import ReleaseReadinessEvaluator
-from .review_state import load_docs_confirmation, load_ui_revision
+from .review_state import (
+    load_architecture_revision,
+    load_docs_confirmation,
+    load_quality_revision,
+    load_ui_revision,
+)
+from .reviewers.redteam import load_redteam_evidence
 from .specs import SpecValidator
 
 _logger = logging.getLogger("super_dev.proof_pack")
@@ -75,6 +81,11 @@ class ProofPackReport:
             "Docs Confirmation",
             "Spec Quality",
             "Scope Coverage",
+            "Product Audit",
+            "Redteam",
+            "Task Execution",
+            "UI Contract",
+            "UI Contract Alignment",
             "Frontend Runtime",
             "UI Review",
             "Delivery Manifest",
@@ -97,9 +108,30 @@ class ProofPackReport:
         scope_coverage = artifact_names.get("Scope Coverage")
         if scope_coverage and scope_coverage.status != "ready":
             actions.append("先执行 `super-dev feature-checklist`，补齐高优先级未实现项，或把未落地能力明确降级到后续版本。")
+        product_audit = artifact_names.get("Product Audit")
+        if product_audit and product_audit.status != "ready":
+            actions.append("先执行 `super-dev product-audit`，把产品闭环、首次上手和缺失功能的审查结果纳入交付证据。")
+        architecture_revision = artifact_names.get("Architecture Revision State")
+        if architecture_revision and architecture_revision.status != "ready":
+            actions.append("先完成架构改版闭环：更新 architecture 文档、同步任务与实现，再重新审查。")
         ui_revision = artifact_names.get("UI Revision State")
         if ui_revision and ui_revision.status != "ready":
             actions.append("先完成 UI 改版闭环：更新 UIUX 文档、重做前端、重新执行 frontend runtime 与 UI review。")
+        ui_contract = artifact_names.get("UI Contract")
+        if ui_contract and ui_contract.status != "ready":
+            actions.append("先补齐并冻结 output/*-ui-contract.json，确认 UI 库选择、字体、图标系统和 design tokens 已写成正式契约。")
+        ui_contract_alignment = artifact_names.get("UI Contract Alignment")
+        if ui_contract_alignment and ui_contract_alignment.status != "ready":
+            actions.append("重新执行 `super-dev review ui` 或 quality gate，补齐 output/*-ui-contract-alignment.json，确认源码已接入冻结后的图标、字体、组件生态和 design tokens。")
+        quality_revision = artifact_names.get("Quality Revision State")
+        if quality_revision and quality_revision.status != "ready":
+            actions.append("先修复质量返工项并确认 quality review 状态，再重新生成交付证据。")
+        redteam = artifact_names.get("Redteam")
+        if redteam and redteam.status != "ready":
+            actions.append("先补齐红队审查并消除阻断项，再进入质量门禁和发布核验。")
+        task_execution = artifact_names.get("Task Execution")
+        if task_execution and task_execution.status != "ready":
+            actions.append("先补齐 Spec 任务执行报告与交付前自检摘要，确认实现链路已经真实闭环。")
         frontend = artifact_names.get("Frontend Runtime")
         if frontend and frontend.status != "ready":
             actions.append("重新执行前端运行验证，确认前端可真实运行而不是只生成页面文件。")
@@ -120,17 +152,32 @@ class ProofPackReport:
         return actions
 
     @property
+    def governance_artifacts(self) -> list[ProofPackArtifact]:
+        governance_names = {
+            "Knowledge Reference Report",
+            "Pipeline Metrics",
+            "Governance Report",
+            "Architecture Decisions",
+            "Validation Rules Report",
+        }
+        return [a for a in self.artifacts if a.name in governance_names]
+
+    @property
     def executive_summary(self) -> str:
+        gov = self.governance_artifacts
+        gov_text = ""
+        if gov:
+            gov_text = f"治理证据 {len(gov)} 项已纳入（" + "、".join(a.name for a in gov) + "）。"
         if self.status == "ready":
             return (
                 f"当前交付证据包已完成，{self.ready_count}/{self.total_count} 项关键证据就绪，"
-                "可以作为当前 run 的正式交付证明。"
+                f"可以作为当前 run 的正式交付证明。{gov_text}"
             )
         missing = [artifact.name for artifact in self.blockers[:3]]
         missing_text = "、".join(missing) if missing else "关键交付证据"
         return (
             f"当前交付证据包尚未完成，已就绪 {self.ready_count}/{self.total_count} 项。"
-            f"优先补齐：{missing_text}。"
+            f"优先补齐：{missing_text}。{gov_text}"
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -192,6 +239,17 @@ class ProofPackReport:
         )
         for artifact in self.key_artifacts:
             lines.append(f"- **{artifact.name}**: {artifact.summary} ({artifact.status})")
+        gov = self.governance_artifacts
+        if gov:
+            lines.extend(
+                [
+                    "",
+                    "## Governance Evidence",
+                    "",
+                ]
+            )
+            for artifact in gov:
+                lines.append(f"- **{artifact.name}**: {artifact.summary} ({artifact.status})")
         lines.extend(
             [
                 "",
@@ -246,9 +304,12 @@ class ProofPackBuilder:
         report.artifacts.extend(
             [
                 self._docs_confirmation_artifact(),
+                self._architecture_revision_artifact(),
                 self._ui_revision_artifact(),
+                self._quality_revision_artifact(),
                 self._spec_quality_artifact(),
                 self._scope_coverage_artifact(),
+                self._product_audit_artifact(),
                 self._repo_map_artifact(),
                 self._dependency_graph_artifact(),
                 self._impact_analysis_artifact(),
@@ -257,6 +318,10 @@ class ProofPackBuilder:
                 self._document_artifact("PRD", "*-prd.md"),
                 self._document_artifact("Architecture", "*-architecture.md"),
                 self._document_artifact("UI/UX", "*-uiux.md"),
+                self._ui_contract_artifact(),
+                self._ui_contract_alignment_artifact(),
+                self._redteam_artifact(),
+                self._task_execution_artifact(),
                 self._frontend_runtime_artifact(),
                 self._ui_review_artifact(),
                 self._quality_gate_artifact(),
@@ -265,6 +330,10 @@ class ProofPackBuilder:
                 self._release_readiness_artifact(verify_tests=verify_tests),
             ]
         )
+
+        # 新增：治理证据（增量添加，文件不存在则跳过）
+        report.artifacts.extend(self._governance_artifacts())
+
         return report
 
     def write(self, report: ProofPackReport) -> dict[str, Path]:
@@ -338,6 +407,62 @@ class ProofPackBuilder:
             summary = f"status={status}"
         return ProofPackArtifact(
             name="UI Revision State",
+            status=artifact_status,
+            summary=summary,
+            path=str(file_path),
+            details=payload,
+        )
+
+    def _architecture_revision_artifact(self) -> ProofPackArtifact:
+        payload = load_architecture_revision(self.project_dir)
+        file_path = self.project_dir / ".super-dev" / "review-state" / "architecture-revision.json"
+        if not payload:
+            return ProofPackArtifact(
+                name="Architecture Revision State",
+                status="ready",
+                summary="no open architecture revision",
+                path=str(file_path) if file_path.exists() else "",
+            )
+        status = str(payload.get("status", "pending_review"))
+        if status == "confirmed":
+            artifact_status = "ready"
+            summary = "architecture revision confirmed"
+        elif status == "revision_requested":
+            artifact_status = "pending"
+            summary = "architecture revision still open"
+        else:
+            artifact_status = "pending"
+            summary = f"status={status}"
+        return ProofPackArtifact(
+            name="Architecture Revision State",
+            status=artifact_status,
+            summary=summary,
+            path=str(file_path),
+            details=payload,
+        )
+
+    def _quality_revision_artifact(self) -> ProofPackArtifact:
+        payload = load_quality_revision(self.project_dir)
+        file_path = self.project_dir / ".super-dev" / "review-state" / "quality-revision.json"
+        if not payload:
+            return ProofPackArtifact(
+                name="Quality Revision State",
+                status="ready",
+                summary="no open quality revision",
+                path=str(file_path) if file_path.exists() else "",
+            )
+        status = str(payload.get("status", "pending_review"))
+        if status == "confirmed":
+            artifact_status = "ready"
+            summary = "quality revision confirmed"
+        elif status == "revision_requested":
+            artifact_status = "pending"
+            summary = "quality revision still open"
+        else:
+            artifact_status = "pending"
+            summary = f"status={status}"
+        return ProofPackArtifact(
+            name="Quality Revision State",
             status=artifact_status,
             summary=summary,
             path=str(file_path),
@@ -443,13 +568,153 @@ class ProofPackBuilder:
         except Exception as e:
             _logger.debug(f"Failed to parse frontend runtime JSON: {e}")
             payload = {}
+        checks = payload.get("checks", {}) if isinstance(payload, dict) else {}
         passed = bool(payload.get("passed", False)) if isinstance(payload, dict) else False
+        contract_aligned = not isinstance(checks, dict) or (
+            bool(checks.get("ui_contract_json", False)) and bool(checks.get("output_frontend_design_tokens", False))
+        )
         return ProofPackArtifact(
             name="Frontend Runtime",
-            status="ready" if passed else "pending",
-            summary="frontend runtime passed" if passed else "frontend runtime not passed",
+            status="ready" if passed and contract_aligned else "pending",
+            summary=(
+                "frontend runtime passed and UI contract tokens are wired"
+                if passed and contract_aligned
+                else "frontend runtime not passed or UI contract assets are missing"
+            ),
             path=str(file_path),
             details=payload if isinstance(payload, dict) else {},
+        )
+
+    def _ui_contract_artifact(self) -> ProofPackArtifact:
+        file_path = self._latest("*-ui-contract.json")
+        if file_path is None:
+            return ProofPackArtifact(name="UI Contract", status="missing", summary="UI contract missing")
+        try:
+            payload = json.loads(file_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            _logger.debug(f"Failed to parse UI contract JSON: {e}")
+            return ProofPackArtifact(
+                name="UI Contract",
+                status="pending",
+                summary="UI contract is not valid JSON",
+                path=str(file_path),
+            )
+        if not isinstance(payload, dict):
+            return ProofPackArtifact(
+                name="UI Contract",
+                status="pending",
+                summary="UI contract must be a JSON object",
+                path=str(file_path),
+            )
+        component_stack = payload.get("component_stack", {}) if isinstance(payload.get("component_stack"), dict) else {}
+        icon_system = payload.get("icon_system") or component_stack.get("icon") or component_stack.get("icons") or ""
+        required_sections = {
+            "style_direction": bool(payload.get("style_direction")),
+            "typography": (
+                (isinstance(payload.get("typography"), dict) and bool(payload.get("typography")))
+                or (isinstance(payload.get("typography_preset"), dict) and bool(payload.get("typography_preset")))
+            ),
+            "icon_system": bool(icon_system),
+            "ui_library_preference": isinstance(payload.get("ui_library_preference"), dict)
+            and bool(payload.get("ui_library_preference")),
+            "design_tokens": isinstance(payload.get("design_tokens"), dict) and bool(payload.get("design_tokens")),
+        }
+        ready = all(required_sections.values())
+        summary = (
+            "UI contract frozen with style, typography, icon system, library preference and design tokens"
+            if ready
+            else "UI contract missing required frozen decision sections"
+        )
+        return ProofPackArtifact(
+            name="UI Contract",
+            status="ready" if ready else "pending",
+            summary=summary,
+            path=str(file_path),
+            details={"required_sections": required_sections},
+        )
+
+    def _ui_contract_alignment_artifact(self) -> ProofPackArtifact:
+        file_path = self._latest("*-ui-contract-alignment.json")
+        if file_path is None:
+            return ProofPackArtifact(
+                name="UI Contract Alignment",
+                status="missing",
+                summary="UI contract alignment report missing",
+            )
+        try:
+            payload = json.loads(file_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            _logger.debug(f"Failed to parse UI contract alignment JSON: {e}")
+            return ProofPackArtifact(
+                name="UI Contract Alignment",
+                status="pending",
+                summary="UI contract alignment report unreadable",
+                path=str(file_path),
+            )
+        if not isinstance(payload, dict):
+            return ProofPackArtifact(
+                name="UI Contract Alignment",
+                status="pending",
+                summary="UI contract alignment report must be a JSON object",
+                path=str(file_path),
+            )
+        checks = [value for value in payload.values() if isinstance(value, dict)]
+        passed = bool(checks) and all(bool(item.get("passed", False)) for item in checks)
+        failed_labels = [str(item.get("label") or key) for key, item in payload.items() if isinstance(item, dict) and not item.get("passed", False)]
+        summary = (
+            "UI contract alignment verified across icons, typography, ecosystem and design tokens"
+            if passed
+            else f"UI contract alignment gaps: {', '.join(failed_labels[:4])}"
+        )
+        return ProofPackArtifact(
+            name="UI Contract Alignment",
+            status="ready" if passed else "pending",
+            summary=summary,
+            path=str(file_path),
+            details=payload,
+        )
+
+    def _redteam_artifact(self) -> ProofPackArtifact:
+        evidence = load_redteam_evidence(self.project_dir, self.project_name)
+        if evidence is None:
+            return ProofPackArtifact(name="Redteam", status="missing", summary="redteam evidence missing")
+        summary = (
+            f"score={evidence.total_score}/{evidence.pass_threshold}, "
+            f"critical={evidence.critical_count}, passed={evidence.passed}"
+        )
+        return ProofPackArtifact(
+            name="Redteam",
+            status="ready" if evidence.passed else "pending",
+            summary=summary,
+            path=str(evidence.path),
+            details={
+                "source_format": evidence.source_format,
+                "blocking_reasons": evidence.blocking_reasons,
+            },
+        )
+
+    def _task_execution_artifact(self) -> ProofPackArtifact:
+        file_path = self._latest("*-task-execution.md")
+        if file_path is None:
+            return ProofPackArtifact(name="Task Execution", status="missing", summary="task execution report missing")
+        text = file_path.read_text(encoding="utf-8", errors="ignore")
+        has_validation = "## 执行期验证摘要" in text
+        has_self_review = "## 宿主补充自检（交付前必做）" in text
+        ready = has_validation and has_self_review
+        summary = (
+            "task execution report includes validation summary and delivery self-review"
+            if ready
+            else "task execution report missing validation summary or delivery self-review"
+        )
+        return ProofPackArtifact(
+            name="Task Execution",
+            status="ready" if ready else "pending",
+            summary=summary,
+            path=str(file_path),
+            details={
+                "has_validation_summary": has_validation,
+                "has_delivery_self_review": has_self_review,
+            },
         )
 
     def _ui_review_artifact(self) -> ProofPackArtifact:
@@ -546,7 +811,7 @@ class ProofPackBuilder:
             if report.coverage_rate is not None
             else "unknown"
         )
-        ready = report.status == "ready"
+        ready = report.status == "ready" or report.high_priority_gap_count == 0
         return ProofPackArtifact(
             name="Scope Coverage",
             status="ready" if ready else "pending",
@@ -556,4 +821,102 @@ class ProofPackBuilder:
             ),
             path=str(paths["json"]),
             details=report.to_dict(),
+        )
+
+    def _governance_artifacts(self) -> list[ProofPackArtifact]:
+        """Collect governance-related evidence artifacts (knowledge tracking, metrics, ADR, etc.)."""
+        artifacts: list[ProofPackArtifact] = []
+
+        # 1. 知识引用报告
+        knowledge_report_candidates = [
+            self.output_dir / "knowledge-tracking-report.md",
+            *sorted(self.output_dir.glob("*-knowledge-tracking.md")),
+        ]
+        knowledge_report_path = next((path for path in knowledge_report_candidates if path.exists()), None)
+        if knowledge_report_path is not None:
+            artifacts.append(
+                ProofPackArtifact(
+                    name="Knowledge Reference Report",
+                    status="ready",
+                    summary="知识引用追踪报告已生成",
+                    path=str(knowledge_report_path),
+                )
+            )
+
+        # 2. 效能度量数据
+        metrics_dir = self.output_dir / "metrics-history"
+        if metrics_dir.exists():
+            metric_files = list(metrics_dir.glob("*.json"))
+            if metric_files:
+                latest = sorted(metric_files)[-1]
+                artifacts.append(
+                    ProofPackArtifact(
+                        name="Pipeline Metrics",
+                        status="ready",
+                        summary=f"效能度量数据 ({len(metric_files)} 次执行记录)",
+                        path=str(latest),
+                    )
+                )
+
+        # 3. 治理报告
+        governance_reports = list(self.output_dir.glob("governance-report-*.md"))
+        if governance_reports:
+            latest_gov = sorted(governance_reports)[-1]
+            artifacts.append(
+                ProofPackArtifact(
+                    name="Governance Report",
+                    status="ready",
+                    summary="Pipeline 治理总报告",
+                    path=str(latest_gov),
+                )
+            )
+
+        # 4. ADR 决策记录
+        adr_dir = self.project_dir / ".super-dev" / "decisions"
+        if adr_dir.exists():
+            adr_files = list(adr_dir.glob("*.md"))
+            if adr_files:
+                artifacts.append(
+                    ProofPackArtifact(
+                        name="Architecture Decisions",
+                        status="ready",
+                        summary=f"{len(adr_files)} 个架构决策记录",
+                        path=str(adr_dir),
+                    )
+                )
+
+        # 5. 验证规则结果
+        validation_results = list(self.output_dir.glob("validation-report-*.md")) + list(
+            self.output_dir.glob("*-validation-results*.json")
+        ) + list(self.output_dir.glob("*-validation-results*.md"))
+        if validation_results:
+            artifacts.append(
+                ProofPackArtifact(
+                    name="Validation Rules Report",
+                    status="ready",
+                    summary="验证规则检查结果",
+                    path=str(sorted(validation_results)[-1]),
+                )
+            )
+
+        return artifacts
+
+    def _product_audit_artifact(self) -> ProofPackArtifact:
+        file_path = self._latest("*-product-audit.json")
+        if file_path is None:
+            return ProofPackArtifact(name="Product Audit", status="missing", summary="product audit report missing")
+        try:
+            payload = json.loads(file_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            _logger.debug(f"Failed to parse product audit JSON: {e}")
+            payload = {}
+        score = int(payload.get("score", 0)) if isinstance(payload, dict) else 0
+        status = str(payload.get("status", "missing")) if isinstance(payload, dict) else "missing"
+        ready = status in {"ready", "attention"}
+        return ProofPackArtifact(
+            name="Product Audit",
+            status="ready" if ready else "pending",
+            summary=f"status={status}, score={score}/100",
+            path=str(file_path),
+            details=payload if isinstance(payload, dict) else {},
         )

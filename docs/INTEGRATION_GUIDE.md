@@ -83,16 +83,16 @@ super-dev skill install super-dev --target opencode --name super-dev-core --forc
 | claude-code | `.claude/CLAUDE.md` |
 | codex-cli | `AGENTS.md` |
 | gemini-cli | `GEMINI.md` |
-| kiro-cli | `.kiro/AGENTS.md` |
+| kiro-cli | `.kiro/steering/super-dev.md` + `.kiro/skills/super-dev-core/SKILL.md` |
 | cursor-cli | `.cursor/rules/super-dev.mdc` |
-| qoder-cli | `.qoder/commands/super-dev.md` + `.qoder/rules.md` |
+| qoder-cli | `.qoder/rules/super-dev.md` + `.qoder/commands/super-dev.md` + `.qoder/skills/super-dev-core/SKILL.md` |
 | codebuddy-cli | `.codebuddy/commands/super-dev.md` + `.codebuddy/agents/super-dev-core.md` |
-| opencode | `.opencode/commands/super-dev.md` + `.opencode/AGENTS.md` |
-| qoder | `.qoder/rules.md` + `.qoder/commands/super-dev.md` |
+| opencode | `AGENTS.md` + `.opencode/commands/super-dev.md` |
+| qoder | `.qoder/rules/super-dev.md` + `.qoder/commands/super-dev.md` + `.qoder/skills/super-dev-core/SKILL.md` |
 | antigravity | `GEMINI.md` + `.gemini/commands/super-dev.md` + `.agent/workflows/super-dev.md` |
 | cursor | `.cursor/rules/super-dev.mdc` |
 | windsurf | `.windsurf/rules.md` + `.windsurf/workflows/super-dev.md` |
-| kiro | `.kiro/AGENTS.md` + `.kiro/steering/super-dev.md` |
+| kiro | `.kiro/steering/super-dev.md` + `.kiro/skills/super-dev-core/SKILL.md` |
 | codebuddy | `.codebuddy/commands/super-dev.md` + `.codebuddy/agents/super-dev-core.md` |
 | trae | `.trae/project_rules.md` + `.trae/rules.md` |
 | vscode-copilot | `.github/copilot-instructions.md` + `AGENTS.md` |

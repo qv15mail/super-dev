@@ -24,6 +24,7 @@ from .models import (
     ProjectType,
     TechStack,
 )
+from .product_audit import ProductAuditBuilder, ProductAuditFinding, ProductAuditReport
 from .regression_guard import RegressionCheck, RegressionGuardBuilder, RegressionGuardReport
 from .repo_map import RepoMapBuilder, RepoMapItem, RepoMapReport
 
@@ -47,6 +48,9 @@ __all__ = [
     "ImpactAnalyzer",
     "ImpactAnalysisReport",
     "ImpactItem",
+    "ProductAuditBuilder",
+    "ProductAuditFinding",
+    "ProductAuditReport",
     "RegressionCheck",
     "RegressionGuardBuilder",
     "RegressionGuardReport",

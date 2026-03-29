@@ -12,6 +12,7 @@ from PIL import Image
 
 import super_dev.web.api as web_api
 from super_dev import __version__ as _super_dev_version
+from super_dev.catalogs import PRIMARY_HOST_TOOL_IDS
 from super_dev.cli import SuperDevCLI
 from super_dev.integrations import IntegrationManager
 from super_dev.orchestrator import Phase, PhaseResult
@@ -26,9 +27,20 @@ def clear_run_store():
     web_api._RUN_STORE.clear()
 
 
+def _prepare_workflow_context(project_dir: Path) -> None:
+    (project_dir / "output").mkdir(parents=True, exist_ok=True)
+    (project_dir / ".super-dev" / "review-state").mkdir(parents=True, exist_ok=True)
+    (project_dir / "super-dev.yaml").write_text("name: demo\ndescription: 商业级官网\n", encoding="utf-8")
+    (project_dir / ".super-dev" / "WORKFLOW.md").write_text("# workflow\n", encoding="utf-8")
+    (project_dir / "output" / f"{project_dir.name}-prd.md").write_text("# prd\n", encoding="utf-8")
+    (project_dir / "output" / f"{project_dir.name}-architecture.md").write_text("# arch\n", encoding="utf-8")
+    (project_dir / "output" / f"{project_dir.name}-uiux.md").write_text("# uiux\n", encoding="utf-8")
+
+
 def _prepare_release_ready_project(project_dir: Path) -> None:
     (project_dir / "super_dev").mkdir(parents=True, exist_ok=True)
     (project_dir / "docs").mkdir(parents=True, exist_ok=True)
+    (project_dir / "output").mkdir(parents=True, exist_ok=True)
     (project_dir / ".super-dev" / "changes" / "release-hardening-finalization").mkdir(
         parents=True,
         exist_ok=True,
@@ -70,12 +82,134 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
     )
     (project_dir / "docs" / "HOST_USAGE_GUIDE.md").write_text("Smoke\n/super-dev\nsuper-dev:\n", encoding="utf-8")
     (project_dir / "docs" / "HOST_CAPABILITY_AUDIT.md").write_text("官方依据\nsuper-dev integrate smoke\n", encoding="utf-8")
+    (project_dir / "docs" / "HOST_RUNTIME_VALIDATION.md").write_text(
+        "host runtime validation\nresearch\nsuper-dev review docs\n",
+        encoding="utf-8",
+    )
+    (project_dir / "docs" / "HOST_INSTALL_SURFACES.md").write_text(
+        "Codex CLI\nsuper-dev:\nsuper-dev integrate audit --auto\n",
+        encoding="utf-8",
+    )
     (project_dir / "docs" / "README.md").write_text("用户文档\n维护者文档\n", encoding="utf-8")
     (project_dir / "docs" / "WORKFLOW_GUIDE.md").write_text("super-dev review docs\nsuper-dev run --resume\n", encoding="utf-8")
     (project_dir / "docs" / "WORKFLOW_GUIDE_EN.md").write_text("super-dev review docs\nsuper-dev run --resume\n", encoding="utf-8")
+    (project_dir / "docs" / "PRODUCT_AUDIT.md").write_text("super-dev product-audit\nproof-pack\nrelease readiness\n", encoding="utf-8")
     (project_dir / "install.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
     for name in ("change.yaml", "proposal.md", "tasks.md"):
         (project_dir / ".super-dev" / "changes" / "release-hardening-finalization" / name).write_text("ok\n", encoding="utf-8")
+    (project_dir / "output" / f"{project_dir.name}-redteam.json").write_text(
+        json.dumps(
+            {
+                "project_name": project_dir.name,
+                "pass_threshold": 70,
+                "critical_count": 0,
+                "high_count": 0,
+                "total_score": 92,
+                "passed": True,
+                "blocking_reasons": [],
+                "security_issues": [],
+                "performance_issues": [],
+                "architecture_issues": [],
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (project_dir / "output" / f"{project_dir.name}-quality-gate.md").write_text(
+        "# 质量门禁报告\n\n**状态**: <span style='color:green'>通过</span>\n**总分**: 90/100\n",
+        encoding="utf-8",
+    )
+    (project_dir / "output" / f"{project_dir.name}-task-execution.md").write_text(
+        (
+            "# Spec 任务执行报告\n\n"
+            "## 执行期验证摘要\n\n"
+            "- build ok\n\n"
+            "## 宿主补充自检（交付前必做）\n\n"
+            "- 新增函数、方法、字段、模块都已接入真实调用链\n"
+        ),
+        encoding="utf-8",
+    )
+    (project_dir / "output" / f"{project_dir.name}-product-audit.json").write_text(
+        json.dumps({"status": "ready", "score": 90}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    output_dir = project_dir / "output"
+    (output_dir / f"governance-report-{project_dir.name}.md").write_text(
+        "# Governance Report\n\nvalidation=PASSED\n命中率: 100%\n",
+        encoding="utf-8",
+    )
+    (output_dir / "knowledge-cache").mkdir(parents=True, exist_ok=True)
+    (output_dir / "knowledge-cache" / f"{project_dir.name}-knowledge-bundle.json").write_text(
+        json.dumps({"local_knowledge": [], "web_knowledge": [], "research_summary": "fixture"}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (output_dir / "knowledge-tracking-report.md").write_text(
+        "# Knowledge Tracking Report\n\n- local refs: ok\n- web refs: ok\n",
+        encoding="utf-8",
+    )
+    (output_dir / "metrics-history").mkdir(parents=True, exist_ok=True)
+    (output_dir / "metrics-history" / f"{project_dir.name}-metrics.json").write_text(
+        json.dumps({"project_name": project_dir.name, "success_rate": 100}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (output_dir / f"{project_dir.name}-validation-results.json").write_text(
+        json.dumps({"passed": True, "errors": []}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (project_dir / "docs" / "adr").mkdir(parents=True, exist_ok=True)
+    (project_dir / "docs" / "adr" / "ADR-001.md").write_text(
+        "# ADR-001: 选择 PostgreSQL\n\n## 决策\n使用 PostgreSQL。\n",
+        encoding="utf-8",
+    )
+    (project_dir / ".super-dev" / "decisions").mkdir(parents=True, exist_ok=True)
+    (project_dir / ".super-dev" / "decisions" / "ADR-001.md").write_text(
+        "# ADR-001: Delivery Closure\n\n选择 proof-pack + release readiness 作为发布闭环。\n",
+        encoding="utf-8",
+    )
+    (output_dir / f"validation-report-{project_dir.name}.md").write_text(
+        "# Validation Report\n\n- rules: passed\n",
+        encoding="utf-8",
+    )
+    (output_dir / "frontend").mkdir(parents=True, exist_ok=True)
+    (output_dir / f"{project_dir.name}-ui-contract.json").write_text(
+        json.dumps(
+            {
+                "style_direction": "Editorial workspace",
+                "typography": {"heading": "Space Grotesk", "body": "Inter"},
+                "icon_system": "lucide-react",
+                "ui_library_preference": {
+                    "preferred": "shadcn/ui + Radix + Tailwind",
+                    "strict": False,
+                    "final_selected": "shadcn/ui + Radix + Tailwind",
+                },
+                "design_tokens": {"color": {"primary": "#0f172a"}},
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / "frontend" / "design-tokens.css").write_text(":root { --color-primary: #0f172a; }\n", encoding="utf-8")
+    (output_dir / f"{project_dir.name}-frontend-runtime.json").write_text(
+        json.dumps(
+            {
+                "passed": True,
+                "checks": {
+                    "ui_contract_json": True,
+                    "output_frontend_design_tokens": True,
+                    "ui_contract_alignment": True,
+                    "ui_theme_entry": True,
+                    "ui_navigation_shell": True,
+                    "ui_component_imports": True,
+                    "ui_banned_patterns": True,
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
 
 def _prepare_proof_pack_project(project_dir: Path) -> None:
@@ -85,12 +219,149 @@ def _prepare_proof_pack_project(project_dir: Path) -> None:
     (output_dir / "rehearsal").mkdir(parents=True, exist_ok=True)
     for suffix in ("research", "architecture", "uiux"):
         (output_dir / f"{project_dir.name}-{suffix}.md").write_text("# ok\n", encoding="utf-8")
-    (output_dir / f"{project_dir.name}-frontend-runtime.json").write_text('{"passed": true}', encoding="utf-8")
+    (output_dir / f"{project_dir.name}-frontend-runtime.json").write_text(
+        json.dumps(
+            {
+                "passed": True,
+                "checks": {
+                    "output_frontend_index": True,
+                    "output_frontend_styles": True,
+                    "output_frontend_design_tokens": True,
+                    "output_frontend_script": True,
+                    "preview_html": True,
+                    "ui_contract_json": True,
+                    "ui_contract_alignment": True,
+                    "ui_theme_entry": True,
+                    "ui_navigation_shell": True,
+                    "ui_component_imports": True,
+                    "ui_banned_patterns": True,
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / f"{project_dir.name}-ui-contract.json").write_text(
+        json.dumps(
+            {
+                "style_direction": "Editorial workspace",
+                "typography": {"heading": "Space Grotesk", "body": "Inter"},
+                "icon_system": "lucide-react",
+                "ui_library_preference": {
+                    "preferred": "shadcn/ui + Radix + Tailwind",
+                    "strict": False,
+                    "final_selected": "shadcn/ui + Radix + Tailwind",
+                },
+                "design_tokens": {"color": {"primary": "#0f172a"}},
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / "frontend").mkdir(parents=True, exist_ok=True)
+    (output_dir / "frontend" / "design-tokens.css").write_text(":root { --color-primary: #0f172a; }\n", encoding="utf-8")
     (output_dir / f"{project_dir.name}-ui-review.json").write_text(
-        json.dumps({"score": 91, "critical_count": 0}, ensure_ascii=False, indent=2),
+        json.dumps({"score": 91, "critical_count": 0, "alignment_summary": {}}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (output_dir / f"{project_dir.name}-ui-contract-alignment.json").write_text(
+        json.dumps(
+            {
+                "ui_contract": {"label": "UI 契约文件", "passed": True, "expected": "output/*-ui-contract.json", "observed": "present"},
+                "icon_system": {"label": "图标系统", "passed": True, "expected": "lucide-react", "observed": "lucide-react"},
+                "font_pair": {"label": "字体组合", "passed": True, "expected": "Space Grotesk / Inter", "observed": "space grotesk, inter"},
+                "component_ecosystem": {"label": "组件生态", "passed": True, "expected": "shadcn/ui + Radix + Tailwind", "observed": "@radix-ui, tailwindcss"},
+                "component_imports": {"label": "组件导入路径", "passed": True, "expected": "@/components/ui, /components/ui/, components/ui/, @radix-ui", "observed": "@/components/ui/button"},
+                "design_tokens": {"label": "Design Token 接入", "passed": True, "expected": "design-tokens.css", "observed": "wired"},
+                "token_usage": {"label": "冻结 Token 使用率", "passed": True, "expected": "--color-primary", "observed": "--color-primary"},
+                "theme_entry": {"label": "主题入口", "passed": True, "expected": "全局主题入口或 design token 入口已接入", "observed": "theme provider / design tokens wired"},
+                "navigation_shell": {"label": "导航骨架", "passed": True, "expected": "源码或预览中存在导航 / header / sidebar / breadcrumb 等骨架信号", "observed": "sections=4 | nav_links=3"},
+                "banned_patterns": {"label": "反模式约束", "passed": True, "expected": "无 emoji 图标、无 Claude 聊天壳层、无模板化渐变/关键词", "observed": ""},
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
     )
     (output_dir / f"{project_dir.name}-quality-gate.md").write_text("# quality gate\npassed\n", encoding="utf-8")
+    (output_dir / f"{project_dir.name}-redteam.json").write_text(
+        json.dumps(
+            {
+                "project_name": project_dir.name,
+                "pass_threshold": 70,
+                "critical_count": 0,
+                "high_count": 0,
+                "total_score": 93,
+                "passed": True,
+                "blocking_reasons": [],
+                "security_issues": [],
+                "performance_issues": [],
+                "architecture_issues": [],
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / f"{project_dir.name}-task-execution.md").write_text(
+        (
+            "# Spec 任务执行报告\n\n"
+            "## 执行期验证摘要\n\n"
+            "- build ok\n\n"
+            "## 宿主补充自检（交付前必做）\n\n"
+            "- 新增函数、方法、字段、模块都已接入真实调用链\n"
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / f"{project_dir.name}-product-audit.json").write_text(
+        json.dumps({"status": "ready", "score": 91}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (output_dir / f"{project_dir.name}-ui-contract.json").write_text(
+        json.dumps(
+            {
+                "style_direction": "Editorial workspace",
+                "typography": {"heading": "Space Grotesk", "body": "Inter"},
+                "icon_system": "lucide-react",
+                "ui_library_preference": {
+                    "preferred": "shadcn/ui + Radix + Tailwind",
+                    "strict": False,
+                    "final_selected": "shadcn/ui + Radix + Tailwind",
+                },
+                "design_tokens": {"color": {"primary": "#0f172a"}},
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / "frontend").mkdir(parents=True, exist_ok=True)
+    (output_dir / "frontend" / "design-tokens.css").write_text(":root { --color-primary: #0f172a; }\n", encoding="utf-8")
+    (output_dir / f"{project_dir.name}-frontend-runtime.json").write_text(
+        json.dumps(
+            {
+                "passed": True,
+                "checks": {
+                    "output_frontend_index": True,
+                    "output_frontend_styles": True,
+                    "output_frontend_design_tokens": True,
+                    "output_frontend_script": True,
+                    "preview_html": True,
+                    "ui_contract_json": True,
+                    "ui_contract_alignment": True,
+                    "ui_theme_entry": True,
+                    "ui_navigation_shell": True,
+                    "ui_component_imports": True,
+                    "ui_banned_patterns": True,
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     (output_dir / f"{project_dir.name}-repo-map.md").write_text("# Repo Map\n\nok\n", encoding="utf-8")
     (output_dir / f"{project_dir.name}-repo-map.json").write_text(
         json.dumps({"project_name": project_dir.name}, ensure_ascii=False, indent=2),
@@ -674,6 +945,85 @@ class TestWebAPI:
         summary = status_resp.json()["pipeline_summary"]
         assert summary["ui_revision"]["status"] == "revision_requested"
         assert "UI 改版请求" in summary["blocker"]
+
+    def test_workflow_preview_confirmation_roundtrip(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-prd.md").write_text("# prd", encoding="utf-8")
+        (output_dir / "demo-architecture.md").write_text("# architecture", encoding="utf-8")
+        (output_dir / "demo-uiux.md").write_text("# uiux", encoding="utf-8")
+        (output_dir / "demo-frontend-runtime.json").write_text(
+            json.dumps({"passed": True, "summary": "frontend ready"}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        change_dir = temp_project_dir / ".super-dev" / "changes" / "preview-demo"
+        change_dir.mkdir(parents=True, exist_ok=True)
+        (change_dir / "proposal.md").write_text("# proposal", encoding="utf-8")
+        (change_dir / "tasks.md").write_text("- [ ] frontend", encoding="utf-8")
+        save_docs_confirmation(
+            temp_project_dir,
+            {
+                "status": "confirmed",
+                "comment": "文档已确认",
+                "actor": "pytest",
+                "run_id": "preview01",
+            },
+        )
+
+        web_api._store_run_state(
+            "preview01",
+            persist_dir=temp_project_dir,
+            status="running",
+            message="frontend ready",
+            requested_phases=["delivery"],
+            completed_phases=["drafting"],
+            progress=68,
+            project_dir=str(temp_project_dir),
+            results=[],
+        )
+
+        pending_resp = client.get(
+            "/api/workflow/status/preview01",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert pending_resp.status_code == 200
+        pending_summary = pending_resp.json()["pipeline_summary"]
+        assert pending_summary["workflow_status"] == "waiting_preview_confirmation"
+        assert pending_summary["workflow_mode"] == "revise"
+        assert pending_summary["preview_confirmation"]["status"] == "pending_review"
+        assert pending_summary["action_card"]["mode"] == "revise"
+        assert pending_summary["action_card"]["machine_action"] == 'super-dev review preview --status confirmed --comment "前端预览已确认"'
+        preview_stage = next(item for item in pending_summary["stages"] if item["id"] == "preview_gate")
+        assert preview_stage["status"] == "waiting"
+
+        update_resp = client.post(
+            "/api/workflow/preview-confirmation",
+            params={"project_dir": str(temp_project_dir), "run_id": "preview01"},
+            json={"status": "revision_requested", "comment": "预览还需要调一下", "actor": "user"},
+        )
+        assert update_resp.status_code == 200
+        assert update_resp.json()["status"] == "revision_requested"
+
+        get_resp = client.get(
+            "/api/workflow/preview-confirmation",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert get_resp.status_code == 200
+        assert get_resp.json()["status"] == "revision_requested"
+        assert get_resp.json()["comment"] == "预览还需要调一下"
+
+        status_resp = client.get(
+            "/api/workflow/status/preview01",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert status_resp.status_code == 200
+        summary = status_resp.json()["pipeline_summary"]
+        assert summary["preview_confirmation"]["status"] == "revision_requested"
+        assert "预览确认" in summary["blocker"] or "预览评审" in summary["blocker"]
+        assert summary["action_card"]["mode"] == "revise"
+        assert "继续调 UI" in summary["action_card"]["examples"]
 
     def test_workflow_architecture_revision_roundtrip(self, temp_project_dir: Path):
         client = TestClient(web_api.app)
@@ -1382,8 +1732,22 @@ class TestWebAPI:
         assert payload["selected_targets"] == ["claude-code"]
         assert "report" in payload
         assert "compatibility" in payload
+        assert payload["decision_card"]["scenario"] in {"no-host-detected", "single-host-detected", "multi-host-detected"}
+        assert payload["decision_card"]["selection_source"] == "explicit"
+        assert payload["decision_card"]["workflow_mode"] == "start"
+        assert payload["decision_card"]["workflow_mode_label"] == "开始新流程"
+        assert payload["decision_card"]["action_title"]
+        assert payload["decision_card"]["action_examples"]
+        assert payload["decision_card"]["user_action_shortcuts"]
+        assert payload["decision_card"]["recommended_reason"]
+        assert payload["decision_card"]["first_action"]
+        assert payload["decision_card"]["lines"]
+        assert isinstance(payload["primary_repair_action"]["secondary_actions"], list)
+        assert payload["decision_card"]["selected_host"] == "claude-code"
+        assert payload["decision_card"]["selected_path_override"]["env_key"] == "SUPER_DEV_HOST_PATH_CLAUDE_CODE"
         assert payload["usage_profiles"]["claude-code"]["usage_mode"] == "native-slash"
         assert payload["usage_profiles"]["claude-code"]["certification_level"] == "certified"
+        assert payload["usage_profiles"]["claude-code"]["path_override"]["env_key"] == "SUPER_DEV_HOST_PATH_CLAUDE_CODE"
         assert payload["usage_profiles"]["claude-code"]["trigger_command"].startswith("/super-dev")
         assert payload["usage_profiles"]["claude-code"]["final_trigger"] == '/super-dev "你的需求"'
         assert "SMOKE_OK" in payload["usage_profiles"]["claude-code"]["smoke_test_prompt"]
@@ -1417,6 +1781,52 @@ class TestWebAPI:
         assert any("Invalid API key provided" in item for item in host["suggestions"])
         assert any(item["status"] == "project-context-required" for item in usage["precondition_items"])
 
+    def test_hosts_doctor_default_targets_follow_primary_product_scope(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+
+        resp = client.get(
+            "/api/hosts/doctor",
+            params={"project_dir": str(temp_project_dir)},
+        )
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["selected_targets"] == list(PRIMARY_HOST_TOOL_IDS)
+        assert "openclaw" not in payload["selected_targets"]
+
+    def test_public_host_targets_prefers_primary_product_scope(self, temp_project_dir: Path):
+        integration_manager = IntegrationManager(temp_project_dir)
+
+        targets = web_api._public_host_targets(integration_manager=integration_manager)
+
+        assert targets == list(PRIMARY_HOST_TOOL_IDS)
+
+    def test_hosts_validate_default_targets_follow_primary_product_scope(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+
+        resp = client.get(
+            "/api/hosts/validate",
+            params={"project_dir": str(temp_project_dir)},
+        )
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["selected_targets"] == list(PRIMARY_HOST_TOOL_IDS)
+        assert "openclaw" not in payload["selected_targets"]
+
+    def test_hosts_runtime_validation_default_targets_follow_primary_product_scope(self, temp_project_dir: Path):
+        client = TestClient(web_api.app)
+
+        resp = client.get(
+            "/api/hosts/runtime-validation",
+            params={"project_dir": str(temp_project_dir)},
+        )
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["selected_targets"] == list(PRIMARY_HOST_TOOL_IDS)
+        assert "openclaw" not in payload["selected_targets"]
+
     def test_hosts_doctor_codex_exposes_restart_and_context_preconditions(self, temp_project_dir: Path):
         client = TestClient(web_api.app)
         resp = client.get(
@@ -1446,6 +1856,142 @@ class TestWebAPI:
         detected, details = web_api._detect_host_targets(["trae"])
         assert detected == ["trae"]
         assert any(item.startswith("path:") for item in details["trae"])
+
+    def test_detect_host_targets_uses_explicit_host_path_override(self, temp_project_dir: Path, monkeypatch):
+        custom_dir = temp_project_dir / "custom-hosts"
+        target = custom_dir / "CodexCustom.exe"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("", encoding="utf-8")
+        monkeypatch.setenv("SUPER_DEV_HOST_PATH_CODEX_CLI", str(target))
+
+        detected, details = web_api._detect_host_targets(["codex-cli"])
+        assert detected == ["codex-cli"]
+        assert any(item.startswith("env:") for item in details["codex-cli"])
+
+    def test_hosts_doctor_exposes_human_detection_details(self, temp_project_dir: Path, monkeypatch):
+        custom_dir = temp_project_dir / "custom-hosts"
+        target = custom_dir / "CodexCustom.exe"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("", encoding="utf-8")
+        monkeypatch.setenv("SUPER_DEV_HOST_PATH_CODEX_CLI", str(target))
+        client = TestClient(web_api.app)
+
+        resp = client.get(
+            "/api/hosts/doctor",
+            params={"project_dir": str(temp_project_dir), "auto": "true"},
+        )
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert any("自定义路径覆盖" in item for item in payload["detection_details_pretty"]["codex-cli"])
+        assert payload["session_resume_cards"]["codex-cli"]["enabled"] is False
+        assert payload["decision_card"]["scenario"] in {"single-host-detected", "multi-host-detected"}
+        assert payload["decision_card"]["workflow_mode"] == "start"
+        assert payload["decision_card"]["workflow_mode_label"] == "开始新流程"
+        assert payload["decision_card"]["action_title"]
+        assert payload["decision_card"]["action_examples"]
+        assert payload["decision_card"]["user_action_shortcuts"]
+        assert payload["decision_card"]["recommended_reason"]
+        assert payload["decision_card"]["first_action"]
+        assert payload["decision_card"]["secondary_actions"]
+        assert payload["decision_card"]["lines"]
+        assert payload["decision_card"]["candidates"][0]["id"] == payload["decision_card"]["selected_host"]
+        assert payload["decision_card"]["candidates"][0]["recommended"] is True
+        expected_env_key = f"SUPER_DEV_HOST_PATH_{payload['decision_card']['selected_host'].upper().replace('-', '_')}"
+        assert payload["decision_card"]["candidates"][0]["path_override"]["env_key"] == expected_env_key
+
+    def test_hosts_doctor_prefers_install_action_when_no_host_detected(self, temp_project_dir: Path, monkeypatch):
+        client = TestClient(web_api.app)
+        monkeypatch.setattr(web_api, "_detect_host_targets", lambda available_targets: ([], {}))
+
+        resp = client.get(
+            "/api/hosts/doctor",
+            params={"project_dir": str(temp_project_dir), "auto": "true"},
+        )
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["decision_card"]["scenario"] == "no-host-detected"
+        assert payload["decision_card"]["workflow_mode"] == "start"
+        assert payload["decision_card"]["workflow_mode_label"] == "开始新流程"
+        assert payload["decision_card"]["action_title"] == "先完成宿主安装与接入"
+        assert payload["decision_card"]["action_examples"]
+        assert payload["decision_card"]["user_action_shortcuts"]
+        assert payload["decision_card"]["lines"]
+        assert payload["primary_repair_action"]["host"] == "当前机器"
+        assert payload["primary_repair_action"]["command"] == payload["decision_card"]["first_action"]
+        assert payload["primary_repair_action"]["secondary_actions"] == payload["decision_card"]["secondary_actions"]
+        assert payload["decision_card"]["path_override_examples"][0]["env_key"]
+
+    def test_hosts_validate_exposes_human_detection_details(self, temp_project_dir: Path, monkeypatch):
+        custom_dir = temp_project_dir / "custom-hosts"
+        target = custom_dir / "CodexCustom.exe"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("", encoding="utf-8")
+        monkeypatch.setenv("SUPER_DEV_HOST_PATH_CODEX_CLI", str(target))
+        client = TestClient(web_api.app)
+
+        resp = client.get(
+            "/api/hosts/validate",
+            params={"project_dir": str(temp_project_dir), "auto": "true"},
+        )
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert any("自定义路径覆盖" in item for item in payload["detection_details_pretty"]["codex-cli"])
+        assert any("自定义路径覆盖" in item for item in payload["report"]["detection_details_pretty"]["codex-cli"])
+        assert payload["session_resume_cards"]["codex-cli"]["enabled"] is False
+        assert payload["decision_card"]["scenario"] in {"single-host-detected", "multi-host-detected"}
+        assert payload["decision_card"]["workflow_mode"] == "start"
+        assert payload["decision_card"]["workflow_mode_label"] == "开始新流程"
+        assert payload["decision_card"]["action_title"]
+        assert payload["decision_card"]["action_examples"]
+        assert payload["decision_card"]["user_action_shortcuts"]
+        assert payload["decision_card"]["recommended_reason"]
+        assert payload["decision_card"]["first_action"]
+        assert payload["decision_card"]["secondary_actions"]
+        assert payload["decision_card"]["lines"]
+        assert payload["decision_card"]["candidates"][0]["id"] == payload["decision_card"]["selected_host"]
+        assert payload["decision_card"]["candidates"][0]["recommended"] is True
+        expected_env_key = f"SUPER_DEV_HOST_PATH_{payload['decision_card']['selected_host'].upper().replace('-', '_')}"
+        assert payload["decision_card"]["candidates"][0]["path_override"]["env_key"] == expected_env_key
+
+    def test_hosts_validate_trims_candidate_preview_for_multi_host_detection(self, temp_project_dir: Path, monkeypatch):
+        client = TestClient(web_api.app)
+        monkeypatch.setattr(
+            web_api,
+            "_detect_host_targets",
+            lambda available_targets: (
+                ["claude-code", "codex-cli", "opencode", "cursor", "gemini-cli"],
+                {
+                    "claude-code": ["cmd:claude"],
+                    "codex-cli": ["cmd:codex"],
+                    "opencode": ["cmd:opencode"],
+                    "cursor": ["path:/Applications/Cursor.app"],
+                    "gemini-cli": ["cmd:gemini"],
+                },
+            ),
+        )
+
+        resp = client.get(
+            "/api/hosts/validate",
+            params={"project_dir": str(temp_project_dir), "auto": "true"},
+        )
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        decision_card = payload["decision_card"]
+        assert decision_card["scenario"] == "multi-host-detected"
+        assert decision_card["workflow_mode"] == "start"
+        assert decision_card["workflow_mode_label"] == "开始新流程"
+        assert decision_card["action_title"]
+        assert decision_card["action_examples"]
+        assert decision_card["user_action_shortcuts"]
+        assert decision_card["candidate_count"] == 5
+        assert len(decision_card["candidates"]) == 3
+        assert decision_card["remaining_candidate_count"] == 2
+        assert decision_card["candidates"][0]["recommended"] is True
+        assert decision_card["lines"]
 
     def test_hosts_doctor_trae_requires_host_skill_and_skips_slash(self, temp_project_dir: Path, monkeypatch):
         fake_home = temp_project_dir / "fake-home"
@@ -1531,7 +2077,8 @@ class TestWebAPI:
         assert any("重启 codex" in step for step in codex_host["post_onboard_steps"])
         assert codex_host["commands"]["slash"] == ""
         assert codex_host["commands"]["skill"] == "super-dev-core"
-        assert "~/.codex/skills/super-dev-core/SKILL.md" in codex_host["official_user_surfaces"]
+        assert "~/.agents/skills/super-dev-core/SKILL.md" in codex_host["official_user_surfaces"]
+        assert "~/.codex/skills/super-dev-core/SKILL.md" in codex_host["observed_compatibility_surfaces"]
         assert codex_host["commands"]["trigger"] == "super-dev: 你的需求"
         assert codex_host["final_trigger"] == "super-dev: 你的需求"
         assert "SMOKE_OK" in codex_host["smoke_test_prompt"]
@@ -1545,7 +2092,9 @@ class TestWebAPI:
         assert claude_host["supports_slash"] is True
         assert claude_host["host_protocol_mode"] == "official-subagent"
         assert claude_host["host_protocol_summary"] == "官方 commands + subagents"
+        assert ".claude/commands/super-dev.md" in claude_host["official_project_surfaces"]
         assert ".claude/agents/super-dev-core.md" in claude_host["official_project_surfaces"]
+        assert "~/.claude/commands/super-dev.md" in claude_host["official_user_surfaces"]
         assert "~/.claude/agents/super-dev-core.md" in claude_host["official_user_surfaces"]
         assert claude_host["commands"]["skill"] == ""
 
@@ -1581,11 +2130,33 @@ class TestWebAPI:
         assert qoder_host["commands"]["slash"] == '/super-dev "你的需求"'
         assert qoder_host["commands"]["trigger"] == '/super-dev "你的需求"'
         assert qoder_host["final_trigger"] == '/super-dev "你的需求"'
-        assert ".qoder/rules.md" in qoder_host["integration_files"]
+        assert ".qoder/rules/super-dev.md" in qoder_host["integration_files"]
         assert ".qoder/commands/super-dev.md" in qoder_host["official_project_surfaces"]
+        assert ".qoder/rules/super-dev.md" in qoder_host["official_project_surfaces"]
         assert "~/.qoder/commands/super-dev.md" in qoder_host["official_user_surfaces"]
         assert ".qoder/skills/super-dev-core/SKILL.md" in qoder_host["official_project_surfaces"]
-        assert "~/.qoderwork/skills/super-dev-core/SKILL.md" in qoder_host["official_user_surfaces"]
+        assert "~/.qoder/skills/super-dev-core/SKILL.md" in qoder_host["official_user_surfaces"]
+        assert "AGENTS.md" in qoder_host["observed_compatibility_surfaces"]
+
+    def test_cursor_host_catalog_exposes_agents_compatibility(self):
+        client = TestClient(web_api.app)
+        resp = client.get("/api/catalogs")
+        assert resp.status_code == 200
+        payload = resp.json()
+        host = next(item for item in payload["host_tools"] if item["id"] == "cursor")
+        assert host["host_protocol_mode"] == "official-context"
+        assert host["host_protocol_summary"] == "官方 commands + rules + AGENTS.md compatibility"
+        assert "AGENTS.md" in host["observed_compatibility_surfaces"]
+
+    def test_gemini_host_catalog_exposes_global_command_surface(self):
+        client = TestClient(web_api.app)
+        resp = client.get("/api/catalogs")
+        assert resp.status_code == 200
+        payload = resp.json()
+        host = next(item for item in payload["host_tools"] if item["id"] == "gemini-cli")
+        assert host["host_protocol_mode"] == "official-context"
+        assert host["host_protocol_summary"] == "官方 commands + GEMINI.md"
+        assert "~/.gemini/commands/super-dev.md" in host["official_user_surfaces"]
 
     def test_antigravity_host_catalog_uses_gemini_and_workflow_surfaces(self):
         client = TestClient(web_api.app)
@@ -1614,7 +2185,9 @@ class TestWebAPI:
         assert kiro_host["supports_slash"] is False
         assert kiro_host["host_protocol_mode"] == "official-steering"
         assert ".kiro/steering/super-dev.md" in kiro_host["official_project_surfaces"]
+        assert ".kiro/skills/super-dev-core/SKILL.md" in kiro_host["official_project_surfaces"]
         assert "~/.kiro/steering/AGENTS.md" in kiro_host["official_user_surfaces"]
+        assert "~/.kiro/skills/super-dev-core/SKILL.md" in kiro_host["official_user_surfaces"]
 
     @pytest.mark.parametrize(
         ("host_id", "slash_file"),
@@ -1624,7 +2197,6 @@ class TestWebAPI:
             ("cursor", ".cursor/commands/super-dev.md"),
             ("windsurf", ".windsurf/workflows/super-dev.md"),
             ("gemini-cli", ".gemini/commands/super-dev.md"),
-            ("kiro-cli", ".kiro/commands/super-dev.md"),
             ("opencode", ".opencode/commands/super-dev.md"),
             ("qoder", ".qoder/commands/super-dev.md"),
         ],
@@ -1643,12 +2215,23 @@ class TestWebAPI:
             assert host["host_protocol_summary"] == "官方 commands + GEMINI.md"
             assert "GEMINI.md" in host["official_project_surfaces"]
             assert "~/.gemini/GEMINI.md" in host["official_user_surfaces"]
-        if host_id == "kiro-cli":
-            assert host["host_protocol_mode"] == "official-context"
-            assert host["host_protocol_summary"] == "官方 commands + AGENTS.md"
-            assert ".kiro/AGENTS.md" in host["official_project_surfaces"]
         assert host["commands"]["trigger"] == '/super-dev "你的需求"'
         assert host["final_trigger"] == '/super-dev "你的需求"'
+
+    def test_kiro_cli_catalog_is_text_trigger_with_steering_and_skills(self):
+        client = TestClient(web_api.app)
+        resp = client.get("/api/catalogs")
+        assert resp.status_code == 200
+        payload = resp.json()
+        host = next(item for item in payload["host_tools"] if item["id"] == "kiro-cli")
+        assert host["supports_slash"] is False
+        assert host["usage_mode"] == "rules-and-skill"
+        assert host["host_protocol_mode"] == "official-steering"
+        assert host["host_protocol_summary"] == "官方 steering + skills"
+        assert host["final_trigger"] == "super-dev: 你的需求"
+        assert ".kiro/steering/super-dev.md" in host["official_project_surfaces"]
+        assert ".kiro/skills/super-dev-core/SKILL.md" in host["official_project_surfaces"]
+        assert "~/.kiro/skills/super-dev-core/SKILL.md" in host["official_user_surfaces"]
 
     def test_hosts_doctor_endpoint_ready_after_files_present(self, temp_project_dir: Path):
         client = TestClient(web_api.app)
@@ -1965,6 +2548,8 @@ class TestWebAPI:
         assert any(artifact["name"] == "Dependency Graph" for artifact in payload["artifacts"])
         assert any(artifact["name"] == "Impact Analysis" for artifact in payload["artifacts"])
         assert any(artifact["name"] == "Regression Guard" for artifact in payload["artifacts"])
+        assert any(artifact["name"] == "UI Contract" and artifact["status"] == "ready" for artifact in payload["artifacts"])
+        assert any(artifact["name"] == "UI Contract Alignment" and artifact["status"] == "ready" for artifact in payload["artifacts"])
 
     def test_repo_map_endpoint(self, temp_project_dir: Path):
         (temp_project_dir / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
@@ -2071,6 +2656,168 @@ class TestWebAPI:
         assert payload["report"]["summary"]["total_hosts"] == 1
         assert payload["report"]["summary"]["blocking_count"] >= 1
         assert payload["report"]["blockers"][0]["host"] == "iflow"
+
+    def test_hosts_validate_codex_uses_host_specific_runtime_checklist(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        (fake_home / ".codex").mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+
+        cli = SuperDevCLI()
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            assert cli.run(["onboard", "--host", "codex-cli", "--force", "--yes"]) == 0
+        finally:
+            os.chdir(original_cwd)
+
+        client = TestClient(web_api.app)
+        resp = client.get(
+            "/api/hosts/validate",
+            params={"project_dir": str(temp_project_dir), "host": "codex-cli"},
+        )
+        assert resp.status_code == 200
+        host = resp.json()["report"]["hosts"][0]
+        assert any("重开 codex" in item for item in host["runtime_checklist"])
+        assert any("当前终端就在目标项目目录" in item for item in host["runtime_checklist"])
+        assert any("AGENTS.md 与官方 Skills" in item for item in host["pass_criteria"])
+
+    def test_hosts_validate_opencode_uses_host_specific_runtime_checklist(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+
+        cli = SuperDevCLI()
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            assert cli.run(["onboard", "--host", "opencode", "--force", "--yes"]) == 0
+        finally:
+            os.chdir(original_cwd)
+
+        client = TestClient(web_api.app)
+        resp = client.get(
+            "/api/hosts/validate",
+            params={"project_dir": str(temp_project_dir), "host": "opencode"},
+        )
+        assert resp.status_code == 200
+        host = resp.json()["report"]["hosts"][0]
+        assert any("当前 OpenCode 会话就是目标项目目录" in item for item in host["runtime_checklist"])
+        assert any("AGENTS.md、commands、skills" in item for item in host["runtime_checklist"])
+        assert any("当前 OpenCode 会话真实读取" in item for item in host["pass_criteria"])
+
+    def test_hosts_validate_with_workflow_context_exposes_resume_probe_prompt(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+
+        cli = SuperDevCLI()
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            _prepare_workflow_context(temp_project_dir)
+            assert cli.run(["onboard", "--host", "opencode", "--force", "--yes"]) == 0
+        finally:
+            os.chdir(original_cwd)
+
+        client = TestClient(web_api.app)
+        resp = client.get(
+            "/api/hosts/validate",
+            params={"project_dir": str(temp_project_dir), "host": "opencode"},
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        host = payload["report"]["hosts"][0]
+        assert ".super-dev/SESSION_BRIEF.md" in host["resume_probe_prompt"]
+        assert '/super-dev "' in host["resume_probe_prompt"]
+        assert any("当前项目会话里恢复" in item for item in host["resume_checklist"])
+        assert payload["session_resume_cards"]["opencode"]["enabled"] is True
+        assert payload["session_resume_cards"]["opencode"]["workflow_mode"] == "revise"
+        assert payload["session_resume_cards"]["opencode"]["workflow_mode_label"] == "返工/补充当前流程"
+        assert payload["session_resume_cards"]["opencode"]["action_title"]
+        assert payload["session_resume_cards"]["opencode"]["action_examples"]
+        assert payload["session_resume_cards"]["opencode"]["user_action_shortcuts"]
+        assert '.super-dev/SESSION_BRIEF.md' in payload["session_resume_cards"]["opencode"]["session_brief_path"]
+        assert payload["session_resume_cards"]["opencode"]["recommended_workflow_command"]
+
+    def test_hosts_doctor_with_workflow_context_exposes_resume_card(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        (fake_home / ".codex").mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+
+        cli = SuperDevCLI()
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            _prepare_workflow_context(temp_project_dir)
+            assert cli.run(["onboard", "--host", "codex-cli", "--force", "--yes"]) == 0
+        finally:
+            os.chdir(original_cwd)
+
+        client = TestClient(web_api.app)
+        resp = client.get(
+            "/api/hosts/doctor",
+            params={"project_dir": str(temp_project_dir), "host": "codex-cli"},
+        )
+        assert resp.status_code == 200
+        card = resp.json()["session_resume_cards"]["codex-cli"]
+        assert card["enabled"] is True
+        assert card["workflow_mode"] == "revise"
+        assert card["workflow_mode_label"] == "返工/补充当前流程"
+        assert card["action_title"]
+        assert card["action_examples"]
+        assert card["user_action_shortcuts"]
+        assert "super-dev:" in card["host_first_sentence"]
+        assert ".super-dev/SESSION_BRIEF.md" in card["session_brief_path"]
+        assert card["recommended_workflow_command"]
+        assert resp.json()["decision_card"]["selection_source"] == "explicit"
+
+    @pytest.mark.parametrize(
+        ("host_id", "expected_runtime_hint", "expected_resume_hint"),
+        [
+            ("claude-code", "当前 Claude Code 会话就在目标项目目录", "不能绕过当前确认门或返工门"),
+            ("cursor-cli", "当前 Cursor CLI 终端就在目标项目目录", "当前终端目录仍是目标项目"),
+            ("gemini-cli", "当前 Gemini CLI 会话就在目标项目目录", "再次读取了 `GEMINI.md`"),
+            ("codebuddy", "当前 CodeBuddy IDE Agent Chat 绑定的是目标项目", "继续当前确认门而不是重新开题"),
+            ("windsurf", "当前 Windsurf Agent Chat / Workflow 入口绑定的是目标项目工作区", "rules、workflow 与 skills"),
+            ("vscode-copilot", "当前 VS Code Copilot Chat 绑定的是目标项目工作区", "重新读取 `.github/copilot-instructions.md`"),
+            ("qoder", "当前 Qoder IDE Agent Chat 绑定的是目标项目", "继续当前确认门"),
+            ("roo-code", "当前 Roo Code 聊天位于目标项目工作区", "重新加载 `.roo/` 规则与命令"),
+            ("kilo-code", "当前 Kilo Code 聊天面板绑定的是目标工作区", "重新读取 `.kilocode/rules/`"),
+        ],
+    )
+    def test_hosts_validate_core_hosts_expose_host_specific_recovery_checks(
+        self,
+        temp_project_dir: Path,
+        monkeypatch,
+        host_id: str,
+        expected_runtime_hint: str,
+        expected_resume_hint: str,
+    ):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+
+        cli = SuperDevCLI()
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            _prepare_workflow_context(temp_project_dir)
+            assert cli.run(["onboard", "--host", host_id, "--force", "--yes"]) == 0
+        finally:
+            os.chdir(original_cwd)
+
+        client = TestClient(web_api.app)
+        resp = client.get(
+            "/api/hosts/validate",
+            params={"project_dir": str(temp_project_dir), "host": host_id},
+        )
+        assert resp.status_code == 200
+        host = resp.json()["report"]["hosts"][0]
+        assert any(expected_runtime_hint in item for item in host["runtime_checklist"])
+        assert ".super-dev/SESSION_BRIEF.md" in host["resume_probe_prompt"]
+        assert any(expected_resume_hint in item for item in host["resume_checklist"])
 
     def test_hosts_runtime_validation_roundtrip(self, temp_project_dir: Path, monkeypatch):
         fake_home = temp_project_dir / "fake-home"

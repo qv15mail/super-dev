@@ -170,7 +170,7 @@ class TestWorkflowEngine:
 
     @pytest.mark.asyncio
     async def test_phase_failure_stops_workflow(self, temp_project_dir: Path, workflow_context):
-        """测试阶段失败停止工作流"""
+        """测试关键阶段失败停止工作流"""
         config_manager = ConfigManager(temp_project_dir)
         config_manager.create(name="test", quality_gate=80)
 
@@ -180,14 +180,44 @@ class TestWorkflowEngine:
         async def success_handler(context):
             return {"status": "ok"}
 
-        # 第二个阶段失败
+        # 第二个阶段失败（DRAFTING 是关键阶段，不可跳过）
+        async def fail_handler(context):
+            raise Exception("Test failure")
+
+        engine.register_phase_handler(Phase.DISCOVERY, success_handler)
+        engine.register_phase_handler(Phase.DRAFTING, fail_handler)
+
+        # Mock 质量评分，让 discovery 通过门禁以便测试后续阶段失败逻辑
+        engine._calculate_quality_score = lambda phase, context: 88.0
+
+        results = await engine.run(
+            phases=[Phase.DISCOVERY, Phase.DRAFTING, Phase.REDTEAM],
+            context=workflow_context
+        )
+
+        assert results[Phase.DISCOVERY].success
+        assert not results[Phase.DRAFTING].success
+        # 第三阶段不应该执行
+        assert Phase.REDTEAM not in results
+
+    @pytest.mark.asyncio
+    async def test_skippable_phase_failure_continues_workflow(self, temp_project_dir: Path, workflow_context):
+        """测试可跳过阶段（INTELLIGENCE）失败后工作流继续"""
+        config_manager = ConfigManager(temp_project_dir)
+        config_manager.create(name="test", quality_gate=80)
+
+        engine = WorkflowEngine(temp_project_dir)
+
+        async def success_handler(context):
+            return {"status": "ok"}
+
         async def fail_handler(context):
             raise Exception("Test failure")
 
         engine.register_phase_handler(Phase.DISCOVERY, success_handler)
         engine.register_phase_handler(Phase.INTELLIGENCE, fail_handler)
+        engine.register_phase_handler(Phase.DRAFTING, success_handler)
 
-        # Mock 质量评分，让 discovery 通过门禁以便测试后续阶段失败逻辑
         engine._calculate_quality_score = lambda phase, context: 88.0
 
         results = await engine.run(
@@ -196,9 +226,12 @@ class TestWorkflowEngine:
         )
 
         assert results[Phase.DISCOVERY].success
-        assert not results[Phase.INTELLIGENCE].success
-        # 第三阶段不应该执行
-        assert Phase.DRAFTING not in results
+        # INTELLIGENCE 失败但被标记为成功（可跳过）
+        assert results[Phase.INTELLIGENCE].success
+        assert len(results[Phase.INTELLIGENCE].errors) > 0
+        # DRAFTING 应该继续执行
+        assert Phase.DRAFTING in results
+        assert results[Phase.DRAFTING].success
 
     @pytest.mark.asyncio
     async def test_quality_gate_check(self, temp_project_dir: Path):

@@ -1,0 +1,1625 @@
+"""CLI parser mixin helpers."""
+
+from __future__ import annotations
+
+import argparse
+
+from . import __description__, __version__
+from .catalogs import (
+    CICD_PLATFORM_IDS,
+    DOMAIN_IDS,
+    FULL_FRONTEND_TEMPLATE_IDS,
+    HOST_TOOL_IDS,
+    PIPELINE_BACKEND_IDS,
+    PIPELINE_FRONTEND_TEMPLATE_IDS,
+    PLATFORM_IDS,
+    normalize_host_tool_id,
+)
+
+SUPPORTED_PLATFORMS = list(PLATFORM_IDS)
+SUPPORTED_PIPELINE_FRONTENDS = list(PIPELINE_FRONTEND_TEMPLATE_IDS)
+SUPPORTED_INIT_FRONTENDS = list(FULL_FRONTEND_TEMPLATE_IDS)
+SUPPORTED_PIPELINE_BACKENDS = list(PIPELINE_BACKEND_IDS)
+SUPPORTED_DOMAINS = list(DOMAIN_IDS)
+SUPPORTED_CICD = list(CICD_PLATFORM_IDS)
+SUPPORTED_HOST_TOOLS = list(HOST_TOOL_IDS)
+
+
+class CliParserMixin:
+    def _create_parser(self) -> argparse.ArgumentParser:
+        """创建命令行参数解析器"""
+        parser = argparse.ArgumentParser(
+            prog="super-dev",
+            description=__description__,
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            epilog="""
+示例:
+  super-dev init my-project        初始化新项目
+  super-dev analyze [path]         分析现有项目
+  super-dev workflow               运行完整工作流
+  super-dev expert PM              调用产品经理专家
+  super-dev quality                运行质量检查
+  super-dev preview                生成原型预览
+  super-dev deploy                 生成部署配置
+            """,
+        )
+
+        parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
+
+        # 子命令
+        subparsers = parser.add_subparsers(
+            dest="command", title="可用命令", description="使用 'super-dev <command> -h' 查看帮助"
+        )
+
+        # init 命令
+        init_parser = subparsers.add_parser(
+            "init", help="初始化新项目", description="创建一个新的 Super Dev 项目"
+        )
+        init_parser.add_argument("name", help="项目名称")
+        init_parser.add_argument("-d", "--description", default="", help="项目描述")
+        init_parser.add_argument(
+            "-p", "--platform", choices=SUPPORTED_PLATFORMS, default="web", help="目标平台"
+        )
+        init_parser.add_argument(
+            "-f", "--frontend", choices=SUPPORTED_INIT_FRONTENDS, default="next", help="前端框架"
+        )
+        init_parser.add_argument(
+            "--ui-library",
+            choices=[
+                "mui",
+                "ant-design",
+                "chakra-ui",
+                "mantine",
+                "shadcn-ui",
+                "radix-ui",
+                "element-plus",
+                "naive-ui",
+                "vuetify",
+                "primevue",
+                "arco-design",
+                "angular-material",
+                "primeng",
+                "skeleton-ui",
+                "svelte-material-ui",
+                "tailwind",
+                "daisyui",
+            ],
+            help="UI 组件库",
+        )
+        init_parser.add_argument(
+            "--style",
+            choices=[
+                "tailwind",
+                "css-modules",
+                "styled-components",
+                "emotion",
+                "scss",
+                "less",
+                "unocss",
+            ],
+            help="样式方案",
+        )
+        init_parser.add_argument(
+            "--state",
+            choices=["react-query", "swr", "zustand", "redux-toolkit", "jotai", "pinia", "xstate"],
+            action="append",
+            help="状态管理方案 (可多选)",
+        )
+        init_parser.add_argument(
+            "--testing",
+            choices=["vitest", "jest", "playwright", "cypress", "testing-library"],
+            action="append",
+            help="测试框架 (可多选)",
+        )
+        init_parser.add_argument(
+            "-b", "--backend", choices=SUPPORTED_PIPELINE_BACKENDS, default="node", help="后端框架"
+        )
+        init_parser.add_argument("--domain", choices=SUPPORTED_DOMAINS, default="", help="业务领域")
+        bootstrap_parser = subparsers.add_parser(
+            "bootstrap",
+            help="显式初始化 Super Dev 工作流契约",
+            description="创建项目配置、SDD 目录、工作流契约和 bootstrap 摘要，让初始化规范可见",
+        )
+        bootstrap_parser.add_argument("--name", help="项目名称；默认使用当前目录名")
+        bootstrap_parser.add_argument("-d", "--description", default="", help="项目描述")
+        bootstrap_parser.add_argument(
+            "-p", "--platform", choices=SUPPORTED_PLATFORMS, default="web", help="目标平台"
+        )
+        bootstrap_parser.add_argument(
+            "-f", "--frontend", choices=SUPPORTED_INIT_FRONTENDS, default="next", help="前端框架"
+        )
+        bootstrap_parser.add_argument(
+            "--ui-library",
+            choices=[
+                "mui",
+                "ant-design",
+                "chakra-ui",
+                "mantine",
+                "shadcn-ui",
+                "radix-ui",
+                "element-plus",
+                "naive-ui",
+                "vuetify",
+                "primevue",
+                "arco-design",
+                "angular-material",
+                "primeng",
+                "skeleton-ui",
+                "svelte-material-ui",
+                "tailwind",
+                "daisyui",
+            ],
+            help="UI 组件库",
+        )
+        bootstrap_parser.add_argument(
+            "--style",
+            choices=[
+                "tailwind",
+                "css-modules",
+                "styled-components",
+                "emotion",
+                "scss",
+                "less",
+                "unocss",
+            ],
+            help="样式方案",
+        )
+        bootstrap_parser.add_argument(
+            "--state",
+            choices=["react-query", "swr", "zustand", "redux-toolkit", "jotai", "pinia", "xstate"],
+            action="append",
+            help="状态管理方案 (可多选)",
+        )
+        bootstrap_parser.add_argument(
+            "--testing",
+            choices=["vitest", "jest", "playwright", "cypress", "testing-library"],
+            action="append",
+            help="测试框架 (可多选)",
+        )
+        bootstrap_parser.add_argument(
+            "-b", "--backend", choices=SUPPORTED_PIPELINE_BACKENDS, default="node", help="后端框架"
+        )
+        bootstrap_parser.add_argument(
+            "--domain", choices=SUPPORTED_DOMAINS, default="", help="业务领域"
+        )
+
+        # analyze 命令
+        analyze_parser = subparsers.add_parser(
+            "analyze",
+            help="分析现有项目",
+            description="自动检测和分析现有项目的结构、技术栈和架构模式",
+        )
+        analyze_parser.add_argument(
+            "path", nargs="?", default=".", help="项目路径 (默认为当前目录)"
+        )
+        analyze_parser.add_argument("-o", "--output", help="输出报告文件路径 (Markdown 格式)")
+        analyze_parser.add_argument(
+            "-f", "--format", choices=["json", "markdown", "text"], default="text", help="输出格式"
+        )
+        analyze_parser.add_argument("--json", action="store_true", help="以 JSON 格式输出")
+
+        repo_map_parser = subparsers.add_parser(
+            "repo-map",
+            help="生成代码库地图",
+            description="输出项目级代码库地图，帮助宿主和开发者先理解代码结构再进入实现",
+        )
+        repo_map_parser.add_argument(
+            "path",
+            nargs="?",
+            default=".",
+            help="项目路径 (默认为当前目录)",
+        )
+        repo_map_parser.add_argument(
+            "-o",
+            "--output",
+            help="输出报告路径（默认为 output/<project>-repo-map.md 或 .json）",
+        )
+        repo_map_parser.add_argument(
+            "-f",
+            "--format",
+            choices=["json", "markdown", "text"],
+            default="text",
+            help="输出格式",
+        )
+        repo_map_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 格式输出",
+        )
+
+        feature_checklist_parser = subparsers.add_parser(
+            "feature-checklist",
+            help="审计 PRD 范围覆盖率",
+            description="基于 PRD、tasks 和 gap 证据生成功能清单，区分流程完成与范围完成。",
+        )
+        feature_checklist_parser.add_argument(
+            "path",
+            nargs="?",
+            default=".",
+            help="项目路径 (默认为当前目录)",
+        )
+        feature_checklist_parser.add_argument(
+            "-o",
+            "--output",
+            help="输出报告路径（默认为 output/<project>-feature-checklist.md 或 .json）",
+        )
+        feature_checklist_parser.add_argument(
+            "-f",
+            "--format",
+            choices=["json", "markdown", "text"],
+            default="text",
+            help="输出格式",
+        )
+        feature_checklist_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 格式输出",
+        )
+
+        product_audit_parser = subparsers.add_parser(
+            "product-audit",
+            help="生成产品总审查报告",
+            description="从产品、交互、闭环和代码结构角度生成跨团队产品审查报告。",
+        )
+        product_audit_parser.add_argument(
+            "path",
+            nargs="?",
+            default=".",
+            help="项目路径 (默认为当前目录)",
+        )
+        product_audit_parser.add_argument(
+            "-o",
+            "--output",
+            help="输出报告路径（默认为 output/<project>-product-audit.md 或 .json）",
+        )
+        product_audit_parser.add_argument(
+            "-f",
+            "--format",
+            choices=["json", "markdown", "text"],
+            default="text",
+            help="输出格式",
+        )
+        product_audit_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 格式输出",
+        )
+
+        impact_parser = subparsers.add_parser(
+            "impact",
+            help="分析变更影响范围",
+            description="基于 Repo Map 推断变更会影响的模块、入口、集成面和回归重点",
+        )
+        impact_parser.add_argument(
+            "description",
+            nargs="?",
+            default="",
+            help="变更描述，例如“修改登录流程”",
+        )
+        impact_parser.add_argument(
+            "--files",
+            nargs="*",
+            default=[],
+            help="已知会修改的文件列表，用于提升影响分析准确度",
+        )
+        impact_parser.add_argument(
+            "--path",
+            default=".",
+            help="项目路径 (默认为当前目录)",
+        )
+        impact_parser.add_argument(
+            "-o",
+            "--output",
+            help="输出报告路径（默认为 output/<project>-impact-analysis.md 或 .json）",
+        )
+        impact_parser.add_argument(
+            "-f",
+            "--format",
+            choices=["json", "markdown", "text"],
+            default="text",
+            help="输出格式",
+        )
+        impact_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 格式输出",
+        )
+
+        regression_guard_parser = subparsers.add_parser(
+            "regression-guard",
+            help="生成回归检查清单",
+            description="基于 Impact Analysis 输出可执行的回归检查清单，减少修复或重构带来的连带回退。",
+        )
+        regression_guard_parser.add_argument(
+            "description",
+            nargs="?",
+            default="",
+            help="变更描述，例如“修改登录流程”",
+        )
+        regression_guard_parser.add_argument(
+            "--files",
+            nargs="*",
+            default=[],
+            help="已知会修改的文件列表，用于提升回归清单准确度",
+        )
+        regression_guard_parser.add_argument(
+            "--path",
+            default=".",
+            help="项目路径 (默认为当前目录)",
+        )
+        regression_guard_parser.add_argument(
+            "-o",
+            "--output",
+            help="输出报告路径（默认为 output/<project>-regression-guard.md 或 .json）",
+        )
+        regression_guard_parser.add_argument(
+            "-f",
+            "--format",
+            choices=["json", "markdown", "text"],
+            default="text",
+            help="输出格式",
+        )
+        regression_guard_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 格式输出",
+        )
+
+        dependency_graph_parser = subparsers.add_parser(
+            "dependency-graph",
+            help="生成依赖图与关键路径",
+            description="输出内部依赖图、关键节点和关键路径，帮助宿主在改动前理解 blast radius。",
+        )
+        dependency_graph_parser.add_argument(
+            "path",
+            nargs="?",
+            default=".",
+            help="项目路径 (默认为当前目录)",
+        )
+        dependency_graph_parser.add_argument(
+            "-o",
+            "--output",
+            help="输出报告路径（默认为 output/<project>-dependency-graph.md 或 .json）",
+        )
+        dependency_graph_parser.add_argument(
+            "-f",
+            "--format",
+            choices=["json", "markdown", "text"],
+            default="text",
+            help="输出格式",
+        )
+        dependency_graph_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 格式输出",
+        )
+
+        # workflow 命令
+        workflow_parser = subparsers.add_parser(
+            "workflow", help="运行工作流", description="执行 Super Dev 7 阶段工作流"
+        )
+        workflow_parser.add_argument(
+            "--phase",
+            choices=[
+                "discovery",
+                "intelligence",
+                "drafting",
+                "redteam",
+                "qa",
+                "delivery",
+                "deployment",
+            ],
+            nargs="*",
+            help="指定要执行的阶段",
+        )
+        workflow_parser.add_argument("-q", "--quality-gate", type=int, help="质量门禁阈值 (0-100)")
+
+        # studio 命令
+        studio_parser = subparsers.add_parser(
+            "studio", help="启动交互工作台", description="启动 Super Dev Web 工作台 API 服务"
+        )
+        studio_parser.add_argument("--host", default="127.0.0.1", help="监听地址 (默认: 127.0.0.1)")
+        studio_parser.add_argument("--port", type=int, default=8765, help="监听端口 (默认: 8765)")
+        studio_parser.add_argument("--reload", action="store_true", help="启用热重载 (开发模式)")
+
+        # expert 命令
+        expert_parser = subparsers.add_parser(
+            "expert", help="调用专家", description="直接调用特定专家"
+        )
+        expert_parser.add_argument("--list", action="store_true", help="列出所有可用专家")
+        expert_parser.add_argument("--list-teams", action="store_true", help="列出所有可用专家团队")
+        expert_parser.add_argument("--team", action="store_true", help="按专家团队而不是单专家执行")
+        expert_parser.add_argument(
+            "expert_name",
+            nargs="?",
+            choices=[
+                "PRODUCT",
+                "PM",
+                "ARCHITECT",
+                "UI",
+                "UX",
+                "SECURITY",
+                "CODE",
+                "DBA",
+                "QA",
+                "DEVOPS",
+                "RCA",
+                "PRODUCT_AUDIT",
+            ],
+            help="专家名称",
+        )
+        expert_parser.add_argument("prompt", nargs="*", help="提示词")
+
+        # quality 命令
+        quality_parser = subparsers.add_parser(
+            "quality", help="质量检查", description="运行质量检查脚本"
+        )
+        quality_parser.add_argument(
+            "-t",
+            "--type",
+            choices=["prd", "architecture", "ui", "ux", "ui-review", "redteam", "code", "all"],
+            default="all",
+            help="检查类型",
+        )
+
+        # metrics 命令
+        metrics_parser = subparsers.add_parser(
+            "metrics", help="流水线指标", description="查看最近一次 pipeline 指标报告"
+        )
+        metrics_parser.add_argument(
+            "--project",
+            help="项目名（可选，默认自动匹配最近文件）",
+        )
+        metrics_parser.add_argument(
+            "--history",
+            action="store_true",
+            help="显示多次流水线历史趋势",
+        )
+        metrics_parser.add_argument(
+            "--limit",
+            type=int,
+            default=10,
+            help="历史记录条数（默认 10）",
+        )
+
+        # preview 命令
+        preview_parser = subparsers.add_parser(
+            "preview", help="生成原型", description="从 UI 设计生成可交互的原型"
+        )
+        preview_parser.add_argument("-o", "--output", default="preview.html", help="输出文件路径")
+
+        # deploy 命令
+        deploy_parser = subparsers.add_parser(
+            "deploy", help="生成部署配置", description="生成 Dockerfile 和 CI/CD 配置"
+        )
+        deploy_parser.add_argument("--docker", action="store_true", help="生成 Dockerfile")
+        deploy_parser.add_argument("--cicd", choices=SUPPORTED_CICD, help="生成 CI/CD 配置")
+        deploy_parser.add_argument(
+            "--rehearsal",
+            action="store_true",
+            help="生成发布演练清单与回滚手册",
+        )
+        deploy_parser.add_argument(
+            "--rehearsal-verify",
+            action="store_true",
+            help="执行发布演练验证并生成评分报告",
+        )
+
+        # config 命令
+        config_parser = subparsers.add_parser(
+            "config", help="配置管理", description="查看和修改项目配置"
+        )
+        config_parser.add_argument("action", choices=["get", "set", "list"], help="操作")
+        config_parser.add_argument("key", nargs="?", help="配置键")
+        config_parser.add_argument("value", nargs="?", help="配置值")
+
+        # skill 命令 - 多平台 Skill 安装/管理
+        skill_parser = subparsers.add_parser(
+            "skill", help="Skill 管理", description="安装、列出、卸载跨平台 AI Coding Skills"
+        )
+        skill_parser.add_argument(
+            "action", choices=["list", "install", "uninstall", "targets"], help="操作类型"
+        )
+        skill_parser.add_argument(
+            "source_or_name",
+            nargs="?",
+            help="install 时为来源（目录/git/super-dev），uninstall 时为 skill 名称",
+        )
+        skill_parser.add_argument(
+            "-t",
+            "--target",
+            choices=SUPPORTED_HOST_TOOLS,
+            type=normalize_host_tool_id,
+            default="claude-code",
+            help="目标平台 (默认: claude-code)",
+        )
+        skill_parser.add_argument("--name", help="安装后的 skill 名称（可选）")
+        skill_parser.add_argument("--force", action="store_true", help="覆盖已存在的 skill")
+
+        # integrate 命令 - 多平台适配配置
+        integrate_parser = subparsers.add_parser(
+            "integrate",
+            help="平台集成配置",
+            description="为 CLI/IDE AI Coding 工具生成集成配置文件",
+        )
+        integrate_parser.add_argument(
+            "action",
+            choices=["list", "setup", "harden", "matrix", "smoke", "audit", "validate"],
+            help="操作类型",
+        )
+        integrate_parser.add_argument(
+            "-t",
+            "--target",
+            choices=SUPPORTED_HOST_TOOLS,
+            type=normalize_host_tool_id,
+            help="目标平台",
+        )
+        integrate_parser.add_argument("--all", action="store_true", help="对所有平台执行 setup")
+        integrate_parser.add_argument(
+            "--auto", action="store_true", help="自动探测本机已安装宿主，仅对检测到的宿主执行审计"
+        )
+        integrate_parser.add_argument("--force", action="store_true", help="覆盖已存在的配置文件")
+        integrate_parser.add_argument(
+            "--json", action="store_true", help="以 JSON 输出集成矩阵（用于自动化）"
+        )
+        integrate_parser.add_argument(
+            "--repair", action="store_true", help="审计时自动重装缺失或过期的宿主接入面"
+        )
+        integrate_parser.add_argument(
+            "--no-save", action="store_true", help="不将审计结果写入 output 报告"
+        )
+        integrate_parser.add_argument(
+            "--status",
+            choices=["pending", "passed", "failed"],
+            help="用于 validate：写入某个宿主的真人运行时验收状态",
+        )
+        integrate_parser.add_argument("--comment", help="用于 validate：补充真人运行时验收备注")
+        integrate_parser.add_argument(
+            "--actor", default="user", help="用于 validate：记录操作者（默认: user）"
+        )
+        integrate_parser.add_argument(
+            "--verify-docs",
+            action="store_true",
+            help="对宿主官方文档链接执行在线可达性核验（matrix/audit）",
+        )
+        integrate_parser.add_argument(
+            "--official-compare",
+            action="store_true",
+            help="对照官方文档内容校验 slash/rules/skills 能力声明（matrix/audit/harden）",
+        )
+        integrate_parser.add_argument(
+            "--parity-threshold",
+            type=float,
+            default=95.0,
+            help="宿主一致性总分门槛（默认: 95.0）",
+        )
+
+        # onboard 命令 - 首次安装向导（宿主选择 + 集成 + skill + slash）
+        onboard_parser = subparsers.add_parser(
+            "onboard",
+            help="首次接入向导",
+            description="选择宿主 AI Coding 工具并自动完成集成、Skill 安装与 /super-dev 命令映射",
+        )
+        onboard_parser.add_argument(
+            "--host",
+            choices=SUPPORTED_HOST_TOOLS,
+            type=normalize_host_tool_id,
+            help="宿主工具（不填则进入选择模式）",
+        )
+        onboard_parser.add_argument("--all", action="store_true", help="对所有宿主工具执行接入")
+        onboard_parser.add_argument(
+            "--auto", action="store_true", help="自动探测本机已安装宿主，仅对检测到的宿主执行接入"
+        )
+        onboard_parser.add_argument(
+            "--skill-name",
+            default="super-dev-core",
+            help="安装后的 Skill 名称（默认: super-dev-core）",
+        )
+        onboard_parser.add_argument(
+            "--skip-integrate", action="store_true", help="跳过规则文件集成"
+        )
+        onboard_parser.add_argument("--skip-skill", action="store_true", help="跳过内置 Skill 安装")
+        onboard_parser.add_argument(
+            "--skip-slash", action="store_true", help="跳过 /super-dev 命令映射文件生成"
+        )
+        onboard_parser.add_argument(
+            "--yes", action="store_true", help="非交互模式（未指定 --host 时默认等价 --all）"
+        )
+        onboard_parser.add_argument(
+            "--force", action="store_true", help="覆盖已存在文件并重装 Skill"
+        )
+        onboard_parser.add_argument(
+            "--dry-run", action="store_true", help="预览将要写入的文件，不实际执行"
+        )
+        onboard_parser.add_argument(
+            "--stable-only", action="store_true", help="仅安装 Certified 和 Compatible 级别的宿主"
+        )
+        onboard_parser.add_argument("--detail", action="store_true", help="显示详细落点与逐项步骤")
+
+        # doctor 命令 - 宿主接入诊断
+        doctor_parser = subparsers.add_parser(
+            "doctor",
+            help="接入状态诊断",
+            description="诊断当前项目在各宿主 AI Coding 工具中的集成、Skill、/super-dev 命令映射状态",
+        )
+        doctor_parser.add_argument(
+            "--host",
+            choices=SUPPORTED_HOST_TOOLS,
+            type=normalize_host_tool_id,
+            help="仅诊断指定宿主（默认诊断全部）",
+        )
+        doctor_parser.add_argument("--all", action="store_true", help="诊断全部宿主工具")
+        doctor_parser.add_argument(
+            "--auto", action="store_true", help="自动探测本机已安装宿主，仅诊断检测到的宿主"
+        )
+        doctor_parser.add_argument(
+            "--skill-name",
+            default="super-dev-core",
+            help="需要校验的 Skill 名称（默认: super-dev-core）",
+        )
+        doctor_parser.add_argument(
+            "--skip-integrate", action="store_true", help="跳过集成规则文件检查"
+        )
+        doctor_parser.add_argument("--skip-skill", action="store_true", help="跳过 Skill 检查")
+        doctor_parser.add_argument(
+            "--skip-slash", action="store_true", help="跳过 /super-dev 命令映射检查"
+        )
+        doctor_parser.add_argument("--json", action="store_true", help="输出 JSON 诊断结果")
+        doctor_parser.add_argument(
+            "--repair", action="store_true", help="自动修复缺失项（集成规则 / Skill / slash 映射）"
+        )
+        doctor_parser.add_argument(
+            "--force", action="store_true", help="修复时覆盖已有文件并重装 Skill"
+        )
+        doctor_parser.add_argument(
+            "--detail", action="store_true", help="显示详细诊断、路径与逐项建议"
+        )
+
+        # setup 命令 - 非技术用户一步接入
+        setup_parser = subparsers.add_parser(
+            "setup",
+            help="一步接入安装",
+            description="一步完成宿主接入（规则 + Skill + /super-dev）并执行诊断",
+        )
+        setup_parser.add_argument(
+            "--host",
+            choices=SUPPORTED_HOST_TOOLS,
+            type=normalize_host_tool_id,
+            help="宿主工具（不填默认全部）",
+        )
+        setup_parser.add_argument("--all", action="store_true", help="接入全部宿主工具")
+        setup_parser.add_argument(
+            "--auto", action="store_true", help="自动探测本机已安装宿主，仅对检测到的宿主执行接入"
+        )
+        setup_parser.add_argument(
+            "--skill-name",
+            default="super-dev-core",
+            help="安装后的 Skill 名称（默认: super-dev-core）",
+        )
+        setup_parser.add_argument("--skip-integrate", action="store_true", help="跳过规则文件集成")
+        setup_parser.add_argument("--skip-skill", action="store_true", help="跳过内置 Skill 安装")
+        setup_parser.add_argument(
+            "--skip-slash", action="store_true", help="跳过 /super-dev 命令映射文件生成"
+        )
+        setup_parser.add_argument("--skip-doctor", action="store_true", help="跳过接入诊断")
+        setup_parser.add_argument("--force", action="store_true", help="覆盖已存在文件并重装 Skill")
+        setup_parser.add_argument("--detail", action="store_true", help="显示详细接入与诊断信息")
+        setup_parser.add_argument(
+            "--yes", action="store_true", help="非交互模式（未指定 --host 时默认等价 --all）"
+        )
+
+        # install 命令 - 面向 PyPI 用户的一键安装入口
+        install_parser = subparsers.add_parser(
+            "install",
+            help="安装向导（宿主多选）",
+            description="在终端内选择要接入的 AI Coding 宿主并完成接入安装",
+        )
+        install_parser.add_argument(
+            "--host",
+            choices=SUPPORTED_HOST_TOOLS,
+            type=normalize_host_tool_id,
+            help="宿主工具（指定后只安装该宿主）",
+        )
+        install_parser.add_argument("--all", action="store_true", help="安装全部宿主工具")
+        install_parser.add_argument(
+            "--auto", action="store_true", help="自动探测本机已安装宿主并安装"
+        )
+        install_parser.add_argument(
+            "--skill-name",
+            default="super-dev-core",
+            help="安装后的 Skill 名称（默认: super-dev-core）",
+        )
+        install_parser.add_argument(
+            "--no-skill", action="store_true", help="只安装规则与 /super-dev 映射，不安装 skill"
+        )
+        install_parser.add_argument(
+            "--skip-integrate", action="store_true", help="跳过规则文件集成"
+        )
+        install_parser.add_argument(
+            "--skip-slash", action="store_true", help="跳过 /super-dev 命令映射文件生成"
+        )
+        install_parser.add_argument("--skip-doctor", action="store_true", help="跳过安装后诊断")
+        install_parser.add_argument(
+            "--force", action="store_true", help="覆盖已存在文件并重装 Skill"
+        )
+        install_parser.add_argument(
+            "--yes", action="store_true", help="非交互模式（未指定 --host 时默认等价 --all）"
+        )
+
+        start_parser = subparsers.add_parser(
+            "start",
+            help="非技术用户起步入口",
+            description="自动选择合适宿主、完成接入，并输出可直接复制的试用步骤",
+        )
+        start_parser.add_argument(
+            "--idea", help="你的需求描述（可选，提供后会生成宿主内可直接使用的触发语句）"
+        )
+        start_parser.add_argument(
+            "--host",
+            choices=SUPPORTED_HOST_TOOLS,
+            type=normalize_host_tool_id,
+            help="指定宿主；默认自动检测并选择最合适的宿主",
+        )
+        start_parser.add_argument(
+            "--skip-onboard",
+            action="store_true",
+            help="只输出起步步骤，不自动写入规则、Skill 与命令映射",
+        )
+        start_parser.add_argument(
+            "--no-save-profile", action="store_true", help="不写入 super-dev.yaml 的宿主画像"
+        )
+        start_parser.add_argument(
+            "--force", action="store_true", help="覆盖已存在的规则、Skill 或命令映射"
+        )
+        start_parser.add_argument("--json", action="store_true", help="以 JSON 输出起步说明")
+
+        # detect 命令 - 宿主自动探测与兼容性报告
+        detect_parser = subparsers.add_parser(
+            "detect",
+            help="宿主探测与兼容性报告",
+            description="自动探测本机可用宿主并输出接入兼容性评分",
+        )
+        detect_parser.add_argument(
+            "--host",
+            choices=SUPPORTED_HOST_TOOLS,
+            type=normalize_host_tool_id,
+            help="仅分析指定宿主",
+        )
+        detect_parser.add_argument(
+            "--all", action="store_true", help="分析全部宿主（默认仅分析自动探测到的宿主）"
+        )
+        detect_parser.add_argument(
+            "--auto", action="store_true", help="显式启用自动探测模式（默认行为）"
+        )
+        detect_parser.add_argument(
+            "--skill-name",
+            default="super-dev-core",
+            help="用于兼容性评分的 Skill 名称（默认: super-dev-core）",
+        )
+        detect_parser.add_argument(
+            "--skip-integrate", action="store_true", help="评分时跳过集成规则文件检查"
+        )
+        detect_parser.add_argument(
+            "--skip-skill", action="store_true", help="评分时跳过 Skill 检查"
+        )
+        detect_parser.add_argument(
+            "--skip-slash", action="store_true", help="评分时跳过 /super-dev 命令映射检查"
+        )
+        detect_parser.add_argument("--json", action="store_true", help="输出 JSON 结果")
+        detect_parser.add_argument(
+            "--no-save", action="store_true", help="不写入 output/host-compatibility 报告文件"
+        )
+        detect_parser.add_argument(
+            "--save-profile",
+            action="store_true",
+            help="将本次 selected_targets 保存到 super-dev.yaml 的 host_profile_targets，并启用 host_profile_enforce_selected",
+        )
+
+        update_parser = subparsers.add_parser(
+            "update",
+            help="升级到最新版本",
+            description="检查 PyPI 最新版本并使用 pip 或 uv 升级当前 super-dev",
+        )
+        update_parser.add_argument(
+            "--check", action="store_true", help="只检查最新版本，不执行升级"
+        )
+        update_parser.add_argument(
+            "--method", choices=["auto", "pip", "uv"], default="auto", help="升级方式（默认: auto）"
+        )
+
+        clean_parser = subparsers.add_parser(
+            "clean",
+            help="清理历史产物文件",
+            description="清理 output/ 目录中的历史产物文件，保留最近一次运行的结果",
+        )
+        clean_parser.add_argument(
+            "--all", action="store_true", help="删除 output/ 目录下的所有产物文件"
+        )
+        clean_parser.add_argument(
+            "--keep", type=int, default=1, help="保留最近 N 次运行的产物（默认: 1）"
+        )
+        clean_parser.add_argument(
+            "--dry-run", action="store_true", help="只显示将要删除的文件，不实际删除"
+        )
+
+        review_parser = subparsers.add_parser(
+            "review", help="管理文档确认等评审状态", description="记录或查看三文档确认状态"
+        )
+        review_subparsers = review_parser.add_subparsers(dest="review_command")
+
+        review_docs_parser = review_subparsers.add_parser("docs", help="查看或更新三文档确认状态")
+        review_docs_parser.add_argument(
+            "--status",
+            choices=["pending_review", "revision_requested", "confirmed"],
+            help="要写入的三文档确认状态；不传则仅查看当前状态",
+        )
+        review_docs_parser.add_argument("--comment", default="", help="确认意见或修改要求")
+        review_docs_parser.add_argument("--run-id", default="", help="关联的运行 ID（可选）")
+        review_docs_parser.add_argument("--actor", default="user", help="记录操作者（默认: user）")
+        review_docs_parser.add_argument("--json", action="store_true", help="以 JSON 格式输出")
+
+        review_ui_parser = review_subparsers.add_parser("ui", help="查看或更新 UI 改版状态")
+        review_ui_parser.add_argument(
+            "--status",
+            choices=["pending_review", "revision_requested", "confirmed"],
+            help="要写入的 UI 改版状态；不传则仅查看当前状态",
+        )
+        review_ui_parser.add_argument("--comment", default="", help="UI 改版意见或确认说明")
+        review_ui_parser.add_argument("--run-id", default="", help="关联的运行 ID（可选）")
+        review_ui_parser.add_argument("--actor", default="user", help="记录操作者（默认: user）")
+        review_ui_parser.add_argument("--json", action="store_true", help="以 JSON 格式输出")
+
+        review_preview_parser = review_subparsers.add_parser(
+            "preview", help="查看或更新前端预览确认状态"
+        )
+        review_preview_parser.add_argument(
+            "--status",
+            choices=["pending_review", "revision_requested", "confirmed"],
+            help="要写入的预览确认状态；不传则仅查看当前状态",
+        )
+        review_preview_parser.add_argument("--comment", default="", help="预览确认意见或修改要求")
+        review_preview_parser.add_argument("--run-id", default="", help="关联的运行 ID（可选）")
+        review_preview_parser.add_argument(
+            "--actor", default="user", help="记录操作者（默认: user）"
+        )
+        review_preview_parser.add_argument("--json", action="store_true", help="以 JSON 格式输出")
+
+        review_architecture_parser = review_subparsers.add_parser(
+            "architecture", help="查看或更新架构返工状态"
+        )
+        review_architecture_parser.add_argument(
+            "--status",
+            choices=["pending_review", "revision_requested", "confirmed"],
+            help="要写入的架构返工状态；不传则仅查看当前状态",
+        )
+        review_architecture_parser.add_argument(
+            "--comment", default="", help="架构返工意见或确认说明"
+        )
+        review_architecture_parser.add_argument(
+            "--run-id", default="", help="关联的运行 ID（可选）"
+        )
+        review_architecture_parser.add_argument(
+            "--actor", default="user", help="记录操作者（默认: user）"
+        )
+        review_architecture_parser.add_argument(
+            "--json", action="store_true", help="以 JSON 格式输出"
+        )
+
+        review_quality_parser = review_subparsers.add_parser(
+            "quality", help="查看或更新质量返工状态"
+        )
+        review_quality_parser.add_argument(
+            "--status",
+            choices=["pending_review", "revision_requested", "confirmed"],
+            help="要写入的质量返工状态；不传则仅查看当前状态",
+        )
+        review_quality_parser.add_argument("--comment", default="", help="质量返工意见或确认说明")
+        review_quality_parser.add_argument("--run-id", default="", help="关联的运行 ID（可选）")
+        review_quality_parser.add_argument(
+            "--actor", default="user", help="记录操作者（默认: user）"
+        )
+        review_quality_parser.add_argument("--json", action="store_true", help="以 JSON 格式输出")
+
+        release_parser = subparsers.add_parser(
+            "release",
+            help="发布收尾与就绪度检查",
+            description="检查当前仓库距离对外发布还剩哪些关键缺口",
+        )
+        release_subparsers = release_parser.add_subparsers(dest="release_command")
+
+        release_readiness_parser = release_subparsers.add_parser("readiness", help="发布就绪度评估")
+        release_readiness_parser.add_argument(
+            "--verify-tests",
+            action="store_true",
+            help="执行 pytest -q，并把测试结果纳入发布就绪度评分",
+        )
+        release_readiness_parser.add_argument(
+            "--json", action="store_true", help="以 JSON 输出结果"
+        )
+        release_proof_pack_parser = release_subparsers.add_parser(
+            "proof-pack", help="生成交付证据包摘要"
+        )
+        release_proof_pack_parser.add_argument(
+            "--verify-tests",
+            action="store_true",
+            help="执行 release readiness 时纳入 pytest -q 结果",
+        )
+        release_proof_pack_parser.add_argument(
+            "--json", action="store_true", help="以 JSON 输出结果"
+        )
+
+        # create 命令 - 一键创建项目
+        create_parser = subparsers.add_parser(
+            "create",
+            help="一键创建项目 (从想法到规范)",
+            description="从一句话描述自动生成 PRD、架构、UI/UX 文档并创建 Spec",
+        )
+        create_parser.add_argument("description", help="功能描述 (如 '用户认证系统')")
+        create_parser.add_argument(
+            "--mode",
+            choices=["feature", "bugfix"],
+            default="feature",
+            help="请求模式（默认 feature；bugfix 会生成轻量补丁文档）",
+        )
+        create_parser.add_argument(
+            "-p", "--platform", choices=SUPPORTED_PLATFORMS, default="web", help="目标平台"
+        )
+        create_parser.add_argument(
+            "-f",
+            "--frontend",
+            choices=SUPPORTED_PIPELINE_FRONTENDS,
+            default="react",
+            help="前端框架",
+        )
+        create_parser.add_argument(
+            "-b", "--backend", choices=SUPPORTED_PIPELINE_BACKENDS, default="node", help="后端框架"
+        )
+        create_parser.add_argument(
+            "-d", "--domain", choices=SUPPORTED_DOMAINS, default="", help="业务领域"
+        )
+        create_parser.add_argument("--name", help="项目名称 (默认根据描述生成)")
+        create_parser.add_argument(
+            "--skip-docs", action="store_true", help="跳过文档生成，只创建 Spec"
+        )
+
+        # wizard 命令 - 零门槛向导
+        wizard_parser = subparsers.add_parser(
+            "wizard", help="零门槛向导模式", description="通过向导收集业务需求并自动执行完整流水线"
+        )
+        wizard_parser.add_argument("--idea", help="需求描述（提供后跳过交互输入）")
+        wizard_parser.add_argument("--name", help="项目名称 (可选)")
+        wizard_parser.add_argument(
+            "-p", "--platform", choices=SUPPORTED_PLATFORMS, help="目标平台（可选）"
+        )
+        wizard_parser.add_argument(
+            "-f", "--frontend", choices=SUPPORTED_PIPELINE_FRONTENDS, help="前端框架（可选）"
+        )
+        wizard_parser.add_argument(
+            "-b", "--backend", choices=SUPPORTED_PIPELINE_BACKENDS, help="后端框架（可选）"
+        )
+        wizard_parser.add_argument(
+            "-d", "--domain", choices=SUPPORTED_DOMAINS, help="业务领域（可选）"
+        )
+        wizard_parser.add_argument("--cicd", choices=SUPPORTED_CICD, help="CI/CD 平台（可选）")
+        wizard_parser.add_argument(
+            "--offline", action="store_true", help="离线模式（禁用联网检索）"
+        )
+        wizard_parser.add_argument(
+            "--quick", action="store_true", help="快速模式：使用默认值（需配合 --idea）"
+        )
+
+        # design 命令 - 设计智能引擎
+        design_parser = subparsers.add_parser(
+            "design",
+            help="设计智能引擎",
+            description="搜索设计资产、生成设计系统、创建 design tokens",
+        )
+        design_subparsers = design_parser.add_subparsers(
+            dest="design_command",
+            title="设计命令",
+            description="使用 'super-dev design <command> -h' 查看帮助",
+        )
+
+        # design search
+        design_search_parser = design_subparsers.add_parser(
+            "search", help="搜索设计资产", description="搜索 UI 风格、配色、字体、组件等设计资产"
+        )
+        design_search_parser.add_argument("query", help="搜索关键词")
+        design_search_parser.add_argument(
+            "-d",
+            "--domain",
+            choices=[
+                "style",
+                "color",
+                "typography",
+                "component",
+                "layout",
+                "animation",
+                "ux",
+                "chart",
+                "product",
+            ],
+            help="搜索领域 (默认自动检测)",
+        )
+        design_search_parser.add_argument(
+            "-n", "--max-results", type=int, default=5, help="最大结果数 (默认: 5)"
+        )
+
+        # design generate
+        design_generate_parser = design_subparsers.add_parser(
+            "generate", help="生成完整设计系统", description="基于产品类型和行业生成完整的设计系统"
+        )
+        design_generate_parser.add_argument(
+            "--product", required=True, help="产品类型 (SaaS, E-commerce, Portfolio, Dashboard)"
+        )
+        design_generate_parser.add_argument(
+            "--industry", required=True, help="行业 (Fintech, Healthcare, Education, Gaming)"
+        )
+        design_generate_parser.add_argument("--keywords", nargs="+", help="关键词列表")
+        design_generate_parser.add_argument(
+            "-p",
+            "--platform",
+            choices=["web", "mobile", "desktop"],
+            default="web",
+            help="目标平台 (默认: web)",
+        )
+        design_generate_parser.add_argument("-a", "--aesthetic", help="美学方向 (可选)")
+        design_generate_parser.add_argument(
+            "-o", "--output", default="output/design", help="输出目录 (默认: output/design)"
+        )
+
+        # design tokens
+        design_tokens_parser = design_subparsers.add_parser(
+            "tokens",
+            help="生成 design tokens",
+            description="生成 CSS 变量、Tailwind 配置等 design tokens",
+        )
+        design_tokens_parser.add_argument(
+            "--primary", required=True, help="主色 (hex 值，如 #3B82F6)"
+        )
+        design_tokens_parser.add_argument(
+            "--type",
+            choices=["monochromatic", "analogous", "complementary", "triadic"],
+            default="monochromatic",
+            help="调色板类型 (默认: monochromatic)",
+        )
+        design_tokens_parser.add_argument(
+            "--format",
+            choices=["css", "json", "tailwind"],
+            default="css",
+            help="输出格式 (默认: css)",
+        )
+        design_tokens_parser.add_argument("-o", "--output", help="输出文件路径")
+
+        # design landing - Landing 页面模式
+        design_landing_parser = design_subparsers.add_parser(
+            "landing", help="Landing 页面模式生成", description="搜索和推荐 Landing 页面布局模式"
+        )
+        design_landing_parser.add_argument("query", nargs="?", help="搜索关键词（可选）")
+        design_landing_parser.add_argument(
+            "--product-type", help="产品类型 (SaaS, E-commerce, Mobile, etc.)"
+        )
+        design_landing_parser.add_argument("--goal", help="目标 (signup, purchase, demo, etc.)")
+        design_landing_parser.add_argument("--audience", help="受众 (B2B, B2C, Enterprise, etc.)")
+        design_landing_parser.add_argument(
+            "-n", "--max-results", type=int, default=5, help="最大结果数 (默认: 5)"
+        )
+        design_landing_parser.add_argument("--list", action="store_true", help="列出所有可用模式")
+
+        # design chart - 图表类型推荐
+        design_chart_parser = design_subparsers.add_parser(
+            "chart", help="图表类型推荐", description="根据数据类型推荐最佳图表类型"
+        )
+        design_chart_parser.add_argument(
+            "data_description", help="数据描述（如 'time series sales data'）"
+        )
+        design_chart_parser.add_argument(
+            "-f",
+            "--framework",
+            choices=["react", "vue", "svelte", "angular", "next", "vanilla"],
+            default="react",
+            help="前端框架 (默认: react)",
+        )
+        design_chart_parser.add_argument(
+            "-n", "--max-results", type=int, default=3, help="最大结果数 (默认: 3)"
+        )
+        design_chart_parser.add_argument("--list", action="store_true", help="列出所有图表类型")
+
+        # design ux - UX 指南查询
+        design_ux_parser = design_subparsers.add_parser(
+            "ux", help="UX 指南查询", description="查询 UX 最佳实践和反模式"
+        )
+        design_ux_parser.add_argument("query", help="搜索查询")
+        design_ux_parser.add_argument(
+            "-d", "--domain", help="领域过滤 (Animation, A11y, Performance, etc.)"
+        )
+        design_ux_parser.add_argument(
+            "-n", "--max-results", type=int, default=5, help="最大结果数 (默认: 5)"
+        )
+        design_ux_parser.add_argument(
+            "--quick-wins", action="store_true", help="显示快速见效的改进建议"
+        )
+        design_ux_parser.add_argument("--checklist", action="store_true", help="显示 UX 检查清单")
+        design_ux_parser.add_argument("--list-domains", action="store_true", help="列出所有领域")
+
+        # design stack - 技术栈最佳实践
+        design_stack_parser = design_subparsers.add_parser(
+            "stack", help="技术栈最佳实践", description="查询技术栈最佳实践、性能优化和设计模式"
+        )
+        design_stack_parser.add_argument(
+            "stack", help="技术栈名称 (Next.js, React, Vue, SvelteKit, etc.)"
+        )
+        design_stack_parser.add_argument("query", nargs="?", help="搜索查询（可选）")
+        design_stack_parser.add_argument(
+            "-c", "--category", help="类别过滤 (architecture, performance, state_management, etc.)"
+        )
+        design_stack_parser.add_argument("--patterns", action="store_true", help="显示设计模式")
+        design_stack_parser.add_argument(
+            "--performance", action="store_true", help="显示性能优化建议"
+        )
+        design_stack_parser.add_argument(
+            "--quick-wins", action="store_true", help="显示快速见效的性能优化"
+        )
+        design_stack_parser.add_argument(
+            "-n", "--max-results", type=int, default=5, help="最大结果数 (默认: 5)"
+        )
+        design_stack_parser.add_argument("--list", action="store_true", help="列出所有支持的技术栈")
+
+        # design codegen - 代码片段生成
+        design_codegen_parser = design_subparsers.add_parser(
+            "codegen", help="代码片段生成", description="生成多框架的 UI 组件代码片段"
+        )
+        design_codegen_parser.add_argument("component", help="组件名称 (button, card, input, etc.)")
+        design_codegen_parser.add_argument(
+            "-f",
+            "--framework",
+            choices=["react", "nextjs", "vue", "svelte", "html", "tailwind"],
+            default="react",
+            help="目标框架 (默认: react)",
+        )
+        design_codegen_parser.add_argument("-o", "--output", help="输出文件路径")
+        design_codegen_parser.add_argument("--list", action="store_true", help="列出所有可用组件")
+        design_codegen_parser.add_argument("--search", help="搜索组件")
+
+        # spec 命令 - Spec-Driven Development
+        spec_parser = subparsers.add_parser(
+            "spec", help="规范驱动开发 (SDD)", description="管理规范和变更提案"
+        )
+        spec_subparsers = spec_parser.add_subparsers(
+            dest="spec_action",
+            title="SDD 命令",
+            description="使用 'super-dev spec <command> -h' 查看帮助",
+        )
+
+        # spec init
+        spec_subparsers.add_parser("init", help="初始化 SDD 目录结构")
+
+        # spec list
+        spec_list_parser = spec_subparsers.add_parser("list", help="列出所有变更")
+        spec_list_parser.add_argument(
+            "--status",
+            choices=["draft", "proposed", "approved", "in_progress", "completed", "archived"],
+            help="按状态过滤",
+        )
+
+        # spec show
+        spec_show_parser = spec_subparsers.add_parser("show", help="显示变更详情")
+        spec_show_parser.add_argument("change_id", help="变更 ID")
+
+        # spec propose
+        spec_propose_parser = spec_subparsers.add_parser("propose", help="创建变更提案")
+        spec_propose_parser.add_argument("change_id", help="变更 ID (如 add-user-auth)")
+        spec_propose_parser.add_argument("--title", required=True, help="变更标题")
+        spec_propose_parser.add_argument("--description", required=True, help="变更描述")
+        spec_propose_parser.add_argument("--motivation", help="变更动机/背景")
+        spec_propose_parser.add_argument("--impact", help="影响范围")
+        spec_propose_parser.add_argument(
+            "--no-scaffold",
+            action="store_true",
+            help="仅创建 proposal，不生成 spec/plan/tasks/checklist 模板",
+        )
+
+        # spec add-req
+        spec_add_req_parser = spec_subparsers.add_parser("add-req", help="向变更添加需求")
+        spec_add_req_parser.add_argument("change_id", help="变更 ID")
+        spec_add_req_parser.add_argument("spec_name", help="规范名称 (如 auth, user-profile)")
+        spec_add_req_parser.add_argument("req_name", help="需求名称")
+        spec_add_req_parser.add_argument("description", help="需求描述")
+
+        spec_scaffold_parser = spec_subparsers.add_parser(
+            "scaffold", help="为变更生成 spec/plan/tasks/checklist 四件套"
+        )
+        spec_scaffold_parser.add_argument("change_id", help="变更 ID")
+        spec_scaffold_parser.add_argument("--force", action="store_true", help="强制覆盖已存在文件")
+
+        spec_quality_parser = spec_subparsers.add_parser("quality", help="评估 Spec 完整度与质量分")
+        spec_quality_parser.add_argument("change_id", help="变更 ID")
+        spec_quality_parser.add_argument("--json", action="store_true", help="以 JSON 格式输出")
+
+        # spec archive
+        spec_archive_parser = spec_subparsers.add_parser("archive", help="归档已完成的变更")
+        spec_archive_parser.add_argument("change_id", help="变更 ID")
+        spec_archive_parser.add_argument("-y", "--yes", action="store_true", help="跳过确认")
+
+        # spec validate
+        spec_validate_parser = spec_subparsers.add_parser("validate", help="验证规格格式和结构")
+        spec_validate_parser.add_argument(
+            "change_id", nargs="?", help="变更 ID (留空则验证所有变更)"
+        )
+        spec_validate_parser.add_argument(
+            "-v", "--verbose", action="store_true", help="显示详细信息"
+        )
+
+        # spec view
+        spec_view_parser = spec_subparsers.add_parser(
+            "view", help="交互式仪表板 - 显示所有规范和变更"
+        )
+        spec_view_parser.add_argument("--refresh", action="store_true", help="强制刷新数据")
+
+        # spec trace
+        spec_trace_parser = spec_subparsers.add_parser("trace", help="生成需求追溯矩阵")
+        spec_trace_parser.add_argument("change_id", help="变更 ID")
+        spec_trace_parser.add_argument("--json", action="store_true", help="以 JSON 格式输出")
+        spec_trace_parser.add_argument(
+            "--save",
+            action="store_true",
+            help="保存追溯矩阵到 .super-dev/changes/<id>/traceability.md",
+        )
+
+        # spec consistency
+        spec_consistency_parser = spec_subparsers.add_parser(
+            "consistency", help="检测 Spec-Code 一致性（防止 spec-code 漂移）"
+        )
+        spec_consistency_parser.add_argument("change_id", help="变更 ID")
+        spec_consistency_parser.add_argument("--json", action="store_true", help="以 JSON 格式输出")
+        spec_consistency_parser.add_argument(
+            "--save",
+            action="store_true",
+            help="保存报告到 .super-dev/changes/<id>/consistency.md",
+        )
+
+        # spec acceptance
+        spec_acceptance_parser = spec_subparsers.add_parser("acceptance", help="生成验收检查清单")
+        spec_acceptance_parser.add_argument("change_id", help="变更 ID")
+        spec_acceptance_parser.add_argument(
+            "--save",
+            action="store_true",
+            help="保存验收清单到 .super-dev/changes/<id>/acceptance.md",
+        )
+
+        # governance 命令 - 治理总报告
+        governance_parser = subparsers.add_parser(
+            "governance", help="治理报告与追溯总览", description="生成跨变更的治理总报告"
+        )
+        governance_subparsers = governance_parser.add_subparsers(
+            dest="governance_action",
+            title="治理命令",
+            description="使用 'super-dev governance <command> -h' 查看帮助",
+        )
+        governance_report_parser = governance_subparsers.add_parser("report", help="生成治理总报告")
+        governance_report_parser.add_argument(
+            "--json", action="store_true", help="以 JSON 格式输出"
+        )
+        governance_report_parser.add_argument(
+            "--save", action="store_true", help="保存报告到 output/governance-report.md"
+        )
+
+        # knowledge 命令 - 知识演化与质量追踪
+        knowledge_parser = subparsers.add_parser(
+            "knowledge",
+            help="知识演化与质量追踪",
+            description="追踪知识使用效果，数据驱动优化知识库",
+        )
+        knowledge_subparsers = knowledge_parser.add_subparsers(
+            dest="knowledge_action",
+            title="知识命令",
+            description="使用 'super-dev knowledge <command> -h' 查看帮助",
+        )
+        knowledge_stats_parser = knowledge_subparsers.add_parser(
+            "stats", help="查看知识文件使用统计"
+        )
+        knowledge_stats_parser.add_argument(
+            "--json", action="store_true", help="以 JSON 格式输出"
+        )
+        knowledge_stats_parser.add_argument(
+            "--top", type=int, default=10, help="显示 Top N 最有效的知识文件（默认 10）"
+        )
+        knowledge_stats_parser.add_argument(
+            "--bottom", type=int, default=10, help="显示 Bottom N 最无效的知识文件（默认 10）"
+        )
+        knowledge_evolve_parser = knowledge_subparsers.add_parser(
+            "evolve", help="生成知识演化报告与改进建议"
+        )
+        knowledge_evolve_parser.add_argument(
+            "--json", action="store_true", help="以 JSON 格式输出"
+        )
+        knowledge_evolve_parser.add_argument(
+            "--save", action="store_true", help="保存报告到 output/knowledge-evolution-report.md"
+        )
+        knowledge_weights_parser = knowledge_subparsers.add_parser(
+            "weights", help="查看基于历史数据的知识权重建议"
+        )
+        knowledge_weights_parser.add_argument(
+            "--json", action="store_true", help="以 JSON 格式输出"
+        )
+
+        # task 命令 - 独立执行/查看 Spec 任务闭环
+        task_parser = subparsers.add_parser(
+            "task",
+            help="Spec 任务闭环执行",
+            description="执行或查看 `.super-dev/changes/*/tasks.md` 的任务状态",
+        )
+        task_parser.add_argument("action", choices=["run", "status", "list"], help="任务操作类型")
+        task_parser.add_argument("change_id", nargs="?", help="变更 ID（run/status 必填）")
+        task_parser.add_argument(
+            "-p", "--platform", choices=SUPPORTED_PLATFORMS, help="目标平台（可选，默认取项目配置）"
+        )
+        task_parser.add_argument(
+            "-f",
+            "--frontend",
+            choices=SUPPORTED_PIPELINE_FRONTENDS,
+            help="前端框架（可选，默认取项目配置）",
+        )
+        task_parser.add_argument(
+            "-b",
+            "--backend",
+            choices=SUPPORTED_PIPELINE_BACKENDS,
+            help="后端框架（可选，默认取项目配置）",
+        )
+        task_parser.add_argument(
+            "-d", "--domain", choices=SUPPORTED_DOMAINS, help="业务领域（可选，默认取项目配置）"
+        )
+        task_parser.add_argument(
+            "--project-name", help="任务执行报告中的项目名（默认取配置名或 change_id）"
+        )
+        task_parser.add_argument(
+            "--max-retries", type=int, default=1, help="失败自动修复重试次数（默认: 1）"
+        )
+
+        # pipeline 命令 - 完整流水线
+        pipeline_parser = subparsers.add_parser(
+            "pipeline",
+            help="运行完整流水线 (从想法到部署)",
+            description="执行完整开发流水线：需求增强 → 文档 → 前端骨架 → Spec → 实现骨架 → 审查与门禁 → 交付配置",
+        )
+        pipeline_parser.add_argument("description", help="功能描述 (如 '用户认证系统')")
+        pipeline_parser.add_argument(
+            "--mode",
+            choices=["feature", "bugfix"],
+            default="feature",
+            help="请求模式（默认 feature；bugfix 会启用轻量缺陷修复路径）",
+        )
+        pipeline_parser.add_argument(
+            "-p", "--platform", choices=SUPPORTED_PLATFORMS, default="web", help="目标平台"
+        )
+        pipeline_parser.add_argument(
+            "-f",
+            "--frontend",
+            choices=SUPPORTED_PIPELINE_FRONTENDS,
+            default="react",
+            help="前端框架",
+        )
+        pipeline_parser.add_argument(
+            "-b", "--backend", choices=SUPPORTED_PIPELINE_BACKENDS, default="node", help="后端框架"
+        )
+        pipeline_parser.add_argument(
+            "-d", "--domain", choices=SUPPORTED_DOMAINS, default="", help="业务领域"
+        )
+        pipeline_parser.add_argument("--name", help="项目名称 (默认根据描述生成)")
+        pipeline_parser.add_argument(
+            "--cicd", choices=SUPPORTED_CICD, default="all", help="CI/CD 平台"
+        )
+        pipeline_parser.add_argument("--skip-redteam", action="store_true", help="跳过红队审查")
+        pipeline_parser.add_argument(
+            "--skip-scaffold", action="store_true", help="跳过前后端实现骨架生成"
+        )
+        pipeline_parser.add_argument(
+            "--skip-quality-gate", action="store_true", help="跳过质量门禁检查"
+        )
+        pipeline_parser.add_argument(
+            "--offline", action="store_true", help="离线模式（禁用联网检索）"
+        )
+        pipeline_parser.add_argument(
+            "--quality-threshold",
+            type=int,
+            default=None,
+            help="质量门禁阈值（可选；默认按场景自动判定）",
+        )
+        pipeline_parser.add_argument(
+            "--skip-rehearsal-verify",
+            action="store_true",
+            help="跳过发布演练验证（默认执行）",
+        )
+        pipeline_parser.add_argument(
+            "--resume",
+            action="store_true",
+            help="恢复模式：优先复用上次已完成阶段产物（含自动降级与审计报告）",
+        )
+
+        fix_parser = subparsers.add_parser(
+            "fix",
+            help="显式缺陷修复模式",
+            description="以轻量 bugfix 路径执行问题复现、补丁文档、修复与回归验证",
+        )
+        fix_parser.add_argument(
+            "description",
+            help="缺陷描述 (如 '修复登录接口 500 并补充回归验证')",
+        )
+        fix_parser.add_argument(
+            "-p", "--platform", choices=SUPPORTED_PLATFORMS, default="web", help="目标平台"
+        )
+        fix_parser.add_argument(
+            "-f",
+            "--frontend",
+            choices=SUPPORTED_PIPELINE_FRONTENDS,
+            default="react",
+            help="前端框架",
+        )
+        fix_parser.add_argument(
+            "-b", "--backend", choices=SUPPORTED_PIPELINE_BACKENDS, default="node", help="后端框架"
+        )
+        fix_parser.add_argument(
+            "-d", "--domain", choices=SUPPORTED_DOMAINS, default="", help="业务领域"
+        )
+        fix_parser.add_argument("--name", help="项目名称 (默认根据描述生成)")
+        fix_parser.add_argument("--cicd", choices=SUPPORTED_CICD, default="all", help="CI/CD 平台")
+        fix_parser.add_argument("--skip-redteam", action="store_true", help="跳过红队审查")
+        fix_parser.add_argument(
+            "--skip-scaffold", action="store_true", help="跳过前后端实现骨架生成"
+        )
+        fix_parser.add_argument("--skip-quality-gate", action="store_true", help="跳过质量门禁检查")
+        fix_parser.add_argument("--offline", action="store_true", help="离线模式（禁用联网检索）")
+        fix_parser.add_argument(
+            "--quality-threshold",
+            type=int,
+            default=None,
+            help="质量门禁阈值（可选；默认按场景自动判定）",
+        )
+        fix_parser.add_argument(
+            "--skip-rehearsal-verify",
+            action="store_true",
+            help="跳过发布演练验证（默认执行）",
+        )
+
+        # run 命令 - 运行控制（如失败恢复）
+        run_parser = subparsers.add_parser(
+            "run", help="运行控制", description="运行控制命令（恢复、状态、阶段回跳、阶段确认）"
+        )
+        run_parser.add_argument(
+            "stage_selector",
+            nargs="?",
+            help="快捷阶段入口（如 research/prd/architecture/uiux/frontend/backend/quality）",
+        )
+        run_parser.add_argument(
+            "--resume",
+            action="store_true",
+            help="恢复最近一次失败的 pipeline 运行",
+        )
+        run_parser.add_argument(
+            "--status",
+            action="store_true",
+            help="查看当前流程状态、阶段确认与推荐下一步",
+        )
+        run_parser.add_argument(
+            "--phase",
+            help="从指定阶段继续执行（如 docs/spec/frontend/backend/quality/delivery）",
+        )
+        run_parser.add_argument(
+            "--jump",
+            help="跳转到指定阶段并继续执行（会先展示影响面）",
+        )
+        run_parser.add_argument(
+            "--confirm",
+            dest="confirm_phase",
+            help="确认指定阶段（docs/ui/architecture/quality/frontend/backend/delivery）",
+        )
+        run_parser.add_argument(
+            "--comment",
+            default="",
+            help="阶段确认备注",
+        )
+        run_parser.add_argument(
+            "--actor",
+            default="cli-user",
+            help="阶段确认操作者",
+        )
+        run_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="状态输出使用 JSON 格式",
+        )
+
+        status_parser = subparsers.add_parser(
+            "status",
+            help="查看当前流程状态",
+            description="快捷别名，等同于 super-dev run --status",
+        )
+        status_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="状态输出使用 JSON 格式",
+        )
+
+        next_parser = subparsers.add_parser(
+            "next",
+            help="给出当前仓库唯一推荐下一步",
+            description="基于当前仓库的初始化状态、运行状态和交付证据，输出当前最应该执行的一步。",
+        )
+        next_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 输出推荐结果",
+        )
+
+        continue_parser = subparsers.add_parser(
+            "continue",
+            help="继续当前仓库的 Super Dev 流程",
+            description="比 next 更自然的继续入口，会直接告诉你当前步骤、下一步动作和宿主里第一句该发什么。",
+        )
+        continue_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 输出继续建议",
+        )
+
+        resume_parser = subparsers.add_parser(
+            "resume",
+            help="回到当前仓库的 Super Dev 流程",
+            description="面向真实恢复场景的直觉入口。适合下班关掉、重开电脑、第二天回来继续开发时使用。",
+        )
+        resume_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="以 JSON 输出恢复建议",
+        )
+
+        jump_parser = subparsers.add_parser(
+            "jump",
+            help="跳转到指定阶段",
+            description="快捷别名，等同于 super-dev run --jump <stage>",
+        )
+        jump_parser.add_argument(
+            "stage",
+            help="目标阶段（如 docs/frontend/backend/quality）",
+        )
+
+        confirm_parser = subparsers.add_parser(
+            "confirm",
+            help="确认指定阶段",
+            description="快捷别名，等同于 super-dev run --confirm <phase>",
+        )
+        confirm_parser.add_argument(
+            "phase",
+            help="需要确认的阶段（如 docs/preview/frontend/backend/quality）",
+        )
+        confirm_parser.add_argument(
+            "--comment",
+            default="",
+            help="阶段确认备注",
+        )
+        confirm_parser.add_argument(
+            "--actor",
+            default="cli-user",
+            help="阶段确认操作者",
+        )
+
+        policy_parser = subparsers.add_parser(
+            "policy", help="流水线治理策略", description="管理 Super Dev 的流水线策略（Policy DSL）"
+        )
+        policy_subparsers = policy_parser.add_subparsers(dest="action")
+        policy_subparsers.add_parser("show", help="显示当前策略")
+        policy_subparsers.add_parser("presets", help="显示可用策略预设")
+        policy_init_parser = policy_subparsers.add_parser("init", help="生成策略文件")
+        policy_init_parser.add_argument(
+            "--preset",
+            choices=["default", "balanced", "enterprise"],
+            default="default",
+            help="策略预设（默认 default）",
+        )
+        policy_init_parser.add_argument(
+            "--force",
+            action="store_true",
+            help="强制覆盖已有策略文件",
+        )
+
+        return parser

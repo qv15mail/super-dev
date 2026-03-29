@@ -19,7 +19,54 @@
 
 ## Version
 
-Current version: `2.1.5`
+Current version: `2.2.0`
+
+---
+
+## What's New in 2.2.0
+
+### Knowledge-Driven Governance
+
+The pipeline now tracks which knowledge files are referenced at every stage. A Knowledge Tracker records hits, generates a knowledge reference report, and enforces a configurable minimum coverage threshold. This closes the loop between the `knowledge/` directory and actual pipeline consumption.
+
+### Programmable Governance (Validation Rule Engine)
+
+A YAML-driven validation rule engine ships with 14 built-in rules and supports project-level custom rules via `.super-dev/rules/custom_rules.yaml`. Rules are pluggable into any pipeline stage, with configurable severity (error / warning) and a `fail_on_warning` switch.
+
+### Expert System Upgrade
+
+The expert roster has been expanded to 11 domain specialists (PRODUCT, PM, ARCHITECT, UI, UX, SECURITY, CODE, DBA, QA, DEVOPS, RCA). Each expert carries an objective definition, background story, thinking framework, and quality criteria. The generated AI prompts exceed 600 lines, ensuring professional baselines at every stage.
+
+### Performance Metrics
+
+A delivery-efficiency measurement system now tracks DORA four key metrics (Deployment Frequency, Lead Time for Changes, Change Failure Rate, Mean Time to Recovery) plus Rework Rate. Metrics can be exported as JSON for external dashboards.
+
+### ADR Generator
+
+Architecture Decision Records are automatically generated from the architecture configuration. The generator extracts technology choices and produces ADR documents in MADR, Nygard, or custom templates.
+
+### Prompt Template Versioning
+
+Prompt templates are now stored as versioned Markdown files under `super_dev/templates/`. Templates support semver, date, or hash versioning strategies so prompt evolution is traceable.
+
+### OpenClaw Native Plugin
+
+OpenClaw integrates via its native Plugin SDK with 13 registered tools. Users install via `openclaw plugins install @super-dev/openclaw-plugin` or the ClawHub Skill at `clawhub install super-dev`.
+
+### Governance CLI
+
+```bash
+super-dev governance status              # view governance capability status
+super-dev governance rules list          # list all validation rules (built-in + custom)
+super-dev governance rules validate      # run all validation rules against the current project
+super-dev governance knowledge-report    # generate knowledge reference report and coverage analysis
+super-dev governance adr generate        # generate ADR documents from architecture config
+super-dev governance adr list            # list generated ADRs
+super-dev governance metrics show        # show delivery efficiency metrics
+super-dev governance metrics export      # export metrics data as JSON
+super-dev governance templates list      # list prompt templates and versions
+super-dev governance templates show <id> # view a specific template
+```
 
 ---
 
@@ -52,12 +99,53 @@ Current version: `2.1.5`
 
 ## Quick Start
 
-Three commands cover every scenario:
+Start with these 5 entry points. The old direct requirement shortcut is still supported:
 
 ```bash
-# Greenfield (0 to 1): run the full pipeline from a requirement description
+# Onboarding wizard / existing-project next step
+super-dev
+
+# Legacy shortcut still supported: enter the full pipeline directly from a requirement
 super-dev "Build an online education platform"
 
+# Greenfield (0 to 1): let Super Dev choose the host and tell you the first sentence
+super-dev start --idea "Build an online education platform"
+
+# Return the next day / reopen the host: resume the current governed flow
+super-dev resume
+
+# Existing flow: continue the current governed flow instead of restarting normal chat
+super-dev continue
+
+# Unsure what to do next: ask the system for the single recommended action
+super-dev next
+```
+
+How it behaves:
+
+- If the current directory is not onboarded yet, bare `super-dev` opens the host onboarding flow.
+- If the current directory already has Super Dev context, bare `super-dev` routes to the current-flow resume path.
+- `super-dev "..."` still works as the direct full-pipeline shortcut when you already know you want Super Dev to start immediately.
+- `super-dev start --idea "..."` auto-detects hosts and returns the recommended host, trigger, restart hint, and first sentence to send.
+- `super-dev resume` is the best entry for real recovery scenarios: next day, after shutdown, after reopening your machine, or after restarting the host session.
+- `super-dev continue` / `super-dev next` tell you the current action, user-side next step, host-side first sentence, and machine-side next command.
+
+Real-world recovery guide:
+
+| Scenario | Do this first | Why |
+|----------|---------------|-----|
+| You stopped for the day and came back tomorrow | `super-dev resume` | Restores the current governed flow, host first sentence, and machine-side next step |
+| The host closed, the machine restarted, or the session dropped | `super-dev resume` | Regenerates the recovery card and points you back to `.super-dev/SESSION_BRIEF.md` |
+| You only want the single next recommended step | `super-dev next` | Shows the single recommended next action for the current repo state |
+| A machine-side pipeline command was interrupted | `super-dev run --resume` | Continues the machine-side pipeline from the interrupted checkpoint |
+| You are still inside a confirmation gate and want to keep revising docs/UI/architecture | `super-dev resume`, then keep speaking naturally | Keeps the conversation inside the current governed gate instead of falling back to normal chat |
+| You want to redo UI | Update `output/*-uiux.md`, then run `super-dev resume` | The UI source of truth must change first so implementation stays aligned |
+| You want to redo architecture | Update `output/*-architecture.md`, then run `super-dev resume` | The technical source of truth must change first so tasks and implementation realign |
+| You really want to leave the current flow | Explicitly say “cancel this flow” or “start a new flow” | Super Dev only exits the governed flow when you explicitly say so |
+
+When you already know where to continue, use the stage commands:
+
+```bash
 # Existing codebase (1 to N+1): analyze the current repo then join the pipeline
 super-dev init
 
@@ -88,19 +176,35 @@ Auxiliary commands:
 super-dev onboard             # interactive host onboarding
 super-dev onboard --dry-run   # preview changes without writing files
 super-dev onboard --stable-only  # onboard certified hosts only
-super-dev doctor              # diagnostics with certification grading
+super-dev detect              # auto-detect hosts and recommend the default host
+super-dev doctor              # diagnostics with certification grading, primary repair action, and next step
+```
+
+Delivery and governance commands:
+
+```bash
+super-dev integrate audit --auto --repair --force
+super-dev integrate validate --auto
+super-dev feature-checklist
+super-dev product-audit
+super-dev release proof-pack
+super-dev release readiness
+super-dev review preview --status confirmed --comment "Frontend preview approved"
+super-dev review architecture --status revision_requested --comment "Technical plan needs redesign"
+super-dev review quality --status revision_requested --comment "Quality gate failed and needs remediation"
 ```
 
 ---
 
 ## Core Features
 
-### 1. 10-Expert Agent Architecture
+### 1. 11-Expert Agent Architecture
 
-v2.1.1 introduces ten domain-expert agents. Each expert is automatically injected into AI prompts at the corresponding pipeline stage, constraining the host to professional-grade output:
+Super Dev currently ships with eleven domain-expert agents. Each expert is injected into prompts at the corresponding pipeline stage so the host stays constrained to professional-grade output:
 
 | Expert | Role | Injection Stages |
 |--------|------|-----------------|
+| PRODUCT | Product Lead | research, prd, quality, delivery |
 | PM | Product Manager | research, prd |
 | ARCHITECT | System Architect | architecture |
 | UI | Interface Designer | uiux, frontend |
@@ -125,9 +229,21 @@ A built-in design intelligence engine that directly constrains visual quality du
 - **12-item pre-delivery checklist**: A11y, responsive design, dark mode, loading states, empty states, error states, and more.
 - **10 industry customizations**: education, healthcare, e-commerce, fintech, SaaS, social, content, enterprise, utilities, and gaming.
 
-**Review capability:**
+The UI system is no longer only advisory. It is frozen into actual artifacts:
 
-- `super-dev quality --type ui-review` performs structure-level visual review against `preview.html` or `output/frontend/index.html`.
+- `output/*-uiux.md`
+- `output/*-ui-contract.json`
+- `output/frontend/design-tokens.css`
+- `output/*-ui-contract-alignment.md`
+- `output/*-ui-contract-alignment.json`
+
+Prompts, frontend scaffolds, implementation scaffolds, UI review, frontend runtime, quality gate, proof-pack, and release readiness all consume that same UI contract.
+
+Key review commands:
+
+- `super-dev quality --type ui-review`
+- `super-dev integrate validate --target <host_id>`
+- `super-dev release proof-pack`
 
 ### 3. Pipeline Orchestration Engine
 
@@ -138,6 +254,9 @@ A built-in design intelligence engine that directly constrains visual quality du
 - **Stage jumping**: `super-dev run <stage>` allows jumping to any stage at any time.
 - **UI revision loop**: when the frontend needs another pass, a formal revision loop can be triggered.
 - **Dual-mode delivery**: works for both greenfield (0-1) and iterative (1-N+1) projects.
+- **Continuation routing**: `super-dev resume`, `super-dev continue`, `super-dev next`, `start --json`, and `doctor --json` all share the same workflow state and action card semantics.
+- **Session recovery card**: `.super-dev/SESSION_BRIEF.md` and `.super-dev/workflow-state.json` persist the current action, host first sentence, machine action, and continuity rules.
+- **Rework-first state handling**: docs confirmation, preview confirmation, UI redesign, architecture rework, and quality remediation all stay inside one governed state machine.
 
 ### 4. Document Generation Engine
 
@@ -159,14 +278,19 @@ The host expands documents based on actual project needs. Final document scope d
 - Fix command suggestions (detected issues produce actionable repair instructions).
 - Policy governance (`default` / `balanced` / `enterprise` presets).
 - Spec quality scoring and release-readiness panel.
+- UI contract execution checks (`ui-contract.json`, `design-tokens.css`, frontend runtime, and UI alignment evidence must stay consistent).
 
 ### 6. Host Onboarding Governance
 
 - 20 hosts with unified onboarding (9 CLI + 11 IDE).
+- OpenClaw is handled separately as a native plugin host via `openclaw plugins install @super-dev/openclaw-plugin`.
 - Auto-generates host rule files, slash command mappings, and Skill directories.
 - Host capability boundary modeling: Certified / Compatible / Experimental three-tier certification.
-- `detect` / `onboard` / `doctor` form a closed onboarding loop.
+- `detect` / `onboard` / `doctor` / `setup` / `install` / `start` form a closed onboarding loop.
 - `--dry-run` preview mode and `--stable-only` stable-only mode.
+- `doctor`, `detect`, and `start` now emit decision cards: recommended host, recommendation reason, first action, folded candidate list, and path-override hints.
+- Supports Windows registry hits, shim directories, common install paths, and `SUPER_DEV_HOST_PATH_<HOST>` explicit path overrides.
+- If you explicitly choose a host, Super Dev centers guidance around that host instead of letting auto-detection override your intent.
 
 ### 7. Codebase Intelligence and Change Analysis
 
@@ -184,6 +308,8 @@ The host expands documents based on actual project needs. Final document scope d
 - `delivery manifest/report/archive`: delivery package.
 - `proof-pack`: delivery evidence bundle with executive summary.
 - `release readiness`, `Spec Quality`, and `Scope Coverage`: unified release scoring panel.
+- UI Contract Alignment is part of proof-pack and release readiness, not just an internal UI review detail.
+- Governance snapshots, frontend runtime, validation reports, and knowledge tracking now participate in delivery closure.
 
 ### 9. Knowledge Base
 
@@ -195,11 +321,22 @@ The host expands documents based on actual project needs. Final document scope d
 
 ### 10. Policy Governance (Policy DSL)
 
-- Three presets: `default`, `balanced`, `enterprise`.
-- Mandatory red-team and quality gate enforcement.
-- Minimum quality thresholds and CI/CD whitelist.
-- Enterprise policy raises the quality bar, requires host profiling, and can enforce required hosts when configured.
-- Configurable via `super-dev.yaml` policy section.
+Parameterized workflow governance through a Policy DSL:
+
+- **default**: standard preset, suitable for individuals and small teams.
+- **balanced**: balanced preset, suitable for medium-sized teams.
+- **enterprise**: enterprise preset, higher quality thresholds, host profiling requirements, and configurable required hosts per project.
+
+Governance control dimensions:
+
+- Mandatory red-team / quality gate toggle.
+- Minimum quality threshold enforcement.
+- CI/CD platform whitelist.
+- Required hosts and ready+score hard validation (enabled per project).
+- Automatic host profiling and scoring.
+- `host-compatibility` report with history tracking.
+
+Configurable via `super-dev.yaml` policy section.
 
 ---
 
@@ -208,7 +345,7 @@ The host expands documents based on actual project needs. Final document scope d
 1. User runs `super-dev` or `super-dev init` in the project directory.
 2. The onboarding wizard connects Super Dev to the target host.
 3. User types `/super-dev requirement` or `super-dev: requirement` inside the host.
-4. The host enters the Super Dev pipeline; 10 expert agents are injected by stage.
+4. The host enters the Super Dev pipeline; 11 expert agents are injected by stage.
 5. The host handles web research, inference, coding, execution, and file modifications.
 6. Super Dev handles workflow, documents, gates, audit, and delivery standards.
 
@@ -261,13 +398,13 @@ This generates `.super-dev/WORKFLOW.md` and `output/*-bootstrap.md` to lock down
 ### 3. Pin a specific version
 
 ```bash
-pip install super-dev==2.1.5
+pip install super-dev==2.2.0
 ```
 
 ### 4. Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.1.5
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.2.0
 ```
 
 ### 5. Source install for development
@@ -326,24 +463,23 @@ Shows the responsibility boundaries and call relationships of core source direct
 
 ---
 
-## 21 Host Support
+## 20 Unified Hosts + 1 Manual Plugin Host
 
-Super Dev integrates with 10 CLI hosts and 11 IDE hosts under three certification levels:
+Super Dev officially documents 20 unified onboarding hosts plus 1 manual plugin host:
 
 - **Certified**: fully aligned integration model; recommended for production use.
 - **Compatible**: complete integration path; awaiting extended real-world validation.
 - **Experimental**: functional integration; needs broader production testing.
 
-### CLI Hosts (10)
+### Unified CLI Hosts (9)
 
 | Host | Trigger | Onboard Command |
 |------|---------|-----------------|
 | Claude Code | `/super-dev your requirement` | `super-dev onboard --host claude-code` |
-| Codex CLI | `super-dev: your requirement` | `super-dev onboard --host codex-cli` |
+| Codex | `super-dev: your requirement` | `super-dev onboard --host codex-cli` |
 | Gemini CLI | `/super-dev your requirement` | `super-dev onboard --host gemini-cli` |
 | OpenCode | `/super-dev your requirement` | `super-dev onboard --host opencode` |
-| OpenClaw | `/super-dev your requirement` | `openclaw plugins install @super-dev/openclaw-plugin` |
-| Kiro CLI | `/super-dev your requirement` | `super-dev onboard --host kiro-cli` |
+| Kiro CLI | `super-dev: your requirement` | `super-dev onboard --host kiro-cli` |
 | Cursor CLI | `/super-dev your requirement` | `super-dev onboard --host cursor-cli` |
 | Qoder CLI | `/super-dev your requirement` | `super-dev onboard --host qoder-cli` |
 | Copilot CLI | `super-dev: your requirement` | `super-dev onboard --host copilot-cli` |
@@ -403,7 +539,7 @@ Notes:
 2. Run `super-dev doctor --host claude-code` after onboarding to confirm slash activation.
 3. Claude Code supports `.claude/agents/` and `~/.claude/agents/`; Super Dev generates a `super-dev-core` subagent.
 
-**Codex CLI**
+**Codex**
 
 ```bash
 super-dev onboard --host codex-cli --force --yes
@@ -415,7 +551,7 @@ Restart required after onboarding: Yes.
 
 Notes:
 1. Uses `super-dev: your requirement` as the primary trigger.
-2. Relies on `AGENTS.md` and the user-level Skill at `~/.codex/skills/super-dev-core/SKILL.md`.
+2. Relies on `AGENTS.md` and the user-level Skill at `~/.agents/skills/super-dev-core/SKILL.md`.
 3. If a previous session did not load the new Skill, restart `codex` and try again.
 
 **Gemini CLI**
@@ -453,12 +589,13 @@ super-dev onboard --host kiro-cli --force --yes
 ```
 
 Trigger location: launch Kiro CLI in the project directory.
-Trigger command: `/super-dev your requirement`
-Restart required after onboarding: No.
+Trigger command: `super-dev: your requirement`
+Restart required after onboarding: Yes.
 
 Notes:
-1. Uses slash commands directly in CLI mode.
-2. If project rules have not refreshed, re-enter the project directory and relaunch Kiro CLI.
+1. Kiro CLI no longer relies on custom slash commands.
+2. The official integration surfaces are `.kiro/steering/super-dev.md` + `.kiro/skills/super-dev-core/SKILL.md` + `~/.kiro/skills/super-dev-core/SKILL.md`.
+3. Relaunch Kiro CLI after onboarding so steering and skills load in the new session.
 
 **OpenCode**
 
@@ -466,7 +603,7 @@ Notes:
 super-dev onboard --host opencode --force --yes
 ```
 
-Trigger location: launch OpenCode CLI in the project directory.
+Trigger location: launch OpenCode in the project directory.
 Trigger command: `/super-dev your requirement`
 Restart required after onboarding: No.
 
@@ -486,7 +623,8 @@ Restart required after onboarding: No.
 
 Notes:
 1. Suitable for command-line pipeline development.
-2. If slash is not active, confirm that `.qoder/commands/super-dev.md` has been generated.
+2. If slash is not active, confirm that `.qoder/commands/super-dev.md` exists and that the `.qoder/rules/` directory has been created.
+3. The official surfaces now use `.qoder/rules/super-dev.md` + `.qoder/commands/super-dev.md` + `.qoder/skills/` / `~/.qoder/skills/`.
 
 **CodeBuddy CLI**
 
@@ -556,12 +694,12 @@ super-dev onboard --host kiro --force --yes
 
 Trigger location: open the Agent Chat / AI panel in Kiro IDE within the project context.
 Trigger command: `super-dev: your requirement`
-Restart required after onboarding: No.
+Restart required after onboarding: Yes.
 
 Notes:
-1. Uses steering/rules mode with `super-dev: your requirement` as the trigger.
-2. Onboarding writes project-level `.kiro/steering/super-dev.md` and supplements the global steering at `~/.kiro/steering/AGENTS.md`.
-3. If steering/rules are not loaded, reopen the project window.
+1. Uses the official steering + skills model with `super-dev: your requirement` as the trigger.
+2. Onboarding writes project-level `.kiro/steering/super-dev.md` and `.kiro/skills/super-dev-core/SKILL.md`, plus global `~/.kiro/steering/AGENTS.md` and `~/.kiro/skills/super-dev-core/SKILL.md`.
+3. If steering or skills are not loaded, reopen the project window or start a new Agent Chat.
 
 **Qoder IDE**
 
@@ -574,8 +712,9 @@ Trigger command: `/super-dev your requirement`
 Restart required after onboarding: No.
 
 Notes:
-1. Uses project-level commands + rules mode; type `/super-dev your requirement` directly in Agent Chat.
-2. If the new command does not appear, confirm `.qoder/commands/super-dev.md` exists, then reopen the project or start a new Agent Chat.
+1. Uses the official project commands + rules + skills mode; type `/super-dev your requirement` directly in Agent Chat.
+2. If the new command does not appear, confirm `.qoder/commands/super-dev.md` and `.qoder/rules/super-dev.md` exist, then reopen the project or start a new Agent Chat.
+3. The official surfaces now use `.qoder/rules/super-dev.md` + `.qoder/commands/super-dev.md` + `.qoder/skills/` / `~/.qoder/skills/`.
 
 **Trae**
 
@@ -716,6 +855,18 @@ super-dev release readiness
 # Review
 super-dev review architecture --status revision_requested --comment "Needs redesign"
 super-dev review quality --status revision_requested --comment "Gate not met"
+
+# Governance (2.2.0+)
+super-dev governance status
+super-dev governance rules list
+super-dev governance rules validate
+super-dev governance knowledge-report
+super-dev governance adr generate
+super-dev governance adr list
+super-dev governance metrics show
+super-dev governance metrics export
+super-dev governance templates list
+super-dev governance templates show <id>
 ```
 
 ---

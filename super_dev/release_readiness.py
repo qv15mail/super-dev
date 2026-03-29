@@ -21,6 +21,7 @@ from . import __version__
 from .analyzer import FeatureChecklistBuilder
 from .catalogs import HOST_TOOL_IDS
 from .integrations import IntegrationManager
+from .reviewers.redteam import load_redteam_evidence
 from .skills import SkillManager
 from .specs import SpecValidator
 
@@ -104,6 +105,23 @@ class ReleaseReadinessReport:
                 f"| {check.name} | {marker} | {check.severity} | {check.detail} | {check.recommendation or '-'} |"
             )
         lines.append("")
+
+        # 治理就绪度章节
+        governance_checks = [c for c in self.checks if c.name.startswith("Governance:")]
+        if governance_checks:
+            lines.append("## Governance Readiness")
+            lines.append("")
+            gov_passed = sum(1 for c in governance_checks if c.passed)
+            gov_total = len(governance_checks)
+            lines.append(f"- Governance checks: {gov_passed}/{gov_total} passed")
+            lines.append("")
+            lines.append("| Check | Result | Detail |")
+            lines.append("|:---|:---:|:---|")
+            for gc in governance_checks:
+                marker = "PASS" if gc.passed else "FAIL"
+                lines.append(f"| {gc.name} | {marker} | {gc.detail} |")
+            lines.append("")
+
         return "\n".join(lines)
 
 
@@ -116,8 +134,11 @@ class ReleaseReadinessEvaluator:
         "docs/README.md": ["用户文档", "维护者文档"],
         "docs/HOST_USAGE_GUIDE.md": ["Smoke", "/super-dev", "super-dev:"],
         "docs/HOST_CAPABILITY_AUDIT.md": ["官方依据", "super-dev integrate smoke"],
+        "docs/HOST_RUNTIME_VALIDATION.md": ["host runtime validation", "research", "super-dev review docs"],
+        "docs/HOST_INSTALL_SURFACES.md": ["Codex CLI", "super-dev:", "super-dev integrate audit --auto"],
         "docs/WORKFLOW_GUIDE.md": ["super-dev review docs", "super-dev run --resume"],
         "docs/WORKFLOW_GUIDE_EN.md": ["super-dev review docs", "super-dev run --resume"],
+        "docs/PRODUCT_AUDIT.md": ["super-dev product-audit", "proof-pack", "release readiness"],
     }
 
     REQUIRED_RUNTIME_IGNORE_RULES = [
@@ -158,8 +179,11 @@ class ReleaseReadinessEvaluator:
                 self._check_release_spec_exists(),
                 self._check_spec_quality(),
                 self._check_scope_coverage(),
+                self._check_delivery_closure(),
             ]
         )
+        # 治理能力检查（增量添加，不影响现有逻辑）
+        report.checks.extend(self._check_governance_artifacts())
         if verify_tests:
             report.checks.append(self._check_test_suite())
         return report
@@ -416,6 +440,232 @@ class ReleaseReadinessEvaluator:
             severity="critical" if result.returncode != 0 else "low",
             recommendation="确保全量 pytest 通过后再执行对外发布。",
         )
+
+    def _check_delivery_closure(self) -> ReleaseReadinessCheck:
+        redteam = load_redteam_evidence(self.project_dir, self.project_dir.name)
+        quality_gate_file = self.output_dir / f"{self.project_dir.name}-quality-gate.md"
+        task_execution_file = self.output_dir / f"{self.project_dir.name}-task-execution.md"
+        product_audit_file = self.output_dir / f"{self.project_dir.name}-product-audit.json"
+        ui_contract_file = self.output_dir / f"{self.project_dir.name}-ui-contract.json"
+        frontend_runtime_file = self.output_dir / f"{self.project_dir.name}-frontend-runtime.json"
+        design_tokens_file = self.output_dir / "frontend" / "design-tokens.css"
+
+        blockers: list[str] = []
+
+        if redteam is None:
+            blockers.append("redteam missing")
+        elif not redteam.passed:
+            blockers.append(f"redteam failed ({'; '.join(redteam.blocking_reasons) or redteam.path.name})")
+
+        if not quality_gate_file.exists():
+            blockers.append("quality gate missing")
+        else:
+            quality_text = quality_gate_file.read_text(encoding="utf-8", errors="ignore").lower()
+            if "未通过" in quality_text or "failed" in quality_text:
+                blockers.append("quality gate failed")
+
+        if not task_execution_file.exists():
+            blockers.append("task execution missing")
+        else:
+            task_text = task_execution_file.read_text(encoding="utf-8", errors="ignore")
+            if "## 执行期验证摘要" not in task_text or "## 宿主补充自检（交付前必做）" not in task_text:
+                blockers.append("task execution self-review incomplete")
+
+        if not product_audit_file.exists():
+            blockers.append("product audit missing")
+        else:
+            try:
+                product_payload = json.loads(product_audit_file.read_text(encoding="utf-8"))
+            except Exception:
+                blockers.append("product audit unreadable")
+            else:
+                product_status = str(product_payload.get("status", "missing"))
+                if product_status == "revision_required":
+                    blockers.append("product audit requires revision")
+
+        if not ui_contract_file.exists():
+            blockers.append("ui contract missing")
+        else:
+            try:
+                ui_contract_payload = json.loads(ui_contract_file.read_text(encoding="utf-8"))
+            except Exception:
+                blockers.append("ui contract unreadable")
+            else:
+                if not isinstance(ui_contract_payload, dict):
+                    blockers.append("ui contract invalid")
+                else:
+                    component_stack = (
+                        ui_contract_payload.get("component_stack", {})
+                        if isinstance(ui_contract_payload.get("component_stack"), dict)
+                        else {}
+                    )
+                    icon_system = (
+                        ui_contract_payload.get("icon_system")
+                        or component_stack.get("icon")
+                        or component_stack.get("icons")
+                    )
+                    required_sections = (
+                        bool(ui_contract_payload.get("style_direction")),
+                        (
+                            (isinstance(ui_contract_payload.get("typography"), dict) and bool(ui_contract_payload.get("typography")))
+                            or (
+                                isinstance(ui_contract_payload.get("typography_preset"), dict)
+                                and bool(ui_contract_payload.get("typography_preset"))
+                            )
+                        ),
+                        bool(icon_system),
+                        isinstance(ui_contract_payload.get("ui_library_preference"), dict)
+                        and bool(ui_contract_payload.get("ui_library_preference")),
+                        isinstance(ui_contract_payload.get("design_tokens"), dict)
+                        and bool(ui_contract_payload.get("design_tokens")),
+                    )
+                    if not all(required_sections):
+                        blockers.append("ui contract incomplete")
+
+        if not design_tokens_file.exists():
+            blockers.append("design tokens missing")
+
+        if not frontend_runtime_file.exists():
+            blockers.append("frontend runtime missing")
+        else:
+            try:
+                frontend_runtime_payload = json.loads(frontend_runtime_file.read_text(encoding="utf-8"))
+            except Exception:
+                blockers.append("frontend runtime unreadable")
+            else:
+                checks = frontend_runtime_payload.get("checks", {}) if isinstance(frontend_runtime_payload, dict) else {}
+                key_ui_checks = (
+                    "ui_contract_alignment",
+                    "ui_theme_entry",
+                    "ui_navigation_shell",
+                    "ui_component_imports",
+                    "ui_banned_patterns",
+                )
+                runtime_ready = (
+                    isinstance(frontend_runtime_payload, dict)
+                    and bool(frontend_runtime_payload.get("passed", False))
+                    and isinstance(checks, dict)
+                    and bool(checks.get("ui_contract_json", False))
+                    and bool(checks.get("output_frontend_design_tokens", False))
+                    and all(bool(checks.get(name, True)) for name in key_ui_checks)
+                )
+                if not runtime_ready:
+                    blockers.append("frontend runtime ui contract alignment missing")
+
+        passed = not blockers
+        detail = "delivery closure evidence aligned" if passed else "; ".join(blockers)
+        return ReleaseReadinessCheck(
+            name="Delivery Closure",
+            passed=passed,
+            detail=detail,
+            severity="critical" if not passed else "low",
+            recommendation=(
+                "先补齐 redteam / quality gate / task execution / product audit / ui contract / frontend runtime 证据，并确保它们指向同一轮交付。"
+            ),
+        )
+
+    def _check_governance_artifacts(self) -> list[ReleaseReadinessCheck]:
+        """检查治理相关产物是否就绪（增量检查，不影响现有逻辑）。"""
+        checks: list[ReleaseReadinessCheck] = []
+
+        # 1. 治理报告
+        governance_reports = list(self.output_dir.glob("governance-report-*.md"))
+        if governance_reports:
+            checks.append(
+                ReleaseReadinessCheck(
+                    name="Governance: Report",
+                    passed=True,
+                    detail=f"治理报告已生成 ({len(governance_reports)} 份)",
+                    severity="medium",
+                )
+            )
+        else:
+            checks.append(
+                ReleaseReadinessCheck(
+                    name="Governance: Report",
+                    passed=False,
+                    detail="未找到治理报告 (output/governance-report-*.md)",
+                    severity="low",
+                    recommendation="执行治理流程生成 governance-report 后重新评估。",
+                )
+            )
+
+        # 2. 知识引用报告
+        knowledge_refs = list(self.output_dir.glob("*-knowledge-references*.md")) + list(
+            self.output_dir.glob("*-knowledge-references*.json")
+        )
+        knowledge_cache = list((self.output_dir / "knowledge-cache").glob("*-knowledge-bundle.json")) if (self.output_dir / "knowledge-cache").is_dir() else []
+        has_knowledge = bool(knowledge_refs or knowledge_cache)
+        checks.append(
+            ReleaseReadinessCheck(
+                name="Governance: Knowledge References",
+                passed=has_knowledge,
+                detail=(
+                    f"知识引用报告 {len(knowledge_refs)} 份, 知识缓存 {len(knowledge_cache)} 份"
+                    if has_knowledge
+                    else "未找到知识引用报告或知识缓存"
+                ),
+                severity="low",
+                recommendation="" if has_knowledge else "建议在文档阶段启用知识库引用，确保决策有据可查。",
+            )
+        )
+
+        # 3. 效能度量数据
+        metrics_files = (
+            list(self.output_dir.glob("*-metrics*.json"))
+            + list(self.output_dir.glob("*-pipeline-metrics.json"))
+            + list(self.output_dir.glob("*-pipeline-metrics.md"))
+            + (
+                list((self.output_dir / "metrics-history").glob("*.json"))
+                if (self.output_dir / "metrics-history").is_dir()
+                else []
+            )
+            + list(self.output_dir.glob("*-performance-metrics*.md"))
+        )
+        has_metrics = bool(metrics_files)
+        checks.append(
+            ReleaseReadinessCheck(
+                name="Governance: Performance Metrics",
+                passed=has_metrics,
+                detail=f"效能度量文件 {len(metrics_files)} 份" if has_metrics else "未找到效能度量数据",
+                severity="low",
+                recommendation="" if has_metrics else "建议生成效能度量报告以量化交付质量。",
+            )
+        )
+
+        # 4. ADR 决策记录
+        adr_dir = self.project_dir / "docs" / "adr"
+        adr_files = list(adr_dir.glob("*.md")) if adr_dir.is_dir() else []
+        # 也检查 output 目录中的 ADR
+        adr_output = list(self.output_dir.glob("*-adr-*.md"))
+        all_adrs = adr_files + adr_output
+        has_adrs = bool(all_adrs)
+        checks.append(
+            ReleaseReadinessCheck(
+                name="Governance: ADR Records",
+                passed=has_adrs,
+                detail=f"ADR 决策记录 {len(all_adrs)} 份" if has_adrs else "未找到 ADR 决策记录",
+                severity="low",
+                recommendation="" if has_adrs else "建议为重要架构决策创建 ADR 记录 (docs/adr/)。",
+            )
+        )
+
+        # 5. 验证规则结果
+        validation_files = list(self.output_dir.glob("*-validation-results*.json")) + list(
+            self.output_dir.glob("*-validation-results*.md")
+        )
+        has_validation = bool(validation_files)
+        checks.append(
+            ReleaseReadinessCheck(
+                name="Governance: Validation Results",
+                passed=has_validation,
+                detail=f"验证规则结果 {len(validation_files)} 份" if has_validation else "未找到验证规则结果",
+                severity="low",
+                recommendation="" if has_validation else "执行验证规则引擎生成结果后重新评估。",
+            )
+        )
+
+        return checks
 
     def _extract_regex(self, file_path: Path, pattern: str) -> str:
         if not file_path.exists():

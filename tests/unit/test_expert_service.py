@@ -6,11 +6,15 @@ from pathlib import Path
 
 from super_dev.experts import (
     has_expert,
+    has_expert_team,
     list_expert_advice_history,
+    list_expert_teams,
     list_experts,
     read_expert_advice,
     render_expert_advice_markdown,
+    render_team_advice_markdown,
     save_expert_advice,
+    save_team_advice,
 )
 
 
@@ -18,8 +22,14 @@ class TestExpertService:
     def test_list_experts_contains_rca(self):
         experts = list_experts()
         ids = {item["id"] for item in experts}
+        assert "PRODUCT" in ids
         assert "PM" in ids
         assert "RCA" in ids
+
+    def test_list_expert_teams_contains_product_audit(self):
+        teams = list_expert_teams()
+        ids = {item["id"] for item in teams}
+        assert "PRODUCT_AUDIT" in ids
 
     def test_render_advice_markdown(self):
         content = render_expert_advice_markdown("PM", "规划认证模块")
@@ -37,6 +47,22 @@ class TestExpertService:
     def test_has_expert(self):
         assert has_expert("PM") is True
         assert has_expert("UNKNOWN") is False
+
+    def test_has_expert_team(self):
+        assert has_expert_team("PRODUCT_AUDIT") is True
+        assert has_expert_team("UNKNOWN") is False
+
+    def test_render_team_advice_markdown(self):
+        content = render_team_advice_markdown("PRODUCT_AUDIT", "做一次全项目闭环审查")
+        assert "# PRODUCT_AUDIT 团队审查报告" in content
+        assert "团队组成" in content
+        assert "做一次全项目闭环审查" in content
+
+    def test_save_team_advice(self, temp_project_dir: Path):
+        path, content = save_team_advice(temp_project_dir, "PRODUCT_AUDIT", "做一次全项目闭环审查")
+        assert path.exists()
+        assert "PRODUCT_AUDIT 团队审查报告" in content
+        assert path.read_text(encoding="utf-8") == content
 
     def test_history_and_read(self, temp_project_dir: Path):
         path, _ = save_expert_advice(temp_project_dir, "PM", "测试")

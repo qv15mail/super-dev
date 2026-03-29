@@ -2,6 +2,7 @@
 需求解析与前端骨架测试
 """
 
+import json
 from pathlib import Path
 
 from super_dev.creators.document_generator import DocumentGenerator
@@ -98,11 +99,14 @@ class TestDocumentGeneratorIntegration:
         assert "### 8.3 容错与降级策略" in architecture
         assert "### 1.4 商业级体验目标" in uiux
         assert "### 1.5 设计 Intelligence 结论" in uiux
+        assert "UI 系统冻结决策" in uiux
+        assert "备选实现路径" in uiux
         assert "### 2.7 布局栅格与密度策略" in uiux
         assert "### 2.8 组件生态与实现基线" in uiux
         assert "### 2.10 多端适配与平台化设计策略" in uiux
         assert "### 2.11 商业级设计质量门禁" in uiux
         assert "### 2.12 精美 UI 执行工作流（Stitch 范式）" in uiux
+        assert "Design Token 冻结输出" in uiux
         assert "### 5.3 组件状态矩阵" in uiux
         assert "### 5.4 图标、图表与内容模块" in uiux
         assert "### 5.5 组件落地清单（Tailwind / 生态组件）" in uiux
@@ -122,6 +126,23 @@ class TestDocumentGeneratorIntegration:
         assert "表单与验证" in uiux
         assert "图标体系" in uiux
         assert "多场景组件库矩阵" in uiux
+
+    def test_document_generator_emits_ui_contract(self):
+        generator = DocumentGenerator(
+            name="ops-suite",
+            description="构建一个企业协作 SaaS 工作台",
+            frontend="react",
+            backend="python",
+        )
+
+        contract = generator.generate_ui_contract()
+
+        assert contract["ui_library_preference"]["preferred"] == "shadcn/ui + Radix UI + Tailwind CSS"
+        assert contract["ui_library_preference"]["strict"] is False
+        assert contract["component_stack"]["icons"]
+        assert contract["icon_system"] == contract["component_stack"]["icons"]
+        assert contract["design_tokens"]["css_variables"]
+        assert contract["typography_preset"]["heading"]
 
     def test_document_generator_consumes_research_summary_for_evidence(self):
         generator = DocumentGenerator(
@@ -211,11 +232,66 @@ class TestFrontendScaffoldBuilder:
 
         html_path = Path(result["html"])
         css_path = Path(result["css"])
+        tokens_path = Path(result["tokens"])
         js_path = Path(result["js"])
 
         assert html_path.exists()
         assert css_path.exists()
+        assert tokens_path.exists()
         assert js_path.exists()
         assert "demo-app" in html_path.read_text(encoding="utf-8")
         assert "--primary" in css_path.read_text(encoding="utf-8")
-        assert "business-core-flow" in js_path.read_text(encoding="utf-8")
+
+    def test_frontend_scaffold_prefers_persisted_ui_contract(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "brand-ui-contract.json").write_text(
+            json.dumps(
+                {
+                    "typography_preset": {"heading": "IBM Plex Sans", "body": "Public Sans"},
+                    "style_direction": {"direction": "可信、稳定、业务优先"},
+                    "component_stack": {"icons": "Lucide Icons"},
+                    "ui_library_preference": {
+                        "preferred": "shadcn/ui + Radix UI + Tailwind CSS",
+                        "strict": False,
+                        "decision_rule": "Prefer shadcn unless something more suitable exists.",
+                        "final_selected": "shadcn/ui + Radix UI + Tailwind CSS",
+                    },
+                    "primary_library": {"name": "shadcn/ui + Radix UI + Tailwind CSS"},
+                    "color_palette": {
+                        "primary": "#123456",
+                        "accent": "#14B8A6",
+                        "background": "#F5F8FF",
+                        "text": "#172133",
+                        "border": "#D9E0EA",
+                    },
+                    "generated_design_system": {
+                        "radius": {"lg": "20px"},
+                        "shadows": {"lg": "0 12px 30px rgba(0,0,0,0.12)"},
+                    },
+                    "design_tokens": {"css_variables": ":root { --color-primary: #123456; }\n"},
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        builder = FrontendScaffoldBuilder(
+            project_dir=temp_project_dir,
+            name="brand",
+            description="品牌化工作台",
+            frontend="react",
+        )
+        result = builder.generate(requirements=[], phases=[], docs={})
+
+        html = Path(result["html"]).read_text(encoding="utf-8")
+        css = Path(result["css"]).read_text(encoding="utf-8")
+        tokens = Path(result["tokens"]).read_text(encoding="utf-8")
+        js = Path(result["js"]).read_text(encoding="utf-8")
+
+        assert "IBM+Plex+Sans" in html
+        assert "Icons: Lucide Icons" in html
+        assert "#123456" in css
+        assert '--font-heading: "IBM Plex Sans"' in css
+        assert "--color-primary: #123456" in tokens
+        assert "ui_library_preference" in js

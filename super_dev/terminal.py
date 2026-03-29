@@ -26,11 +26,12 @@ except ImportError:  # pragma: no cover - rich 在主环境中始终可用
 
 
 UNICODE_FALLBACKS = {
-    "✓": "OK",
+    "✓": "*",
     "✗": "X",
     "⚠": "!",
     "●": ">",
-    "○": " ",
+    "▸": ">",
+    "○": "o",
     "→": "->",
     "…": "...",
     "•": "-",
@@ -40,7 +41,7 @@ SYMBOL_MAP = {
     "success": "✓",
     "failure": "✗",
     "warning": "⚠",
-    "cursor": "●",
+    "cursor": ">",
     "selected": "✓",
     "unselected": "○",
 }
@@ -91,15 +92,41 @@ def initialize_terminal_output() -> None:
 
 
 def supports_unicode_output() -> bool:
-    """判断当前标准输出是否适合直接输出 Unicode UI 符号。"""
+    """判断当前标准输出是否适合直接输出 Unicode UI 符号。
+
+    检测策略参考 Inquirer.js / @inquirer/figures 的 isUnicodeSupported：
+    - 非 Windows: 除了 linux console (TERM=linux) 外都支持
+    - Windows: 检测 Windows Terminal / VS Code / ConEmu 等现代终端
+    - 兜底: 检查 stdout encoding 是否包含 utf
+    """
     mode = terminal_output_mode()
     if mode == "unicode":
         return True
     if mode == "ascii":
         return False
+
+    # 非 Windows 平台：macOS / Linux 桌面终端几乎都支持 Unicode
+    if sys.platform != "win32":
+        # Linux console (kernel tty) 不支持 Unicode
+        term = os.environ.get("TERM", "")
+        if term == "linux":
+            return False
+        # macOS Terminal / iTerm / Alacritty / Kitty 等都支持
+        return True
+
+    # Windows 平台：检测现代终端
+    if (
+        os.environ.get("WT_SESSION")                        # Windows Terminal
+        or os.environ.get("TERMINUS_SUBLIME")                # Terminus
+        or os.environ.get("ConEmuTask") == "{cmd::Cmder}"   # ConEmu/Cmder
+        or os.environ.get("TERM_PROGRAM") == "vscode"        # VS Code terminal
+        or os.environ.get("TERM") in ("xterm-256color", "alacritty")
+        or os.environ.get("TERMINAL_EMULATOR") == "JetBrains-JediTerm"
+    ):
+        return True
+
+    # 兜底：检查 encoding
     encoding = (getattr(sys.stdout, "encoding", None) or "").lower()
-    if not encoding:
-        return False
     return "utf" in encoding
 
 

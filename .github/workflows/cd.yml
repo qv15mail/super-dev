@@ -15,7 +15,7 @@ jobs:
       name: development
       url: https://dev.super-dev.example.com
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
       - name: Configure kubectl
         uses: azure/k8s-set-context@v3
@@ -41,7 +41,7 @@ jobs:
       name: production
       url: https://super-dev.example.com
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
       - name: Configure kubectl
         uses: azure/k8s-set-context@v3

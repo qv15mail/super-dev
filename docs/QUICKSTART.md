@@ -1,6 +1,6 @@
 # Super Dev 快速开始
 
-> 面向 `2.1.1` 版本，5-10 分钟完成从安装到首次流水线运行。
+> 面向 `2.1.6` 版本，5-10 分钟完成从安装到首次流水线运行。
 
 ## 1. 环境要求
 
@@ -22,10 +22,30 @@ pip install -U super-dev
 ### 方式 B：安装指定版本（复现/回滚）
 
 ```bash
-pip install super-dev==2.1.1
+pip install super-dev==2.1.6
 ```
 
 ## 3. 启动方式（推荐）
+
+### 最短路径
+
+如果你只想最快跑通一次，不想自己摸索，直接按这 3 步：
+
+```bash
+super-dev start --idea "构建一个电商后台，包含登录、订单、支付"
+```
+
+然后：
+
+1. 按输出选择的宿主打开正确入口
+2. 复制输出里的那句触发命令到宿主会话
+3. 确认宿主第一轮回复明确说当前阶段是 `research`
+
+成功标志：
+
+- 会先做同类产品研究，而不是直接写代码
+- 三份核心文档完成后会停下来等你确认
+- 没有跳过 `research -> 三文档 -> 确认门 -> Spec -> frontend -> backend -> quality`
 
 优先在宿主会话内使用：
 
@@ -38,6 +58,38 @@ pip install super-dev==2.1.1
 ```bash
 super-dev start --idea "构建一个电商后台，包含登录、订单、支付"
 ```
+
+如果你已经在项目里，但不知道现在该先做哪一步，直接运行：
+
+```bash
+super-dev resume
+```
+
+如果你是下班回来、第二天继续、重开电脑或重开宿主后继续开发，优先用这一条。
+
+```bash
+super-dev next
+```
+
+它只输出当前最应该执行的一步，不需要你自己翻状态和门禁。
+
+常见恢复场景：
+
+| 场景 | 该用哪条命令 |
+|------|--------------|
+| 第二天回来继续开发 | `super-dev resume` |
+| 宿主关掉了，重开后继续 | `super-dev resume` |
+| 电脑重启了，回到项目继续 | `super-dev resume` |
+| 不知道现在该先做什么 | `super-dev next` |
+| 机器侧 pipeline 被中断 | `super-dev run --resume` |
+| 当前在文档 / UI / 架构确认门里继续补充 | `super-dev resume`，然后直接继续说自然语言 |
+
+恢复前优先看两份文件：
+
+- `.super-dev/SESSION_BRIEF.md`
+- `.super-dev/workflow-state.json`
+
+这两份是当前流程的恢复真源。
 
 如果你想先显式初始化项目契约，再进入宿主：
 
@@ -91,6 +143,7 @@ super-dev studio --port 8765
 ```bash
 # 看当前在哪一步、下一步是什么
 super-dev status
+super-dev next
 
 # 只重跑研究或单个核心文档
 super-dev run research
@@ -120,6 +173,13 @@ super-dev run --resume
 ```
 
 预检会执行：`ruff`、`mypy`、`pytest`、`delivery-smoke`、`bandit(-ll)`、`pip-audit`、benchmark、build、twine check。
+
+如果你在真实项目里用 Super Dev 编码，额外建议宿主在每轮实现后补做这 4 项：
+
+1. 跑项目原生 `build / compile / type-check / test / runtime smoke`
+2. 确认新增函数、方法、字段、模块都已经接入调用链
+3. 确认没有新增 `unused code` 或新增 warning
+4. 对本次 diff 做一次最小自审，再汇报完成
 
 ## 7. 下一步
 

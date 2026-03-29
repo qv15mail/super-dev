@@ -1,0 +1,46 @@
+{
+  "status": "failed",
+  "current_step_label": "继续当前流程",
+  "user_next_action": "按当前状态面板继续，不要重新开一轮普通聊天。",
+  "recommended_command": "super-dev run --resume",
+  "reason": "当前仓库存在运行态、确认门或返工门，需要先沿当前流程继续。",
+  "evidence": "run_status=failed",
+  "preferred_host": "claude-code",
+  "preferred_host_name": "Claude Code",
+  "host_continue_prompt": "/super-dev \"继续当前项目“confirm docs --comment ok”的 Super Dev 流程，不要当作普通聊天。先读取 .super-dev/SESSION_BRIEF.md、.super-dev/workflow-state.json、.super-dev/WORKFLOW.md、output/*、.super-dev/review-state/* 和最近的 tasks.md。当前步骤是“继续当前流程”。只要仓库里还有活动的 Super Dev 上下文，后续自然语言需求默认继续当前流程，而不是切回普通聊天。\"",
+  "session_brief_path": "/Users/weiyou/Documents/kaifa/super-dev/.super-dev/SESSION_BRIEF.md",
+  "continuity_rules": [
+    "只要仓库里还有活动的 Super Dev 上下文，后续自然语言需求默认继续当前流程，而不是切回普通聊天。"
+  ],
+  "gates": {
+    "docs_confirmation": {
+      "status": "confirmed",
+      "comment": "三文档已确认，进入交付终检"
+    },
+    "preview_confirmation": {
+      "status": "pending_review",
+      "comment": ""
+    },
+    "ui_revision": {
+      "status": "pending_review",
+      "comment": ""
+    },
+    "architecture_revision": {
+      "status": "pending_review",
+      "comment": ""
+    },
+    "quality_revision": {
+      "status": "pending_review",
+      "comment": ""
+    }
+  },
+  "pipeline_run_state": {
+    "status": "failed",
+    "current_stage": "",
+    "current_stage_title": "",
+    "scope_coverage_status": "",
+    "scope_high_priority_gap_count": 0,
+    "skipped_gates": []
+  },
+  "updated_at": "2026-03-29T00:13:28.313641+00:00"
+}

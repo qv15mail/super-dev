@@ -43,6 +43,17 @@ class TestQualityGateChecker:
         monkeypatch.setattr(checker, "_check_performance", lambda _r: [])
         monkeypatch.setattr(checker, "_check_testing", lambda: [])
         monkeypatch.setattr(checker, "_check_code_quality", lambda: [])
+        monkeypatch.setattr(
+            checker,
+            "_check_ui_contract_execution",
+            lambda: QualityCheck(
+                name="UI 契约执行",
+                category="ui_quality",
+                description="UI 契约执行",
+                status=CheckStatus.PASSED,
+                score=100,
+            ),
+        )
         monkeypatch.setattr(checker, "_calculate_total_score", lambda _c: 90)
         monkeypatch.setattr(checker, "_calculate_weighted_score", lambda _c: 90.0)
         monkeypatch.setattr(checker, "_generate_recommendations", lambda _c: [])
@@ -81,6 +92,17 @@ class TestQualityGateChecker:
         monkeypatch.setattr(checker, "_check_performance", lambda _r: [])
         monkeypatch.setattr(checker, "_check_testing", lambda: [])
         monkeypatch.setattr(checker, "_check_code_quality", lambda: [])
+        monkeypatch.setattr(
+            checker,
+            "_check_ui_contract_execution",
+            lambda: QualityCheck(
+                name="UI 契约执行",
+                category="ui_quality",
+                description="UI 契约执行",
+                status=CheckStatus.PASSED,
+                score=100,
+            ),
+        )
         monkeypatch.setattr(checker, "_calculate_total_score", lambda _c: 95)
         monkeypatch.setattr(checker, "_calculate_weighted_score", lambda _c: 95.0)
         monkeypatch.setattr(checker, "_generate_recommendations", lambda _c: [])
@@ -292,7 +314,11 @@ class TestQualityGateChecker:
             encoding="utf-8",
         )
         (output_dir / "demo-uiux.md").write_text(
-            "## 2\n### 2.8 多端适配与平台化设计策略\n### 2.9 商业级设计质量门禁\nWEB\nH5\n微信小程序\nAPP\n桌面端\n",
+            (
+                "## 1\n主视觉气质\n字体组合\n配色逻辑\n图标系统\n备选实现路径\n明确不默认采用\n"
+                "Design Token 冻结输出\n2 个视觉方向候选\n"
+                "## 2\n### 2.8 多端适配与平台化设计策略\n### 2.9 商业级设计质量门禁\nWEB\nH5\n微信小程序\nAPP\n桌面端\n"
+            ),
             encoding="utf-8",
         )
         checker = QualityGateChecker(
@@ -337,6 +363,35 @@ class TestQualityGateChecker:
         )
         assert check.status.value == "failed"
         assert "UI 五端覆盖" in check.details
+
+    def test_document_consistency_warns_when_ui_system_decisions_missing(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-prd.md").write_text(
+            "## 1\n### 1.7 联网研究证据与方案对比\n### 1.8 关键决策账本\n### 1.9 用户到专业交付统一协议\n",
+            encoding="utf-8",
+        )
+        (output_dir / "demo-architecture.md").write_text(
+            "## 1\n### 1.4 架构选型取舍与证据链\n### 1.5 架构决策账本\n### 1.6 Agent 执行流水线（全端）\n",
+            encoding="utf-8",
+        )
+        (output_dir / "demo-uiux.md").write_text(
+            "## 2\n### 2.8 多端适配与平台化设计策略\n### 2.9 商业级设计质量门禁\nWEB\nH5\n微信小程序\nAPP\n桌面端\n",
+            encoding="utf-8",
+        )
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="1-N+1",
+        )
+        check = checker._check_document_consistency(
+            prd_path=output_dir / "demo-prd.md",
+            arch_path=output_dir / "demo-architecture.md",
+            uiux_path=output_dir / "demo-uiux.md",
+        )
+        assert check.status.value == "warning"
+        assert "UI 风格决策冻结" in check.details
 
     def test_pipeline_observability_check_passed(self, temp_project_dir: Path):
         output_dir = temp_project_dir / "output"
@@ -603,6 +658,43 @@ class TestQualityGateChecker:
         check = checker._check_rehearsal_verification_report()
         assert check.status.value == "warning"
 
+    def test_task_execution_review_trace_passed(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-task-execution.md").write_text(
+            (
+                "# Spec 任务执行报告\n\n"
+                "## 执行期验证摘要\n\n"
+                "- 任务闭环: 通过\n\n"
+                "## 宿主补充自检（交付前必做）\n\n"
+                "- [ ] 运行项目原生 build / compile / type-check / test / runtime smoke，并确认没有编译错误\n"
+                "- [ ] 检查本轮新增函数、方法、字段、模块都已接入真实调用链；未接入则删除\n"
+                "- [ ] 检查没有新增 unused code、未引用文件或新增 warning\n"
+                "- [ ] 对本次 diff 做最小自审，确认新增日志、埋点、恢复逻辑真正生效\n"
+            ),
+            encoding="utf-8",
+        )
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+        )
+        check = checker._check_task_execution_review_trace()
+        assert check.status.value == "passed"
+
+    def test_task_execution_review_trace_warning_when_missing_markers(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-task-execution.md").write_text("# Spec 任务执行报告\n", encoding="utf-8")
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="0-1",
+        )
+        check = checker._check_task_execution_review_trace()
+        assert check.status.value == "warning"
+
     def test_knowledge_governance_passed(self, temp_project_dir: Path):
         (temp_project_dir / "super-dev.yaml").write_text(
             (
@@ -683,3 +775,111 @@ class TestQualityGateChecker:
         )
         check = checker._check_knowledge_governance()
         assert check.status.value == "warning"
+
+    def test_ui_contract_execution_passed_when_contract_tokens_and_runtime_align(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        frontend_dir = output_dir / "frontend"
+        frontend_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-ui-contract.json").write_text(
+            (
+                "{\n"
+                '  "style_direction": "Editorial workspace",\n'
+                '  "typography": {"heading": "Space Grotesk", "body": "Inter"},\n'
+                '  "icon_system": "lucide-react",\n'
+                '  "ui_library_preference": {"final_selected": "shadcn/ui + Radix + Tailwind"},\n'
+                '  "design_tokens": {"color": {"primary": "#0f172a"}}\n'
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        (frontend_dir / "design-tokens.css").write_text(":root { --color-primary: #0f172a; }\n", encoding="utf-8")
+        (output_dir / "demo-ui-contract-alignment.json").write_text(
+            (
+                "{\n"
+                '  "ui_contract": {"label": "UI 契约文件", "passed": true, "expected": "frozen", "observed": "frozen"},\n'
+                '  "icon_system": {"label": "图标系统", "passed": true, "expected": "lucide-react", "observed": "lucide-react"},\n'
+                '  "font_pair": {"label": "字体组合", "passed": true, "expected": "Space Grotesk / Inter", "observed": "Space Grotesk / Inter"},\n'
+                '  "component_ecosystem": {"label": "组件生态", "passed": true, "expected": "shadcn/ui + Radix + Tailwind", "observed": "shadcn/ui + Radix + Tailwind"},\n'
+                '  "design_tokens": {"label": "Design Token 接入", "passed": true, "expected": "wired", "observed": "wired"},\n'
+                '  "token_usage": {"label": "冻结 Token 使用率", "passed": true, "expected": "majority", "observed": "majority"}\n'
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        (output_dir / "demo-frontend-runtime.json").write_text(
+            (
+                "{\n"
+                '  "passed": true,\n'
+                '  "checks": {\n'
+                '    "ui_contract_json": true,\n'
+                '    "output_frontend_design_tokens": true,\n'
+                '    "ui_contract_alignment": true\n'
+                "  }\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="1-N+1",
+        )
+        check = checker._check_ui_contract_execution()
+        assert check.status.value == "passed"
+        assert "library=shadcn/ui + Radix + Tailwind" in check.details
+
+    def test_ui_contract_execution_failed_when_runtime_missing_contract_alignment(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        frontend_dir = output_dir / "frontend"
+        frontend_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-ui-contract.json").write_text(
+            (
+                "{\n"
+                '  "style_direction": "Editorial workspace",\n'
+                '  "typography": {"heading": "Space Grotesk", "body": "Inter"},\n'
+                '  "icon_system": "lucide-react",\n'
+                '  "ui_library_preference": {"final_selected": "shadcn/ui + Radix + Tailwind"},\n'
+                '  "design_tokens": {"color": {"primary": "#0f172a"}}\n'
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        (frontend_dir / "design-tokens.css").write_text(":root { --color-primary: #0f172a; }\n", encoding="utf-8")
+        (output_dir / "demo-ui-contract-alignment.json").write_text(
+            (
+                "{\n"
+                '  "ui_contract": {"label": "UI 契约文件", "passed": true, "expected": "frozen", "observed": "frozen"},\n'
+                '  "icon_system": {"label": "图标系统", "passed": true, "expected": "lucide-react", "observed": "lucide-react"},\n'
+                '  "font_pair": {"label": "字体组合", "passed": true, "expected": "Space Grotesk / Inter", "observed": "Space Grotesk / Inter"},\n'
+                '  "component_ecosystem": {"label": "组件生态", "passed": true, "expected": "shadcn/ui + Radix + Tailwind", "observed": "shadcn/ui + Radix + Tailwind"},\n'
+                '  "design_tokens": {"label": "Design Token 接入", "passed": true, "expected": "wired", "observed": "wired"},\n'
+                '  "token_usage": {"label": "冻结 Token 使用率", "passed": true, "expected": "majority", "observed": "majority"}\n'
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        (output_dir / "demo-frontend-runtime.json").write_text(
+            (
+                "{\n"
+                '  "passed": true,\n'
+                '  "checks": {\n'
+                '    "ui_contract_json": false,\n'
+                '    "output_frontend_design_tokens": true,\n'
+                '    "ui_contract_alignment": true\n'
+                "  }\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="1-N+1",
+        )
+        check = checker._check_ui_contract_execution()
+        assert check.status.value == "failed"
+        assert "frontend runtime 未证明 UI 契约文件和 Design Token 已真实接入前端" in check.details

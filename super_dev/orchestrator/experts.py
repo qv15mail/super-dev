@@ -1,5 +1,5 @@
 """
-专家系统调度器 - 协调 10 位专家协作生成文档
+专家系统调度器 - 协调 11 位专家协作生成文档
 
 开发：Excellent（11964948@qq.com）
 功能：调度专家角色，生成高质量项目文档
@@ -18,6 +18,7 @@ from typing import Literal, cast
 
 class ExpertRole(Enum):
     """专家角色枚举"""
+    PRODUCT = "PRODUCT"             # 产品负责人
     PM = "PM"                       # 产品经理
     ARCHITECT = "ARCHITECT"         # 架构师
     UI = "UI"                       # UI 设计师
@@ -31,6 +32,7 @@ class ExpertRole(Enum):
 
 
 EXPERT_DESCRIPTIONS: dict[ExpertRole, str] = {
+    ExpertRole.PRODUCT: "产品闭环、功能缺口、体验总审查、优先级取舍",
     ExpertRole.PM: "需求分析、PRD 编写、用户故事、业务规则",
     ExpertRole.ARCHITECT: "系统设计、技术选型、架构文档、API 设计",
     ExpertRole.UI: "视觉设计、设计规范、组件库、品牌一致性",
@@ -46,7 +48,7 @@ EXPERT_DESCRIPTIONS: dict[ExpertRole, str] = {
 
 @dataclass
 class ExpertProfile:
-    """专家完整画像（学习自 CrewAI 的 role/goal/backstory 模式）"""
+    """专家完整画像"""
     role: ExpertRole
     title: str
     goal: str
@@ -58,6 +60,37 @@ class ExpertProfile:
 
 
 EXPERT_PROFILES: dict[ExpertRole, ExpertProfile] = {
+    ExpertRole.PRODUCT: ExpertProfile(
+        role=ExpertRole.PRODUCT,
+        title="产品负责人",
+        goal="从全局产品视角审查首次上手、功能闭环、交付可信度和优先级，持续识别缺失能力与断链流程",
+        backstory="你是一位长期负责 0-1 与商业化落地的产品负责人，关注的不只是文档是否存在，而是用户能不能真的走通、团队能不能真的交付、问题能不能真的闭环。你的标准是：每个能力都要有发现路径、执行路径和恢复路径。",
+        focus_areas=[
+            "首次上手路径与命令发现成本",
+            "确认门、返工门与恢复路径是否可理解",
+            "功能缺口、逻辑断链与未闭环能力",
+            "产品审查报告、证据链和后续行动是否一致",
+            "优先级判断是否对齐商业交付目标",
+        ],
+        thinking_framework=[
+            "先看用户是否知道第一步是什么，再看工程实现是否足够稳",
+            "把问题分成阻断首次使用、影响闭环、可延后优化三层",
+            "每项能力都要回答：用户如何发现、如何执行、失败后如何恢复",
+            "产品审查不是复述功能，而是找出缺失功能、缺失逻辑和断链路径",
+        ],
+        quality_criteria=[
+            "存在明确的最短路径和成功标志",
+            "存在正式的产品审查入口与报告",
+            "缺口能被转成下一步行动而不是停留在描述",
+            "确认门、返工门、发布门之间没有断链",
+        ],
+        handoff_checklist=[
+            "产品审查报告已生成",
+            "关键问题已分级",
+            "下一步动作已排序",
+            "需要补齐的闭环已纳入实施计划",
+        ],
+    ),
     ExpertRole.PM: ExpertProfile(
         role=ExpertRole.PM,
         title="产品经理",
@@ -143,7 +176,7 @@ EXPERT_PROFILES: dict[ExpertRole, ExpertProfile] = {
             "设计系统包含完整的 Token 定义",
             "配色方案有色阶（50-950）和语义色",
             "组件有完整的状态定义",
-            "禁止 AI 模板化视觉（紫/粉渐变、emoji 图标、系统字体直出）",
+            "默认避免宿主滑向 AI 模板化视觉（紫/粉渐变、emoji 图标、系统字体直出），但若品牌或用户明确要求可采用并必须给出理由",
         ],
         handoff_checklist=[
             "UIUX 文档已生成",

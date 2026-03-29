@@ -13,6 +13,7 @@ import {
   Sparkles,
   Terminal,
   Workflow,
+  Zap,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { CodeBlock } from '@/components/ui/CodeBlock';
@@ -79,6 +80,9 @@ type Content = {
   troubleshootingSteps: string[];
   smokeTitle: string;
   smokeCode: string;
+  highlightsTitle: string;
+  highlightsBody: string;
+  highlightsCards: { title: string; body: string }[];
 };
 
 function gradeVariant(grade: string) {
@@ -98,6 +102,7 @@ const zhContent: Content = {
     { label: '核心阶段', value: '9 段' },
   ],
   sections: [
+    { id: 'highlights', label: 'v2.2.0 新功能', icon: Zap },
     { id: 'governance', label: '产品定位', icon: BookOpen },
     { id: 'install', label: '安装方式', icon: Package },
     { id: 'surfaces', label: '接入面', icon: Boxes },
@@ -310,6 +315,18 @@ const zhContent: Content = {
     '先用 smoke 触发语句。',
     '如果宿主直接开始开发，优先判断当前会话没有重新加载规则。',
   ],
+  highlightsTitle: 'v2.2.0 新功能亮点',
+  highlightsBody: '2.2.0 是 Super Dev 的知识驱动与质量自治大版本，核心升级集中在知识推送、可编程规则、专家深度武装和跨系统集成四个方向。',
+  highlightsCards: [
+    { title: '知识推送引擎', body: '每阶段自动推送相关知识约束，306文件索引，7阶段映射，L1/L2/L3渐进式加载。' },
+    { title: '知识自演化', body: 'SQLite追踪使用效果，数据驱动权重优化，知识库扩展至270+文件/15万行，覆盖23个技术领域。' },
+    { title: '可编程验证规则', body: '25条YAML声明式规则（14默认+11红队），支持自定义扩展。' },
+    { title: '质量顾问', body: '主动质量建议，Quick Wins优先排序，Spec-Code一致性检测防止代码偏离Spec。' },
+    { title: '专家系统四层武装', body: 'Profile+Knowledge+Rules+Protocol，11个深度Playbook，交叉审查引擎多专家视角自动审查。' },
+    { title: 'Pipeline效能度量', body: 'DORA五指标+Rework Rate，ADR自动生成，Prompt模板版本化。' },
+    { title: '跨系统集成', body: 'A2A协议5个Agent Cards，外部审查集成（CodeRabbit/Qodo），结构化输出5个JSON Schema。' },
+    { title: '基础设施强化', body: 'Web API认证，OpenClaw插件升级至20个Tool，终端UI自适应，1600+测试覆盖。' },
+  ],
   smokeTitle: 'Smoke 验收',
   smokeCode:
     '# slash 宿主\n/super-dev "请先不要开始编码，只回复 SMOKE_OK，并说明你会先做 research、再写三文档并等待确认。"\n\n# 非 slash 宿主\nsuper-dev: 请先不要开始编码，只回复 SMOKE_OK，并说明你会先做 research、再写三文档并等待确认。',
@@ -326,6 +343,7 @@ const enContent: Content = {
     { label: 'Core phases', value: '9' },
   ],
   sections: [
+    { id: 'highlights', label: 'v2.2.0 Highlights', icon: Zap },
     { id: 'governance', label: 'Positioning', icon: BookOpen },
     { id: 'install', label: 'Installation', icon: Package },
     { id: 'surfaces', label: 'Integration Surfaces', icon: Boxes },
@@ -538,6 +556,18 @@ const enContent: Content = {
     'Use a smoke prompt before trying the real requirement.',
     'If the host starts coding immediately, assume the current session did not reload the rules.',
   ],
+  highlightsTitle: 'v2.2.0 Highlights',
+  highlightsBody: 'Version 2.2.0 is the knowledge-driven and quality-autonomous major release. Core upgrades focus on knowledge push, programmable rules, expert depth, and cross-system integration.',
+  highlightsCards: [
+    { title: 'Knowledge Push Engine', body: 'Auto-push relevant knowledge per pipeline phase. 306 files indexed, 7-phase mapping, L1/L2/L3 progressive loading.' },
+    { title: 'Knowledge Evolution', body: 'SQLite-based usage tracking with data-driven weight optimization. Knowledge base expanded to 270+ files / 150K lines across 23 domains.' },
+    { title: 'Programmable Validation Rules', body: '25 YAML declarative rules (14 default + 11 redteam), fully customizable.' },
+    { title: 'Quality Advisor', body: 'Proactive quality suggestions with Quick Wins prioritization. Spec-Code consistency checker prevents code drift.' },
+    { title: 'Expert System 4-Layer Upgrade', body: 'Profile+Knowledge+Rules+Protocol, 11 deep Playbooks, cross-review engine for multi-expert artifact validation.' },
+    { title: 'Pipeline Metrics', body: 'DORA 5 indicators + Rework Rate, ADR auto-generation, prompt template versioning.' },
+    { title: 'Cross-System Integration', body: 'A2A protocol with 5 Agent Cards, external review integration (CodeRabbit/Qodo), 5 structured output JSON Schemas.' },
+    { title: 'Infrastructure Hardening', body: 'Web API authentication, OpenClaw plugin upgraded to 20 Tools, responsive terminal UI, 1600+ test coverage.' },
+  ],
   smokeTitle: 'Smoke validation',
   smokeCode:
     '# slash hosts\n/super-dev "Do not start coding. Reply only with SMOKE_OK and explain that you will do research first, then generate the three core docs, then wait for confirmation."\n\n# non-slash hosts\nsuper-dev: Do not start coding. Reply only with SMOKE_OK and explain that you will do research first, then generate the three core docs, then wait for confirmation.',
@@ -589,7 +619,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             <div className="max-w-[860px]">
               <div className="mb-5 flex flex-wrap items-center gap-2">
                 <Badge variant="version">{content.heroKicker}</Badge>
-                <Badge variant="certified">v2.1.5</Badge>
+                <Badge variant="certified">v2.2.0</Badge>
                 <Badge variant="compatible">{locale === 'en' ? 'Bilingual' : '中英双语'}</Badge>
               </div>
               <h1 className="max-w-[900px] text-4xl font-bold leading-[1.08] tracking-tight text-text-primary sm:text-5xl lg:text-[3.5rem]">
@@ -674,7 +704,18 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
           </aside>
 
           <div className="space-y-8">
-            <SectionShell id="governance" icon={BookOpen} label={content.sections[0].label} title={content.governanceTitle} body={content.governanceBody}>
+            <SectionShell id="highlights" icon={Zap} label={content.sections[0].label} title={content.highlightsTitle} body={content.highlightsBody}>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {content.highlightsCards.map((card) => (
+                  <div key={card.title} className="rounded-2xl border border-accent-blue/25 bg-accent-blue/5 p-5">
+                    <h3 className="mb-2 text-base font-semibold text-text-primary">{card.title}</h3>
+                    <p className="text-sm leading-7 text-text-secondary">{card.body}</p>
+                  </div>
+                ))}
+              </div>
+            </SectionShell>
+
+            <SectionShell id="governance" icon={BookOpen} label={content.sections[1].label} title={content.governanceTitle} body={content.governanceBody}>
               <div className="grid gap-4 lg:grid-cols-2">
                 {content.governanceCards.map((item) => (
                   <div key={item.title} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
@@ -685,7 +726,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
               </div>
             </SectionShell>
 
-            <SectionShell id="install" icon={Package} label={content.sections[1].label} title={content.installTitle} body={content.installBody}>
+            <SectionShell id="install" icon={Package} label={content.sections[2].label} title={content.installTitle} body={content.installBody}>
               <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
                 <div className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
                   <h3 className="mb-4 text-lg font-semibold text-text-primary">{locale === 'en' ? 'Installation notes' : '安装说明'}</h3>
@@ -702,7 +743,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
               </div>
             </SectionShell>
 
-            <SectionShell id="surfaces" icon={Boxes} label={content.sections[2].label} title={content.surfacesTitle} body={content.surfacesBody}>
+            <SectionShell id="surfaces" icon={Boxes} label={content.sections[3].label} title={content.surfacesTitle} body={content.surfacesBody}>
               <div className="grid gap-4 lg:grid-cols-2">
                 {content.surfaces.map((surface) => (
                   <div key={surface.title} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
@@ -721,7 +762,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
               </div>
             </SectionShell>
 
-            <SectionShell id="triggers" icon={Command} label={content.sections[3].label} title={content.triggerTitle} body={content.triggerBody}>
+            <SectionShell id="triggers" icon={Command} label={content.sections[4].label} title={content.triggerTitle} body={content.triggerBody}>
               <div className="space-y-4">
                 {content.triggerCards.map((card) => (
                   <div key={card.title} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
@@ -741,7 +782,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
               </div>
             </SectionShell>
 
-            <SectionShell id="hosts" icon={Terminal} label={content.sections[4].label} title={content.matrixTitle} body={content.matrixBody}>
+            <SectionShell id="hosts" icon={Terminal} label={content.sections[5].label} title={content.matrixTitle} body={content.matrixBody}>
               <div className="space-y-4">
                 {content.matrixGroups.map((group) => (
                   <div key={group.category} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
@@ -766,7 +807,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
               </div>
             </SectionShell>
 
-            <SectionShell id="pipeline" icon={Workflow} label={content.sections[5].label} title={content.pipelineTitle} body={content.pipelineBody}>
+            <SectionShell id="pipeline" icon={Workflow} label={content.sections[6].label} title={content.pipelineTitle} body={content.pipelineBody}>
               <div className="space-y-4">
                 {content.pipelineSteps.map((step, index) => (
                   <div key={step.step} className="grid gap-4 rounded-2xl border border-border-default bg-bg-elevated/80 p-5 lg:grid-cols-[88px_minmax(0,1fr)]">
@@ -785,7 +826,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
               </div>
             </SectionShell>
 
-            <SectionShell id="control" icon={RefreshCw} label={content.sections[6].label} title={content.controlTitle} body={content.controlBody}>
+            <SectionShell id="control" icon={RefreshCw} label={content.sections[7].label} title={content.controlTitle} body={content.controlBody}>
               <div className="grid gap-4 lg:grid-cols-3">
                 {content.controlCards.map((card) => (
                   <div key={card.title} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
@@ -797,7 +838,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
               </div>
             </SectionShell>
 
-            <SectionShell id="operations" icon={FolderTree} label={content.sections[7].label} title={content.operationsTitle} body={content.operationsBody}>
+            <SectionShell id="operations" icon={FolderTree} label={content.sections[8].label} title={content.operationsTitle} body={content.operationsBody}>
               <div className="space-y-4">
                 {content.operationsCards.map((card) => (
                   <div key={card.title} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
@@ -816,7 +857,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
               </div>
             </SectionShell>
 
-            <SectionShell id="commands" icon={Package} label={content.sections[8].label} title={content.commandsTitle} body={content.commandsBody}>
+            <SectionShell id="commands" icon={Package} label={content.sections[9].label} title={content.commandsTitle} body={content.commandsBody}>
               <div className="space-y-4">
                 {content.commands.map((command) => (
                   <div key={command.title} className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
@@ -827,7 +868,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
               </div>
             </SectionShell>
 
-            <SectionShell id="troubleshooting" icon={LifeBuoy} label={content.sections[9].label} title={content.troubleshootingTitle} body={content.troubleshootingBody}>
+            <SectionShell id="troubleshooting" icon={LifeBuoy} label={content.sections[10].label} title={content.troubleshootingTitle} body={content.troubleshootingBody}>
               <div className="space-y-4">
                 <div className="rounded-2xl border border-border-default bg-bg-elevated/80 p-5">
                   <h3 className="mb-4 text-lg font-semibold text-text-primary">{locale === 'en' ? 'Troubleshooting order' : '排查顺序'}</h3>

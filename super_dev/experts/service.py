@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 _EXPERT_META: list[dict[str, str]] = [
+    {"id": "PRODUCT", "name": "产品负责人", "description": "产品闭环、功能缺口、体验总审查"},
     {"id": "PM", "name": "产品经理", "description": "需求分析、PRD编写"},
     {"id": "ARCHITECT", "name": "架构师", "description": "系统设计、技术选型"},
     {"id": "UI", "name": "UI设计师", "description": "视觉设计、设计规范"},
@@ -20,6 +21,11 @@ _EXPERT_META: list[dict[str, str]] = [
 
 
 _EXPERT_PLAYBOOKS: dict[str, list[str]] = {
+    "PRODUCT": [
+        "先看首次上手路径、成功标志和失败恢复是否清晰，再看实现细节。",
+        "从产品完整性角度盘点缺失能力、断链流程和交付证据缺口。",
+        "把问题按“阻断首次使用 / 影响闭环 / 可延后优化”分层，优先修阻断项。",
+    ],
     "PM": [
         "明确目标用户、核心场景与北极星指标。",
         "将需求拆分为 MUST/SHOULD/COULD，并定义验收标准。",
@@ -72,13 +78,33 @@ _EXPERT_PLAYBOOKS: dict[str, list[str]] = {
     ],
 }
 
+_TEAM_META: list[dict[str, str]] = [
+    {
+        "id": "PRODUCT_AUDIT",
+        "name": "产品审查团队",
+        "description": "产品负责人牵头，联动 PM/UX/ARCHITECT/SECURITY/CODE/QA/DEVOPS 做全项目闭环审查",
+    },
+]
+
+_TEAM_COMPOSITION: dict[str, list[str]] = {
+    "PRODUCT_AUDIT": ["PRODUCT", "PM", "UX", "ARCHITECT", "SECURITY", "CODE", "QA", "DEVOPS"],
+}
+
 
 def list_experts() -> list[dict[str, str]]:
     return list(_EXPERT_META)
 
 
+def list_expert_teams() -> list[dict[str, str]]:
+    return list(_TEAM_META)
+
+
 def has_expert(expert_id: str) -> bool:
     return expert_id in _EXPERT_PLAYBOOKS
+
+
+def has_expert_team(team_id: str) -> bool:
+    return team_id in _TEAM_COMPOSITION
 
 
 def render_expert_advice_markdown(expert_id: str, prompt: str = "") -> str:
@@ -107,6 +133,52 @@ def render_expert_advice_markdown(expert_id: str, prompt: str = "") -> str:
     return "\n".join(lines)
 
 
+def render_team_advice_markdown(team_id: str, prompt: str = "") -> str:
+    if team_id not in _TEAM_COMPOSITION:
+        raise ValueError(f"unknown team: {team_id}")
+
+    members = _TEAM_COMPOSITION[team_id]
+    lines = [
+        f"# {team_id} 团队审查报告",
+        "",
+        f"**输入问题**: {prompt or '(未提供，按仓库级全面审查输出)'}",
+        "",
+        "## 团队组成",
+        "",
+    ]
+    for member in members:
+        meta = next((item for item in _EXPERT_META if item["id"] == member), {"name": member, "description": ""})
+        lines.append(f"- **{member}**: {meta['name']} - {meta['description']}")
+
+    lines.extend(
+        [
+            "",
+            "## 审查维度",
+            "",
+            "1. 产品与上手路径：用户是否知道怎么开始、怎么继续、怎么确认流程完成。",
+            "2. 交互与信息架构：主路径、确认门、失败恢复、状态反馈是否闭环。",
+            "3. 功能完整性：是否存在承诺了但没有真实做成的能力、文档断链或命令断链。",
+            "4. 技术与架构：代码结构是否支持持续迭代，协议/规则是否有单一真相源。",
+            "5. 质量与安全：红队、质量门禁、proof-pack、release readiness 是否引用同一套证据。",
+            "6. 交付闭环：报告、任务执行、自检、评审状态、发布证据是否一致。",
+            "",
+            "## 输出要求",
+            "",
+            "1. 先按严重级别列出问题，必须带文件路径与原因。",
+            "2. 再给出按优先级排序的修复建议。",
+            "3. 最后输出一个从 P0 到 P2 的补全路线图。",
+            "",
+            "## 下一步执行",
+            "",
+            "1. 先生成正式审查报告并写入 `output/`。",
+            "2. 按 P0/P1 优先级直接修复闭环漏洞和断链能力。",
+            "3. 修复后重新执行 `super-dev quality --type all`、`super-dev release proof-pack`、`super-dev release readiness`。",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def save_expert_advice(project_dir: Path, expert_id: str, prompt: str = "") -> tuple[Path, str]:
     project_dir = Path(project_dir).resolve()
     output_dir = project_dir / "output"
@@ -114,6 +186,17 @@ def save_expert_advice(project_dir: Path, expert_id: str, prompt: str = "") -> t
 
     content = render_expert_advice_markdown(expert_id=expert_id, prompt=prompt)
     file_path = output_dir / f"expert-{expert_id.lower()}-advice.md"
+    file_path.write_text(content, encoding="utf-8")
+    return file_path, content
+
+
+def save_team_advice(project_dir: Path, team_id: str, prompt: str = "") -> tuple[Path, str]:
+    project_dir = Path(project_dir).resolve()
+    output_dir = project_dir / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    content = render_team_advice_markdown(team_id=team_id, prompt=prompt)
+    file_path = output_dir / f"team-{team_id.lower().replace('_', '-')}-report.md"
     file_path.write_text(content, encoding="utf-8")
     return file_path, content
 

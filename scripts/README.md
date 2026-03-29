@@ -125,9 +125,9 @@ python3 scripts/generate_lifecycle_packet.py --project-dir . --name order-center
 ./scripts/release.sh
 ```
 
-## 推荐顺序（2.1.1）
+## 推荐顺序（2.2.0）
 
 1. `./scripts/preflight.sh`
 2. `python3 -m build && twine check dist/*`
 3. `twine upload dist/*`
-4. `git tag v2.1.1 && git push origin v2.1.1`
+4. `git tag v2.2.0 && git push origin v2.2.0`

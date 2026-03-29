@@ -21,6 +21,14 @@ class AIPromptGenerator:
         self.project_dir = Path(project_dir).resolve()
         self.name = name
 
+        # 加载专家工具箱（用于注入多维度审查指令）
+        try:
+            from ..experts.toolkit import load_expert_toolkits
+
+            self._toolkits = load_expert_toolkits()
+        except Exception:
+            self._toolkits = {}
+
     def generate(self) -> str:
         """生成 AI 提示词"""
         import yaml  # type: ignore[import-untyped]
@@ -108,21 +116,21 @@ class AIPromptGenerator:
 
 ## 多专家 Agent 架构
 
-Super Dev 内置 10 位专家 Agent，每位专家有独立的角色定义、专业目标、思维框架和质量标准。在不同阶段以不同专家的专业身份工作。
+Super Dev 内置 11 位专家 Agent，每位专家有独立的角色定义、专业目标、思维框架和质量标准。在不同阶段以不同专家的专业身份工作。
 
 ### 阶段-专家映射
 
 | 阶段 | 主导专家 | 专业视角 |
 |:---|:---|:---|
-| 研究 | PM + ARCHITECT | 用户价值分析 + 技术可行性评估 |
-| PRD | PM | 需求拆解、用户故事、验收标准、商业规则 |
+| 研究 | PRODUCT + PM + ARCHITECT | 产品机会判断 + 用户价值分析 + 技术可行性评估 |
+| PRD | PRODUCT + PM | 需求拆解、用户故事、验收标准、商业规则 |
 | 架构 | ARCHITECT + DBA | 系统设计、技术选型、API 契约、数据建模 |
 | UI/UX | UI + UX | 视觉系统、设计 Token、组件规范、交互设计 |
 | Spec | PM + CODE | 任务分解、优先级排序、依赖分析 |
 | 前端 | CODE + UI | 组件实现、页面搭建、状态管理、交互还原 |
 | 后端 | CODE + DBA | API 实现、数据层、认证授权、性能优化 |
-| 质量 | QA + SECURITY | 测试策略、安全审查、质量门禁、合规检查 |
-| 交付 | DEVOPS + QA | CI/CD、部署配置、发布演练、交付打包 |
+| 质量 | PRODUCT + QA + SECURITY | 闭环复核、测试策略、安全审查、质量门禁 |
+| 交付 | PRODUCT + DEVOPS + QA | 交付证据、CI/CD、发布演练、交付打包 |
 
 ### 专家角色画像
 
@@ -291,6 +299,10 @@ Super Dev 内置 10 位专家 Agent，每位专家有独立的角色定义、专
 
 ---
 
+{self._build_expert_section()}
+
+---
+
 ## 任务列表
 
 {change_content}
@@ -355,10 +367,13 @@ import {{ Save, Search, Settings }} from 'lucide-react';
 
 1. 先定义视觉方向、字体系统、颜色 token、间距 token、栅格系统，再开始页面实现。
 2. 页面必须体现真实商业产品的层级关系、数据密度与任务路径，禁止只会做大色块和浅层卡片。
-3. 禁止紫色/粉色渐变主视觉、禁止 emoji 图标、禁止默认系统字体直出、禁止无品牌感模板页面。
-4. 必须覆盖正常态、加载态、空态、错误态、禁用态、悬停态、聚焦态、成功反馈态。
-5. 关键页面必须优先保证信息架构正确、CTA 清晰、转化路径明确、信任元素完整。
-6. 先完成可用、可信、可演示的界面，再做装饰性视觉。
+3. 默认避免宿主自动滑向紫色/粉色渐变主视觉、默认系统字体直出和无品牌感模板页面；只有在品牌规范、用户明确要求或产品定位匹配时才允许采用，并必须说明理由。
+4. 对于非对话式 AI 产品，默认避免复刻 Claude / ChatGPT 式界面骨架、灰黑侧栏聊天布局、窄中栏对话壳层与同款中性色配色；若用户明确要求或产品本身就是聊天工作台，可采用，但必须在 UI 方案里说明为什么适合。
+5. 开始任何 UI 实现前，必须先明确本轮图标库（Lucide / Heroicons / Tabler / 官方组件图标）；未声明图标库视为不能开始写页面。
+6. 不允许把“图标库约束”留到后面补充；如果发现页面里出现 emoji 或临时表情符号，必须先删干净再继续。
+7. 必须覆盖正常态、加载态、空态、错误态、禁用态、悬停态、聚焦态、成功反馈态。
+8. 关键页面必须优先保证信息架构正确、CTA 清晰、转化路径明确、信任元素完整。
+9. 先完成可用、可信、可演示的界面，再做装饰性视觉。
 
 ### 本项目 UI 实现基线
 
@@ -368,11 +383,22 @@ import {{ Save, Search, Settings }} from 'lucide-react';
 
 1. 必须先输出 **UI 方案草图说明**（信息架构、页面骨架、组件生态、token 策略）再写代码。
 2. 每个关键页面必须提供 **2 个视觉方案**，并说明主方案取舍原因。
+2.1 在开始实现前，必须明确输出：主视觉气质、版式骨架、字体组合、图标库、配色逻辑、明确不采用的参考方向。
 3. 必须按 **Token → Primitive → Pattern → Surface** 四层实现，不允许直接散写样式。
 4. 若使用 Shadcn / DaisyUI / Aceternity / Magic UI，必须先声明用途边界与替换策略，禁止混搭失控。
 5. 页面完成后必须自检：状态矩阵、转化路径、信任模块、可访问性、性能预算。
 6. 必须把技术细节转译成“目标-步骤-结果”，保证非技术与专业用户都能使用同一套交互。
 7. 若目标端为 Web/H5/微信小程序/APP/桌面端，必须切换到对应生态（TDesign 小程序 / RN / Flutter / SwiftUI / Electron / Tauri）并遵循平台交互规范。
+8. 实现结束前，必须再次检查源码和设计稿说明里不存在任何 emoji 功能图标，也不存在 Claude / ChatGPT 同款聊天壳层式布局借壳复用。
+
+### 实现收尾与自审闭环（必须遵守）
+
+1. 每轮代码修改完成后，必须先做一次最小 diff review，再汇报“已完成”。
+2. 必须运行项目原生 `build / compile / type-check / test / runtime smoke`；如果某项不存在，要明确说明原因。
+3. 对本轮新增的函数、方法、字段、组件、配置、日志埋点，必须逐项确认已经接入真实调用链；未接入则删除，不允许“先留着以后用”。
+4. 严禁留下新增 `unused code`、未引用文件、只定义不调用的 helper、不可达分支或无效兜底逻辑。
+5. 如果新增的是日志、恢复逻辑、告警、埋点，必须验证它们会在真实路径上触发，不能只把方法写进去却不挂到入口。
+6. 结束汇报时必须说明：运行了哪些命令、修掉了哪些报错或 warning、还有哪些残余风险。
 
 ### 安全规范
 
@@ -464,6 +490,7 @@ project-root/
         from ..orchestrator.experts import ExpertRole, get_expert_prompt_section
 
         key_experts = [
+            ExpertRole.PRODUCT,
             ExpertRole.PM,
             ExpertRole.ARCHITECT,
             ExpertRole.UI,
@@ -475,6 +502,170 @@ project-root/
         for role in key_experts:
             sections.append(get_expert_prompt_section(role))
         return "\n".join(sections)
+
+    def _current_phase(self) -> str:
+        """推断当前 pipeline 阶段（基于产出物是否存在）。"""
+        output_dir = self.project_dir / "output"
+        changes_dir = self.project_dir / ".super-dev" / "changes"
+
+        # 按产出物反推当前阶段
+        if not (output_dir / f"{self.name}-research.md").exists():
+            return "research"
+        if not (output_dir / f"{self.name}-prd.md").exists():
+            return "docs"
+        if not (output_dir / f"{self.name}-architecture.md").exists():
+            return "docs"
+        if not (output_dir / f"{self.name}-uiux.md").exists():
+            return "docs"
+        # 有文档但还没有 spec
+        if not changes_dir.exists() or not any(changes_dir.iterdir()):
+            return "spec"
+        # 有 spec，推断前端/后端/质量/交付
+        # 默认返回 frontend，让所有相关专家都激活
+        return "frontend"
+
+    def _get_active_experts_for_phase(self) -> dict:
+        """根据当前阶段返回激活的专家工具箱。"""
+        try:
+            from ..experts.toolkit import PHASE_EXPERT_MAP
+
+            phase = self._current_phase()
+            expert_ids = PHASE_EXPERT_MAP.get(phase, [])
+            return {eid: self._toolkits[eid] for eid in expert_ids if eid in self._toolkits}
+        except Exception:
+            return {}
+
+    def _build_expert_section(self) -> str:
+        """构建专家视角注入区域（多维度审查要求 + 检查清单 + 交叉审查指令）。"""
+        if not self._toolkits:
+            return ""
+
+        try:
+            active_experts = self._get_active_experts_for_phase()
+        except Exception:
+            return ""
+
+        if not active_experts:
+            return ""
+
+        phase = self._current_phase()
+        lines = ["## 专家视角（多维度审查要求）", ""]
+        lines.append("在开发和审查过程中，请从以下专家视角进行检查：")
+        lines.append("")
+
+        for expert_id, toolkit in active_experts.items():
+            lines.append(f"### {toolkit.name}（{expert_id}）视角")
+            lines.append(toolkit.system_prompt_injection)
+            lines.append("")
+
+            # 注入 Playbook 核心条目
+            if toolkit.playbook:
+                lines.append("**核心方法论：**")
+                for item in toolkit.playbook[:3]:
+                    lines.append(f"- {item}")
+                lines.append("")
+
+            # 注入当前阶段的检查清单
+            checklist = toolkit.phase_checklists.get(phase, [])
+            if checklist:
+                lines.append("**检查清单：**")
+                for item in checklist[:10]:
+                    lines.append(f"- [ ] {item}")
+                lines.append("")
+
+            # 注入专家的知识约束（通过 ExpertKnowledge.resolve）
+            if hasattr(toolkit, "knowledge") and hasattr(toolkit.knowledge, "resolve"):
+                try:
+                    knowledge_dir = Path.cwd() / "knowledge"
+                    if knowledge_dir.is_dir():
+                        knowledge_files = toolkit.knowledge.resolve(knowledge_dir)
+                        if knowledge_files:
+                            lines.append(
+                                f"**知识约束** (来自 {len(knowledge_files)} 个知识文件):"
+                            )
+                            for kf in knowledge_files[:3]:
+                                kf_path = Path(kf)
+                                if kf_path.exists():
+                                    try:
+                                        content = kf_path.read_text(
+                                            encoding="utf-8", errors="replace"
+                                        )
+                                        if "Agent Checklist" in content:
+                                            cl_start = content.index("Agent Checklist")
+                                            checklist_text = content[
+                                                cl_start : cl_start + 500
+                                            ]
+                                            lines.append(f"  从 {kf_path.name}:")
+                                            for cl_line in checklist_text.split("\n")[2:8]:
+                                                if cl_line.strip().startswith("- ["):
+                                                    lines.append(f"  {cl_line.strip()}")
+                                    except OSError:
+                                        pass
+                            lines.append("")
+                except Exception:
+                    pass
+
+        # 知识约束提示
+        lines.append("### 知识约束")
+        lines.append(
+            "如果 `knowledge/` 或 `output/knowledge-cache/` 中存在与当前阶段相关的规范、"
+            "清单或反模式，必须视为硬约束纳入实现和审查，不得降级为可选参考。"
+        )
+        lines.append("")
+
+        # 知识推送引擎注入（按阶段自动推送精准知识子集）
+        try:
+            from ..orchestrator.knowledge_pusher import KnowledgePusher
+
+            knowledge_dir = self.project_dir / "knowledge"
+            if knowledge_dir.is_dir():
+                import yaml as _yaml  # type: ignore[import-untyped]
+
+                _cfg_path = self.project_dir / "super-dev.yaml"
+                _tech: dict = {}
+                if _cfg_path.exists():
+                    with open(_cfg_path, encoding="utf-8") as _f:
+                        _cfg = _yaml.safe_load(_f) or {}
+                    _tech = {
+                        "frontend": _cfg.get("frontend", ""),
+                        "backend": _cfg.get("backend", ""),
+                        "database": _cfg.get("database", ""),
+                    }
+                pusher = KnowledgePusher(
+                    knowledge_dir=knowledge_dir,
+                    tech_stack=_tech,
+                    project_description=project_config.get("description", ""),
+                )
+                phase_push = pusher.get_phase_knowledge(phase)
+                injection = phase_push.to_prompt_injection()
+                if injection.strip():
+                    lines.append(injection)
+        except Exception:
+            pass
+
+        # 交叉审查指令（优先从 review_protocol 动态生成）
+        try:
+            from ..experts.review_protocol import CrossReviewEngine
+
+            review_engine = CrossReviewEngine(self._toolkits)
+            review_prompt = review_engine.generate_review_prompt(phase, "all")
+            if review_prompt:
+                lines.append("### 多专家交叉审查（自动生成）")
+                lines.append(review_prompt[:2000])  # 限制长度
+                lines.append("")
+            else:
+                raise ValueError("empty review prompt")
+        except Exception:
+            # 降级为静态文字
+            lines.append("### 交叉审查要求")
+            lines.append("完成每个阶段后，请从以下角度进行自我审查：")
+            lines.append("1. **安全专家**：是否存在安全漏洞？认证授权是否最小权限？输入校验是否完整？")
+            lines.append("2. **QA专家**：验收标准是否可测试？关键路径是否有自动化测试？质量门禁是否达标？")
+            lines.append("3. **DBA专家**：数据库设计是否合理？索引策略是否覆盖高频查询？迁移是否可回滚？")
+            lines.append("4. **产品负责人**：用户能否走通首次上手路径？功能闭环是否完整？")
+            lines.append("")
+
+        return "\n".join(lines)
 
     def _infer_product_type(self, description: str) -> str:
         text = description.lower()
@@ -521,7 +712,14 @@ project-root/
     def _render_ui_profile(self, profile: dict) -> str:
         lib = profile.get("primary_library", {})
         stack = profile.get("component_stack", {})
+        typography = profile.get("typography_preset", {})
+        palette = profile.get("color_palette", {})
+        style_direction = profile.get("style_direction", {})
         lines = [
+            f"- **主视觉气质**: {style_direction.get('direction', 'N/A')}",
+            f"- **材质/版式提示**: {style_direction.get('materials', 'N/A')}",
+            f"- **字体组合**: {typography.get('heading', 'N/A')} / {typography.get('body', 'N/A')}",
+            f"- **配色逻辑**: {palette.get('name', 'N/A')}（主色 {palette.get('primary', 'N/A')} / 强调色 {palette.get('accent', 'N/A')} / 背景 {palette.get('background', 'N/A')}）",
             f"- **首选组件生态**: {lib.get('name', 'N/A')}",
             f"- **表单与验证**: {stack.get('form', 'N/A')}",
             f"- **数据展示**: {stack.get('table', 'N/A')} / {stack.get('chart', 'N/A')}",
@@ -533,8 +731,23 @@ project-root/
             "**必须优先落实的模块**:",
         ]
         lines.extend(f"- {item}" for item in profile.get("component_priorities", []))
+        priorities = profile.get("design_system_priorities", [])
+        if priorities:
+            lines.extend(["", "**设计系统优先级**:"])
+            lines.extend(f"- {item}" for item in priorities[:8])
         lines.extend(["", "**必须出现的信任/转化模块**:"])
         lines.extend(f"- {item}" for item in profile.get("trust_modules", [])[:8])
+        state_requirements = profile.get("state_requirements", [])
+        if state_requirements:
+            lines.extend(["", "**状态矩阵要求**:"])
+            lines.extend(f"- {item}" for item in state_requirements[:8])
+        alternatives = profile.get("alternative_libraries", [])
+        if alternatives:
+            lines.extend(["", "**备选组件生态与适用边界**:"])
+            for item in alternatives[:3]:
+                if not isinstance(item, dict):
+                    continue
+                lines.append(f"- {item.get('name', 'N/A')}: {item.get('rationale', 'N/A')}")
         lines.extend(["", "**明确禁止**:"])
         lines.extend(f"- {item}" for item in profile.get("banned_patterns", [])[:6])
         ui_matrix = profile.get("ui_library_matrix", [])
@@ -550,6 +763,14 @@ project-root/
         if quality:
             lines.extend(["", "**商业级 UI 交付清单**:"])
             lines.extend(f"- [ ] {item}" for item in quality[:8])
+        pre_delivery = profile.get("pre_delivery_checklist", [])
+        if pre_delivery:
+            lines.extend(["", "**交付前核对项**:"])
+            lines.extend(f"- [ ] {item}" for item in pre_delivery[:6])
+        keywords = profile.get("knowledge_keywords", [])
+        if keywords:
+            lines.extend(["", "**设计知识库关键词**:"])
+            lines.append("- " + " / ".join(keywords[:10]))
         return "\n".join(lines)
 
     def _read_document(self, doc_type: str) -> str | None:

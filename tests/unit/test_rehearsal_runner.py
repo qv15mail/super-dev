@@ -65,6 +65,19 @@ def _prepare_common_artifacts(temp_project_dir: Path, project_name: str) -> None
     (temp_project_dir / ".github" / "workflows" / "ci.yml").write_text("name: ci", encoding="utf-8")
     (temp_project_dir / ".github" / "workflows" / "cd.yml").write_text("name: cd", encoding="utf-8")
 
+    governance_dir = output_dir / "governance"
+    governance_dir.mkdir(parents=True, exist_ok=True)
+    (governance_dir / "governance-report-20260328.md").write_text(
+        (
+            "# Pipeline 治理报告\n\n"
+            "**项目**: demo\n"
+            "**Run ID**: 20260328-abc\n"
+            "**状态**: PASSED\n\n"
+            "命中率: 85%\n"
+        ),
+        encoding="utf-8",
+    )
+
 
 def test_rehearsal_runner_passes_when_all_artifacts_ready(temp_project_dir: Path) -> None:
     project_name = "demo"
@@ -109,3 +122,91 @@ def test_rehearsal_runner_detects_quality_gate_failed_text(temp_project_dir: Pat
     assert quality_checks
     assert quality_checks[0].passed is False
     assert result.passed is False
+
+
+def test_rehearsal_runner_accepts_legacy_redteam_markdown_without_score(temp_project_dir: Path) -> None:
+    project_name = "demo"
+    _prepare_common_artifacts(temp_project_dir, project_name=project_name)
+    (temp_project_dir / "output" / f"{project_name}-redteam.md").write_text(
+        "- **Critical 问题**: 0\n**状态**: 通过 - 质量良好\n",
+        encoding="utf-8",
+    )
+
+    runner = LaunchRehearsalRunner(
+        project_dir=temp_project_dir,
+        project_name=project_name,
+        cicd_platform="github",
+    )
+    result = runner.run()
+    redteam_check = next(item for item in result.checks if item.name == "Redteam Report")
+
+    assert redteam_check.passed is True
+
+
+def test_rehearsal_runner_prefers_redteam_json_evidence(temp_project_dir: Path) -> None:
+    project_name = "demo"
+    _prepare_common_artifacts(temp_project_dir, project_name=project_name)
+    (temp_project_dir / "output" / f"{project_name}-redteam.json").write_text(
+        (
+            "{\n"
+            '  "project_name": "demo",\n'
+            '  "pass_threshold": 70,\n'
+            '  "critical_count": 1,\n'
+            '  "high_count": 0,\n'
+            '  "total_score": 62,\n'
+            '  "passed": false,\n'
+            '  "blocking_reasons": ["存在 1 个 critical 问题"],\n'
+            '  "security_issues": [{"severity": "critical", "category": "auth", "description": "x", "recommendation": "y"}],\n'
+            '  "performance_issues": [],\n'
+            '  "architecture_issues": []\n'
+            "}\n"
+        ),
+        encoding="utf-8",
+    )
+
+    runner = LaunchRehearsalRunner(
+        project_dir=temp_project_dir,
+        project_name=project_name,
+        cicd_platform="github",
+    )
+    result = runner.run()
+    redteam_check = next(item for item in result.checks if item.name == "Redteam Report")
+
+    assert redteam_check.passed is False
+    assert "critical" in redteam_check.detail
+
+
+def test_rehearsal_runner_accepts_live_governance_snapshot_without_final_report(
+    temp_project_dir: Path,
+) -> None:
+    project_name = "demo"
+    _prepare_common_artifacts(temp_project_dir, project_name=project_name)
+    governance_report = (
+        temp_project_dir / "output" / "governance" / "governance-report-20260328.md"
+    )
+    governance_report.unlink()
+    (temp_project_dir / "output" / f"{project_name}-pipeline-contract.md").write_text(
+        "# Pipeline Contract\n\n- Success: yes\n",
+        encoding="utf-8",
+    )
+    (temp_project_dir / "output" / "knowledge-cache").mkdir(parents=True, exist_ok=True)
+    (
+        temp_project_dir
+        / "output"
+        / "knowledge-cache"
+        / f"{project_name}-knowledge-bundle.json"
+    ).write_text(
+        '{"local_knowledge":[],"web_knowledge":[],"research_summary":"fixture"}',
+        encoding="utf-8",
+    )
+
+    runner = LaunchRehearsalRunner(
+        project_dir=temp_project_dir,
+        project_name=project_name,
+        cicd_platform="github",
+    )
+    result = runner.run()
+    governance_check = next(item for item in result.checks if item.name == "Governance Status")
+
+    assert governance_check.passed is True
+    assert "pending-finalization" in governance_check.detail

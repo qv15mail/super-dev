@@ -8,6 +8,7 @@ from super_dev.specs.generator import SpecGenerator
 def _prepare_release_ready_project(project_dir: Path) -> None:
     (project_dir / "super_dev").mkdir(parents=True, exist_ok=True)
     (project_dir / "docs").mkdir(parents=True, exist_ok=True)
+    (project_dir / "output").mkdir(parents=True, exist_ok=True)
     (project_dir / ".super-dev" / "changes" / "release-hardening-finalization").mkdir(
         parents=True,
         exist_ok=True,
@@ -55,6 +56,14 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         "官方依据\nsuper-dev integrate smoke\n",
         encoding="utf-8",
     )
+    (project_dir / "docs" / "HOST_RUNTIME_VALIDATION.md").write_text(
+        "host runtime validation\nresearch\nsuper-dev review docs\n",
+        encoding="utf-8",
+    )
+    (project_dir / "docs" / "HOST_INSTALL_SURFACES.md").write_text(
+        "Codex CLI\nsuper-dev:\nsuper-dev integrate audit --auto\n",
+        encoding="utf-8",
+    )
     (project_dir / "docs" / "README.md").write_text("用户文档\n维护者文档\n", encoding="utf-8")
     (project_dir / "docs" / "WORKFLOW_GUIDE.md").write_text(
         "super-dev review docs\nsuper-dev run --resume\n",
@@ -64,12 +73,115 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
         "super-dev review docs\nsuper-dev run --resume\n",
         encoding="utf-8",
     )
+    (project_dir / "docs" / "PRODUCT_AUDIT.md").write_text(
+        "super-dev product-audit\nproof-pack\nrelease readiness\n",
+        encoding="utf-8",
+    )
     (project_dir / "install.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
     for name in ("change.yaml", "proposal.md", "tasks.md"):
         (project_dir / ".super-dev" / "changes" / "release-hardening-finalization" / name).write_text(
             "ok\n",
             encoding="utf-8",
         )
+    (project_dir / "output" / f"{project_dir.name}-redteam.json").write_text(
+        (
+            "{\n"
+            f'  "project_name": "{project_dir.name}",\n'
+            '  "pass_threshold": 70,\n'
+            '  "critical_count": 0,\n'
+            '  "high_count": 0,\n'
+            '  "total_score": 92,\n'
+            '  "passed": true,\n'
+            '  "blocking_reasons": [],\n'
+            '  "security_issues": [],\n'
+            '  "performance_issues": [],\n'
+            '  "architecture_issues": []\n'
+            "}\n"
+        ),
+        encoding="utf-8",
+    )
+    (project_dir / "output" / f"{project_dir.name}-quality-gate.md").write_text(
+        "# 质量门禁报告\n\n**状态**: <span style='color:green'>通过</span>\n**总分**: 90/100\n",
+        encoding="utf-8",
+    )
+    (project_dir / "output" / f"{project_dir.name}-task-execution.md").write_text(
+        (
+            "# Spec 任务执行报告\n\n"
+            "## 执行期验证摘要\n\n"
+            "- 构建检查已完成\n\n"
+            "## 宿主补充自检（交付前必做）\n\n"
+            "- 新增函数、方法、字段、模块都已接入真实调用链\n"
+        ),
+        encoding="utf-8",
+    )
+    (project_dir / "output" / f"{project_dir.name}-product-audit.json").write_text(
+        '{\n  "status": "ready",\n  "score": 90\n}\n',
+        encoding="utf-8",
+    )
+    (project_dir / "output" / f"{project_dir.name}-ui-contract.json").write_text(
+        (
+            "{\n"
+            '  "style_direction": "Editorial workspace",\n'
+            '  "typography": {"heading": "Space Grotesk", "body": "Inter"},\n'
+            '  "icon_system": "lucide-react",\n'
+            '  "ui_library_preference": {\n'
+            '    "preferred": "shadcn/ui + Radix + Tailwind",\n'
+            '    "strict": false,\n'
+            '    "final_selected": "shadcn/ui + Radix + Tailwind"\n'
+            "  },\n"
+            '  "design_tokens": {"color": {"primary": "#0f172a"}}\n'
+            "}\n"
+        ),
+        encoding="utf-8",
+    )
+    (project_dir / "output" / "frontend").mkdir(parents=True, exist_ok=True)
+    (project_dir / "output" / "frontend" / "design-tokens.css").write_text(
+        ":root { --color-primary: #0f172a; }\n",
+        encoding="utf-8",
+    )
+    (project_dir / "output" / f"{project_dir.name}-frontend-runtime.json").write_text(
+        (
+            "{\n"
+            '  "passed": true,\n'
+            '  "checks": {\n'
+            '    "output_frontend_index": true,\n'
+            '    "output_frontend_styles": true,\n'
+            '    "output_frontend_design_tokens": true,\n'
+            '    "output_frontend_script": true,\n'
+            '    "preview_html": true,\n'
+            '    "ui_contract_json": true,\n'
+            '    "ui_contract_alignment": true,\n'
+            '    "ui_theme_entry": true,\n'
+            '    "ui_navigation_shell": true,\n'
+            '    "ui_component_imports": true,\n'
+            '    "ui_banned_patterns": true\n'
+            "  }\n"
+            "}\n"
+        ),
+        encoding="utf-8",
+    )
+    # 治理证据 mock（确保治理检查项通过）
+    (project_dir / "output" / "governance-report-test.md").write_text(
+        "# Pipeline 治理报告\n\n**状态**: PASSED\n",
+        encoding="utf-8",
+    )
+    (project_dir / "output" / f"{project_dir.name}-knowledge-references.json").write_text(
+        '{"referenced_files": 5, "hit_rate": 0.65}\n',
+        encoding="utf-8",
+    )
+    (project_dir / "output" / f"{project_dir.name}-metrics.json").write_text(
+        '{"quality_gate_score": 90}\n',
+        encoding="utf-8",
+    )
+    (project_dir / "output" / f"{project_dir.name}-validation-results.json").write_text(
+        '{"passed": true, "score": 95}\n',
+        encoding="utf-8",
+    )
+    (project_dir / "docs" / "adr").mkdir(parents=True, exist_ok=True)
+    (project_dir / "docs" / "adr" / "ADR-001.md").write_text(
+        "# ADR-001: 选择 PostgreSQL\n\n## 决策\n使用 PostgreSQL。\n",
+        encoding="utf-8",
+    )
 
 
 def _prepare_spec_quality_change(project_dir: Path, change_id: str = "add-proof-ready") -> None:
@@ -125,6 +237,63 @@ def test_release_readiness_fails_when_latest_spec_quality_is_weak(temp_project_d
     spec_check = next(check for check in report.checks if check.name == "Spec Quality")
     assert spec_check.passed is False
     assert "weak-change" in spec_check.detail
+
+
+def test_release_readiness_fails_when_delivery_closure_is_incomplete(temp_project_dir: Path) -> None:
+    _prepare_release_ready_project(temp_project_dir)
+    (temp_project_dir / "output" / f"{temp_project_dir.name}-task-execution.md").unlink()
+
+    evaluator = ReleaseReadinessEvaluator(temp_project_dir)
+    report = evaluator.evaluate(verify_tests=False)
+
+    closure_check = next(check for check in report.checks if check.name == "Delivery Closure")
+    assert closure_check.passed is False
+    assert "task execution missing" in closure_check.detail
+
+
+def test_release_readiness_fails_when_ui_contract_closure_is_incomplete(temp_project_dir: Path) -> None:
+    _prepare_release_ready_project(temp_project_dir)
+    (temp_project_dir / "output" / f"{temp_project_dir.name}-ui-contract.json").unlink()
+
+    evaluator = ReleaseReadinessEvaluator(temp_project_dir)
+    report = evaluator.evaluate(verify_tests=False)
+
+    closure_check = next(check for check in report.checks if check.name == "Delivery Closure")
+    assert closure_check.passed is False
+    assert "ui contract missing" in closure_check.detail
+
+
+def test_release_readiness_fails_when_frontend_runtime_structural_ui_checks_fail(temp_project_dir: Path) -> None:
+    _prepare_release_ready_project(temp_project_dir)
+    runtime_file = temp_project_dir / "output" / f"{temp_project_dir.name}-frontend-runtime.json"
+    runtime_file.write_text(
+        (
+            "{\n"
+            '  "passed": true,\n'
+            '  "checks": {\n'
+            '    "output_frontend_index": true,\n'
+            '    "output_frontend_styles": true,\n'
+            '    "output_frontend_design_tokens": true,\n'
+            '    "output_frontend_script": true,\n'
+            '    "preview_html": true,\n'
+            '    "ui_contract_json": true,\n'
+            '    "ui_contract_alignment": true,\n'
+            '    "ui_theme_entry": false,\n'
+            '    "ui_navigation_shell": true,\n'
+            '    "ui_component_imports": true,\n'
+            '    "ui_banned_patterns": true\n'
+            "  }\n"
+            "}\n"
+        ),
+        encoding="utf-8",
+    )
+
+    evaluator = ReleaseReadinessEvaluator(temp_project_dir)
+    report = evaluator.evaluate(verify_tests=False)
+
+    closure_check = next(check for check in report.checks if check.name == "Delivery Closure")
+    assert closure_check.passed is False
+    assert "frontend runtime ui contract alignment missing" in closure_check.detail
 
 
 def test_release_readiness_fails_when_latest_spec_contains_tbd_placeholders(temp_project_dir: Path) -> None:

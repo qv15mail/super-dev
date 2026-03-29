@@ -16,6 +16,24 @@ def _seed_required_files(temp_project_dir: Path, name: str) -> None:
     _write(output_dir / f"{name}-prd.md")
     _write(output_dir / f"{name}-architecture.md")
     _write(output_dir / f"{name}-uiux.md")
+    _write(
+        output_dir / f"{name}-ui-contract.json",
+        json.dumps(
+            {
+                "style_direction": "Bold editorial SaaS",
+                "typography": {"heading": "Space Grotesk", "body": "Inter"},
+                "icon_system": "lucide-react",
+                "ui_library_preference": {
+                    "preferred": "shadcn/ui + Radix + Tailwind",
+                    "strict": False,
+                    "final_selected": "shadcn/ui + Radix + Tailwind",
+                },
+                "design_tokens": {"color": {"primary": "#123456"}},
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+    )
     _write(output_dir / f"{name}-execution-plan.md")
     _write(output_dir / f"{name}-frontend-blueprint.md")
     _write(output_dir / f"{name}-redteam.md")
@@ -28,6 +46,7 @@ def _seed_required_files(temp_project_dir: Path, name: str) -> None:
 
     _write(output_dir / "frontend" / "index.html")
     _write(output_dir / "frontend" / "styles.css")
+    _write(output_dir / "frontend" / "design-tokens.css")
     _write(output_dir / "frontend" / "app.js")
     _write(temp_project_dir / "preview.html")
 
@@ -70,12 +89,15 @@ def test_delivery_packager_ready(temp_project_dir: Path) -> None:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["status"] == "ready"
     assert "output/demo-prd.md" in manifest["included_files"]
+    assert "output/demo-ui-contract.json" in manifest["included_files"]
+    assert "output/frontend/design-tokens.css" in manifest["included_files"]
     assert "prisma/migrations/0001_init/migration.sql" in manifest["included_files"]
     assert manifest["spec_tasks"]["pending"] == 0
 
     with ZipFile(archive_path, "r") as archive:
         entries = set(archive.namelist())
         assert "output/demo-prd.md" in entries
+        assert "output/demo-ui-contract.json" in entries
         assert "output/delivery/demo-delivery-manifest.json" in entries
 
 
@@ -152,3 +174,20 @@ def test_delivery_packager_incomplete_without_frontend_runtime_report(temp_proje
     reasons = {item["path"] for item in missing_items if isinstance(item, dict)}
     assert f"output/{name}-frontend-runtime.md" in reasons
     assert f"output/{name}-frontend-runtime.json" in reasons
+
+
+def test_delivery_packager_incomplete_without_ui_contract_and_design_tokens(temp_project_dir: Path) -> None:
+    name = "demo"
+    _seed_required_files(temp_project_dir, name)
+    (temp_project_dir / "output" / f"{name}-ui-contract.json").unlink()
+    (temp_project_dir / "output" / "frontend" / "design-tokens.css").unlink()
+
+    packager = DeliveryPackager(project_dir=temp_project_dir, name=name, version="2.1.1")
+    result = packager.package(cicd_platform="all")
+
+    assert result["status"] == "incomplete"
+    missing_items = result["missing_required"]
+    assert isinstance(missing_items, list)
+    reasons = {item["path"] for item in missing_items if isinstance(item, dict)}
+    assert f"output/{name}-ui-contract.json" in reasons
+    assert "output/frontend/design-tokens.css" in reasons

@@ -28,7 +28,7 @@ or
 
 The agent will activate the Super Dev pipeline and walk through: research -> docs -> spec -> frontend -> backend -> quality -> delivery.
 
-## Registered Tools (13)
+## Registered Tools (20)
 
 | Tool | Purpose |
 |------|---------|
@@ -44,6 +44,13 @@ The agent will activate the Super Dev pipeline and walk through: research -> doc
 | `super_dev_deploy` | Generate CI/CD config, Dockerfile, or release rehearsal |
 | `super_dev_analyze` | Analyze project structure, tech stack, and dependencies |
 | `super_dev_doctor` | Run health check and diagnostics for host integration |
+| `super_dev_governance` | Governance management: status, rules, ADR, knowledge report, templates |
+| `super_dev_task` | Manage spec tasks: list, run, check completion status |
+| `super_dev_fix` | Start lightweight bugfix pipeline (skip research/docs) |
+| `super_dev_confirm` | Quick confirm a gate: docs, ui, architecture, quality, preview |
+| `super_dev_jump` | Jump to a specific pipeline stage by name or number |
+| `super_dev_product_audit` | Run comprehensive product audit: feature gaps, journey, credibility |
+| `super_dev_metrics` | View pipeline metrics, quality trends, and DORA indicators |
 | `super_dev_run` | Run any super-dev CLI command directly (optional, fallback) |
 
 ## Configuration
@@ -83,7 +90,7 @@ In your OpenClaw config (`~/.openclaw/openclaw.json`):
 OpenClaw Agent -> Plugin (TypeScript) -> child_process.execFile -> super-dev (Python CLI)
 ```
 
-The plugin registers 13 tools that bridge OpenClaw to the `super-dev` Python CLI via subprocess. The built-in SKILL.md (481 lines) teaches the agent the complete pipeline protocol including:
+The plugin registers 20 tools that bridge OpenClaw to the `super-dev` Python CLI via subprocess. The built-in SKILL.md teaches the agent the complete pipeline protocol including:
 - 9 pipeline stages with per-stage execution guidance
 - 2 mandatory confirmation gates (DOC_CONFIRM_GATE + PREVIEW_CONFIRM_GATE)
 - UI/architecture/quality rework protocols

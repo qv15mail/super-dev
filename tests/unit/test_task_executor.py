@@ -45,6 +45,10 @@ def test_task_executor_completes_generated_change(temp_project_dir: Path) -> Non
     report_path = Path(summary.report_file)
     assert report_path.exists()
     assert report_path.name == "demo-task-exec-task-execution.md"
+    report = report_path.read_text(encoding="utf-8")
+    assert "## 执行期验证摘要" in report
+    assert "## 宿主补充自检（交付前必做）" in report
+    assert "新增函数、方法、字段、模块都已接入真实调用链" in report
 
     change = ChangeManager(temp_project_dir).load_change(change_id)
     assert change is not None

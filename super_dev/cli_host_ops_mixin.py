@@ -1,0 +1,4097 @@
+"""CLI host operations mixin helpers."""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+import glob
+import importlib.metadata
+import io
+import json
+import os
+import re
+import shutil
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+try:
+    from rich.console import Group
+    from rich.live import Live
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+    RICH_AVAILABLE = True
+except ImportError:
+    RICH_AVAILABLE = False
+
+from . import __version__
+from .catalogs import (
+    HOST_COMMAND_CANDIDATES,
+    SPECIAL_INSTALL_HOST_TOOL_IDS,
+    host_detection_path_candidates,
+    host_display_name,
+    host_path_override_guide,
+    host_runtime_validation_overrides,
+)
+from .config import ConfigManager, ProjectConfig, get_config_manager
+from .review_state import (
+    host_runtime_validation_file,
+    load_host_runtime_validation,
+    save_host_runtime_validation,
+)
+from .terminal import normalize_terminal_text, output_mode_label, output_mode_reason, symbol
+
+
+class CliHostOpsMixin:
+    def _is_manual_install_host(self, target: str | None) -> bool:
+        return bool(target) and target in SPECIAL_INSTALL_HOST_TOOL_IDS
+
+    def _print_manual_install_host_guidance(self, *, target: str, command_name: str) -> int:
+        from .integrations import IntegrationManager
+
+        integration_manager = IntegrationManager(Path.cwd())
+        docs = list(getattr(integration_manager, "OFFICIAL_DOCS_INDEX", {}).get(target, ()))
+        host_name = self._host_label(target)
+        if not RICH_AVAILABLE:
+            self.console.print(f"{host_name} 不走 super-dev {command_name} 统一安装流。")
+            self.console.print("请直接在宿主侧手动安装官方插件：openclaw plugins install @super-dev/openclaw-plugin")
+            return 0
+
+        lines = [
+            f"{host_name} 不走 `super-dev {command_name}` 统一接入流。",
+            "请直接在宿主侧安装原生 npm 插件：",
+            "",
+            "`openclaw plugins install @super-dev/openclaw-plugin`",
+            "",
+            "安装完成后再回到 OpenClaw Agent 会话里使用 `super-dev:` 或 `/super-dev` 触发。",
+        ]
+        if command_name != "doctor":
+            lines.append("如需检查插件落地状态，可再执行 `super-dev doctor --host openclaw`。")
+        if docs:
+            lines.append("")
+            lines.append("官方文档:")
+            for url in docs[:2]:
+                lines.append(f"- {url}")
+        self.console.print(Panel("\n".join(lines), title=f"{host_name} 手动安装", padding=(1, 2), border_style="cyan", expand=True))
+        return 0
+
+    def _collect_runtime_install_health(self) -> dict[str, Any]:
+        current_module_path = Path(sys.modules[__name__.rsplit(".", 1)[0]].__file__).resolve()
+        installed_dist_version = ""
+        metadata_error = ""
+        try:
+            installed_dist_version = importlib.metadata.version("super-dev")
+        except importlib.metadata.PackageNotFoundError:
+            installed_dist_version = ""
+        except Exception as exc:
+            metadata_error = str(exc)
+
+        site_packages_entries = [
+            Path(entry).resolve()
+            for entry in sys.path
+            if isinstance(entry, str) and "site-packages" in entry
+        ]
+        stale_package_dirs: list[str] = []
+        dist_info_versions: list[str] = []
+        editable_versions: list[str] = []
+        dist_info_pattern = re.compile(r"super_dev-(?P<version>.+)\.dist-info$")
+        editable_pattern = re.compile(r"__editable__\.super_dev-(?P<version>.+)\.pth$")
+        for site_packages in site_packages_entries:
+            package_dir = site_packages / "super_dev"
+            if package_dir.exists():
+                init_file = package_dir / "__init__.py"
+                if init_file.exists() and init_file.resolve() != current_module_path:
+                    stale_package_dirs.append(str(package_dir))
+            for dist_info in site_packages.glob("super_dev-*.dist-info"):
+                match = dist_info_pattern.search(dist_info.name)
+                if match:
+                    dist_info_versions.append(match.group("version"))
+            for editable in site_packages.glob("__editable__.super_dev-*.pth"):
+                match = editable_pattern.search(editable.name)
+                if match:
+                    editable_versions.append(match.group("version"))
+
+        dist_info_versions = sorted(set(dist_info_versions))
+        editable_versions = sorted(set(editable_versions))
+        warnings: list[str] = []
+        remediation: list[str] = []
+
+        if stale_package_dirs:
+            warnings.append("检测到 site-packages 中残留的 super_dev 实体目录，可能覆盖当前版本。")
+            remediation.append("删除旧的 site-packages/super_dev 目录后重新执行 pip install -e .")
+        if len(dist_info_versions) > 1:
+            warnings.append("检测到多个 super-dev dist-info 版本并存: " + ", ".join(dist_info_versions))
+            remediation.append("清理旧的 super_dev-*.dist-info 残留，只保留当前版本。")
+        if len(editable_versions) > 1:
+            warnings.append("检测到多个 editable 安装记录并存: " + ", ".join(editable_versions))
+            remediation.append("清理旧的 __editable__.super_dev-*.pth 和 finder 文件后重新安装。")
+        if installed_dist_version and installed_dist_version != __version__:
+            warnings.append(f"包元数据版本 {installed_dist_version} 与当前运行版本 {__version__} 不一致。")
+            remediation.append("重新安装 super-dev，确保脚本与导入版本一致。")
+        if metadata_error:
+            warnings.append(f"读取安装元数据失败: {metadata_error}")
+
+        return {
+            "healthy": not warnings,
+            "current_version": __version__,
+            "current_module_path": str(current_module_path),
+            "installed_dist_version": installed_dist_version,
+            "stale_package_dirs": stale_package_dirs,
+            "dist_info_versions": dist_info_versions,
+            "editable_versions": editable_versions,
+            "warnings": warnings,
+            "remediation": remediation,
+        }
+
+    def _print_runtime_install_health(self, runtime_health: dict[str, Any], *, indent: str = "") -> None:
+        status = "[green]正常[/green]" if runtime_health.get("healthy", False) else "[yellow]异常[/yellow]"
+        self.console.print(
+            f"{indent}[cyan]运行时安装[/cyan]: {status} 版本 {runtime_health.get('current_version', '-')}"
+        )
+        self.console.print(
+            f"{indent}[dim]模块路径: {runtime_health.get('current_module_path', '-')}[/dim]"
+        )
+        installed_dist_version = runtime_health.get("installed_dist_version", "")
+        if installed_dist_version:
+            self.console.print(f"{indent}[dim]安装元数据版本: {installed_dist_version}[/dim]")
+        for warning in runtime_health.get("warnings", []):
+            self.console.print(f"{indent}[yellow]- {warning}[/yellow]")
+        for action in runtime_health.get("remediation", []):
+            self.console.print(f"{indent}[dim]修复: {action}[/dim]")
+
+    def _host_label(self, target: str) -> str:
+        return host_display_name(target)
+
+    def _host_path_override_key(self, target: str) -> str:
+        return str(host_path_override_guide(target).get("env_key", ""))
+
+    def _custom_host_path_override_hint(self, target: str | None = None) -> str:
+        if target:
+            return str(host_path_override_guide(target).get("hint", ""))
+        return str(host_path_override_guide("codex-cli").get("hint", ""))
+
+    def _format_detection_reason(self, reason: str) -> str:
+        source, _, value = str(reason).partition(":")
+        source_labels = {
+            "cmd": "命令命中",
+            "path": "默认安装路径",
+            "env": "自定义路径覆盖",
+            "registry": "Windows 注册信息",
+            "shim": "Windows shim / 包管理器目录",
+        }
+        label = source_labels.get(source, source or "检测来源")
+        return f"{label}: {value}" if value else label
+
+    def _explain_detection_details(self, detected_meta: dict[str, list[str]]) -> dict[str, list[str]]:
+        explained: dict[str, list[str]] = {}
+        for host, reasons in detected_meta.items():
+            explained[host] = [self._format_detection_reason(item) for item in reasons]
+        return explained
+
+    def _host_runtime_checklist(self, *, target: str, usage: dict[str, Any]) -> list[str]:
+        trigger = str(usage.get("final_trigger", "")).strip() or "-"
+        common = [
+            f"在宿主中使用最终触发命令进入 Super Dev 流水线：{trigger}",
+            "确认首轮响应明确进入 research，而不是直接开始编码。",
+            "确认真实写入 output/*-research.md、output/*-prd.md、output/*-architecture.md、output/*-uiux.md。",
+            "确认三文档完成后暂停等待用户确认，而不是直接继续实现。",
+            "确认文档确认后能继续进入 Spec、前端运行验证、后端与交付阶段。",
+        ]
+        overrides = host_runtime_validation_overrides(target)
+        return [*overrides.get("runtime_checklist", []), *common]
+
+    def _host_runtime_pass_criteria(self, *, target: str) -> list[str]:
+        common = [
+            "首轮响应符合 Super Dev 首轮契约。",
+            "关键文档真实落盘到项目目录。",
+            "确认门真实生效。",
+            "后续恢复路径可用。",
+        ]
+        overrides = host_runtime_validation_overrides(target)
+        return [*overrides.get("pass_criteria", []), *common]
+
+    def _host_resume_checklist(self, *, target: str) -> list[str]:
+        common = [
+            "重开宿主或新开会话后，使用恢复探针而不是普通闲聊进入当前流程。",
+            "确认宿主先读取 `.super-dev/SESSION_BRIEF.md`，并继续当前流程而不是重新开始。",
+            "确认用户继续说“改一下 / 补充 / 继续改 / 确认 / 通过”时，宿主仍然留在当前 Super Dev 流程内。",
+        ]
+        overrides = host_runtime_validation_overrides(target)
+        return [*overrides.get("resume_checklist", []), *common]
+
+    def _host_resume_probe_prompt(self, *, project_dir: Path, target: str) -> str:
+        if not self._project_has_super_dev_context(project_dir):
+            return ""
+        return self._build_host_continue_prompt(project_dir=project_dir, target=target)
+
+    def _resolve_onboard_targets(
+        self,
+        *,
+        available_targets: list[str],
+        host: str | None,
+        all_targets: bool,
+        non_interactive: bool,
+    ) -> list[str]:
+        targets: list[str] = []
+        if all_targets:
+            return available_targets
+        if host:
+            return [host]
+        if non_interactive:
+            return available_targets
+
+        interactive_targets = self._interactive_host_selector(available_targets=available_targets)
+        if interactive_targets is not None:
+            return interactive_targets
+
+        self._render_host_selection_guide(available_targets=available_targets)
+        raw = input("宿主选择: ").strip()
+        if not raw:
+            return available_targets
+        try:
+            selected_indices = [int(item.strip()) for item in raw.split(",") if item.strip()]
+        except ValueError:
+            raise ValueError("输入无效，请输入数字编号（如 1,3）")
+        for index in selected_indices:
+            if index < 1 or index > len(available_targets):
+                raise ValueError(f"编号超出范围: {index}")
+
+        seen = set()
+        for index in selected_indices:
+            target = available_targets[index - 1]
+            if target in seen:
+                continue
+            seen.add(target)
+            targets.append(target)
+        return targets
+
+    def _super_dev_ascii_banner(self) -> str:
+        return (
+            "  ____                        ____             \n"
+            " / ___| _   _ _ __   ___ _ __|  _ \\  _____   __\n"
+            " \\___ \\| | | | '_ \\ / _ \\ '__| | | |/ _ \\ \\ / /\n"
+            "  ___) | |_| | |_) |  __/ |  | |_| |  __/\\ V / \n"
+            " |____/ \\__,_| .__/ \\___|_|  |____/ \\___| \\_/  \n"
+            "             |_|                               "
+        )
+
+    def _read_single_key(self) -> str:
+        if os.name == "nt":
+            import msvcrt
+
+            key = msvcrt.getwch()
+            if key in ("\x00", "\xe0"):
+                special = msvcrt.getwch()
+                return {
+                    "H": "UP",
+                    "P": "DOWN",
+                }.get(special, special)
+            if key == "\r":
+                return "ENTER"
+            if key == " ":
+                return "SPACE"
+            if key == "\x1b":
+                return "ESC"
+            return key
+
+        import termios
+        import tty
+
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            first = sys.stdin.read(1)
+            if first == "\x1b":
+                second = sys.stdin.read(1)
+                if second == "[":
+                    third = sys.stdin.read(1)
+                    return {
+                        "A": "UP",
+                        "B": "DOWN",
+                    }.get(third, "ESC")
+                return "ESC"
+            if first in ("\r", "\n"):
+                return "ENTER"
+            if first == " ":
+                return "SPACE"
+            return first
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+    def _interactive_host_selector(self, *, available_targets: list[str]) -> list[str] | None:
+        from .integrations import IntegrationManager
+
+        if not RICH_AVAILABLE:
+            return None
+        if not sys.stdin.isatty() or not sys.stdout.isatty():
+            return None
+
+        integration_manager = IntegrationManager(Path.cwd())
+        detected_targets, _ = self._detect_host_targets(available_targets=available_targets)
+        selected: set[str] = set(detected_targets)
+        cursor = 0
+        status_message = ""
+
+        def renderable() -> Group:
+            # 获取终端高度，计算可显示的行数
+            try:
+                term_height = self.console.size.height
+            except Exception:
+                term_height = 24
+            # header(~10行) + footer(2行) + 表头(3行) + 状态(1行) = ~16行开销
+            max_visible = max(5, term_height - 16)
+
+            subtitle = (
+                "Space 勾选，Enter 安装，U 卸载选中，↑/↓ 移动，A 全选，C 仅 CLI，I 仅 IDE，R 清空，Esc 取消\n"
+                " >  当前光标   [✓] 已选中  [○] 未选中\n"
+                "slash 宿主用 /super-dev；非 slash 宿主用 super-dev: / super-dev："
+            )
+            header = Panel(f"{self._super_dev_ascii_banner()}\n\n{normalize_terminal_text(subtitle)}", title="Super Dev", expand=True)
+
+            table = Table(title="选择宿主工具", show_header=True, header_style="bold cyan", expand=True)
+            table.add_column("", min_width=3, max_width=4, justify="center")
+            table.add_column("#", min_width=3, max_width=4, style="cyan", justify="center")
+            table.add_column("宿主", style="bold", ratio=2)
+            table.add_column("认证", min_width=6, ratio=1)
+            table.add_column("触发", min_width=8, ratio=1)
+            table.add_column("协议", ratio=2, overflow="fold")
+            table.add_column("检测", min_width=4, max_width=8, justify="center")
+
+            # 滚动窗口：只显示光标附��的 max_visible 行
+            total = len(available_targets)
+            if total <= max_visible:
+                start, end = 0, total
+            else:
+                half = max_visible // 2
+                start = max(0, cursor - half)
+                end = start + max_visible
+                if end > total:
+                    end = total
+                    start = max(0, end - max_visible)
+
+            for idx in range(start, end):
+                target = available_targets[idx]
+                profile = integration_manager.get_adapter_profile(target)
+                selected_mark = "[✓]" if target in selected else "[○]"
+                pointer = " > " if idx == cursor else "   "
+                trigger = "/super-dev" if integration_manager.supports_slash(target) else "super-dev:"
+                detected = "已检测" if target in detected_targets else ""
+                host_label = Text()
+                host_label.append(f"{selected_mark} ", style="green" if target in selected else "dim")
+                host_label.append(target, style="bold white" if idx == cursor else "bold")
+                table.add_row(
+                    pointer,
+                    str(idx + 1),
+                    host_label,
+                    profile.certification_label,
+                    trigger,
+                    profile.host_protocol_summary or profile.host_protocol_mode,
+                    detected,
+                )
+
+            # 滚动指示器
+            scroll_info = ""
+            if total > max_visible:
+                if start > 0:
+                    scroll_info += f"  ↑ 还有 {start} 项"
+                if end < total:
+                    scroll_info += f"  ↓ 还有 {total - end} 项"
+
+            selected_text = ", ".join(sorted(selected)) if selected else "未选择"
+            footer = Text()
+            footer.append(f"当前选择 ({len(selected)}/{total}): ", style="cyan")
+            footer.append(selected_text, style="bold white")
+            if scroll_info:
+                footer.append(scroll_info, style="dim")
+
+            parts: list[object] = [header, table, footer]
+            if status_message:
+                parts.append(Text(status_message, style="yellow"))
+            return Group(*parts)
+
+        with Live(renderable(), console=self.console, refresh_per_second=8, transient=True, auto_refresh=False) as live:
+            while True:
+                key = self._read_single_key()
+                status_message = ""
+                if key == "UP":
+                    cursor = (cursor - 1) % len(available_targets)
+                    live.update(renderable(), refresh=True)
+                    continue
+                if key == "DOWN":
+                    cursor = (cursor + 1) % len(available_targets)
+                    live.update(renderable(), refresh=True)
+                    continue
+                if key == "SPACE":
+                    target = available_targets[cursor]
+                    if target in selected:
+                        selected.remove(target)
+                    else:
+                        selected.add(target)
+                    live.update(renderable(), refresh=True)
+                    continue
+                if key in ("a", "A"):
+                    selected = set(available_targets)
+                    live.update(renderable(), refresh=True)
+                    continue
+                if key in ("c", "C"):
+                    selected = {
+                        target for target in available_targets
+                        if integration_manager.get_adapter_profile(target).category == "cli"
+                    }
+                    live.update(renderable(), refresh=True)
+                    continue
+                if key in ("i", "I"):
+                    selected = {
+                        target for target in available_targets
+                        if integration_manager.get_adapter_profile(target).category == "ide"
+                    }
+                    live.update(renderable(), refresh=True)
+                    continue
+                if key in ("r", "R"):
+                    selected.clear()
+                    live.update(renderable(), refresh=True)
+                    continue
+                if key in ("u", "U"):
+                    if not selected:
+                        status_message = "请先选中要卸载的宿主"
+                        live.update(renderable(), refresh=True)
+                        continue
+                    # 卸载选中宿主的 super-dev 集成
+                    from .skills import SkillManager
+                    skill_manager = SkillManager(Path.cwd())
+                    uninstalled_count = 0
+                    for target in sorted(selected):
+                        try:
+                            removed = integration_manager.remove(target=target)
+                            if removed:
+                                uninstalled_count += len(removed)
+                        except Exception:
+                            pass
+                        try:
+                            if skill_manager.skill_surface_available(target):
+                                skill_manager.uninstall("super-dev-core", target)
+                                uninstalled_count += 1
+                        except Exception:
+                            pass
+                    status_message = f"已从 {len(selected)} 个宿主卸载 Super Dev（{uninstalled_count} 个文件）"
+                    selected.clear()
+                    live.update(renderable(), refresh=True)
+                    continue
+                if key == "ENTER":
+                    chosen = [target for target in available_targets if target in selected]
+                    if chosen:
+                        return chosen
+                    status_message = "请至少选择一个宿主"
+                    live.update(renderable(), refresh=True)
+                    continue
+                if key == "ESC":
+                    raise ValueError("已取消宿主选择")
+                live.update(renderable(), refresh=True)
+
+    def _build_install_summary(self, *, available_targets: list[str]) -> str:
+        from .integrations import IntegrationManager
+
+        integration_manager = IntegrationManager(Path.cwd())
+        slash_hosts = [target for target in available_targets if integration_manager.supports_slash(target)]
+        text_hosts = [target for target in available_targets if not integration_manager.supports_slash(target)]
+        return (
+            f"slash 宿主 ({len(slash_hosts)}): "
+            + ", ".join(self._host_label(target) for target in slash_hosts)
+            + "\n"
+            + f"text 宿主 ({len(text_hosts)}): "
+            + ", ".join(self._host_label(target) for target in text_hosts)
+        )
+
+    def _render_host_selection_guide(self, *, available_targets: list[str]) -> None:
+        from .integrations import IntegrationManager
+
+        if not RICH_AVAILABLE:
+            self.console.print("[cyan]请选择宿主 AI Coding 工具（可多选）:[/cyan]")
+            for idx, target in enumerate(available_targets, 1):
+                self.console.print(f"  {idx}. {self._host_label(target)}")
+            self.console.print("[dim]输入编号（逗号分隔），直接回车表示全部[/dim]")
+            return
+
+        integration_manager = IntegrationManager(Path.cwd())
+        detected_targets, _ = self._detect_host_targets(available_targets=available_targets)
+        intro = (
+            "安装后直接在宿主里触发。\n"
+            "支持 slash 的宿主使用 `/super-dev 你的需求`。\n"
+            f"不支持 slash 的宿主使用 `super-dev: 你的需求` 或 `super-dev：你的需求`。\n"
+            f"当前版本内置 {len(available_targets)} 个宿主适配配置。"
+        )
+        self.console.print(Panel(intro, title="Super Dev 安装向导", padding=(1, 2), expand=True))
+
+        table = Table(title="宿主选择", show_header=True, header_style="bold cyan", expand=True)
+        table.add_column("#", style="cyan", min_width=3, max_width=4, justify="center")
+        table.add_column("宿主", style="bold", ratio=2)
+        table.add_column("认证", min_width=8, ratio=1)
+        table.add_column("触发", min_width=8, ratio=1)
+        table.add_column("宿主协议", ratio=2, overflow="fold")
+        table.add_column("检测", min_width=6, max_width=8, justify="center")
+
+        for idx, target in enumerate(available_targets, 1):
+            profile = integration_manager.get_adapter_profile(target)
+            trigger = "/super-dev" if integration_manager.supports_slash(target) else "super-dev:"
+            detected = "已检测" if target in detected_targets else ""
+            table.add_row(
+                str(idx),
+                self._host_label(target),
+                profile.certification_label,
+                trigger,
+                profile.host_protocol_summary or profile.host_protocol_mode,
+                detected,
+            )
+        self.console.print(table)
+        self.console.print("[dim]输入编号（逗号分隔），直接回车表示全部[/dim]")
+
+    def _render_install_intro(self, *, args) -> None:
+        from .integrations import IntegrationManager
+
+        runtime_health = self._collect_runtime_install_health()
+        if not RICH_AVAILABLE:
+            self.console.print("[cyan]Super Dev 安装入口[/cyan]")
+            self.console.print("宿主负责编码与模型调用；Super Dev 负责流程、门禁、审计与交付标准。")
+            self.console.print("slash 宿主输入 /super-dev；非 slash 宿主输入 super-dev: 或 super-dev：")
+            if not runtime_health.get("healthy", False):
+                self.console.print("[yellow]检测到 super-dev 运行时安装残留，建议先执行 doctor 检查。[/yellow]")
+            return
+
+        integration_manager = IntegrationManager(Path.cwd())
+        available_targets = self._public_host_targets(integration_manager=integration_manager)
+        lines = [
+            "宿主负责编码、工具调用和模型能力。",
+            "Super Dev 负责 research → 三文档 → 确认门 → Spec → 前端优先 → 质量门禁 → 交付。",
+            "slash 宿主输入 `/super-dev 你的需求`，非 slash 宿主输入 `super-dev: 你的需求` 或 `super-dev：你的需求`。",
+            "",
+            self._build_install_summary(available_targets=available_targets),
+            "",
+            "OpenClaw 不在这 20 个统一安装宿主内，请用户自行执行 `openclaw plugins install @super-dev/openclaw-plugin`。",
+            "如果宿主装在自定义目录，可设置 `SUPER_DEV_HOST_PATH_<HOST>=<安装路径>` 后再执行自动检测。",
+        ]
+        if getattr(args, "auto", False):
+            lines.append("当前模式: 自动检测宿主。")
+        elif getattr(args, "host", None):
+            lines.append(f"当前模式: 仅接入 {self._host_label(args.host)}。")
+        elif getattr(args, "all", False):
+            lines.append("当前模式: 接入全部宿主。")
+        self.console.print(Panel("\n".join(lines), title="Super Dev 安装入口", padding=(1, 2), expand=True))
+        if not runtime_health.get("healthy", False):
+            self.console.print("[yellow]检测到当前 super-dev 安装存在旧版本残留，建议先修复运行时安装环境。[/yellow]")
+            self._print_runtime_install_health(runtime_health, indent="  ")
+            self.console.print("")
+
+    def _detect_host_targets(
+        self,
+        *,
+        available_targets: list[str],
+    ) -> tuple[list[str], dict[str, list[str]]]:
+        detected: list[str] = []
+        details: dict[str, list[str]] = {}
+
+        for target in available_targets:
+            reasons: list[str] = []
+
+            for command in HOST_COMMAND_CANDIDATES.get(target, []):
+                if shutil.which(command):
+                    reasons.append(f"cmd:{command}")
+                    break
+
+            for source, candidate in host_detection_path_candidates(target):
+                if glob.glob(candidate):
+                    reasons.append(f"{source}:{candidate}")
+                    break
+
+            if reasons:
+                detected.append(target)
+                details[target] = reasons
+
+        return detected, details
+
+    def _collect_configured_host_targets(
+        self,
+        *,
+        project_dir: Path,
+        available_targets: list[str],
+    ) -> list[str]:
+        from .integrations import IntegrationManager
+        from .skills import SkillManager
+
+        configured: list[str] = []
+        skill_manager = SkillManager(project_dir)
+        for target in available_targets:
+            integration_files = IntegrationManager.TARGETS[target].files
+
+            has_integration = any((project_dir / relative).exists() for relative in integration_files)
+            if IntegrationManager.supports_slash(target):
+                project_slash_exists = IntegrationManager.resolve_slash_command_path(
+                    target=target,
+                    scope="project",
+                    project_dir=project_dir,
+                ).exists()
+                global_slash_exists = IntegrationManager.resolve_slash_command_path(
+                    target=target,
+                    scope="global",
+                ).exists()
+            else:
+                project_slash_exists = False
+                global_slash_exists = False
+            has_slash = project_slash_exists or global_slash_exists
+            has_skill = False
+            if IntegrationManager.requires_skill(target):
+                try:
+                    has_skill = skill_manager.skill_surface_available(target)
+                except ValueError:
+                    has_skill = False
+            if has_integration or has_slash or has_skill:
+                configured.append(target)
+        return configured
+
+    def _is_env_truthy(self, key: str) -> bool:
+        value = os.getenv(key, "").strip().lower()
+        return value in {"1", "true", "yes", "on"}
+
+    def _ensure_pipeline_host_ready(self, *, project_dir: Path, config: ProjectConfig) -> bool:
+        from .integrations import IntegrationManager
+
+        if self._is_env_truthy("SUPER_DEV_ALLOW_NO_HOST"):
+            self.console.print("[dim]检测到 SUPER_DEV_ALLOW_NO_HOST=1，跳过宿主硬门禁[/dim]")
+            return True
+
+        available_targets = [item.name for item in IntegrationManager(project_dir).list_targets()]
+        detected_targets, _ = self._detect_host_targets(available_targets=available_targets)
+        configured_targets = self._collect_configured_host_targets(
+            project_dir=project_dir,
+            available_targets=available_targets,
+        )
+
+        if config.host_profile_enforce_selected and config.host_profile_targets:
+            candidate_targets = [item for item in config.host_profile_targets if item in available_targets]
+        else:
+            candidate_targets = sorted(set(detected_targets + configured_targets))
+
+        if not candidate_targets:
+            self.console.print("[red]流水线宿主校验失败：未检测到可用宿主[/red]")
+            self.console.print("[dim]请先执行: super-dev install --auto --force --yes[/dim]")
+            self.console.print("[dim]或手动接入: super-dev setup --host codex-cli --force --yes[/dim]")
+            return False
+
+        report = self._collect_host_diagnostics(
+            project_dir=project_dir,
+            targets=candidate_targets,
+            skill_name="super-dev-core",
+            check_integrate=True,
+            check_skill=True,
+            check_slash=True,
+        )
+        compatibility = self._build_compatibility_summary(
+            report=report,
+            targets=candidate_targets,
+            check_integrate=True,
+            check_skill=True,
+            check_slash=True,
+        )
+
+        host_scores = compatibility.get("hosts", {})
+        if not isinstance(host_scores, dict):
+            host_scores = {}
+        ready_targets = [
+            target for target in candidate_targets
+            if bool((host_scores.get(target) or {}).get("ready", False))
+        ]
+        ready_detected_targets = [target for target in ready_targets if target in detected_targets]
+
+        if ready_detected_targets:
+            self.console.print(
+                "[dim]宿主硬门禁通过: "
+                + ", ".join(self._host_label(target) for target in ready_detected_targets)
+                + "[/dim]"
+            )
+            return True
+
+        self.console.print("[red]流水线宿主校验失败：未找到 ready 的已检测宿主[/red]")
+        if ready_targets:
+            self.console.print(
+                "[yellow]检测到已接入宿主但未识别到本机可执行宿主: "
+                + ", ".join(self._host_label(target) for target in ready_targets)
+                + "[/yellow]"
+            )
+
+        hosts_report = report.get("hosts", {})
+        if isinstance(hosts_report, dict):
+            for target in candidate_targets:
+                host = hosts_report.get(target, {})
+                if not isinstance(host, dict):
+                    continue
+                suggestions = host.get("suggestions", [])
+                if isinstance(suggestions, list):
+                    for item in suggestions:
+                        self.console.print(f"[dim]- {item}[/dim]")
+
+        self.console.print("[dim]建议先执行: super-dev detect --auto --save-profile[/dim]")
+        return False
+
+    def _collect_host_diagnostics(
+        self,
+        *,
+        project_dir: Path,
+        targets: list[str],
+        skill_name: str,
+        check_integrate: bool,
+        check_skill: bool,
+        check_slash: bool,
+    ) -> dict[str, Any]:
+        from .integrations import IntegrationManager
+        from .skills import SkillManager
+
+        integration_manager = IntegrationManager(project_dir)
+        integration_targets = IntegrationManager.TARGETS
+        skill_manager = SkillManager(project_dir)
+
+        report: dict[str, Any] = {"hosts": {}, "overall_ready": True}
+        for target in targets:
+            host_report: dict[str, Any] = {
+                "ready": True,
+                "checks": {},
+                "missing": [],
+                "suggestions": [],
+            }
+
+            surface_audit: dict[str, dict[str, Any]] = {}
+            for surface_key, surface_path in integration_manager.collect_managed_surface_paths(
+                target=target,
+                skill_name=skill_name,
+            ).items():
+                exists = surface_path.exists()
+                audit_entry: dict[str, Any] = {
+                    "path": str(surface_path),
+                    "exists": exists,
+                    "missing_markers": [],
+                }
+                if exists:
+                    try:
+                        content = surface_path.read_text(encoding="utf-8")
+                    except Exception as exc:
+                        audit_entry["read_error"] = str(exc)
+                        audit_entry["missing_markers"] = ["unreadable"]
+                    else:
+                        audit_entry["missing_markers"] = integration_manager.audit_surface_contract(
+                            target,
+                            surface_key,
+                            surface_path,
+                            content,
+                        )
+                surface_audit[surface_key] = audit_entry
+
+            invalid_surfaces = {
+                key: value
+                for key, value in surface_audit.items()
+                if value.get("exists") and value.get("missing_markers")
+            }
+            host_report["checks"]["contract"] = {
+                "ok": not invalid_surfaces,
+                "surfaces": surface_audit,
+                "invalid_surfaces": invalid_surfaces,
+            }
+            if invalid_surfaces:
+                host_report["ready"] = False
+                host_report["missing"].append("contract")
+                host_report["suggestions"].append(
+                    f"super-dev onboard --host {target} --force --yes"
+                )
+
+            if check_integrate:
+                integrate_files = [project_dir / item for item in integration_targets[target].files]
+                integrate_ok = all(path.exists() for path in integrate_files)
+                host_report["checks"]["integrate"] = {
+                    "ok": integrate_ok,
+                    "files": [str(item) for item in integrate_files],
+                }
+                if not integrate_ok:
+                    host_report["ready"] = False
+                    host_report["missing"].append("integrate")
+                    host_report["suggestions"].append(
+                        f"super-dev integrate setup --target {target} --force"
+                    )
+
+            if check_skill and IntegrationManager.requires_skill(target):
+                skill_files = IntegrationManager.expected_skill_paths(target=target, skill_name=skill_name)
+                primary_skill_file = skill_files[0] if skill_files else (skill_manager._target_dir(target) / skill_name / "SKILL.md")
+                surface_available = skill_manager.skill_surface_available(target)
+                skill_ok = any(path.exists() for path in skill_files) if surface_available else True
+                host_report["checks"]["skill"] = {
+                    "ok": skill_ok,
+                    "file": str(primary_skill_file),
+                    "files": [str(item) for item in skill_files] if skill_files else [str(primary_skill_file)],
+                    "surface_available": surface_available,
+                    "mode": "managed" if surface_available else "compatibility-surface-unavailable",
+                }
+                if surface_available and not skill_ok:
+                    host_report["ready"] = False
+                    host_report["missing"].append("skill")
+                    host_report["suggestions"].append(
+                        f"super-dev skill install super-dev --target {target} --name {skill_name} --force"
+                    )
+
+            if check_slash:
+                if IntegrationManager.supports_slash(target):
+                    project_slash = IntegrationManager.resolve_slash_command_path(
+                        target=target,
+                        scope="project",
+                        project_dir=project_dir,
+                    )
+                    global_slash = IntegrationManager.resolve_slash_command_path(
+                        target=target,
+                        scope="global",
+                    )
+                    project_ok = project_slash.exists()
+                    global_ok = global_slash.exists()
+                    slash_ok = project_ok or global_ok
+                    scope = "project" if project_ok else ("global" if global_ok else "missing")
+                    host_report["checks"]["slash"] = {
+                        "ok": slash_ok,
+                        "scope": scope,
+                        "project_file": str(project_slash),
+                        "global_file": str(global_slash),
+                    }
+                    if not slash_ok:
+                        host_report["ready"] = False
+                        host_report["missing"].append("slash")
+                        host_report["suggestions"].append(
+                            f"super-dev onboard --host {target} --skip-integrate --skip-skill --force --yes"
+                        )
+                else:
+                    host_report["checks"]["slash"] = {
+                        "ok": True,
+                        "scope": "n/a",
+                        "project_file": "",
+                        "global_file": "",
+                        "mode": "rules-only",
+                    }
+
+            host_report["usage_profile"] = self._build_host_usage_profile(
+                integration_manager=integration_manager,
+                target=target,
+            )
+            usage_profile = host_report["usage_profile"]
+            if isinstance(usage_profile, dict):
+                precondition_status = str(usage_profile.get("precondition_status", "")).strip()
+                precondition_label = str(usage_profile.get("precondition_label", "")).strip()
+                precondition_guidance = usage_profile.get("precondition_guidance", [])
+                precondition_signals = usage_profile.get("precondition_signals", {})
+                precondition_items = usage_profile.get("precondition_items", [])
+                host_report["preconditions"] = {
+                    "status": precondition_status,
+                    "label": precondition_label,
+                    "guidance": precondition_guidance if isinstance(precondition_guidance, list) else [],
+                    "signals": precondition_signals if isinstance(precondition_signals, dict) else {},
+                    "items": precondition_items if isinstance(precondition_items, list) else [],
+                }
+                if precondition_status == "host-auth-required":
+                    host_report["suggestions"].append(
+                        "若宿主报 Invalid API key provided，请先在宿主内完成 /auth 或更新宿主 API key 配置。"
+                    )
+                if precondition_status == "session-restart-required":
+                    host_report["suggestions"].append("接入后先关闭旧宿主会话，再开一个新会话后重试。")
+                if precondition_status == "project-context-required":
+                    host_report["suggestions"].append("确认当前聊天/终端绑定的是目标项目，再重新触发 Super Dev。")
+            host_report["diagnosis"] = self._build_host_diagnosis(
+                target=target,
+                host_report=host_report,
+                integration_manager=integration_manager,
+            )
+            report["hosts"][target] = host_report
+            if not host_report["ready"]:
+                report["overall_ready"] = False
+
+        return report
+
+    def _build_compatibility_summary(
+        self,
+        *,
+        report: dict[str, Any],
+        targets: list[str],
+        check_integrate: bool,
+        check_skill: bool,
+        check_slash: bool,
+    ) -> dict[str, Any]:
+        from .integrations import IntegrationManager
+
+        enabled_checks = ["contract"]
+        if check_integrate:
+            enabled_checks.append("integrate")
+        if check_skill and any(IntegrationManager.requires_skill(target) for target in targets):
+            enabled_checks.append("skill")
+        if check_slash and any(IntegrationManager.supports_slash(target) for target in targets):
+            enabled_checks.append("slash")
+
+        per_host: dict[str, dict[str, Any]] = {}
+        total_passed = 0
+        total_possible = 0
+        ready_hosts = 0
+        flow_consistent_hosts = 0
+        hosts = report.get("hosts", {})
+        if not isinstance(hosts, dict):
+            hosts = {}
+
+        for target in targets:
+            host = hosts.get(target, {})
+            checks = host.get("checks", {}) if isinstance(host, dict) else {}
+            if not isinstance(checks, dict):
+                checks = {}
+            passed = 0
+            possible = len(enabled_checks)
+            for check_name in enabled_checks:
+                check_value = checks.get(check_name, {})
+                if isinstance(check_value, dict) and bool(check_value.get("ok", False)):
+                    passed += 1
+            flow_consistent = False
+            contract_check = checks.get("contract", {})
+            if isinstance(contract_check, dict):
+                flow_consistent = True
+                surfaces = contract_check.get("surfaces", {})
+                if isinstance(surfaces, dict):
+                    for item in surfaces.values():
+                        if not isinstance(item, dict):
+                            continue
+                        missing_markers = item.get("missing_markers", [])
+                        if isinstance(missing_markers, list) and "flow" in missing_markers:
+                            flow_consistent = False
+                            break
+            score = round((passed / possible) * 100, 2) if possible > 0 else 100.0
+            per_host[target] = {
+                "score": score,
+                "passed": passed,
+                "possible": possible,
+                "ready": bool(host.get("ready", False)) if isinstance(host, dict) else False,
+                "flow_consistent": flow_consistent,
+            }
+            total_passed += passed
+            total_possible += possible
+            if bool(host.get("ready", False)) if isinstance(host, dict) else False:
+                ready_hosts += 1
+            if flow_consistent:
+                flow_consistent_hosts += 1
+
+        overall_score = round((total_passed / total_possible) * 100, 2) if total_possible > 0 else 100.0
+        flow_consistency_score = round((flow_consistent_hosts / len(targets)) * 100, 2) if targets else 100.0
+        return {
+            "overall_score": overall_score,
+            "ready_hosts": ready_hosts,
+            "total_hosts": len(targets),
+            "enabled_checks": enabled_checks,
+            "flow_consistent_hosts": flow_consistent_hosts,
+            "flow_consistency_score": flow_consistency_score,
+            "hosts": per_host,
+        }
+
+    def _build_host_diagnosis(
+        self,
+        *,
+        target: str,
+        host_report: dict[str, Any],
+        integration_manager,
+    ) -> dict[str, str]:
+        profile = integration_manager.get_adapter_profile(target)
+        missing = host_report.get("missing", [])
+        preconditions = host_report.get("preconditions", {}) if isinstance(host_report, dict) else {}
+        precondition_status = str(preconditions.get("status", "")).strip()
+        precondition_label = str(preconditions.get("label", "")).strip()
+        suggestions = host_report.get("suggestions", [])
+        suggested_command = ""
+        if isinstance(suggestions, list):
+            for item in suggestions:
+                if isinstance(item, str) and item.startswith("super-dev "):
+                    suggested_command = item
+                    break
+        if not suggested_command and suggestions:
+            first = suggestions[0]
+            if isinstance(first, str):
+                suggested_command = first
+
+        primary_reason = str(profile.certification_reason or "").strip()
+        blocker_summary = "当前还缺少关键接入项。"
+
+        if "contract" in missing:
+            blocker_summary = "已存在宿主接入文件，但内容版本过旧或缺少当前流水线契约。"
+            if not suggested_command:
+                suggested_command = f"super-dev onboard --host {target} --force --yes"
+        elif "integrate" in missing:
+            blocker_summary = "当前项目里还没有写入该宿主需要的接入文件。"
+            if not suggested_command:
+                suggested_command = f"super-dev integrate setup --target {target} --force"
+        elif "skill" in missing:
+            blocker_summary = "宿主级 Skill 目录存在，但 Super Dev Skill 还没装进去。"
+            if not suggested_command:
+                suggested_command = f"super-dev skill install super-dev --target {target} --name super-dev-core --force"
+        elif "slash" in missing:
+            blocker_summary = "宿主命令映射还没写入，所以宿主里还不能直接触发 `/super-dev`。"
+            if not suggested_command:
+                suggested_command = f"super-dev onboard --host {target} --skip-integrate --skip-skill --force --yes"
+        elif precondition_status == "host-auth-required":
+            blocker_summary = precondition_label or "宿主鉴权还没完成。"
+        elif precondition_status == "session-restart-required":
+            blocker_summary = precondition_label or "接入完成后还需要重开宿主会话。"
+        elif precondition_status == "project-context-required":
+            blocker_summary = precondition_label or "当前会话还没绑定到目标项目。"
+
+        return {
+            "certification_reason": primary_reason,
+            "blocker_summary": blocker_summary,
+            "suggested_command": suggested_command,
+        }
+
+    def _build_official_compare_summary(self, *, hardening_results: dict[str, Any]) -> dict[str, Any]:
+        total = 0
+        passed = 0
+        partial = 0
+        unknown = 0
+        failed = 0
+        per_host: dict[str, str] = {}
+        for host, item in hardening_results.items():
+            total += 1
+            status = "unknown"
+            if isinstance(item, dict):
+                official_compare = item.get("official_compare", {})
+                if isinstance(official_compare, dict):
+                    status = str(official_compare.get("status", "unknown")).strip() or "unknown"
+            per_host[str(host)] = status
+            if status == "passed":
+                passed += 1
+            elif status == "partial":
+                partial += 1
+            elif status == "failed":
+                failed += 1
+            else:
+                unknown += 1
+        score = round((passed / total) * 100, 2) if total else 100.0
+        return {
+            "total": total,
+            "passed": passed,
+            "partial": partial,
+            "failed": failed,
+            "unknown": unknown,
+            "score": score,
+            "hosts": per_host,
+        }
+
+    def _build_host_parity_summary(self, *, usage_profiles: dict[str, dict[str, Any]]) -> dict[str, Any]:
+        total = 0
+        passed = 0
+        per_host: dict[str, dict[str, Any]] = {}
+        required_keys = ("slash", "rules", "skills", "trigger")
+        for host, usage in usage_profiles.items():
+            total += 1
+            labels = usage.get("capability_labels", {}) if isinstance(usage, dict) else {}
+            trigger_command = str(usage.get("trigger_command", "")) if isinstance(usage, dict) else ""
+            smoke_prompt = str(usage.get("smoke_test_prompt", "")) if isinstance(usage, dict) else ""
+            smoke_signal = str(usage.get("smoke_success_signal", "")) if isinstance(usage, dict) else ""
+            protocol_mode = str(usage.get("host_protocol_mode", "")).strip() if isinstance(usage, dict) else ""
+            slash_label = str((labels or {}).get("slash", "")).strip()
+            trigger_ok = (
+                trigger_command.startswith("/super-dev")
+                if slash_label == "native"
+                else trigger_command.startswith("super-dev:")
+            )
+            checks = {
+                "trigger": trigger_ok,
+                "smoke_prompt": "SMOKE_OK" in smoke_prompt,
+                "smoke_signal": "SMOKE_OK" in smoke_signal,
+                "protocol_mode": bool(protocol_mode),
+                "capability_labels": all(key in labels for key in required_keys),
+            }
+            check_total = len(checks)
+            check_passed = sum(1 for item in checks.values() if bool(item))
+            host_pass = check_passed == check_total
+            if host_pass:
+                passed += 1
+            per_host[str(host)] = {
+                "passed": host_pass,
+                "score": round((check_passed / check_total) * 100, 2) if check_total else 100.0,
+                "checks": checks,
+            }
+        score = round((passed / total) * 100, 2) if total else 100.0
+        return {
+            "total": total,
+            "passed": passed,
+            "score": score,
+            "hosts": per_host,
+        }
+
+    def _build_host_recovery_summary(
+        self,
+        *,
+        targets: list[str],
+        usage_profiles: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        from .integrations import IntegrationManager
+
+        total = 0
+        passed = 0
+        hosts: dict[str, dict[str, Any]] = {}
+        for target in targets:
+            total += 1
+            usage = usage_profiles.get(target, {}) if isinstance(usage_profiles, dict) else {}
+            slash_label = ""
+            if isinstance(usage, dict):
+                labels = usage.get("capability_labels", {})
+                if isinstance(labels, dict):
+                    slash_label = str(labels.get("slash", "")).strip()
+            commands = [f"super-dev integrate setup --target {target} --force"]
+            if IntegrationManager.requires_skill(target):
+                commands.append(f"super-dev skill install super-dev --target {target} --name super-dev-core --force")
+            if slash_label == "native":
+                commands.append(f"super-dev onboard --host {target} --skip-integrate --skip-skill --force --yes")
+            commands.append(f"super-dev integrate audit --target {target} --repair --force")
+            checks = {
+                "has_setup": any(cmd.startswith("super-dev integrate setup --target ") for cmd in commands),
+                "has_repair_audit": any(cmd.startswith("super-dev integrate audit --target ") for cmd in commands),
+                "contains_target": all(f" {target} " in f" {cmd} " for cmd in commands),
+            }
+            if IntegrationManager.requires_skill(target):
+                checks["has_skill_install"] = any(cmd.startswith("super-dev skill install ") for cmd in commands)
+            if slash_label == "native":
+                checks["has_slash_recovery"] = any(cmd.startswith("super-dev onboard --host ") for cmd in commands)
+            host_pass = all(bool(item) for item in checks.values())
+            if host_pass:
+                passed += 1
+            hosts[target] = {
+                "passed": host_pass,
+                "checks": checks,
+                "recommended_commands": commands,
+            }
+        score = round((passed / total) * 100, 2) if total else 100.0
+        return {
+            "total": total,
+            "passed": passed,
+            "score": score,
+            "hosts": hosts,
+        }
+
+    def _build_host_gate_summary(self, *, report: dict[str, Any], targets: list[str]) -> dict[str, Any]:
+        total = 0
+        passed = 0
+        hosts: dict[str, dict[str, Any]] = {}
+        report_hosts = report.get("hosts", {}) if isinstance(report, dict) else {}
+        if not isinstance(report_hosts, dict):
+            report_hosts = {}
+        for target in targets:
+            total += 1
+            host = report_hosts.get(target, {})
+            checks = host.get("checks", {}) if isinstance(host, dict) else {}
+            contract = checks.get("contract", {}) if isinstance(checks, dict) else {}
+            surfaces = contract.get("surfaces", {}) if isinstance(contract, dict) else {}
+            docs_confirm_ok = True
+            preview_confirm_ok = True
+            if isinstance(surfaces, dict):
+                for surface in surfaces.values():
+                    if not isinstance(surface, dict):
+                        continue
+                    if not bool(surface.get("exists", False)):
+                        continue
+                    missing = surface.get("missing_markers", [])
+                    if not isinstance(missing, list):
+                        continue
+                    if "confirmation" in missing:
+                        docs_confirm_ok = False
+                    if "flow" in missing:
+                        preview_confirm_ok = False
+            host_pass = docs_confirm_ok and preview_confirm_ok
+            if host_pass:
+                passed += 1
+            hosts[target] = {
+                "passed": host_pass,
+                "checks": {
+                    "docs_confirm_gate": docs_confirm_ok,
+                    "preview_confirm_gate": preview_confirm_ok,
+                },
+            }
+        score = round((passed / total) * 100, 2) if total else 100.0
+        return {
+            "total": total,
+            "passed": passed,
+            "score": score,
+            "hosts": hosts,
+        }
+
+    def _build_host_runtime_script_summary(self, *, usage_profiles: dict[str, dict[str, Any]]) -> dict[str, Any]:
+        total = 0
+        passed = 0
+        hosts: dict[str, dict[str, Any]] = {}
+        for host, usage in usage_profiles.items():
+            total += 1
+            if not isinstance(usage, dict):
+                usage = {}
+            smoke_steps = usage.get("smoke_test_steps", [])
+            post_steps = usage.get("post_onboard_steps", [])
+            checks = {
+                "has_final_trigger": bool(str(usage.get("final_trigger", "")).strip()),
+                "has_smoke_prompt": "SMOKE_OK" in str(usage.get("smoke_test_prompt", "")),
+                "has_smoke_signal": "SMOKE_OK" in str(usage.get("smoke_success_signal", "")),
+                "has_smoke_steps": isinstance(smoke_steps, list) and len(smoke_steps) > 0,
+                "has_post_onboard_steps": isinstance(post_steps, list) and len(post_steps) > 0,
+            }
+            host_pass = all(bool(item) for item in checks.values())
+            if host_pass:
+                passed += 1
+            hosts[str(host)] = {
+                "passed": host_pass,
+                "checks": checks,
+            }
+        score = round((passed / total) * 100, 2) if total else 100.0
+        return {
+            "total": total,
+            "passed": passed,
+            "score": score,
+            "hosts": hosts,
+        }
+
+    def _build_host_parity_index(
+        self,
+        *,
+        threshold: float,
+        official_compare_summary: dict[str, Any] | None,
+        host_parity_summary: dict[str, Any] | None,
+        host_gate_summary: dict[str, Any] | None,
+        host_runtime_script_summary: dict[str, Any] | None,
+        host_recovery_summary: dict[str, Any] | None,
+        compatibility: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        metrics: dict[str, float] = {}
+        mapping: list[tuple[str, dict[str, Any] | None]] = [
+            ("official_compare", official_compare_summary),
+            ("host_parity", host_parity_summary),
+            ("host_gate", host_gate_summary),
+            ("runtime_script", host_runtime_script_summary),
+            ("host_recovery", host_recovery_summary),
+        ]
+        for name, summary in mapping:
+            if isinstance(summary, dict):
+                if name == "official_compare":
+                    total = int(summary.get("total", 0) or 0)
+                    passed = int(summary.get("passed", 0) or 0)
+                    partial = int(summary.get("partial", 0) or 0)
+                    failed = int(summary.get("failed", 0) or 0)
+                    if total <= 0 or (passed + partial + failed) <= 0:
+                        continue
+                try:
+                    metrics[name] = float(summary.get("score", 0))
+                except Exception:
+                    metrics[name] = 0.0
+        if isinstance(compatibility, dict):
+            try:
+                metrics["flow_consistency"] = float(compatibility.get("flow_consistency_score", 0))
+            except Exception:
+                metrics["flow_consistency"] = 0.0
+        if metrics:
+            score = round(sum(metrics.values()) / len(metrics), 2)
+        else:
+            score = 0.0
+        limit = float(threshold)
+        return {
+            "score": score,
+            "threshold": limit,
+            "passed": score >= limit,
+            "metrics": metrics,
+        }
+
+    def _repair_host_diagnostics(
+        self,
+        *,
+        project_dir: Path,
+        report: dict[str, Any],
+        skill_name: str,
+        force: bool,
+        check_integrate: bool,
+        check_skill: bool,
+        check_slash: bool,
+    ) -> dict[str, dict[str, str]]:
+        from .integrations import IntegrationManager
+        from .skills import SkillManager
+
+        integration_manager = IntegrationManager(project_dir)
+        skill_manager = SkillManager(project_dir)
+        actions: dict[str, dict[str, str]] = {}
+
+        hosts = report.get("hosts", {})
+        if not isinstance(hosts, dict):
+            return actions
+
+        for target, host in hosts.items():
+            if not isinstance(target, str) or not isinstance(host, dict):
+                continue
+            missing = host.get("missing", [])
+            if not isinstance(missing, list):
+                continue
+
+            host_actions: dict[str, str] = {}
+            contract_needs_repair = "contract" in missing
+
+            if contract_needs_repair:
+                try:
+                    integration_manager.setup(target=target, force=True)
+                    integration_manager.setup_global_protocol(target=target, force=True)
+                    if integration_manager.supports_slash(target):
+                        integration_manager.setup_slash_command(target=target, force=True)
+                        integration_manager.setup_global_slash_command(target=target, force=True)
+                    if check_skill and IntegrationManager.requires_skill(target) and skill_manager.skill_surface_available(target):
+                        skill_manager.install(
+                            source="super-dev",
+                            target=target,
+                            name=skill_name,
+                            force=True,
+                        )
+                    host_actions["contract"] = "refreshed"
+                except Exception as exc:
+                    host_actions["contract"] = f"failed: {exc}"
+
+            try:
+                if check_integrate and "integrate" in missing and not contract_needs_repair:
+                    integration_manager.setup(target=target, force=force)
+                    host_actions["integrate"] = "fixed"
+            except Exception as exc:
+                host_actions["integrate"] = f"failed: {exc}"
+
+            try:
+                if check_skill and IntegrationManager.requires_skill(target) and "skill" in missing and not contract_needs_repair:
+                    skill_manager.install(
+                        source="super-dev",
+                        target=target,
+                        name=skill_name,
+                        force=force,
+                    )
+                    host_actions["skill"] = "fixed"
+            except Exception as exc:
+                host_actions["skill"] = f"failed: {exc}"
+
+            try:
+                if check_slash and integration_manager.supports_slash(target) and not contract_needs_repair:
+                    integration_manager.setup_slash_command(target=target, force=force)
+                    integration_manager.setup_global_slash_command(target=target, force=force)
+                    if "slash" in missing:
+                        host_actions["slash"] = "fixed"
+            except Exception as exc:
+                host_actions["slash"] = f"failed: {exc}"
+
+            if host_actions:
+                actions[target] = host_actions
+
+        return actions
+
+    def _cmd_onboard(self, args) -> int:
+        """首次接入向导：宿主选择 + 集成 + skill + slash"""
+        from .integrations import IntegrationManager
+        from .skills import SkillManager
+
+        if not self._ensure_host_support_matrix():
+            return 1
+        if self._is_manual_install_host(getattr(args, "host", None)):
+            return self._print_manual_install_host_guidance(target=str(args.host), command_name="onboard")
+
+        project_dir = Path.cwd()
+        integration_manager = IntegrationManager(project_dir)
+        skill_manager = SkillManager(project_dir)
+        detail = bool(getattr(args, "detail", False))
+
+        available_targets = self._public_host_targets(integration_manager=integration_manager)
+        targets: list[str]
+        detected_meta: dict[str, list[str]] = {}
+
+        if args.host:
+            targets = [args.host]
+        elif args.all:
+            targets = available_targets
+        elif args.auto:
+            targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
+            if not targets:
+                self.console.print("[red]未检测到可用宿主，请改用 --host 指定或使用 --all[/red]")
+                self.console.print(f"[dim]{self._custom_host_path_override_hint()}[/dim]")
+                return 1
+            self.console.print(
+                f"[cyan]自动检测到 {len(targets)} 个宿主：{', '.join(self._host_label(target) for target in targets)}[/cyan]"
+            )
+            for target in targets:
+                reasons = ", ".join(self._format_detection_reason(item) for item in detected_meta.get(target, []))
+                if reasons:
+                    self.console.print(f"[dim]  - {self._host_label(target)}: {reasons}[/dim]")
+        else:
+            try:
+                targets = self._resolve_onboard_targets(
+                    available_targets=available_targets,
+                    host=args.host,
+                    all_targets=bool(args.all),
+                    non_interactive=bool(args.yes),
+                )
+            except ValueError as exc:
+                self.console.print(f"[red]{exc}[/red]")
+                return 1
+
+        if not targets:
+            self.console.print("[red]未选择任何宿主工具[/red]")
+            return 1
+
+        if getattr(args, 'stable_only', False):
+            stable_targets = []
+            for t in targets:
+                profile = integration_manager.get_adapter_profile(t)
+                cert = profile.certification_label.lower()
+                if cert.startswith("certified") or cert.startswith("compatible"):
+                    stable_targets.append(t)
+            if not stable_targets:
+                self.console.print("[yellow]未找到 Certified 或 Compatible 级别的宿主[/yellow]")
+                return 1
+            skipped = set(targets) - set(stable_targets)
+            if skipped:
+                self.console.print(
+                    f"[dim]跳过 Experimental 宿主: {', '.join(self._host_label(target) for target in sorted(skipped))}[/dim]"
+                )
+            targets = stable_targets
+
+        setattr(args, "_selected_targets", list(targets))
+
+        self.console.print("")
+        from rich.panel import Panel
+        from rich.rule import Rule
+        self.console.print(Panel(
+            f"[bold cyan]Super Dev Onboard[/bold cyan]\n\n"
+            f"  [dim]项目[/dim]      {project_dir.name}\n"
+            f"  [dim]目标宿主[/dim]  {len(targets)} 个\n"
+            f"  [dim]版本[/dim]      {__version__}",
+            border_style="cyan",
+            expand=True,
+            padding=(1, 2),
+        ))
+        self.console.print("")
+        has_error = False
+        for idx, target in enumerate(targets, 1):
+            protocol = integration_manager._protocol_profile(target=target)
+            protocol_summary = protocol.get("summary", "") if isinstance(protocol, dict) else ""
+            self.console.print(Rule(
+                f"[bold cyan] {idx}/{len(targets)} [/bold cyan] [bold]{self._host_label(target)}[/bold]  [dim]{protocol_summary}[/dim]",
+                style="dim cyan",
+            ))
+            self.console.print("")
+            profile = integration_manager.get_adapter_profile(target)
+
+            if getattr(args, "dry_run", False):
+                surfaces = integration_manager.collect_managed_surface_paths(target=target)
+                self.console.print("  [dim]将写入以下文件:[/dim]")
+                for key, path in surfaces.items():
+                    exists = path.exists()
+                    status = "[dim]已存在[/dim]" if exists else "[cyan]新建[/cyan]"
+                    self.console.print(f"    {status} {path}")
+                self.console.print("")
+                continue
+
+            if not args.skip_integrate:
+                try:
+                    written_files = integration_manager.setup(target=target, force=args.force)
+                    integrate_written_count = len(written_files)
+                    if written_files:
+                        if detail:
+                            for item in written_files:
+                                self.console.print(
+                                    f"  [green]✓[/green] 集成规则: {item}",
+                                    soft_wrap=True,
+                                )
+                        else:
+                            self.console.print(f"  [green]✓[/green] 集成规则: {integrate_written_count} 项")
+                    else:
+                        self.console.print("  [dim]- 集成规则已存在（可加 --force 覆盖）[/dim]")
+                    global_protocol = integration_manager.setup_global_protocol(target=target, force=args.force)
+                    if global_protocol is not None:
+                        if detail:
+                            self.console.print(
+                                f"  [green]✓[/green] 宿主协议: {global_protocol}",
+                                soft_wrap=True,
+                            )
+                        else:
+                            self.console.print("  [green]✓[/green] 宿主协议: 已写入")
+                except Exception as exc:
+                    has_error = True
+                    self.console.print(f"  [red]✗[/red] 集成失败: {exc}")
+
+            if not args.skip_skill and IntegrationManager.requires_skill(target):
+                try:
+                    if not skill_manager.skill_surface_available(target):
+                        self.console.print("  [dim]- 未检测到官方或兼容 Skill 目录，已跳过宿主级 Skill 安装[/dim]")
+                    else:
+                        installed = set(skill_manager.list_installed(target))
+                        if args.skill_name in installed and not args.force:
+                            self.console.print(
+                                f"  [dim]- Skill 已存在: {args.skill_name}（可加 --force 重装）[/dim]"
+                            )
+                        else:
+                            install_result = skill_manager.install(
+                                source="super-dev",
+                                target=target,
+                                name=args.skill_name,
+                                force=args.force,
+                            )
+                            if detail:
+                                self.console.print(
+                                    f"  [green]✓[/green] Skill: {install_result.path}",
+                                    soft_wrap=True,
+                                )
+                            else:
+                                self.console.print("  [green]✓[/green] Skill: 已安装")
+                except Exception as exc:
+                    has_error = True
+                    self.console.print(f"  [red]✗[/red] Skill 安装失败: {exc}")
+            elif not args.skip_skill:
+                self.console.print("  [dim]- 该宿主默认按项目规则运行，已跳过 Skill 安装[/dim]")
+
+            if not args.skip_slash:
+                try:
+                    if integration_manager.supports_slash(target):
+                        slash_file = integration_manager.setup_slash_command(
+                            target=target,
+                            force=args.force,
+                        )
+                        if slash_file is None:
+                            self.console.print("  [dim]- /super-dev 映射已存在（可加 --force 覆盖）[/dim]")
+                        else:
+                            if detail:
+                                self.console.print(
+                                    f"  [green]✓[/green] /super-dev 映射: {slash_file}",
+                                    soft_wrap=True,
+                                )
+                            else:
+                                self.console.print("  [green]✓[/green] /super-dev 映射: 已写入")
+                        global_slash_file = integration_manager.setup_global_slash_command(
+                            target=target,
+                            force=args.force,
+                        )
+                        if global_slash_file is None:
+                            self.console.print("  [dim]- 全局 /super-dev 映射已存在（可加 --force 覆盖）[/dim]")
+                        elif slash_file is None or global_slash_file.resolve() != slash_file.resolve():
+                            if detail:
+                                self.console.print(
+                                    f"  [green]✓[/green] 全局 /super-dev 映射: {global_slash_file}",
+                                    soft_wrap=True,
+                                )
+                            else:
+                                self.console.print("  [green]✓[/green] 全局 /super-dev 映射: 已写入")
+                    else:
+                        self.console.print("  [dim]- 该宿主不支持 /super-dev，已跳过 slash 映射[/dim]")
+                except Exception as exc:
+                    has_error = True
+                    self.console.print(f"  [red]✗[/red] /super-dev 映射失败: {exc}")
+
+            self.console.print(f"  [cyan]主入口[/cyan]: {profile.primary_entry}")
+            if profile.requires_restart_after_onboard:
+                self.console.print("  [yellow]注意[/yellow]: 接入完成后需要重启宿主")
+            if detail:
+                for step in profile.post_onboard_steps:
+                    self.console.print(f"  [dim]- {step}[/dim]")
+            elif profile.post_onboard_steps:
+                self.console.print(f"  [dim]- {profile.post_onboard_steps[0]}[/dim]")
+
+            contract_failures = self._collect_onboard_contract_failures(
+                integration_manager=integration_manager,
+                target=target,
+                skill_name=args.skill_name,
+                skip_skill=bool(args.skip_skill),
+            )
+            if contract_failures and not args.force:
+                refreshed = self._refresh_onboard_contract_surfaces(
+                    integration_manager=integration_manager,
+                    skill_manager=skill_manager,
+                    target=target,
+                    skill_name=args.skill_name,
+                    skip_skill=bool(args.skip_skill),
+                )
+                if refreshed:
+                    self.console.print(
+                        f"  [yellow]![/yellow] 检测到旧版接入文件，已自动刷新: {', '.join(refreshed)}"
+                    )
+                    contract_failures = self._collect_onboard_contract_failures(
+                        integration_manager=integration_manager,
+                        target=target,
+                        skill_name=args.skill_name,
+                        skip_skill=bool(args.skip_skill),
+                    )
+            auto_repair_actions = self._auto_repair_onboard_target(
+                project_dir=project_dir,
+                target=target,
+                skill_name=args.skill_name,
+                check_integrate=not args.skip_integrate,
+                check_skill=not args.skip_skill,
+                check_slash=not args.skip_slash,
+            )
+            if auto_repair_actions:
+                action_text = ", ".join(f"{k}={v}" for k, v in auto_repair_actions.items())
+                self.console.print(f"  [yellow]![/yellow] 检测到安装残留，已自动修复: {action_text}")
+                contract_failures = self._collect_onboard_contract_failures(
+                    integration_manager=integration_manager,
+                    target=target,
+                    skill_name=args.skill_name,
+                    skip_skill=bool(args.skip_skill),
+                )
+            if contract_failures:
+                has_error = True
+                self.console.print("  [red]✗[/red] 宿主契约校验失败:")
+                for item in contract_failures[:6]:
+                    self.console.print(f"  [dim]- {item}[/dim]")
+            else:
+                self.console.print("  [green]✓[/green] 宿主契约校验通过")
+
+        self.console.print("")
+        if args.dry_run:
+            self.console.print(Panel(
+                "[bold cyan]Dry Run 完成[/bold cyan]\n\n"
+                "  以上为预览，未实际写入任何文件\n"
+                "  去掉 --dry-run 参数执行实际安装",
+                border_style="cyan",
+                expand=True,
+                padding=(1, 2),
+            ))
+            return 0
+        if has_error:
+            self.console.print(Panel(
+                "[bold red]Onboard 完成（部分失败）[/bold red]\n\n"
+                "  请检查上方错误信息\n"
+                "  使用 [cyan]super-dev doctor[/cyan] 诊断并自动修复\n"
+                "  需要看完整落点时加 [cyan]--detail[/cyan]",
+                border_style="red",
+                expand=True,
+                padding=(1, 2),
+            ))
+            return 1
+
+        next_steps = self._build_onboard_next_steps(targets=targets)
+        steps_text = "\n".join(f"  [green]>[/green] {line}" for line in next_steps)
+        resume_lines = self._build_session_resume_card_lines(project_dir=project_dir, target=targets[0]) if targets else []
+        resume_text = ""
+        if resume_lines:
+            resume_text = "\n\n[bold]如果你是在继续已有流程:[/bold]\n\n" + "\n".join(
+                f"  [cyan]>[/cyan] {line}" for line in resume_lines
+            )
+        self.console.print(Panel(
+            f"[bold green]Onboard 完成[/bold green]\n\n"
+            f"[bold]接下来这样用:[/bold]\n\n{steps_text}{resume_text}\n\n"
+            f"[dim]提示: 终端 super-dev \"你的需求\" 仅触发本地编排，不替代宿主会话编码[/dim]\n"
+            f"[dim]需要看完整落点与逐项步骤时，可加 --detail[/dim]",
+            border_style="green",
+            expand=True,
+            padding=(1, 2),
+        ))
+        return 0
+
+    def _collect_onboard_contract_failures(
+        self,
+        *,
+        integration_manager,
+        target: str,
+        skill_name: str,
+        skip_skill: bool,
+    ) -> list[str]:
+        contract_surfaces = integration_manager.collect_managed_surface_paths(
+            target=target,
+            skill_name=skill_name,
+        )
+        contract_failures: list[str] = []
+        for surface_key, surface_path in contract_surfaces.items():
+            if surface_key.startswith("skill:") and skip_skill:
+                continue
+            if not surface_path.exists():
+                continue
+            try:
+                content = surface_path.read_text(encoding="utf-8")
+            except Exception:
+                contract_failures.append(str(surface_path))
+                continue
+            if integration_manager.audit_surface_contract(target, surface_key, surface_path, content):
+                contract_failures.append(str(surface_path))
+        return contract_failures
+
+    def _refresh_onboard_contract_surfaces(
+        self,
+        *,
+        integration_manager,
+        skill_manager,
+        target: str,
+        skill_name: str,
+        skip_skill: bool,
+    ) -> list[str]:
+        from .integrations import IntegrationManager
+
+        refreshed: list[str] = []
+        integration_manager.setup(target=target, force=True)
+        integration_manager.setup_global_protocol(target=target, force=True)
+        refreshed.append("integrate")
+
+        if integration_manager.supports_slash(target):
+            integration_manager.setup_slash_command(target=target, force=True)
+            integration_manager.setup_global_slash_command(target=target, force=True)
+            refreshed.append("slash")
+
+        if (
+            not skip_skill
+            and IntegrationManager.requires_skill(target)
+            and skill_manager.skill_surface_available(target)
+        ):
+            skill_manager.install(
+                source="super-dev",
+                target=target,
+                name=skill_name,
+                force=True,
+            )
+            refreshed.append("skill")
+
+        return refreshed
+
+    def _auto_repair_onboard_target(
+        self,
+        *,
+        project_dir: Path,
+        target: str,
+        skill_name: str,
+        check_integrate: bool,
+        check_skill: bool,
+        check_slash: bool,
+    ) -> dict[str, str]:
+        report = self._collect_host_diagnostics(
+            project_dir=project_dir,
+            targets=[target],
+            skill_name=skill_name,
+            check_integrate=check_integrate,
+            check_skill=check_skill,
+            check_slash=check_slash,
+        )
+        host_report = (report.get("hosts", {}) or {}).get(target, {})
+        if not isinstance(host_report, dict) or bool(host_report.get("ready", False)):
+            return {}
+
+        repair_actions = self._repair_host_diagnostics(
+            project_dir=project_dir,
+            report=report,
+            skill_name=skill_name,
+            force=True,
+            check_integrate=check_integrate,
+            check_skill=check_skill,
+            check_slash=check_slash,
+        )
+        return repair_actions.get(target, {}) if isinstance(repair_actions, dict) else {}
+
+    def _cmd_doctor(self, args) -> int:
+        """诊断宿主接入状态"""
+        from .integrations import IntegrationManager
+
+        if not self._ensure_host_support_matrix():
+            return 1
+
+        detail = bool(getattr(args, "detail", False))
+
+        project_dir = Path.cwd()
+        integration_manager = IntegrationManager(project_dir)
+        detected_targets: list[str] = []
+        detected_meta: dict[str, list[str]] = {}
+        if self._is_manual_install_host(getattr(args, "host", None)):
+            targets = [str(args.host)]
+        else:
+            available_targets = self._public_host_targets(integration_manager=integration_manager)
+            targets: list[str]
+        if args.host:
+            targets = [args.host]
+        elif args.auto:
+            targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
+            if not targets:
+                if not args.json:
+                    self.console.print("[yellow]未检测到可用宿主，已回退为诊断全部目标[/yellow]")
+                    self.console.print(f"[dim]{self._custom_host_path_override_hint()}[/dim]")
+                targets = available_targets
+            elif not args.json:
+                self.console.print(
+                    f"[cyan]自动检测到 {len(targets)} 个宿主：{', '.join(self._host_label(target) for target in targets)}[/cyan]"
+                )
+                for target in targets:
+                    reasons = ", ".join(self._format_detection_reason(item) for item in detected_meta.get(target, []))
+                    if reasons:
+                        self.console.print(f"[dim]  - {self._host_label(target)}: {reasons}[/dim]")
+        elif args.all:
+            targets = available_targets
+        else:
+            targets = available_targets
+
+        report = self._collect_host_diagnostics(
+            project_dir=project_dir,
+            targets=targets,
+            skill_name=args.skill_name,
+            check_integrate=not args.skip_integrate,
+            check_skill=not args.skip_skill,
+            check_slash=not args.skip_slash,
+        )
+        runtime_health = self._collect_runtime_install_health()
+        compatibility = self._build_compatibility_summary(
+            report=report,
+            targets=targets,
+            check_integrate=not args.skip_integrate,
+            check_skill=not args.skip_skill,
+            check_slash=not args.skip_slash,
+        )
+        repair_actions: dict[str, dict[str, str]] = {}
+        if args.repair:
+            repair_actions = self._repair_host_diagnostics(
+                project_dir=project_dir,
+                report=report,
+                skill_name=args.skill_name,
+                force=bool(args.force),
+                check_integrate=not args.skip_integrate,
+                check_skill=not args.skip_skill,
+                check_slash=not args.skip_slash,
+            )
+            report = self._collect_host_diagnostics(
+                project_dir=project_dir,
+                targets=targets,
+                skill_name=args.skill_name,
+                check_integrate=not args.skip_integrate,
+                check_skill=not args.skip_skill,
+                check_slash=not args.skip_slash,
+            )
+            compatibility = self._build_compatibility_summary(
+                report=report,
+                targets=targets,
+                check_integrate=not args.skip_integrate,
+                check_skill=not args.skip_skill,
+                check_slash=not args.skip_slash,
+            )
+            report["repair_actions"] = repair_actions
+        decision_card = (
+            self._build_detected_host_decision_card(
+                project_dir=project_dir,
+                integration_manager=integration_manager,
+                detected_targets=detected_targets,
+                detected_meta=detected_meta,
+                preferred_targets=targets if args.host else None,
+            )
+            if detected_targets
+            else self._build_detected_host_decision_card(
+                project_dir=project_dir,
+                integration_manager=integration_manager,
+                detected_targets=[],
+                detected_meta=detected_meta,
+                preferred_targets=targets if args.host else None,
+            )
+        )
+        report["compatibility"] = compatibility
+        report["runtime_install_health"] = runtime_health
+        report["selected_targets"] = targets
+        report["detected_hosts"] = detected_targets
+        report["detection_details_pretty"] = self._explain_detection_details(detected_meta)
+        report["decision_card"] = decision_card
+        report["primary_repair_action"] = self._build_primary_repair_action(
+            report=report,
+            targets=targets,
+            decision_card=decision_card,
+        )
+
+        if args.json:
+            sys.stdout.write(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+            return 0 if bool(report.get("overall_ready", False)) else 1
+
+        self.console.print("[cyan]Super Dev Doctor[/cyan]")
+        self.console.print(f"[dim]项目目录: {project_dir}[/dim]")
+        if isinstance(decision_card, dict) and decision_card.get("lines"):
+            self.console.print(f"[cyan]{decision_card.get('title', '宿主决策')}[/cyan]")
+            self.console.print(f"[dim]{decision_card.get('summary', '')}[/dim]")
+            for line in decision_card.get("lines", []):
+                self.console.print(f"[dim]- {line}[/dim]")
+            self.console.print("")
+        self.console.print(
+            f"[cyan]兼容性评分: {compatibility['overall_score']:.2f}/100 "
+            f"(ready {compatibility['ready_hosts']}/{compatibility['total_hosts']})[/cyan]"
+        )
+        if not runtime_health.get("healthy", False):
+            self.console.print(
+                "[yellow]运行时安装异常[/yellow]: 通常不是必须和 Python 装在同一盘，"
+                "而是 `super-dev` 命令与当前 Python 不在同一环境。"
+            )
+            if not detail:
+                self.console.print("[dim]加 --detail 可查看模块路径、残留版本与修复建议[/dim]")
+        if detail:
+            self.console.print(
+                f"[dim]终端输出: {output_mode_label()} ({output_mode_reason()})[/dim]"
+            )
+            self.console.print(
+                f"[cyan]流程一致性: {compatibility.get('flow_consistency_score', 0):.2f}/100 "
+                f"({compatibility.get('flow_consistent_hosts', 0)}/{compatibility.get('total_hosts', 0)})[/cyan]"
+            )
+            certified_count = sum(
+                1 for t in targets
+                if integration_manager.get_adapter_profile(t).certification_label.lower().startswith("certified")
+            )
+            compatible_count = sum(
+                1 for t in targets
+                if integration_manager.get_adapter_profile(t).certification_label.lower().startswith("compatible")
+            )
+            experimental_count = len(targets) - certified_count - compatible_count
+            self.console.print(
+                f"[cyan]认证分布: Certified {certified_count} / Compatible {compatible_count} / Experimental {experimental_count}[/cyan]"
+            )
+        self.console.print("")
+        if detail:
+            self._print_runtime_install_health(runtime_health)
+            self.console.print("")
+        ready_targets = [target for target in targets if bool((report.get("hosts", {}).get(target) or {}).get("ready", False))]
+        if ready_targets:
+            self.console.print("[green]现在可以直接这样开始[/green]")
+            for line in self._build_onboard_next_steps(targets=ready_targets[:3]):
+                self.console.print(f"[green]>[/green] {line}")
+            resume_lines = self._build_session_resume_card_lines(project_dir=project_dir, target=ready_targets[0])
+            if resume_lines:
+                self.console.print("[cyan]如果你是在继续已有流程[/cyan]")
+                for line in resume_lines:
+                    self.console.print(f"[dim]- {line}[/dim]")
+            self.console.print("")
+        if args.repair:
+            self.console.print("[cyan]Repair 模式已执行[/cyan]")
+            if repair_actions:
+                for target, actions in repair_actions.items():
+                    action_text = ", ".join(f"{k}={v}" for k, v in actions.items())
+                    self.console.print(f"[dim]- {self._host_label(target)}: {action_text}[/dim]")
+            else:
+                self.console.print("[dim]- 无需修复或未执行修复动作[/dim]")
+            self.console.print("")
+        if not detail:
+            primary_repair = report.get("primary_repair_action", {})
+            if isinstance(primary_repair, dict) and primary_repair.get("command"):
+                self.console.print("[cyan]主修复动作[/cyan]")
+                self.console.print(f"[dim]- 宿主: {primary_repair.get('host', '-')}[/dim]")
+                if primary_repair.get("reason"):
+                    self.console.print(f"[dim]- 原因: {primary_repair.get('reason')}[/dim]")
+                self.console.print(f"[dim]- 先执行: {primary_repair.get('command')}[/dim]")
+                secondary_actions = primary_repair.get("secondary_actions", [])
+                if isinstance(secondary_actions, list) and secondary_actions:
+                    self.console.print("[dim]- 备选动作:[/dim]")
+                    for item in secondary_actions[:2]:
+                        self.console.print(f"[dim]  • {item}[/dim]")
+                self.console.print("")
+            self.console.print("[dim]使用 --detail 查看路径、协议、前置条件与逐项建议[/dim]")
+            self.console.print("")
+        # 摘要表格
+        from rich.table import Table
+        summary_table = Table(
+            title="宿主接入状态",
+            expand=True,
+            show_lines=False,
+            border_style="dim",
+            title_style="bold cyan",
+        )
+        summary_table.add_column("宿主", style="bold", min_width=18)
+        summary_table.add_column("状态", justify="center", min_width=8)
+        summary_table.add_column("集成规则", justify="center")
+        summary_table.add_column("Skill", justify="center")
+        summary_table.add_column("Slash", justify="center")
+        summary_table.add_column("认证", justify="center", min_width=12)
+        if detail:
+            summary_table.add_column("协议", style="dim")
+
+        for target in targets:
+            host = report["hosts"][target]
+            protocol = integration_manager._protocol_profile(target=target)
+            protocol_summary = protocol.get("summary", "") if isinstance(protocol, dict) else ""
+
+            status = "[green]已就绪[/green]" if host["ready"] else "[red]未安装[/red]"
+
+            integrate_ok = bool(host.get("checks", {}).get("integrate", {}).get("ok", True))
+            skill_ok = bool(host.get("checks", {}).get("skill", {}).get("ok", True))
+            slash_ok = bool(host.get("checks", {}).get("slash", {}).get("ok", True))
+
+            integrate_text = "[green]已安装[/green]" if integrate_ok else "[red]未安装[/red]"
+            skill_text = "[green]已安装[/green]" if skill_ok else ("[dim]不适用[/dim]" if not IntegrationManager.requires_skill(target) else "[red]未安装[/red]")
+            slash_text = "[green]已安装[/green]" if slash_ok else ("[dim]不适用[/dim]" if not integration_manager.supports_slash(target) else "[red]未安装[/red]")
+
+            profile = integration_manager.get_adapter_profile(target)
+            cert_label = profile.certification_label
+            if "certified" in cert_label.lower():
+                cert_text = f"[bold green]{cert_label}[/bold green]"
+            elif "compatible" in cert_label.lower():
+                cert_text = f"[cyan]{cert_label}[/cyan]"
+            else:
+                cert_text = f"[yellow]{cert_label}[/yellow]"
+
+            row = [self._host_label(target), status, integrate_text, skill_text, slash_text, cert_text]
+            if detail:
+                row.append(protocol_summary)
+            summary_table.add_row(*row)
+
+        self.console.print(summary_table)
+        self.console.print("")
+
+        for target in targets:
+            host = report["hosts"][target]
+            if detail:
+                if host["ready"]:
+                    self.console.print(f"[green]✓ {self._host_label(target)}[/green] ready")
+                else:
+                    self.console.print(f"[red]✗ {self._host_label(target)}[/red] [red]未安装[/red]")
+                    for check_name in host.get("missing", []):
+                        self.console.print(f"  [red]- 缺失: {check_name}[/red]")
+                    for suggestion in host.get("suggestions", []):
+                        self.console.print(f"  [dim]建议: {suggestion}[/dim]")
+                self._print_host_usage_guidance(
+                    integration_manager=integration_manager,
+                    target=target,
+                    indent="  ",
+                )
+            elif not host["ready"]:
+                missing = ", ".join(host.get("missing", []))
+                self.console.print(f"[red]✗ {self._host_label(target)}[/red] 缺失: {missing}")
+                diagnosis = host.get("diagnosis", {})
+                suggested_command = ""
+                if isinstance(diagnosis, dict):
+                    blocker_summary = str(diagnosis.get("blocker_summary", "")).strip()
+                    certification_reason = str(diagnosis.get("certification_reason", "")).strip()
+                    suggested_command = str(diagnosis.get("suggested_command", "")).strip()
+                    if blocker_summary:
+                        self.console.print(f"[dim]  原因: {blocker_summary}[/dim]")
+                    if certification_reason:
+                        self.console.print(f"[dim]  适配说明: {certification_reason}[/dim]")
+                    if suggested_command:
+                        self.console.print(f"[dim]  先执行: {suggested_command}[/dim]")
+                suggestions = host.get("suggestions", [])
+                if suggestions:
+                    first_suggestion = str(suggestions[0]).strip()
+                    if not suggested_command or first_suggestion != suggested_command:
+                        self.console.print(f"[dim]  建议: {first_suggestion}[/dim]")
+
+        self.console.print("")
+        if bool(report.get("overall_ready", False)):
+            self.console.print("[green]✓ Doctor 通过：所有宿主接入完整[/green]")
+            return 0
+        self.console.print("[red]Doctor 未通过：请按建议修复后重试[/red]")
+        return 1
+
+    def _cmd_setup(self, args) -> int:
+        """一步接入：onboard + doctor"""
+        if self._is_manual_install_host(getattr(args, "host", None)):
+            return self._print_manual_install_host_guidance(target=str(args.host), command_name="setup")
+        setup_all = bool(args.all or (bool(args.yes) and not args.host and not args.auto))
+        onboard_args = argparse.Namespace(
+            host=args.host,
+            all=setup_all,
+            auto=bool(args.auto and not args.host and not args.all),
+            skill_name=args.skill_name,
+            skip_integrate=bool(args.skip_integrate),
+            skip_skill=bool(args.skip_skill),
+            skip_slash=bool(args.skip_slash),
+            yes=bool(args.yes),
+            force=bool(args.force),
+            dry_run=False,
+            stable_only=False,
+            detail=bool(getattr(args, "detail", False)),
+        )
+        onboard_result = self._cmd_onboard(onboard_args)
+        if onboard_result != 0:
+            return onboard_result
+
+        if args.skip_doctor:
+            return 0
+
+        selected_targets = getattr(onboard_args, "_selected_targets", None)
+        if isinstance(selected_targets, list) and selected_targets:
+            final_code = 0
+            for target in selected_targets:
+                doctor_args = argparse.Namespace(
+                    host=target,
+                    all=False,
+                    auto=False,
+                    skill_name=args.skill_name,
+                    skip_integrate=bool(args.skip_integrate),
+                    skip_skill=bool(args.skip_skill),
+                    skip_slash=bool(args.skip_slash),
+                    json=False,
+                    repair=True,
+                    force=bool(args.force),
+                    detail=bool(getattr(args, "detail", False)),
+                )
+                result = self._cmd_doctor(doctor_args)
+                if result != 0:
+                    final_code = result
+            return final_code
+
+        doctor_args = argparse.Namespace(
+            host=args.host,
+            all=setup_all,
+            auto=bool(args.auto and not args.host and not args.all),
+            skill_name=args.skill_name,
+            skip_integrate=bool(args.skip_integrate),
+            skip_skill=bool(args.skip_skill),
+            skip_slash=bool(args.skip_slash),
+            json=False,
+            repair=True,
+            force=bool(args.force),
+            detail=bool(getattr(args, "detail", False)),
+        )
+        return self._cmd_doctor(doctor_args)
+
+    def _cmd_install(self, args) -> int:
+        """面向 PyPI 用户的一键安装入口"""
+        self._render_install_intro(args=args)
+        if self._is_manual_install_host(getattr(args, "host", None)):
+            return self._print_manual_install_host_guidance(target=str(args.host), command_name="install")
+        setup_args = argparse.Namespace(
+            host=args.host,
+            all=bool(args.all),
+            auto=bool(args.auto),
+            skill_name=args.skill_name,
+            skip_integrate=bool(args.skip_integrate),
+            skip_skill=bool(args.no_skill),
+            skip_slash=bool(args.skip_slash),
+            skip_doctor=bool(args.skip_doctor),
+            force=bool(args.force),
+            yes=bool(args.yes),
+        )
+        return self._cmd_setup(setup_args)
+
+    def _cmd_start(self, args) -> int:
+        """面向非技术用户的起步入口：自动选宿主、接入并输出最短试用路径。"""
+        from .integrations import IntegrationManager
+
+        if not self._ensure_host_support_matrix():
+            return 1
+        if self._is_manual_install_host(getattr(args, "host", None)):
+            return self._print_manual_install_host_guidance(target=str(args.host), command_name="start")
+
+        project_dir = Path.cwd()
+        integration_manager = IntegrationManager(project_dir)
+        available_targets = self._public_host_targets(integration_manager=integration_manager)
+        detected_targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
+
+        target = args.host
+        selection_reason = "manual"
+        if not target:
+            if detected_targets:
+                target = self._select_best_start_host(
+                    integration_manager=integration_manager,
+                    targets=detected_targets,
+                )
+                selection_reason = "auto-detected"
+            else:
+                decision_card = self._build_no_host_decision_card(
+                    integration_manager=integration_manager
+                )
+                payload = {
+                    "status": "error",
+                    "reason": "no-host-detected",
+                    "message": "未检测到可用宿主，请先安装受支持宿主后重试。",
+                    "path_override_hint": decision_card["path_override_hint"],
+                    "recommended_hosts": decision_card["recommended_hosts"],
+                    "decision_card": decision_card,
+                }
+                if args.json:
+                    sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+                else:
+                    self.console.print("[red]未检测到可用宿主[/red]")
+                    self.console.print(f"[dim]{decision_card['summary']}[/dim]")
+                    for line in decision_card["lines"]:
+                        self.console.print(f"[dim]- {line}[/dim]")
+                    self.console.print("[cyan]优先建议安装这些宿主:[/cyan]")
+                    for host in decision_card["recommended_hosts"]:
+                        self.console.print(
+                            f"  - {host['name']} [{host['certification_label']}]"
+                        )
+                return 1
+
+        usage = self._build_host_usage_profile(
+            integration_manager=integration_manager,
+            target=target,
+        )
+
+        onboard_performed = False
+        if not bool(args.skip_onboard):
+            setup_args = argparse.Namespace(
+                host=target,
+                all=False,
+                auto=False,
+                skill_name="super-dev-core",
+                skip_integrate=False,
+                skip_skill=False,
+                skip_slash=False,
+                skip_doctor=False,
+                yes=True,
+                force=bool(args.force),
+            )
+            if args.json:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    onboard_result = self._cmd_setup(setup_args)
+            else:
+                onboard_result = self._cmd_setup(setup_args)
+            onboard_performed = True
+            if onboard_result != 0:
+                return onboard_result
+
+        profile_saved = False
+        profile_save_error = ""
+        if not bool(args.no_save_profile):
+            try:
+                ConfigManager(project_dir).update(
+                    host_profile_targets=[target],
+                    host_profile_enforce_selected=True,
+                )
+                profile_saved = True
+            except Exception as exc:
+                profile_save_error = str(exc)
+
+        session_hint = self._build_workflow_session_hint(project_dir=project_dir, target=target)
+        session_resume_card = self._build_session_resume_card(project_dir=project_dir, target=target)
+        decision_card = self._build_detected_host_decision_card(
+            project_dir=project_dir,
+            integration_manager=integration_manager,
+            detected_targets=detected_targets,
+            detected_meta=detected_meta,
+            preferred_targets=[target],
+        )
+        quick_start = self._build_host_quick_start_text(
+            host_profile=usage,
+            host_id=target,
+            host_name=self._host_label(target),
+            idea=args.idea,
+            session_hint=session_hint,
+        )
+        payload = {
+            "status": "success",
+            "project_dir": str(project_dir),
+            "selected_host": target,
+            "selected_host_name": self._host_label(target),
+            "selection_reason": selection_reason,
+            "detected_hosts": detected_targets,
+            "detection_details": detected_meta,
+            "detection_details_pretty": self._explain_detection_details(detected_meta),
+            "onboard_performed": onboard_performed,
+            "profile_saved": profile_saved,
+            "profile_save_error": profile_save_error,
+            "usage_profile": usage,
+            "session_mode": session_hint.get("session_mode", "fresh_start"),
+            "continue_prompt": session_hint.get("continue_prompt", ""),
+            "recommended_workflow_command": session_hint.get("recommended_workflow_command", ""),
+            "workflow_reason": session_hint.get("workflow_reason", ""),
+            "session_resume_card": session_resume_card,
+            "decision_card": decision_card,
+            "runtime_install_health": self._collect_runtime_install_health(),
+            "recommended_trigger": self._build_host_trigger_example(target=target, idea=args.idea),
+            "quick_start": quick_start,
+        }
+
+        if args.json:
+            sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+            return 0
+
+        profile = integration_manager.get_adapter_profile(target)
+        self.console.print("[cyan]Super Dev Start[/cyan]")
+        self.console.print(f"[cyan]已选择宿主[/cyan]: {self._host_label(target)}")
+        self.console.print(
+            f"[cyan]认证等级[/cyan]: {profile.certification_label} ({profile.certification_level})"
+        )
+        if selection_reason == "auto-detected":
+            reasons = ", ".join(detected_meta.get(target, []))
+            if reasons:
+                self.console.print(f"[dim]自动选择依据: {reasons}[/dim]")
+        if decision_card.get("scenario") == "multi-host-detected":
+            self.console.print(f"[cyan]{decision_card.get('title', '已检测到宿主')}[/cyan]")
+            self.console.print(f"[dim]{decision_card.get('summary', '')}[/dim]")
+            for line in decision_card.get("lines", []):
+                self.console.print(f"[dim]- {line}[/dim]")
+        self.console.print(f"[dim]{profile.certification_reason}[/dim]")
+        if profile_saved:
+            self.console.print("[green]✓[/green] 已写入宿主画像到 super-dev.yaml")
+        elif profile_save_error:
+            self.console.print(f"[yellow]宿主画像写入失败: {profile_save_error}[/yellow]")
+        self.console.print("")
+        self.console.print(quick_start)
+        return 0
+
+    def _cmd_detect(self, args) -> int:
+        """宿主探测 + 接入兼容性评分"""
+        from .integrations import IntegrationManager
+
+        if not self._ensure_host_support_matrix():
+            return 1
+
+        project_dir = Path.cwd()
+        integration_manager = IntegrationManager(project_dir)
+        if self._is_manual_install_host(getattr(args, "host", None)):
+            targets = [str(args.host)]
+            available_targets = targets
+        else:
+            available_targets = self._public_host_targets(integration_manager=integration_manager)
+        detected_targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
+
+        if args.host:
+            targets = [args.host]
+        elif args.all:
+            targets = available_targets
+        else:
+            targets = detected_targets
+
+        report = self._collect_host_diagnostics(
+            project_dir=project_dir,
+            targets=targets,
+            skill_name=args.skill_name,
+            check_integrate=not args.skip_integrate,
+            check_skill=not args.skip_skill,
+            check_slash=not args.skip_slash,
+        )
+        compatibility = self._build_compatibility_summary(
+            report=report,
+            targets=targets,
+            check_integrate=not args.skip_integrate,
+            check_skill=not args.skip_skill,
+            check_slash=not args.skip_slash,
+        )
+
+        payload: dict[str, Any] = {
+            "project_dir": str(project_dir),
+            "detected_hosts": detected_targets,
+            "detection_details": detected_meta,
+            "detection_details_pretty": self._explain_detection_details(detected_meta),
+            "selected_targets": targets,
+            "decision_card": self._build_detected_host_decision_card(
+                project_dir=project_dir,
+                integration_manager=integration_manager,
+                detected_targets=detected_targets,
+                detected_meta=detected_meta,
+                preferred_targets=targets if args.host else None,
+            ),
+            "report": report,
+            "compatibility": compatibility,
+            "session_resume_cards": {
+                target: self._build_session_resume_card(project_dir=project_dir, target=target)
+                for target in targets
+            },
+            "usage_profiles": {
+                target: self._build_host_usage_profile(
+                    integration_manager=integration_manager,
+                    target=target,
+                )
+                for target in targets
+            },
+        }
+        if not bool(args.no_save):
+            report_files = self._write_host_compatibility_report(project_dir=project_dir, payload=payload)
+            payload["report_files"] = {name: str(path) for name, path in report_files.items()}
+
+        if bool(args.save_profile):
+            try:
+                config_manager = ConfigManager(project_dir)
+                config_manager.update(
+                    host_profile_targets=targets,
+                    host_profile_enforce_selected=True,
+                )
+                payload["host_profile_updated"] = True
+            except Exception as exc:
+                payload["host_profile_updated"] = False
+                payload["host_profile_update_error"] = str(exc)
+
+        if args.json:
+            sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+            return 0
+
+        self.console.print("[cyan]Super Dev Host Detect[/cyan]")
+        self.console.print(f"[dim]项目目录: {project_dir}[/dim]")
+        if detected_targets:
+            self.console.print(
+                f"[cyan]自动检测到 {len(detected_targets)} 个宿主：{', '.join(self._host_label(target) for target in detected_targets)}[/cyan]"
+            )
+            for target in detected_targets:
+                reasons = ", ".join(self._format_detection_reason(item) for item in detected_meta.get(target, []))
+                if reasons:
+                    self.console.print(f"[dim]  - {self._host_label(target)}: {reasons}[/dim]")
+        else:
+            self.console.print("[yellow]未检测到宿主（可用 --all 查看全部兼容评分）[/yellow]")
+        decision_card = payload.get("decision_card", {})
+        if isinstance(decision_card, dict) and decision_card.get("lines"):
+            self.console.print("")
+            self.console.print(f"[cyan]{decision_card.get('title', '宿主决策')}[/cyan]")
+            self.console.print(f"[dim]{decision_card.get('summary', '')}[/dim]")
+            for line in decision_card.get("lines", []):
+                self.console.print(f"[dim]- {line}[/dim]")
+
+        self.console.print("")
+        self.console.print(
+            f"[cyan]兼容性评分: {compatibility['overall_score']:.2f}/100 "
+            f"(ready {compatibility['ready_hosts']}/{compatibility['total_hosts']})[/cyan]"
+        )
+        self.console.print(
+            f"[cyan]流程一致性: {compatibility.get('flow_consistency_score', 0):.2f}/100 "
+            f"({compatibility.get('flow_consistent_hosts', 0)}/{compatibility.get('total_hosts', 0)})[/cyan]"
+        )
+        for target in targets:
+            host_compat = compatibility["hosts"].get(target, {})
+            score = host_compat.get("score", 0.0)
+            ready = bool(host_compat.get("ready", False))
+            badge = "[green]ready[/green]" if ready else "[yellow]not-ready[/yellow]"
+            self.console.print(f"  - {self._host_label(target)}: {score:.2f}/100 {badge}")
+        if targets:
+            guidance_target = self._select_best_start_host(
+                integration_manager=integration_manager,
+                targets=targets,
+            )
+            resume_card = self._build_session_resume_card(project_dir=project_dir, target=guidance_target)
+            if bool(resume_card.get("enabled", False)):
+                self.console.print("")
+                self.console.print("[cyan]如果你是在继续已有流程[/cyan]")
+                for line in resume_card.get("lines", []):
+                    self.console.print(f"[dim]- {line}[/dim]")
+            self._print_host_usage_guidance(
+                integration_manager=integration_manager,
+                target=guidance_target,
+                indent="    ",
+            )
+        if not bool(args.no_save):
+            saved_report_files = payload.get("report_files", {})
+            if isinstance(saved_report_files, dict):
+                json_file = saved_report_files.get("json")
+                md_file = saved_report_files.get("markdown")
+                if isinstance(json_file, str) and isinstance(md_file, str):
+                    self.console.print(f"[dim]报告: {md_file}[/dim]")
+                    self.console.print(f"[dim]数据: {json_file}[/dim]")
+        if bool(args.save_profile):
+            if bool(payload.get("host_profile_updated", False)):
+                self.console.print("[green]✓[/green] 已更新宿主画像: host_profile_targets + host_profile_enforce_selected")
+            else:
+                err = payload.get("host_profile_update_error", "")
+                self.console.print(f"[yellow]宿主画像更新失败: {err}[/yellow]")
+
+        return 0
+
+    def _cmd_clean(self, args) -> int:
+        """清理历史产物文件"""
+        project_dir = Path.cwd()
+        output_dir = project_dir / get_config_manager(project_dir).config.output_dir
+
+        if not output_dir.exists():
+            self.console.print("[yellow]output/ 目录不存在，无需清理[/yellow]")
+            return 0
+
+        # 收集所有产物文件（按修改时间排序）
+        artifact_extensions = {".md", ".json", ".html", ".css", ".js", ".tar.gz", ".zip"}
+        all_files: list[Path] = []
+        for f in output_dir.rglob("*"):
+            if f.is_file() and (f.suffix in artifact_extensions or ".tar" in f.name):
+                all_files.append(f)
+
+        if not all_files:
+            self.console.print("[green]output/ 目录已是干净状态[/green]")
+            return 0
+
+        all_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+
+        if args.all:
+            files_to_delete = all_files
+        else:
+            # 按项目名分组，每组保留最近 keep 个文件
+            import re as _re
+            from collections import defaultdict
+
+            # 已知的产物后缀模式
+            artifact_suffixes = [
+                "-prd", "-architecture", "-uiux", "-research", "-execution-plan",
+                "-frontend-blueprint", "-redteam", "-quality-gate", "-code-review",
+                "-ai-prompt", "-release-readiness", "-pipeline-metrics",
+                "-ui-review", "-proof-pack", "-contract-report", "-knowledge-bundle",
+                "-frontend-runtime", "-repo-map", "-dependency-graph",
+                "-feature-checklist", "-resume-audit", "-rehearsal-report",
+            ]
+
+            groups: dict[str, list[Path]] = defaultdict(list)
+            for f in all_files:
+                name = f.stem
+                matched = False
+                for suffix in artifact_suffixes:
+                    if name.endswith(suffix):
+                        name = name[: -len(suffix)]
+                        matched = True
+                        break
+                if not matched:
+                    # 尝试正则提取（处理未知后缀）
+                    m = _re.match(r"^(.+?)(?:-[a-z]+-[a-z]+)$", name)
+                    if m:
+                        name = m.group(1)
+                groups[name].append(f)
+
+            files_to_delete = []
+            for _group_name, group_files in groups.items():
+                group_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+                keep_count = args.keep
+                if len(group_files) > keep_count:
+                    files_to_delete.extend(group_files[keep_count:])
+
+        if not files_to_delete:
+            self.console.print(f"[green]无需清理（当前保留最近 {args.keep} 次运行的产物）[/green]")
+            return 0
+
+        self.console.print(f"[cyan]将清理 {len(files_to_delete)} 个文件：[/cyan]")
+        for f in files_to_delete[:20]:
+            try:
+                rel = f.relative_to(project_dir)
+            except ValueError:
+                rel = f.name
+            self.console.print(f"  [dim]{rel}[/dim]")
+        if len(files_to_delete) > 20:
+            self.console.print(f"  [dim]... 及其他 {len(files_to_delete) - 20} 个文件[/dim]")
+
+        if args.dry_run:
+            self.console.print("[yellow]--dry-run 模式，未实际删除[/yellow]")
+            return 0
+
+        deleted = 0
+        for f in files_to_delete:
+            try:
+                f.unlink()
+                deleted += 1
+            except OSError:
+                pass
+
+        # 清理空目录
+        for d in sorted(output_dir.rglob("*"), reverse=True):
+            if d.is_dir() and not any(d.iterdir()):
+                try:
+                    d.rmdir()
+                except OSError:
+                    pass
+
+        self.console.print(f"[green]已清理 {deleted} 个文件[/green]")
+        return 0
+
+    def _cmd_update(self, args) -> int:
+        latest_version = self._fetch_latest_pypi_version()
+        if latest_version is None:
+            self.console.print("[red]无法获取 PyPI 最新版本信息，请检查网络后重试[/red]")
+            return 1
+
+        current_version = __version__
+        self.console.print(f"[cyan]当前版本[/cyan]: {current_version}")
+        self.console.print(f"[cyan]PyPI 最新版本[/cyan]: {latest_version}")
+
+        method = self._resolve_update_method(args.method)
+        if args.check:
+            if self._is_version_newer(latest_version, current_version):
+                self.console.print("[yellow]发现新版本，可执行 `super-dev update` 完成升级[/yellow]")
+            elif self._version_key(current_version) > self._version_key(latest_version):
+                self.console.print("[yellow]当前本地版本高于 PyPI 最新版本，可能是尚未发布的开发版本[/yellow]")
+            else:
+                self.console.print("[green]✓ 当前已是最新版本[/green]")
+            return 0
+
+        if self._version_key(current_version) > self._version_key(latest_version):
+            self.console.print("[yellow]当前本地版本高于 PyPI 最新版本，将继续执行升级命令以刷新当前安装[/yellow]")
+        elif not self._is_version_newer(latest_version, current_version):
+            self.console.print("[green]当前版本已与 PyPI 一致，将继续执行升级命令以确保安装状态最新[/green]")
+
+        self.console.print(f"[cyan]升级方式[/cyan]: {method}")
+        command = self._build_update_command(method=method)
+        self.console.print(f"[dim]执行命令: {' '.join(command)}[/dim]")
+
+        # Windows 下 uv tool upgrade 可能因文件锁定失败，提供重试机制
+        max_retries = 3 if sys.platform == "win32" and method == "uv" else 1
+        completed = None
+        for attempt in range(max_retries):
+            try:
+                from . import cli as cli_module
+
+                completed = cli_module.subprocess.run(command, check=False)
+                if completed.returncode == 0:
+                    break
+                if attempt < max_retries - 1 and sys.platform == "win32":
+                    self.console.print(
+                        f"[yellow]升级失败（尝试 {attempt + 1}/{max_retries}），"
+                        "Windows 下文件可能被占用，等待 2 秒后重试...[/yellow]"
+                    )
+                    import time
+                    time.sleep(2)
+            except FileNotFoundError:
+                self.console.print(f"[red]未找到升级工具: {method}[/red]")
+                return 1
+
+        if completed is None or completed.returncode != 0:
+            if sys.platform == "win32" and method == "uv":
+                self.console.print("")
+                self.console.print(
+                    "[red]升级失败：Windows 下 super-dev.exe 可能被其他进程占用[/red]\n"
+                    "[yellow]请按以下步骤操作：[/yellow]\n"
+                    "  1. 关闭所有使用 super-dev 的终端窗口\n"
+                    "  2. 打开新的终端\n"
+                    "  3. 执行: uv tool upgrade super-dev\n"
+                    "  [dim]如果仍然失败，尝试: uv tool install super-dev --force --reinstall[/dim]"
+                )
+            else:
+                self.console.print("[red]升级失败，请根据上面的命令手动执行[/red]")
+            return completed.returncode if completed else 1
+
+        from rich.panel import Panel
+        self.console.print("")
+        self.console.print(Panel(
+            "[bold green]升级完成[/bold green]\n\n"
+            "  [bold]请关闭当前终端，重新打开后再使用 super-dev[/bold]\n\n"
+            "  [dim]当前进程仍加载旧版本代码，必须重启终端才能生效[/dim]\n"
+            "  [dim]验证: super-dev --version[/dim]",
+            border_style="green",
+            expand=True,
+            padding=(1, 2),
+        ))
+        return 0
+
+    def _fetch_latest_pypi_version(self) -> str | None:
+        try:
+            from . import cli as cli_module
+
+            if cli_module.requests is None:
+                return None
+            response = cli_module.requests.get("https://pypi.org/pypi/super-dev/json", timeout=10)
+            response.raise_for_status()
+            payload = response.json()
+        except Exception:
+            return None
+        info = payload.get("info", {})
+        version = info.get("version")
+        return version if isinstance(version, str) and version.strip() else None
+
+    def _resolve_update_method(self, preferred: str) -> str:
+        if preferred in {"pip", "uv"}:
+            return preferred
+        uv_binary = shutil.which("uv")
+        runtime_markers = [
+            sys.executable,
+            shutil.which("super-dev") or "",
+            os.environ.get("UV_TOOL_BIN_DIR", ""),
+            os.environ.get("PATH", ""),
+        ]
+        if uv_binary and any(".local/share/uv" in marker or "/uv/tools/" in marker for marker in runtime_markers):
+            return "uv"
+        return "uv" if uv_binary and "uv" in sys.executable.lower() else "pip"
+
+    def _build_update_command(self, *, method: str) -> list[str]:
+        if method == "uv":
+            return ["uv", "tool", "upgrade", "super-dev"]
+        return [sys.executable, "-m", "pip", "install", "-U", "super-dev"]
+
+    def _is_version_newer(self, latest: str, current: str) -> bool:
+        return self._version_key(latest) > self._version_key(current)
+
+    def _version_key(self, version: str) -> tuple[int, ...]:
+        parts = []
+        for part in version.replace("-", ".").split("."):
+            digits = "".join(ch for ch in part if ch.isdigit())
+            parts.append(int(digits or 0))
+        return tuple(parts)
+
+    def _print_host_usage_guidance(
+        self,
+        *,
+        integration_manager,
+        target: str,
+        indent: str = "",
+    ) -> None:
+        usage = self._build_host_usage_profile(
+            integration_manager=integration_manager,
+            target=target,
+        )
+        self.console.print(f"{indent}[cyan]主入口[/cyan]: {usage['primary_entry']}")
+        self.console.print(
+            f"{indent}认证等级: {usage['certification_label']} ({usage['certification_level']})"
+        )
+        self.console.print(f"{indent}使用模式: {usage['usage_mode']}")
+        protocol_mode = str(usage.get("host_protocol_mode", "")).strip()
+        protocol_summary = str(usage.get("host_protocol_summary", "")).strip()
+        if protocol_mode or protocol_summary:
+            protocol_text = protocol_summary or protocol_mode
+            if protocol_mode and protocol_summary and protocol_mode != protocol_summary:
+                protocol_text = f"{protocol_summary} ({protocol_mode})"
+            self.console.print(f"{indent}宿主协议: {protocol_text}")
+        self.console.print(f"{indent}触发命令: {usage['trigger_command']}")
+        self.console.print(f"{indent}触发上下文: {usage['trigger_context']}")
+        self.console.print(f"{indent}触发位置: {usage['usage_location']}")
+        self.console.print(f"{indent}接入后重启: {usage['restart_required_label']}")
+        precondition_label = usage.get("precondition_label", "")
+        if isinstance(precondition_label, str) and precondition_label.strip():
+            self.console.print(f"{indent}宿主前置条件: {precondition_label}")
+        precondition_items = usage.get("precondition_items", [])
+        if isinstance(precondition_items, list) and precondition_items:
+            self.console.print(f"{indent}前置条件项:")
+            for item in precondition_items:
+                if not isinstance(item, dict):
+                    continue
+                item_label = str(item.get("label", "")).strip()
+                item_status = str(item.get("status", "")).strip()
+                item_text = item_label or item_status
+                if item_text:
+                    self.console.print(f"{indent}  - {item_text}")
+        precondition_guidance = usage.get("precondition_guidance", [])
+        if isinstance(precondition_guidance, list) and precondition_guidance:
+            self.console.print(f"{indent}前置条件说明:")
+            for item in precondition_guidance:
+                self.console.print(f"{indent}  - {item}")
+        if usage.get("certification_reason"):
+            self.console.print(f"{indent}认证说明: {usage['certification_reason']}")
+        official_project = usage.get("official_project_surfaces", [])
+        if isinstance(official_project, list) and official_project:
+            self.console.print(f"{indent}官方项目级接入面:")
+            for item in official_project:
+                self.console.print(f"{indent}  - {item}")
+        official_user = usage.get("official_user_surfaces", [])
+        if isinstance(official_user, list) and official_user:
+            self.console.print(f"{indent}官方用户级接入面:")
+            for item in official_user:
+                self.console.print(f"{indent}  - {item}")
+        observed_surfaces = usage.get("observed_compatibility_surfaces", [])
+        if isinstance(observed_surfaces, list) and observed_surfaces:
+            self.console.print(f"{indent}兼容增强路径:")
+            for item in observed_surfaces:
+                self.console.print(f"{indent}  - {item}")
+        steps = usage.get("post_onboard_steps", [])
+        if isinstance(steps, list) and steps:
+            self.console.print(f"{indent}接入后步骤:")
+            for step in steps:
+                self.console.print(f"{indent}  - {step}")
+        notes = usage.get("usage_notes", [])
+        if isinstance(notes, list) and notes:
+            self.console.print(f"{indent}使用提示:")
+            for note in notes:
+                self.console.print(f"{indent}  - {note}")
+        smoke_prompt = usage.get("smoke_test_prompt", "")
+        if isinstance(smoke_prompt, str) and smoke_prompt:
+            self.console.print(f"{indent}Smoke 验收语句: {smoke_prompt}")
+        smoke_steps = usage.get("smoke_test_steps", [])
+        if isinstance(smoke_steps, list) and smoke_steps:
+            self.console.print(f"{indent}Smoke 验收步骤:")
+            for step in smoke_steps:
+                self.console.print(f"{indent}  - {step}")
+        smoke_signal = usage.get("smoke_success_signal", "")
+        if isinstance(smoke_signal, str) and smoke_signal:
+            self.console.print(f"{indent}Smoke 通过标准: {smoke_signal}")
+
+    def _host_certification_rank(self, level: str) -> int:
+        order = {"certified": 0, "compatible": 1, "experimental": 2}
+        return order.get(level, 3)
+
+    def _host_selection_sort_key(self, *, integration_manager, target: str) -> tuple[int, int, int, str]:
+        profile = integration_manager.get_adapter_profile(target)
+        return (
+            self._host_certification_rank(profile.certification_level),
+            0 if integration_manager.supports_slash(target) else 1,
+            0 if profile.category == "cli" else 1,
+            target,
+        )
+
+    def _rank_host_targets(self, *, integration_manager, targets: list[str]) -> list[str]:
+        return sorted(targets, key=lambda target: self._host_selection_sort_key(integration_manager=integration_manager, target=target))
+
+    def _select_best_start_host(self, *, integration_manager, targets: list[str]) -> str:
+        return self._rank_host_targets(integration_manager=integration_manager, targets=targets)[0]
+
+    def _recommended_start_hosts(self, *, integration_manager) -> list[dict[str, str]]:
+        from .integrations import IntegrationManager
+
+        items: list[dict[str, str]] = []
+        for target in sorted(IntegrationManager.TARGETS):
+            profile = integration_manager.get_adapter_profile(target)
+            if profile.certification_level != "certified":
+                continue
+            items.append(
+                {
+                    "id": target,
+                    "name": self._host_label(target),
+                    "certification_label": profile.certification_label,
+                    "path_override_env": str(host_path_override_guide(target).get("env_key", "")),
+                }
+            )
+        return items
+
+    def _build_no_host_decision_card(self, *, integration_manager) -> dict[str, Any]:
+        recommended_hosts = self._recommended_start_hosts(integration_manager=integration_manager)
+        next_actions = [
+            "先安装一个受支持宿主，优先 Claude Code 或 Codex。",
+            "如果宿主装在自定义目录，先设置对应的 SUPER_DEV_HOST_PATH_* 环境变量。",
+            "安装后先执行 super-dev detect --auto，再执行 super-dev start。",
+        ]
+        first_action = next_actions[0]
+        return {
+            "scenario": "no-host-detected",
+            "workflow_mode": "start",
+            "workflow_mode_label": self._workflow_mode_label("start"),
+            "action_title": "先完成宿主安装与接入",
+            "action_examples": ["先装 Codex", "我先用 Claude Code", "先把宿主接好再开始"],
+            "title": "未检测到可用宿主",
+            "summary": "当前机器上没有命中受支持宿主，或宿主不在默认路径与当前 PATH 中。",
+            "recommended_reason": "先保证机器上至少有一个正式支持的宿主可用，再进入接入流程。",
+            "first_action": first_action,
+            "secondary_actions": next_actions[1:],
+            "path_override_hint": self._custom_host_path_override_hint(),
+            "path_override_examples": [
+                {
+                    "id": item["id"],
+                    "name": item["name"],
+                    "env_key": str(host_path_override_guide(item["id"]).get("env_key", "")),
+                    "unix_example": str(host_path_override_guide(item["id"]).get("unix_example", "")),
+                    "windows_example": str(host_path_override_guide(item["id"]).get("windows_example", "")),
+                }
+                for item in recommended_hosts[:2]
+            ],
+            "recommended_hosts": recommended_hosts,
+            "next_actions": next_actions,
+            "lines": [
+                f"先做这一步: {first_action}",
+                "当前机器上未命中受支持宿主。",
+                self._custom_host_path_override_hint(),
+                "优先安装 Claude Code 或 Codex，安装后先跑 super-dev detect --auto。",
+            ],
+        }
+
+    def _host_selection_reason(self, *, integration_manager, target: str) -> str:
+        profile = integration_manager.get_adapter_profile(target)
+        if profile.certification_level == "certified" and integration_manager.supports_slash(target):
+            return "它当前是已检测宿主里认证等级最高、触发入口最直接的一项。"
+        if profile.certification_level == "certified":
+            return "它当前是已检测宿主里认证等级最高的一项。"
+        if integration_manager.supports_slash(target):
+            return "它当前触发入口最直接，适合作为默认宿主。"
+        return "它当前在已检测宿主里综合优先级最高。"
+
+    def _build_detected_host_decision_card(
+        self,
+        *,
+        project_dir: Path,
+        integration_manager,
+        detected_targets: list[str],
+        detected_meta: dict[str, list[str]],
+        preferred_targets: list[str] | None = None,
+        ) -> dict[str, Any]:
+        candidate_targets = list(dict.fromkeys([*(preferred_targets or []), *detected_targets]))
+        if not candidate_targets:
+            return self._build_no_host_decision_card(integration_manager=integration_manager)
+        candidate_display_limit = 3
+        ranked_targets = self._rank_host_targets(
+            integration_manager=integration_manager,
+            targets=candidate_targets,
+        )
+        preferred_set = {target for target in (preferred_targets or []) if target}
+        if preferred_set:
+            ranked_targets = sorted(
+                ranked_targets,
+                key=lambda target: (0 if target in preferred_set else 1, ranked_targets.index(target)),
+            )
+        selected_host = ranked_targets[0]
+        selected_profile = integration_manager.get_adapter_profile(selected_host)
+        session_resume_card = self._build_session_resume_card(project_dir=project_dir, target=selected_host)
+        candidates: list[dict[str, Any]] = []
+        for target in ranked_targets:
+            reasons = self._explain_detection_details({target: detected_meta.get(target, [])}).get(target, [])
+            profile = integration_manager.get_adapter_profile(target)
+            candidates.append(
+                {
+                    "id": target,
+                    "name": self._host_label(target),
+                    "certification_label": profile.certification_label,
+                    "certification_level": profile.certification_level,
+                    "recommended": target == selected_host,
+                    "recommended_reason": self._host_selection_reason(
+                        integration_manager=integration_manager,
+                        target=target,
+                    ),
+                    "reasons": reasons,
+                    "trigger": str(profile.trigger_command).replace("<需求描述>", "你的需求"),
+                    "path_override": host_path_override_guide(target),
+                }
+            )
+        display_candidates = candidates[:candidate_display_limit]
+        remaining_candidate_count = max(0, len(candidates) - len(display_candidates))
+        selection_source = "explicit" if preferred_set else "detected"
+        scenario = "multi-host-detected" if len(candidate_targets) > 1 else "single-host-detected"
+        recommended_reason = self._host_selection_reason(
+            integration_manager=integration_manager,
+            target=selected_host,
+        )
+        workflow_mode = "continue" if session_resume_card.get("enabled") else "start"
+        action_title = str(session_resume_card.get("action_title", "")).strip() if session_resume_card.get("enabled") else f"在 {self._host_label(selected_host)} 里启动 Super Dev"
+        action_examples = (
+            list(session_resume_card.get("action_examples") or [])
+            if session_resume_card.get("enabled")
+            else ["开始这个项目", "做一个商业级官网", "用 Super Dev 开始处理当前需求"]
+        )
+        first_action = (
+            f"重开后第一句直接复制 {session_resume_card.get('host_first_sentence')}"
+            if session_resume_card.get("enabled")
+            else f"先在 {self._host_label(selected_host)} 里输入 {str(selected_profile.trigger_command).replace('<需求描述>', '你的需求')}"
+        )
+        secondary_actions = [
+            "如果当前是重开宿主后的第一轮输入，先不要普通聊天起手，直接用建议入口。",
+            "如果命令/技能还没刷新，先关闭旧宿主会话再开新会话。",
+        ]
+        lines = [
+            f"动作类型: {self._workflow_mode_label(workflow_mode)}",
+            f"当前动作: {action_title}",
+            f"先做这一步: {first_action}",
+            f"默认推荐先用 {self._host_label(selected_host)}，{recommended_reason}",
+            f"当前建议入口: {selected_profile.primary_entry}",
+        ]
+        if selection_source == "explicit":
+            lines.insert(3, f"当前模式: 仅围绕 {self._host_label(selected_host)} 给出建议。")
+        if action_examples:
+            lines.append(f"自然语言示例: {', '.join(str(item) for item in action_examples[:3])}")
+        candidate_summary = "、".join(
+            f"{item['name']} [{item['certification_label']}]"
+            for item in display_candidates
+        )
+        if candidate_summary:
+            lines.append(f"优先候选: {candidate_summary}")
+        if remaining_candidate_count:
+            lines.append(f"另外还有 {remaining_candidate_count} 个候选已折叠，默认不建议先看。")
+        if session_resume_card.get("enabled"):
+            lines.append(f"继续当前流程第一句: {session_resume_card.get('host_first_sentence')}")
+        elif candidates:
+            lines.append(f"第一句建议: {candidates[0]['trigger']}")
+        return {
+            "scenario": scenario,
+            "selection_source": selection_source,
+            "workflow_mode": workflow_mode,
+            "workflow_mode_label": self._workflow_mode_label(workflow_mode),
+            "action_title": action_title,
+            "action_examples": action_examples,
+            "title": "已检测到宿主",
+            "summary": (
+                f"当前已按你指定的宿主给出默认建议，共纳入 {len(candidate_targets)} 个候选。"
+                if selection_source == "explicit"
+                else f"当前检测到 {len(detected_targets)} 个宿主，已按优先级给出默认推荐。"
+            ),
+            "recommended_reason": recommended_reason,
+            "first_action": first_action,
+            "secondary_actions": secondary_actions,
+            "selected_host": selected_host,
+            "selected_host_name": self._host_label(selected_host),
+            "selected_path_override": host_path_override_guide(selected_host),
+            "candidate_count": len(candidates),
+            "remaining_candidate_count": remaining_candidate_count,
+            "candidates": display_candidates,
+            "session_resume_card": session_resume_card,
+            "lines": lines,
+        }
+
+    def _build_primary_repair_action(
+        self,
+        *,
+        report: dict[str, Any],
+        targets: list[str],
+        decision_card: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        hosts = report.get("hosts", {})
+        if isinstance(decision_card, dict) and decision_card.get("scenario") == "no-host-detected":
+            first_action = str(decision_card.get("first_action", "")).strip()
+            if first_action:
+                secondary_actions = decision_card.get("secondary_actions", [])
+                return {
+                    "host": "当前机器",
+                    "reason": str(decision_card.get("summary", "")).strip(),
+                    "command": first_action,
+                    "secondary_actions": secondary_actions if isinstance(secondary_actions, list) else [],
+                }
+        if not isinstance(hosts, dict):
+            return {"host": "", "reason": "", "command": "", "secondary_actions": []}
+        for target in targets:
+            host = hosts.get(target, {})
+            if not isinstance(host, dict) or bool(host.get("ready", False)):
+                continue
+            diagnosis = host.get("diagnosis", {})
+            if not isinstance(diagnosis, dict):
+                continue
+            command = str(diagnosis.get("suggested_command", "")).strip()
+            if not command:
+                continue
+            reason = str(diagnosis.get("blocker_summary", "")).strip()
+            suggestions = host.get("suggestions", [])
+            secondary_actions: list[str] = []
+            if isinstance(suggestions, list):
+                for item in suggestions:
+                    text = str(item).strip()
+                    if not text or text == command or text in secondary_actions:
+                        continue
+                    secondary_actions.append(text)
+                    if len(secondary_actions) >= 2:
+                        break
+            return {
+                "host": self._host_label(target),
+                "reason": reason,
+                "command": command,
+                "secondary_actions": secondary_actions,
+            }
+        runtime_health = report.get("runtime_install_health", {})
+        if isinstance(runtime_health, dict) and not bool(runtime_health.get("healthy", True)):
+            remediation = runtime_health.get("remediation", [])
+            primary = ""
+            secondary_actions: list[str] = []
+            if isinstance(remediation, list):
+                for item in remediation:
+                    text = str(item).strip()
+                    if not text:
+                        continue
+                    if not primary:
+                        primary = text
+                    elif text not in secondary_actions:
+                        secondary_actions.append(text)
+                    if len(secondary_actions) >= 2:
+                        break
+            if primary:
+                warnings = runtime_health.get("warnings", [])
+                reason = ""
+                if isinstance(warnings, list):
+                    reason = "；".join(str(item).strip() for item in warnings if str(item).strip())
+                return {
+                    "host": "当前运行时",
+                    "reason": reason,
+                    "command": primary,
+                    "secondary_actions": secondary_actions,
+                }
+        return {"host": "", "reason": "", "command": "", "secondary_actions": []}
+
+    def _build_host_trigger_example(self, *, target: str, idea: str | None) -> str:
+        from .integrations import IntegrationManager
+
+        if not idea:
+            return ""
+        escaped = idea.replace('"', '\\"')
+        if target == "codex-cli":
+            return f"{IntegrationManager.TEXT_TRIGGER_PREFIX} {idea}"
+        if target == "trae":
+            return f"{IntegrationManager.TEXT_TRIGGER_PREFIX} {idea}"
+        if IntegrationManager.supports_slash(target):
+            return f'/super-dev "{escaped}"'
+        return f"{IntegrationManager.TEXT_TRIGGER_PREFIX} {idea}"
+
+    def _build_onboard_next_steps(self, *, targets: list[str]) -> list[str]:
+        from .integrations import IntegrationManager
+
+        project_dir = Path.cwd()
+        integration_manager = IntegrationManager(project_dir)
+        lines: list[str] = []
+        for target in targets:
+            profile = integration_manager.get_adapter_profile(target)
+            trigger = str(profile.trigger_command).replace("<需求描述>", "你的需求")
+            session_hint = self._build_workflow_session_hint(project_dir=project_dir, target=target)
+            continue_prompt = str(session_hint.get("continue_prompt", "") or "").strip()
+            continue_mode = str(session_hint.get("session_mode", "") or "") == "continue_super_dev"
+            if continue_mode and continue_prompt:
+                line = f"{self._host_label(target)}: 重开后第一句直接复制 {continue_prompt}"
+            elif target == "codex-cli":
+                line = "Codex: 重开 codex 后，直接输入 super-dev: 你的需求"
+            elif target == "opencode":
+                line = 'OpenCode: 在当前会话里输入 /super-dev "你的需求"'
+            else:
+                line = f"{self._host_label(target)}: 打开宿主后输入 {trigger}"
+            if profile.requires_restart_after_onboard:
+                line += "（先重启宿主）"
+            lines.append(line)
+        return lines
+
+    def _build_session_resume_card_lines(self, *, project_dir: Path, target: str) -> list[str]:
+        session_hint = self._build_workflow_session_hint(project_dir=project_dir, target=target)
+        continue_prompt = str(session_hint.get("continue_prompt", "") or "").strip()
+        continue_mode = str(session_hint.get("session_mode", "") or "") == "continue_super_dev"
+        if not continue_mode or not continue_prompt:
+            return []
+        recommended_workflow_command = str(session_hint.get("recommended_workflow_command", "") or "").strip()
+        workflow_mode = str(session_hint.get("workflow_mode", "") or "").strip()
+        action_title = str(session_hint.get("action_title", "") or "").strip()
+        action_examples = session_hint.get("action_examples") if isinstance(session_hint.get("action_examples"), list) else []
+        user_action_shortcuts = session_hint.get("user_action_shortcuts") if isinstance(session_hint.get("user_action_shortcuts"), list) else []
+        continuity_rules = session_hint.get("continuity_rules") if isinstance(session_hint.get("continuity_rules"), list) else []
+        primary_rule = str(continuity_rules[0]).strip() if continuity_rules else ""
+        exit_rule = str(continuity_rules[1]).strip() if len(continuity_rules) > 1 else ""
+        generic_continue_rule = "用户说“改一下 / 补充 / 继续改 / 确认 / 通过”时，仍然留在当前 Super Dev 流程。"
+        generic_exit_rule = "只有用户明确说取消当前流程、重新开始或切回普通聊天，才允许离开流程。"
+        lines = [
+            f"动作类型: {self._workflow_mode_label(workflow_mode)}" if workflow_mode else "",
+            f"当前动作: {action_title}" if action_title else "",
+            f"宿主第一句: {continue_prompt}",
+            f"流程状态卡: {self._session_brief_path(project_dir)}",
+            f"继续规则: {generic_continue_rule}",
+            f"当前门禁规则: {primary_rule}" if primary_rule and primary_rule != generic_continue_rule else "",
+            f"退出条件: {generic_exit_rule}",
+            f"当前门禁退出条件: {exit_rule}" if exit_rule and exit_rule != generic_exit_rule else "",
+        ]
+        if user_action_shortcuts:
+            lines.insert(2, f"你现在可以直接说: {' / '.join(str(item) for item in user_action_shortcuts[:4])}")
+        if action_examples:
+            lines.insert(3 if user_action_shortcuts else 2, f"自然语言示例: {', '.join(str(item) for item in action_examples[:3])}")
+        if recommended_workflow_command:
+            lines.append(f"机器侧动作: {recommended_workflow_command}")
+        return [line for line in lines if line]
+
+    def _build_session_resume_card(self, *, project_dir: Path, target: str) -> dict[str, Any]:
+        session_hint = self._build_workflow_session_hint(project_dir=project_dir, target=target)
+        continue_prompt = str(session_hint.get("continue_prompt", "") or "").strip()
+        continue_mode = str(session_hint.get("session_mode", "") or "") == "continue_super_dev"
+        enabled = bool(continue_mode and continue_prompt)
+        recommended_workflow_command = str(session_hint.get("recommended_workflow_command", "") or "").strip()
+        workflow_mode = str(session_hint.get("workflow_mode", "") or "").strip()
+        action_title = str(session_hint.get("action_title", "") or "").strip()
+        action_examples = session_hint.get("action_examples") if isinstance(session_hint.get("action_examples"), list) else []
+        user_action_shortcuts = session_hint.get("user_action_shortcuts") if isinstance(session_hint.get("user_action_shortcuts"), list) else []
+        specific_rules = session_hint.get("continuity_rules") if isinstance(session_hint.get("continuity_rules"), list) else []
+        rules = [
+            "用户说“改一下 / 补充 / 继续改 / 确认 / 通过”时，仍然留在当前 Super Dev 流程。",
+            *[str(item).strip() for item in specific_rules if str(item).strip()],
+            "只有用户明确说取消当前流程、重新开始或切回普通聊天，才允许离开流程。",
+        ]
+        return {
+            "enabled": enabled,
+            "workflow_mode": workflow_mode if enabled else "",
+            "workflow_mode_label": self._workflow_mode_label(workflow_mode) if enabled and workflow_mode else "",
+            "action_title": action_title if enabled else "",
+            "action_examples": action_examples if enabled else [],
+            "user_action_shortcuts": user_action_shortcuts if enabled else [],
+            "host_first_sentence": continue_prompt,
+            "session_brief_path": str(self._session_brief_path(project_dir)) if enabled else "",
+            "workflow_state_path": str(self._workflow_state_path(project_dir)) if enabled else "",
+            "rules": rules if enabled else [],
+            "recommended_workflow_command": recommended_workflow_command if enabled else "",
+            "lines": self._build_session_resume_card_lines(project_dir=project_dir, target=target),
+        }
+
+    def _build_host_quick_start_text(
+        self,
+        *,
+        host_profile: dict[str, Any],
+        host_id: str,
+        host_name: str,
+        idea: str | None,
+        session_hint: dict[str, Any] | None = None,
+    ) -> str:
+        trigger_text = self._build_host_trigger_example(target=host_id, idea=idea)
+        if not trigger_text:
+            trigger_text = str(host_profile.get("final_trigger", "") or host_profile.get("primary_entry", "-"))
+        session_hint = session_hint or {}
+        continue_prompt = str(session_hint.get("continue_prompt", "") or "").strip()
+        continue_mode = str(session_hint.get("session_mode", "") or "") == "continue_super_dev"
+        workflow_reason = str(session_hint.get("workflow_reason", "") or "").strip()
+        recommended_workflow_command = str(session_hint.get("recommended_workflow_command", "") or "").strip()
+
+        if host_id in {"codex-cli", "opencode"}:
+            lines = [
+                f"{host_name} 最短路径",
+                "",
+                "当前会话目标"
+                + ("：继续仓库里已有的 Super Dev 流程" if continue_mode else "：启动一次新的 Super Dev 流程"),
+                f"现在就去这里：{host_profile.get('trigger_context', '-')}",
+                (
+                    f"重开宿主后第一句直接复制：{continue_prompt}"
+                    if continue_mode and continue_prompt
+                    else f"第一句直接输入：{trigger_text}"
+                ),
+            ]
+            if continue_mode:
+                lines.extend(
+                    [
+                        "流程状态卡：.super-dev/SESSION_BRIEF.md",
+                        "继续规则：用户说“改一下 / 补充 / 继续改 / 确认 / 通过”时，仍然留在当前 Super Dev 流程。",
+                        "退出条件：只有用户明确说取消当前流程、重新开始或切回普通聊天，才允许离开流程。",
+                    ]
+                )
+            lines.extend([
+                "",
+                "成功标志",
+                "1. 第一轮回复明确说当前阶段是 research",
+                "2. 三份核心文档完成后会停下来等你确认",
+            ])
+            if continue_mode and workflow_reason:
+                lines.extend(["", f"当前流程说明：{workflow_reason}"])
+            if continue_mode and recommended_workflow_command:
+                lines.extend(["", f"机器侧对应动作：{recommended_workflow_command}"])
+            priority_notes = self._build_host_priority_notes(host_id=host_id)
+            if priority_notes:
+                lines.extend(["", "最关键的提醒"])
+                for index, note in enumerate(priority_notes, start=1):
+                    lines.append(f"{index}. {note}")
+            lines.extend([
+                "",
+                "重新接入或修复",
+                f"super-dev setup --host {host_id} --force --yes",
+                f"super-dev doctor --host {host_id} --repair --force",
+            ])
+            return "\n".join(lines)
+
+        lines = [
+            f"{host_name} 最短路径",
+            "",
+            "当前会话目标：继续已有流程" if continue_mode else "当前会话目标：启动新的 Super Dev 流程",
+            "1. 确认当前会话就在目标项目里。",
+            f"2. {'先重启宿主，再' if host_profile.get('restart_required_label', '-') == '是' else ''}打开正确入口：{host_profile.get('trigger_context', '-')}",
+            f"3. {'重开宿主后第一句直接复制' if continue_mode and continue_prompt else '直接输入'}：{continue_prompt if continue_mode and continue_prompt else trigger_text}",
+        ]
+        if continue_mode:
+            lines.extend(
+                [
+                    "4. 流程状态卡：.super-dev/SESSION_BRIEF.md",
+                    "5. 用户说“改一下 / 补充 / 继续改 / 确认 / 通过”时，仍然留在当前 Super Dev 流程。",
+                    "6. 只有用户明确说取消当前流程、重新开始或切回普通聊天，才允许离开流程。",
+                ]
+            )
+        lines.extend(
+            [
+                "",
+                "看到下面两点就算接入成功：",
+                "1. 第一轮回复明确说当前阶段是 research",
+                "2. 三份核心文档完成后会停下来等你确认",
+                "",
+                f"认证等级：{host_profile.get('certification_label', '-')}"
+                f" ({host_profile.get('certification_level', '-')})",
+                f"主入口：{host_profile.get('primary_entry', '-')}",
+                f"使用模式：{host_profile.get('usage_mode', '-')}",
+            ]
+        )
+        priority_notes = self._build_host_priority_notes(host_id=host_id)
+        if priority_notes:
+            lines.extend(["", "这个宿主最关键的提醒"])
+            for index, note in enumerate(priority_notes, start=1):
+                lines.append(f"{index}. {note}")
+        reason = host_profile.get("certification_reason", "")
+        if isinstance(reason, str) and reason.strip():
+            lines.extend(["", "为什么推荐这个宿主", reason])
+        if continue_mode and workflow_reason:
+            lines.extend(["", "当前流程说明", workflow_reason])
+        if continue_mode and recommended_workflow_command:
+            lines.extend(["", f"机器侧对应动作：{recommended_workflow_command}"])
+        steps = host_profile.get("post_onboard_steps", [])
+        if isinstance(steps, list) and steps:
+            lines.extend(["", "如果还是没生效，按这个顺序排查"])
+            for index, step in enumerate(steps, start=1):
+                lines.append(f"{index}. {step}")
+        lines.extend([
+            "",
+            "重新接入或修复",
+            f"super-dev setup --host {host_id} --force --yes",
+            f"super-dev doctor --host {host_id} --repair --force",
+        ])
+        return "\n".join(lines)
+
+    def _build_host_priority_notes(self, *, host_id: str) -> list[str]:
+        if host_id == "codex-cli":
+            return [
+                "不要输入 `/super-dev`，直接输入 `super-dev: 你的需求`。",
+                "接入完成后必须彻底重开 `codex`，旧会话不会重新加载 AGENTS.md 和 Skill。",
+                "先确认当前终端就在目标项目目录里，再开始新会话。",
+            ]
+        if host_id == "opencode":
+            return [
+                "直接在 OpenCode 会话里输入 `/super-dev \"你的需求\"`。",
+                "通常不需要重启；如果命令列表没有刷新，关掉当前会话再重开一次。",
+                "优先保留项目级 `.opencode/commands/super-dev.md`，不要只依赖全局命令目录。",
+            ]
+        return []
+
+    def _build_host_usage_profile(
+        self,
+        *,
+        integration_manager,
+        target: str,
+    ) -> dict[str, Any]:
+        profile = integration_manager.get_adapter_profile(target)
+        final_trigger = str(profile.trigger_command).replace("<需求描述>", "你的需求")
+        return {
+            "host": self._host_label(profile.host),
+            "host_id": profile.host,
+            "category": profile.category,
+            "certification_level": profile.certification_level,
+            "certification_label": profile.certification_label,
+            "certification_reason": profile.certification_reason,
+            "certification_evidence": list(profile.certification_evidence),
+            "host_protocol_mode": profile.host_protocol_mode,
+            "host_protocol_summary": profile.host_protocol_summary,
+            "capability_labels": dict(profile.capability_labels),
+            "official_project_surfaces": list(profile.official_project_surfaces),
+            "official_user_surfaces": list(profile.official_user_surfaces),
+            "observed_compatibility_surfaces": list(profile.observed_compatibility_surfaces),
+            "official_docs_url": profile.official_docs_url,
+            "official_docs_references": list(profile.official_docs_references),
+            "docs_check_status": profile.docs_check_status,
+            "docs_check_summary": profile.docs_check_summary,
+            "usage_mode": profile.usage_mode,
+            "primary_entry": profile.primary_entry,
+            "trigger_command": profile.trigger_command,
+            "final_trigger": final_trigger,
+            "trigger_context": profile.trigger_context,
+            "usage_location": profile.usage_location,
+            "requires_restart_after_onboard": profile.requires_restart_after_onboard,
+            "restart_required_label": "是" if profile.requires_restart_after_onboard else "否",
+            "post_onboard_steps": list(profile.post_onboard_steps),
+            "usage_notes": list(profile.usage_notes),
+            "smoke_test_prompt": profile.smoke_test_prompt,
+            "smoke_test_steps": list(profile.smoke_test_steps),
+            "smoke_success_signal": profile.smoke_success_signal,
+            "path_override": host_path_override_guide(target),
+            "precondition_status": profile.precondition_status,
+            "precondition_label": profile.precondition_label,
+            "precondition_guidance": list(profile.precondition_guidance),
+            "precondition_signals": dict(profile.precondition_signals),
+            "precondition_items": list(profile.precondition_items),
+            "notes": profile.notes,
+        }
+
+    def _load_host_runtime_validation_state(self, *, project_dir: Path) -> dict[str, Any]:
+        payload = load_host_runtime_validation(project_dir) or {}
+        if not isinstance(payload, dict):
+            return {"hosts": {}, "updated_at": ""}
+        hosts = payload.get("hosts", {})
+        if not isinstance(hosts, dict):
+            hosts = {}
+        return {
+            "hosts": hosts,
+            "updated_at": str(payload.get("updated_at", "")).strip(),
+        }
+
+    def _host_runtime_status_label(self, status: str) -> str:
+        mapping = {
+            "pending": "待真人验收",
+            "passed": "已真人通过",
+            "failed": "真人验收失败",
+        }
+        return mapping.get(status, "待真人验收")
+
+    def _update_host_runtime_validation_state(
+        self,
+        *,
+        project_dir: Path,
+        target: str,
+        status: str,
+        comment: str,
+        actor: str,
+    ) -> tuple[dict[str, Any], Path]:
+        payload = self._load_host_runtime_validation_state(project_dir=project_dir)
+        hosts = dict(payload.get("hosts", {}))
+        current = hosts.get(target, {})
+        if not isinstance(current, dict):
+            current = {}
+        hosts[target] = {
+            "status": status,
+            "comment": comment.strip(),
+            "actor": actor.strip() or "user",
+            "updated_at": current.get("updated_at", ""),
+        }
+        file_path = save_host_runtime_validation(
+            project_dir,
+            {
+                "hosts": hosts,
+            },
+        )
+        updated = self._load_host_runtime_validation_state(project_dir=project_dir)
+        return updated, file_path
+
+    def _resolve_report_project_name(self, project_dir: Path) -> str:
+        try:
+            config = ConfigManager(project_dir).load()
+            raw = config.name or project_dir.name
+        except Exception:
+            raw = project_dir.name
+        return self._sanitize_project_name(raw)
+
+    def _render_host_compatibility_markdown(self, payload: dict[str, Any]) -> str:
+        compatibility = payload.get("compatibility", {})
+        report = payload.get("report", {})
+        selected_targets = payload.get("selected_targets", [])
+        detected_hosts = payload.get("detected_hosts", [])
+        if not isinstance(compatibility, dict):
+            compatibility = {}
+        if not isinstance(report, dict):
+            report = {}
+        if not isinstance(selected_targets, list):
+            selected_targets = []
+        if not isinstance(detected_hosts, list):
+            detected_hosts = []
+
+        lines = [
+            "# Host Compatibility Report",
+            "",
+            f"- Generated At (UTC): {datetime.now(timezone.utc).isoformat()}",
+            f"- Project Dir: {payload.get('project_dir', '')}",
+            f"- Detected Hosts: {', '.join(self._host_label(str(item)) for item in detected_hosts) if detected_hosts else '(none)'}",
+            f"- Selected Targets: {', '.join(self._host_label(str(item)) for item in selected_targets) if selected_targets else '(none)'}",
+            "",
+            "## Summary",
+            f"- Overall Score: {compatibility.get('overall_score', 0)}/100",
+            f"- Ready Hosts: {compatibility.get('ready_hosts', 0)}/{compatibility.get('total_hosts', 0)}",
+            f"- Enabled Checks: {', '.join(str(item) for item in compatibility.get('enabled_checks', []))}",
+            "",
+            "## Per-Host Scores",
+            "",
+            "| Host | Certification | Score | Ready | Passed/Total |",
+            "|---|---|---:|---|---:|",
+        ]
+
+        host_scores = compatibility.get("hosts", {})
+        if isinstance(host_scores, dict):
+            for target in selected_targets:
+                info = host_scores.get(target, {}) if isinstance(target, str) else {}
+                if not isinstance(info, dict):
+                    info = {}
+                usage_profiles = payload.get("usage_profiles", {})
+                certification = "-"
+                if isinstance(usage_profiles, dict):
+                    usage = usage_profiles.get(target, {})
+                    if isinstance(usage, dict):
+                        certification = str(usage.get("certification_label", "-"))
+                score = info.get("score", 0)
+                ready = "yes" if bool(info.get("ready", False)) else "no"
+                passed = int(info.get("passed", 0))
+                possible = int(info.get("possible", 0))
+                lines.append(f"| {self._host_label(target)} | {certification} | {score} | {ready} | {passed}/{possible} |")
+
+        lines.extend(["", "## Usage Guidance", ""])
+        usage_profiles = payload.get("usage_profiles", {})
+        if isinstance(usage_profiles, dict):
+            for target in selected_targets:
+                usage = usage_profiles.get(target, {}) if isinstance(target, str) else {}
+                if not isinstance(usage, dict):
+                    usage = {}
+                lines.append(f"### {target}")
+                lines.append(
+                    f"- Certification: {usage.get('certification_label', '-')} ({usage.get('certification_level', '-')})"
+                )
+                reason = usage.get("certification_reason", "")
+                if isinstance(reason, str) and reason.strip():
+                    lines.append(f"- Certification Reason: {reason}")
+                evidence = usage.get("certification_evidence", [])
+                if isinstance(evidence, list) and evidence:
+                    lines.append("- Certification Evidence:")
+                    for item in evidence:
+                        lines.append(f"  - {item}")
+                lines.append(f"- Primary Entry: {usage.get('primary_entry', '-')}")
+                lines.append(f"- Usage Mode: {usage.get('usage_mode', '-')}")
+                lines.append(f"- Trigger Command: {usage.get('trigger_command', '-')}")
+                lines.append(f"- Trigger Context: {usage.get('trigger_context', '-')}")
+                lines.append(f"- Restart Required: {usage.get('restart_required_label', '-')}")
+                precondition_label = usage.get("precondition_label", "")
+                if isinstance(precondition_label, str) and precondition_label.strip():
+                    lines.append(f"- Host Preconditions: {precondition_label}")
+                precondition_items = usage.get("precondition_items", [])
+                if isinstance(precondition_items, list) and precondition_items:
+                    lines.append("- Host Precondition Items:")
+                    for item in precondition_items:
+                        if not isinstance(item, dict):
+                            continue
+                        item_label = str(item.get("label", "")).strip()
+                        item_status = str(item.get("status", "")).strip()
+                        item_text = item_label or item_status
+                        if item_text:
+                            lines.append(f"  - {item_text}")
+                precondition_guidance = usage.get("precondition_guidance", [])
+                if isinstance(precondition_guidance, list) and precondition_guidance:
+                    lines.append("- Host Precondition Guidance:")
+                    for item in precondition_guidance:
+                        lines.append(f"  - {item}")
+                steps = usage.get("post_onboard_steps", [])
+                if isinstance(steps, list) and steps:
+                    lines.append("- Post Onboard Steps:")
+                    for step in steps:
+                        lines.append(f"  - {step}")
+                note = usage.get("notes", "")
+                if isinstance(note, str) and note.strip():
+                    lines.append(f"- Notes: {note}")
+                lines.append("")
+
+        lines.extend(["## Missing Items", ""])
+        hosts = report.get("hosts", {})
+        if isinstance(hosts, dict):
+            for target in selected_targets:
+                host = hosts.get(target, {}) if isinstance(target, str) else {}
+                if not isinstance(host, dict):
+                    continue
+                missing = host.get("missing", [])
+                if not isinstance(missing, list) or not missing:
+                    continue
+                lines.append(f"### {target}")
+                lines.append(f"- Missing: {', '.join(str(item) for item in missing)}")
+                suggestions = host.get("suggestions", [])
+                if isinstance(suggestions, list):
+                    for suggestion in suggestions:
+                        lines.append(f"- Suggestion: `{suggestion}`")
+                lines.append("")
+
+        return "\n".join(lines).rstrip() + "\n"
+
+    def _render_host_surface_audit_markdown(self, payload: dict[str, Any]) -> str:
+        report = payload.get("report", {})
+        compatibility = payload.get("compatibility", {})
+        selected_targets = payload.get("selected_targets", [])
+        detected_hosts = payload.get("detected_hosts", [])
+        usage_profiles = payload.get("usage_profiles", {})
+        repair_actions = payload.get("repair_actions", {})
+        if not isinstance(report, dict):
+            report = {}
+        if not isinstance(compatibility, dict):
+            compatibility = {}
+        if not isinstance(selected_targets, list):
+            selected_targets = []
+        if not isinstance(detected_hosts, list):
+            detected_hosts = []
+        if not isinstance(usage_profiles, dict):
+            usage_profiles = {}
+        if not isinstance(repair_actions, dict):
+            repair_actions = {}
+
+        lines = [
+            "# Host Surface Audit Report",
+            "",
+            f"- Generated At (UTC): {datetime.now(timezone.utc).isoformat()}",
+            f"- Project Dir: {payload.get('project_dir', '')}",
+            f"- Detected Hosts: {', '.join(str(item) for item in detected_hosts) if detected_hosts else '(none)'}",
+            f"- Selected Targets: {', '.join(str(item) for item in selected_targets) if selected_targets else '(none)'}",
+            f"- Overall Score: {compatibility.get('overall_score', 0)}/100",
+            "",
+        ]
+        if repair_actions:
+            lines.extend(["## Repair Actions", ""])
+            for target, actions in repair_actions.items():
+                if isinstance(actions, dict):
+                    action_text = ", ".join(f"{key}={value}" for key, value in actions.items())
+                    lines.append(f"- {target}: {action_text}")
+            lines.append("")
+
+        hosts = report.get("hosts", {})
+        if not isinstance(hosts, dict):
+            hosts = {}
+
+        for target in selected_targets:
+            host = hosts.get(target, {}) if isinstance(target, str) else {}
+            usage = usage_profiles.get(target, {}) if isinstance(target, str) else {}
+            if not isinstance(host, dict):
+                host = {}
+            if not isinstance(usage, dict):
+                usage = {}
+            checks = host.get("checks", {})
+            contract = checks.get("contract", {}) if isinstance(checks, dict) else {}
+            surfaces = contract.get("surfaces", {}) if isinstance(contract, dict) else {}
+            invalid_surfaces = contract.get("invalid_surfaces", {}) if isinstance(contract, dict) else {}
+            lines.extend(
+                [
+                    f"## {target}",
+                    "",
+                    f"- Ready: {'yes' if bool(host.get('ready', False)) else 'no'}",
+                    f"- Trigger: {usage.get('final_trigger', '-')}",
+                    f"- Protocol: {usage.get('host_protocol_summary', '-')}",
+                    "",
+                    "| Surface | Exists | Missing Markers | Path |",
+                    "|---|---|---|---|",
+                ]
+            )
+            if isinstance(surfaces, dict):
+                for surface_key, surface_info in surfaces.items():
+                    if not isinstance(surface_info, dict):
+                        continue
+                    exists = "yes" if bool(surface_info.get("exists", False)) else "no"
+                    missing = surface_info.get("missing_markers", [])
+                    missing_text = ", ".join(str(item) for item in missing) if isinstance(missing, list) and missing else "-"
+                    lines.append(
+                        f"| {surface_key} | {exists} | {missing_text} | {surface_info.get('path', '-')} |"
+                    )
+            suggestions = host.get("suggestions", [])
+            if isinstance(invalid_surfaces, dict) and invalid_surfaces:
+                lines.extend(["", "### Fix Guidance", ""])
+                for surface_key, surface_info in invalid_surfaces.items():
+                    if not isinstance(surface_info, dict):
+                        continue
+                    missing = surface_info.get("missing_markers", [])
+                    missing_text = ", ".join(str(item) for item in missing) if isinstance(missing, list) and missing else "-"
+                    lines.append(f"- `{surface_key}` -> {missing_text}")
+            if isinstance(suggestions, list) and suggestions:
+                lines.extend(["", "### Suggested Commands", ""])
+                for suggestion in suggestions:
+                    lines.append(f"- `{suggestion}`")
+            lines.append("")
+
+        return "\n".join(lines).rstrip() + "\n"
+
+    def _build_host_runtime_validation_payload(
+        self,
+        *,
+        project_dir: Path,
+        targets: list[str],
+        detected_meta: dict[str, list[str]],
+        report: dict[str, Any],
+        usage_profiles: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        runtime_state = self._load_host_runtime_validation_state(project_dir=project_dir)
+        runtime_hosts = runtime_state.get("hosts", {})
+        if not isinstance(runtime_hosts, dict):
+            runtime_hosts = {}
+        hosts = report.get("hosts", {})
+        if not isinstance(hosts, dict):
+            hosts = {}
+        entries: list[dict[str, Any]] = []
+        blockers: list[dict[str, Any]] = []
+        next_actions: list[str] = []
+        for target in targets:
+            host = hosts.get(target, {}) if isinstance(target, str) else {}
+            usage = usage_profiles.get(target, {}) if isinstance(target, str) else {}
+            runtime_entry = runtime_hosts.get(target, {}) if isinstance(target, str) else {}
+            if not isinstance(host, dict):
+                host = {}
+            if not isinstance(usage, dict):
+                usage = {}
+            if not isinstance(runtime_entry, dict):
+                runtime_entry = {}
+            runtime_status = str(runtime_entry.get("status", "")).strip() or "pending"
+            surface_ready = bool(host.get("ready", False))
+            precondition_label = usage.get("precondition_label", "-")
+            precondition_guidance = usage.get("precondition_guidance", [])
+            precondition_items = usage.get("precondition_items", [])
+            blocking_reason = ""
+            recommended_action = ""
+            blocker_type = ""
+            if not surface_ready:
+                blocking_reason = "宿主接入面仍存在 contract 缺口"
+                recommended_action = f"super-dev integrate audit --target {target} --repair --force"
+                blocker_type = "surface"
+            elif runtime_status == "failed":
+                blocking_reason = "宿主真人运行时验收失败"
+                recommended_action = f"super-dev integrate audit --target {target} --repair --force"
+                blocker_type = "runtime"
+            elif runtime_status != "passed":
+                blocking_reason = "宿主尚未完成真人运行时验收"
+                recommended_action = (
+                    f"super-dev integrate validate --target {target} --status passed --comment \"首轮先进入 research，三文档已真实落盘\""
+                )
+                blocker_type = "validation"
+
+            if not surface_ready or runtime_status != "passed":
+                blocker_entry = {
+                    "host": target,
+                    "type": blocker_type or "runtime",
+                    "summary": blocking_reason,
+                    "next_action": recommended_action,
+                }
+                blockers.append(blocker_entry)
+                if recommended_action and recommended_action not in next_actions:
+                    next_actions.append(recommended_action)
+
+            if isinstance(precondition_guidance, list):
+                for item in precondition_guidance[:2]:
+                    if isinstance(item, str) and item.strip() and item not in next_actions and runtime_status != "passed":
+                        next_actions.append(item.strip())
+
+            entries.append(
+                {
+                    "host": target,
+                    "surface_ready": surface_ready,
+                    "ready_for_delivery": surface_ready and runtime_status == "passed",
+                    "blocking_reason": blocking_reason,
+                    "recommended_action": recommended_action,
+                    "manual_runtime_status": runtime_status,
+                    "manual_runtime_status_label": self._host_runtime_status_label(runtime_status),
+                    "manual_runtime_comment": str(runtime_entry.get("comment", "")).strip(),
+                    "manual_runtime_actor": str(runtime_entry.get("actor", "")).strip(),
+                    "manual_runtime_updated_at": str(runtime_entry.get("updated_at", "")).strip(),
+                    "final_trigger": usage.get("final_trigger", "-"),
+                    "host_protocol_mode": usage.get("host_protocol_mode", "-"),
+                    "host_protocol_summary": usage.get("host_protocol_summary", "-"),
+                    "certification_label": usage.get("certification_label", "-"),
+                    "precondition_label": precondition_label,
+                    "precondition_guidance": precondition_guidance,
+                    "precondition_items": precondition_items if isinstance(precondition_items, list) else [],
+                    "smoke_test_prompt": usage.get("smoke_test_prompt", ""),
+                    "smoke_success_signal": usage.get("smoke_success_signal", ""),
+                    "runtime_checklist": self._host_runtime_checklist(target=target, usage=usage),
+                    "pass_criteria": self._host_runtime_pass_criteria(target=target),
+                    "resume_probe_prompt": self._host_resume_probe_prompt(project_dir=project_dir, target=target),
+                    "resume_checklist": self._host_resume_checklist(target=target),
+                }
+            )
+
+        total_hosts = len(entries)
+        surface_ready_count = sum(1 for item in entries if bool(item.get("surface_ready", False)))
+        runtime_passed_count = sum(1 for item in entries if item.get("manual_runtime_status") == "passed")
+        runtime_failed_count = sum(1 for item in entries if item.get("manual_runtime_status") == "failed")
+        runtime_pending_count = sum(1 for item in entries if item.get("manual_runtime_status") == "pending")
+        fully_ready_count = sum(1 for item in entries if bool(item.get("ready_for_delivery", False)))
+
+        return {
+            "project_dir": str(project_dir),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "runtime_state_file": str(host_runtime_validation_file(project_dir)),
+            "runtime_state_updated_at": runtime_state.get("updated_at", ""),
+            "detected_hosts": list(detected_meta.keys()),
+            "detection_details": detected_meta,
+            "detection_details_pretty": self._explain_detection_details(detected_meta),
+            "selected_targets": targets,
+            "summary": {
+                "overall_status": "ready" if total_hosts > 0 and fully_ready_count == total_hosts else "attention",
+                "total_hosts": total_hosts,
+                "surface_ready_count": surface_ready_count,
+                "runtime_passed_count": runtime_passed_count,
+                "runtime_failed_count": runtime_failed_count,
+                "runtime_pending_count": runtime_pending_count,
+                "fully_ready_count": fully_ready_count,
+                "blocking_count": len(blockers),
+                "next_actions": next_actions,
+            },
+            "blockers": blockers,
+            "hosts": entries,
+        }
+
+    def _render_host_runtime_validation_markdown(self, payload: dict[str, Any]) -> str:
+        hosts = payload.get("hosts", [])
+        if not isinstance(hosts, list):
+            hosts = []
+        lines = [
+            "# Host Runtime Validation Matrix",
+            "",
+            f"- Generated At (UTC): {payload.get('generated_at', '')}",
+            f"- Project Dir: {payload.get('project_dir', '')}",
+            f"- Detected Hosts: {', '.join(str(item) for item in payload.get('detected_hosts', [])) or '(none)'}",
+            "",
+        ]
+        summary = payload.get("summary", {})
+        if isinstance(summary, dict):
+            lines.extend(
+                [
+                    "## Summary",
+                    "",
+                    f"- Overall Status: {summary.get('overall_status', '-')}",
+                    f"- Fully Ready: {summary.get('fully_ready_count', 0)}/{summary.get('total_hosts', 0)}",
+                    f"- Surface Ready: {summary.get('surface_ready_count', 0)}/{summary.get('total_hosts', 0)}",
+                    f"- Runtime Passed: {summary.get('runtime_passed_count', 0)}",
+                    f"- Runtime Failed: {summary.get('runtime_failed_count', 0)}",
+                    f"- Runtime Pending: {summary.get('runtime_pending_count', 0)}",
+                    "",
+                ]
+            )
+        blockers = payload.get("blockers", [])
+        if isinstance(blockers, list):
+            lines.extend(["## Current Blockers", ""])
+            if blockers:
+                for item in blockers:
+                    if not isinstance(item, dict):
+                        continue
+                    lines.append(
+                        f"- **{item.get('host', '-')}** ({item.get('type', '-')}) {item.get('summary', '-')}"
+                    )
+            else:
+                lines.append("- 当前没有阻塞项。")
+            lines.extend(["", "## Recommended Next Actions", ""])
+            next_actions = summary.get("next_actions", []) if isinstance(summary, dict) else []
+            if isinstance(next_actions, list) and next_actions:
+                for item in next_actions:
+                    lines.append(f"- {item}")
+            else:
+                lines.append("- 当前宿主验收中心没有额外动作。")
+            lines.append("")
+        lines.extend(
+            [
+            "| Host | Surface Ready | Trigger | Protocol | Manual Runtime Status |",
+            "|---|---|---|---|---|",
+            ]
+        )
+        for host in hosts:
+            if not isinstance(host, dict):
+                continue
+            lines.append(
+                f"| {host.get('host', '-')} | {'yes' if bool(host.get('surface_ready', False)) else 'no'} | "
+                f"{host.get('final_trigger', '-')} | {host.get('host_protocol_summary', '-')} | {host.get('manual_runtime_status_label', '-')} |"
+            )
+
+        for host in hosts:
+            if not isinstance(host, dict):
+                continue
+            lines.extend(
+                [
+                    "",
+                    f"## {host.get('host', '-')}",
+                    "",
+                    f"- Trigger: {host.get('final_trigger', '-')}",
+                    f"- Protocol: {host.get('host_protocol_summary', '-')}",
+                    f"- Surface Ready: {'yes' if bool(host.get('surface_ready', False)) else 'no'}",
+                    f"- Manual Runtime Status: {host.get('manual_runtime_status_label', '-')}",
+                    f"- Host Preconditions: {host.get('precondition_label', '-')}",
+                    f"- Smoke Prompt: {host.get('smoke_test_prompt', '-')}",
+                    f"- Smoke Success Signal: {host.get('smoke_success_signal', '-')}",
+                    "",
+                    "### Runtime Checklist",
+                    "",
+                ]
+            )
+            resume_probe = host.get("resume_probe_prompt", "")
+            if isinstance(resume_probe, str) and resume_probe.strip():
+                lines.extend(["### Resume Probe Prompt", "", f"- {resume_probe.strip()}", ""])
+            comment = host.get("manual_runtime_comment", "")
+            if isinstance(comment, str) and comment.strip():
+                lines.extend(["### Runtime Validation Note", "", f"- {comment.strip()}", ""])
+            preconditions = host.get("precondition_guidance", [])
+            if isinstance(preconditions, list) and preconditions:
+                lines.extend(["", "### Host Precondition Guidance", ""])
+                for item in preconditions:
+                    lines.append(f"- {item}")
+            checklist = host.get("runtime_checklist", [])
+            if isinstance(checklist, list):
+                for item in checklist:
+                    lines.append(f"- {item}")
+            lines.extend(["", "### Pass Criteria", ""])
+            criteria = host.get("pass_criteria", [])
+            if isinstance(criteria, list):
+                for item in criteria:
+                    lines.append(f"- {item}")
+            resume_checklist = host.get("resume_checklist", [])
+            if isinstance(resume_checklist, list) and resume_checklist:
+                lines.extend(["", "### Resume Checklist", ""])
+                for item in resume_checklist:
+                    lines.append(f"- {item}")
+        return "\n".join(lines).rstrip() + "\n"
+
+    def _write_host_surface_audit_report(
+        self,
+        *,
+        project_dir: Path,
+        payload: dict[str, Any],
+    ) -> dict[str, Path]:
+        project_name = self._resolve_report_project_name(project_dir)
+        output_dir = project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        json_file = output_dir / f"{project_name}-host-surface-audit.json"
+        md_file = output_dir / f"{project_name}-host-surface-audit.md"
+        json_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        md_file.write_text(self._render_host_surface_audit_markdown(payload), encoding="utf-8")
+
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        history_dir = output_dir / "host-surface-audit-history"
+        history_dir.mkdir(parents=True, exist_ok=True)
+        history_json = history_dir / f"{project_name}-host-surface-audit-{stamp}.json"
+        history_md = history_dir / f"{project_name}-host-surface-audit-{stamp}.md"
+        history_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        history_md.write_text(self._render_host_surface_audit_markdown(payload), encoding="utf-8")
+
+        return {
+            "json": json_file,
+            "markdown": md_file,
+            "history_json": history_json,
+            "history_markdown": history_md,
+        }
+
+    def _render_host_hardening_markdown(self, payload: dict[str, Any]) -> str:
+        compatibility = payload.get("compatibility", {})
+        selected_targets = payload.get("selected_targets", [])
+        hardening_results = payload.get("hardening_results", {})
+        if not isinstance(compatibility, dict):
+            compatibility = {}
+        if not isinstance(selected_targets, list):
+            selected_targets = []
+        if not isinstance(hardening_results, dict):
+            hardening_results = {}
+        lines = [
+            "# Host System Hardening Report",
+            "",
+            f"- Generated At (UTC): {datetime.now(timezone.utc).isoformat()}",
+            f"- Project Dir: {payload.get('project_dir', '')}",
+            f"- Selected Targets: {', '.join(str(item) for item in selected_targets) if selected_targets else '(none)'}",
+            f"- Compatibility Score: {compatibility.get('overall_score', 0)}/100",
+            f"- Flow Consistency: {compatibility.get('flow_consistency_score', 0)}/100",
+            f"- Official Doc Alignment: {((payload.get('official_compare_summary', {}) or {}).get('score', 0))}/100",
+            f"- Host Parity: {((payload.get('host_parity_summary', {}) or {}).get('score', 0))}/100",
+            f"- Host Gate Parity: {((payload.get('host_gate_summary', {}) or {}).get('score', 0))}/100",
+            f"- Host Runtime Script Parity: {((payload.get('host_runtime_script_summary', {}) or {}).get('score', 0))}/100",
+            f"- Host Recovery Parity: {((payload.get('host_recovery_summary', {}) or {}).get('score', 0))}/100",
+            "",
+        ]
+        for target in selected_targets:
+            item = hardening_results.get(target, {}) if isinstance(target, str) else {}
+            if not isinstance(item, dict):
+                item = {}
+            plan = item.get("plan", {})
+            contract = item.get("contract", {})
+            official_compare = item.get("official_compare", {})
+            gate_hosts = (payload.get("host_gate_summary", {}) or {}).get("hosts", {})
+            gate_info = gate_hosts.get(target, {}) if isinstance(gate_hosts, dict) else {}
+            runtime_script_hosts = (payload.get("host_runtime_script_summary", {}) or {}).get("hosts", {})
+            runtime_script_info = runtime_script_hosts.get(target, {}) if isinstance(runtime_script_hosts, dict) else {}
+            recovery_hosts = (payload.get("host_recovery_summary", {}) or {}).get("hosts", {})
+            recovery_info = recovery_hosts.get(target, {}) if isinstance(recovery_hosts, dict) else {}
+            lines.extend([f"## {target}", ""])
+            lines.append(f"- Trigger: {plan.get('final_trigger', '-')}")
+            lines.append(f"- Trigger Mode: {plan.get('trigger_mode', '-')}")
+            lines.append(f"- Contract OK: {'yes' if bool((contract or {}).get('ok', False)) else 'no'}")
+            if isinstance(gate_info, dict) and gate_info:
+                lines.append(f"- Gate Parity: {'yes' if bool(gate_info.get('passed', False)) else 'no'}")
+            if isinstance(runtime_script_info, dict) and runtime_script_info:
+                lines.append(
+                    f"- Runtime Script Parity: {'yes' if bool(runtime_script_info.get('passed', False)) else 'no'}"
+                )
+            if isinstance(recovery_info, dict) and recovery_info:
+                lines.append(f"- Recovery Parity: {'yes' if bool(recovery_info.get('passed', False)) else 'no'}")
+                commands = recovery_info.get("recommended_commands", [])
+                if isinstance(commands, list) and commands:
+                    lines.append("- Recovery Commands:")
+                    for cmd in commands:
+                        lines.append(f"  - {cmd}")
+            if isinstance(official_compare, dict) and official_compare:
+                lines.append(
+                    f"- Official Compare: {official_compare.get('status', 'unknown')} "
+                    f"({official_compare.get('reachable_urls', 0)}/{official_compare.get('checked_urls', 0)})"
+                )
+            written_files = item.get("written_files", [])
+            if isinstance(written_files, list) and written_files:
+                lines.append("- Updated Files:")
+                for path in written_files:
+                    lines.append(f"  - {path}")
+            required_steps = plan.get("required_steps", [])
+            if isinstance(required_steps, list) and required_steps:
+                lines.append("- Required Steps:")
+                for step in required_steps:
+                    lines.append(f"  - {step}")
+            skill_install = item.get("skill_install", {})
+            if isinstance(skill_install, dict) and bool(skill_install.get("required", False)):
+                lines.append(
+                    f"- Skill Install: {'ok' if bool(skill_install.get('installed', False)) else 'failed'}"
+                )
+                if skill_install.get("path"):
+                    lines.append(f"  - Path: {skill_install.get('path')}")
+                if skill_install.get("error"):
+                    lines.append(f"  - Error: {skill_install.get('error')}")
+            invalid = (contract or {}).get("invalid_surfaces", {})
+            if isinstance(invalid, dict) and invalid:
+                lines.append("- Invalid Surfaces:")
+                for surface_key in invalid.keys():
+                    lines.append(f"  - {surface_key}")
+            lines.append("")
+        return "\n".join(lines).rstrip() + "\n"
+
+    def _render_host_parity_onepage_markdown(self, payload: dict[str, Any]) -> str:
+        selected_targets = payload.get("selected_targets", [])
+        if not isinstance(selected_targets, list):
+            selected_targets = []
+        hardening_results = payload.get("hardening_results", {})
+        if not isinstance(hardening_results, dict):
+            hardening_results = {}
+        parity_index = payload.get("host_parity_index", {})
+        if not isinstance(parity_index, dict):
+            parity_index = {}
+        lines = [
+            "# Host Parity Onepage",
+            "",
+            f"- Generated At (UTC): {datetime.now(timezone.utc).isoformat()}",
+            f"- Project Dir: {payload.get('project_dir', '')}",
+            f"- Host Parity Index: {parity_index.get('score', 0)}/100 "
+            f"(threshold {parity_index.get('threshold', 95.0)}, "
+            f"{'pass' if bool(parity_index.get('passed', False)) else 'fail'})",
+            "",
+            "| Host | Status | Failed Dimension | Next Command |",
+            "|---|---|---|---|",
+        ]
+        official_hosts = (payload.get("official_compare_summary", {}) or {}).get("hosts", {})
+        parity_hosts = (payload.get("host_parity_summary", {}) or {}).get("hosts", {})
+        gate_hosts = (payload.get("host_gate_summary", {}) or {}).get("hosts", {})
+        runtime_hosts = (payload.get("host_runtime_script_summary", {}) or {}).get("hosts", {})
+        recovery_hosts = (payload.get("host_recovery_summary", {}) or {}).get("hosts", {})
+        flow_hosts = (payload.get("compatibility", {}) or {}).get("hosts", {})
+        for target in selected_targets:
+            item = hardening_results.get(target, {}) if isinstance(target, str) else {}
+            contract = item.get("contract", {}) if isinstance(item, dict) else {}
+            recovery = recovery_hosts.get(target, {}) if isinstance(recovery_hosts, dict) else {}
+            recovery_commands = recovery.get("recommended_commands", []) if isinstance(recovery, dict) else []
+            dimensions: list[tuple[str, bool]] = []
+            dimensions.append(("official_compare", str((official_hosts or {}).get(target, "unknown")) == "passed"))
+            dimensions.append(("host_parity", bool(((parity_hosts or {}).get(target, {}) or {}).get("passed", False))))
+            dimensions.append(("host_gate", bool(((gate_hosts or {}).get(target, {}) or {}).get("passed", False))))
+            dimensions.append(("runtime_script", bool(((runtime_hosts or {}).get(target, {}) or {}).get("passed", False))))
+            dimensions.append(("host_recovery", bool(((recovery_hosts or {}).get(target, {}) or {}).get("passed", False))))
+            dimensions.append(("flow_consistency", bool(((flow_hosts or {}).get(target, {}) or {}).get("flow_consistent", False))))
+            contract_ok = bool((contract or {}).get("ok", False))
+            status = "PASS" if contract_ok and all(ok for _, ok in dimensions) else "FAIL"
+            failed = [name for name, ok in dimensions if not ok]
+            failed_text = ", ".join(failed) if failed else "-"
+            next_command = recovery_commands[0] if isinstance(recovery_commands, list) and recovery_commands else "-"
+            lines.append(f"| {target} | {status} | {failed_text} | `{next_command}` |")
+        return "\n".join(lines).rstrip() + "\n"
+
+    def _write_host_hardening_report(
+        self,
+        *,
+        project_dir: Path,
+        payload: dict[str, Any],
+    ) -> dict[str, Path]:
+        project_name = self._resolve_report_project_name(project_dir)
+        output_dir = project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        json_file = output_dir / f"{project_name}-host-hardening.json"
+        md_file = output_dir / f"{project_name}-host-hardening.md"
+        onepage_file = output_dir / f"{project_name}-host-parity-onepage.md"
+        json_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        md_file.write_text(self._render_host_hardening_markdown(payload), encoding="utf-8")
+        onepage_file.write_text(self._render_host_parity_onepage_markdown(payload), encoding="utf-8")
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        history_dir = output_dir / "host-hardening-history"
+        history_dir.mkdir(parents=True, exist_ok=True)
+        history_json = history_dir / f"{project_name}-host-hardening-{stamp}.json"
+        history_md = history_dir / f"{project_name}-host-hardening-{stamp}.md"
+        history_onepage = history_dir / f"{project_name}-host-parity-onepage-{stamp}.md"
+        history_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        history_md.write_text(self._render_host_hardening_markdown(payload), encoding="utf-8")
+        history_onepage.write_text(self._render_host_parity_onepage_markdown(payload), encoding="utf-8")
+        return {
+            "json": json_file,
+            "markdown": md_file,
+            "onepage_markdown": onepage_file,
+            "history_json": history_json,
+            "history_markdown": history_md,
+            "history_onepage_markdown": history_onepage,
+        }
+
+    def _write_host_runtime_validation_report(
+        self,
+        *,
+        project_dir: Path,
+        payload: dict[str, Any],
+    ) -> dict[str, Path]:
+        project_name = self._resolve_report_project_name(project_dir)
+        output_dir = project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        json_file = output_dir / f"{project_name}-host-runtime-validation.json"
+        md_file = output_dir / f"{project_name}-host-runtime-validation.md"
+        json_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        md_file.write_text(self._render_host_runtime_validation_markdown(payload), encoding="utf-8")
+
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        history_dir = output_dir / "host-runtime-validation-history"
+        history_dir.mkdir(parents=True, exist_ok=True)
+        history_json = history_dir / f"{project_name}-host-runtime-validation-{stamp}.json"
+        history_md = history_dir / f"{project_name}-host-runtime-validation-{stamp}.md"
+        history_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        history_md.write_text(self._render_host_runtime_validation_markdown(payload), encoding="utf-8")
+
+        return {
+            "json": json_file,
+            "markdown": md_file,
+            "history_json": history_json,
+            "history_markdown": history_md,
+        }
+
+    def _write_host_compatibility_report(
+        self,
+        *,
+        project_dir: Path,
+        payload: dict[str, Any],
+    ) -> dict[str, Path]:
+        project_name = self._resolve_report_project_name(project_dir)
+        output_dir = project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        json_file = output_dir / f"{project_name}-host-compatibility.json"
+        md_file = output_dir / f"{project_name}-host-compatibility.md"
+        json_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        md_file.write_text(self._render_host_compatibility_markdown(payload), encoding="utf-8")
+
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        history_dir = output_dir / "host-compatibility-history"
+        history_dir.mkdir(parents=True, exist_ok=True)
+        history_json = history_dir / f"{project_name}-host-compatibility-{stamp}.json"
+        history_md = history_dir / f"{project_name}-host-compatibility-{stamp}.md"
+        history_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        history_md.write_text(self._render_host_compatibility_markdown(payload), encoding="utf-8")
+
+        return {
+            "json": json_file,
+            "markdown": md_file,
+            "history_json": history_json,
+            "history_markdown": history_md,
+        }

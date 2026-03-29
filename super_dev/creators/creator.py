@@ -7,6 +7,7 @@
 创建时间：2025-12-30
 """
 
+import json
 from pathlib import Path
 
 from .document_generator import DocumentGenerator
@@ -100,6 +101,13 @@ class ProjectCreator:
         uiux_content = self.doc_generator.generate_uiux()
         uiux_path.write_text(uiux_content, encoding="utf-8")
         docs['uiux'] = str(uiux_path)
+
+        ui_contract_path = self.output_dir / f"{self.name}-ui-contract.json"
+        ui_contract_path.write_text(
+            json.dumps(self.doc_generator.generate_ui_contract(), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        docs['ui_contract'] = str(ui_contract_path)
 
         # 4. 执行路线图
         scenario = self.doc_generator.requirement_parser.detect_scenario(self.project_dir)

@@ -23,9 +23,10 @@ from typing import Any, Literal, cast
 from urllib.parse import urlencode
 
 import uvicorn
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -48,7 +49,10 @@ from super_dev.catalogs import (
     LANGUAGE_PREFERENCE_CATALOG,
     PIPELINE_FRONTEND_TEMPLATE_CATALOG,
     PLATFORM_CATALOG,
-    host_path_candidates,
+    PRIMARY_HOST_TOOL_IDS,
+    host_detection_path_candidates,
+    host_path_override_guide,
+    host_runtime_validation_overrides,
 )
 from super_dev.config import ConfigManager
 from super_dev.deployers import CICDGenerator
@@ -73,17 +77,27 @@ from super_dev.review_state import (
     load_architecture_revision,
     load_docs_confirmation,
     load_host_runtime_validation,
+    load_preview_confirmation,
     load_quality_revision,
     load_ui_revision,
+    preview_confirmation_file,
     quality_revision_file,
     save_architecture_revision,
     save_docs_confirmation,
     save_host_runtime_validation,
+    save_preview_confirmation,
     save_quality_revision,
     save_ui_revision,
     ui_revision_file,
+    workflow_state_file,
 )
 from super_dev.skills import SkillManager
+from super_dev.workflow_state import (
+    detect_pipeline_summary,
+    workflow_continuity_rules,
+    workflow_mode_label,
+    workflow_mode_shortcuts,
+)
 
 try:
     import fcntl
@@ -102,6 +116,12 @@ def _validate_project_dir(project_dir: str) -> Path:
         raise HTTPException(status_code=400, detail="project_dir 不允许包含 .. 路径遍历")
     normalized = Path(project_dir).resolve()
     return normalized
+
+
+def _public_host_targets(*, integration_manager: IntegrationManager) -> list[str]:
+    available_targets = [item.name for item in integration_manager.list_targets()]
+    public_targets = [target for target in PRIMARY_HOST_TOOL_IDS if target in available_targets]
+    return public_targets or available_targets
 
 
 # ==================== 数据模型 ====================
@@ -177,6 +197,13 @@ class WorkflowDocsConfirmationRequest(BaseModel):
 
 class WorkflowUIRevisionRequest(BaseModel):
     """UI 改版状态更新请求"""
+    status: Literal["pending_review", "revision_requested", "confirmed"]
+    comment: str = ""
+    actor: str = "user"
+
+
+class WorkflowPreviewConfirmationRequest(BaseModel):
+    """前端预览确认状态更新请求"""
     status: Literal["pending_review", "revision_requested", "confirmed"]
     comment: str = ""
     actor: str = "user"
@@ -276,8 +303,21 @@ app.add_middleware(
     allow_origins=[o.strip() for o in _CORS_ORIGINS if o.strip()],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
+    allow_headers=["Content-Type", "Authorization", "X-Request-ID", "X-Super-Dev-Key"],
 )
+
+# ==================== API Key 认证 ====================
+
+API_KEY_HEADER = APIKeyHeader(name="X-Super-Dev-Key", auto_error=False)
+
+
+def get_api_key(api_key: str | None = Security(API_KEY_HEADER)) -> str | None:
+    """验证 API Key（仅在设置了 SUPER_DEV_API_KEY 环境变量时生效）"""
+    expected_key = os.environ.get("SUPER_DEV_API_KEY")
+    if expected_key and api_key != expected_key:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    return api_key
+
 
 # ==================== 工作流运行状态 ====================
 
@@ -479,306 +519,8 @@ def _list_persisted_runs(project_dir: Path, limit: int = 20) -> list[dict[str, A
     return runs
 
 
-def _has_any(patterns: list[Path]) -> bool:
-    return any(path.exists() for path in patterns)
-
-
 def _detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = None) -> dict[str, Any]:
-    output_dir = project_dir / "output"
-    changes_dir = project_dir / ".super-dev" / "changes"
-
-    research_done = any(output_dir.glob("*-research.md"))
-    prd_done = any(output_dir.glob("*-prd.md"))
-    architecture_done = any(output_dir.glob("*-architecture.md"))
-    uiux_done = any(output_dir.glob("*-uiux.md"))
-    docs_done = prd_done and architecture_done and uiux_done
-    spec_done = any(changes_dir.glob("*/proposal.md")) and any(changes_dir.glob("*/tasks.md"))
-    frontend_runtime_files = sorted(output_dir.glob("*-frontend-runtime.json"))
-    frontend_runtime_passed = False
-    frontend_runtime_path = ""
-    if frontend_runtime_files:
-        latest_frontend_runtime = max(frontend_runtime_files, key=lambda path: path.stat().st_mtime)
-        frontend_runtime_path = str(latest_frontend_runtime)
-        try:
-            frontend_runtime_payload = json.loads(latest_frontend_runtime.read_text(encoding="utf-8"))
-        except Exception as e:
-            _api_logger.debug(f"Failed to parse frontend runtime JSON: {e}")
-            frontend_runtime_payload = {}
-        if isinstance(frontend_runtime_payload, dict):
-            frontend_runtime_passed = bool(frontend_runtime_payload.get("passed", False))
-    frontend_done = frontend_runtime_passed
-    backend_done = _has_any(
-        [
-            project_dir / "backend" / "src",
-            project_dir / "backend" / "package.json",
-            project_dir / "backend" / "pyproject.toml",
-            project_dir / "backend" / "requirements.txt",
-            project_dir / "backend" / "go.mod",
-        ]
-    )
-    quality_done = any(output_dir.glob("*-quality-gate.md")) or any(output_dir.glob("*-ui-review.md"))
-
-    delivery_manifest_files = sorted((output_dir / "delivery").glob("*-delivery-manifest.json")) if (output_dir / "delivery").exists() else []
-    delivery_manifest_ready = False
-    delivery_manifest_path = ""
-    if delivery_manifest_files:
-        latest_manifest = max(delivery_manifest_files, key=lambda path: path.stat().st_mtime)
-        delivery_manifest_path = str(latest_manifest)
-        try:
-            manifest_payload = json.loads(latest_manifest.read_text(encoding="utf-8"))
-        except Exception as e:
-            _api_logger.debug(f"Failed to parse delivery manifest JSON: {e}")
-            manifest_payload = {}
-        if isinstance(manifest_payload, dict):
-            delivery_manifest_ready = str(manifest_payload.get("status", "")).strip().lower() == "ready"
-
-    rehearsal_report_files = sorted((output_dir / "rehearsal").glob("*-rehearsal-report.json")) if (output_dir / "rehearsal").exists() else []
-    rehearsal_report_passed = False
-    rehearsal_report_path = ""
-    if rehearsal_report_files:
-        latest_rehearsal_report = max(rehearsal_report_files, key=lambda path: path.stat().st_mtime)
-        rehearsal_report_path = str(latest_rehearsal_report)
-        try:
-            rehearsal_payload = json.loads(latest_rehearsal_report.read_text(encoding="utf-8"))
-        except Exception as e:
-            _api_logger.debug(f"Failed to parse rehearsal report JSON: {e}")
-            rehearsal_payload = {}
-        if isinstance(rehearsal_payload, dict):
-            rehearsal_report_passed = bool(rehearsal_payload.get("passed", False))
-
-    delivery_done = delivery_manifest_ready and rehearsal_report_passed
-    knowledge_cache_files = sorted((output_dir / "knowledge-cache").glob("*-knowledge-bundle.json")) if (output_dir / "knowledge-cache").exists() else []
-    knowledge_summary: dict[str, Any] = {
-        "enabled": bool((project_dir / "knowledge").exists()),
-        "cache_exists": False,
-        "cache_path": "",
-        "local_hits": 0,
-        "web_hits": 0,
-        "top_local_sources": [],
-    }
-    if knowledge_cache_files:
-        latest_bundle = max(knowledge_cache_files, key=lambda path: path.stat().st_mtime)
-        knowledge_summary["cache_exists"] = True
-        knowledge_summary["cache_path"] = str(latest_bundle)
-        try:
-            payload = json.loads(latest_bundle.read_text(encoding="utf-8"))
-        except Exception as e:
-            _api_logger.debug(f"Failed to parse knowledge bundle JSON: {e}")
-            payload = {}
-        if isinstance(payload, dict):
-            local_knowledge = payload.get("local_knowledge", [])
-            web_knowledge = payload.get("web_knowledge", [])
-            if isinstance(local_knowledge, list):
-                knowledge_summary["local_hits"] = len(local_knowledge)
-                knowledge_summary["top_local_sources"] = [
-                    str(item.get("source", ""))
-                    for item in local_knowledge[:3]
-                    if isinstance(item, dict) and str(item.get("source", "")).strip()
-                ]
-            if isinstance(web_knowledge, list):
-                knowledge_summary["web_hits"] = len(web_knowledge)
-
-    docs_confirmation = load_docs_confirmation(project_dir) or {}
-    docs_confirmation_status = str(docs_confirmation.get("status", "")).strip() or "pending_review"
-    docs_confirmation_comment = str(docs_confirmation.get("comment", "")).strip()
-    docs_confirmation_run_id = str(docs_confirmation.get("run_id", "")).strip()
-    explicit_confirmed = docs_confirmation_status == "confirmed"
-    explicit_revision_requested = docs_confirmation_status == "revision_requested"
-    explicit_waiting_review = docs_confirmation_status == "pending_review"
-    ui_revision = load_ui_revision(project_dir) or {}
-    ui_revision_status = str(ui_revision.get("status", "")).strip() or "pending_review"
-    ui_revision_comment = str(ui_revision.get("comment", "")).strip()
-    ui_revision_run_id = str(ui_revision.get("run_id", "")).strip()
-    explicit_ui_revision_requested = ui_revision_status == "revision_requested"
-    architecture_revision = load_architecture_revision(project_dir) or {}
-    architecture_revision_status = str(architecture_revision.get("status", "")).strip() or "pending_review"
-    architecture_revision_comment = str(architecture_revision.get("comment", "")).strip()
-    architecture_revision_run_id = str(architecture_revision.get("run_id", "")).strip()
-    explicit_architecture_revision_requested = architecture_revision_status == "revision_requested"
-    quality_revision = load_quality_revision(project_dir) or {}
-    quality_revision_status = str(quality_revision.get("status", "")).strip() or "pending_review"
-    quality_revision_comment = str(quality_revision.get("comment", "")).strip()
-    quality_revision_run_id = str(quality_revision.get("run_id", "")).strip()
-    explicit_quality_revision_requested = quality_revision_status == "revision_requested"
-
-    run_status = str((run or {}).get("status", "unknown"))
-    run_results = cast(list[dict[str, Any]], (run or {}).get("results") or [])
-    running_phase = None
-    if run_status in {"running", "cancelling"}:
-        completed = set(cast(list[str], (run or {}).get("completed_phases") or []))
-        requested = cast(list[str], (run or {}).get("requested_phases") or [])
-        running_phase = next((phase_id for phase_id in requested if phase_id not in completed), None)
-
-    def _status(done: bool, *, waiting: bool = False, running: bool = False) -> str:
-        if done:
-            return "completed"
-        if running:
-            return "running"
-        if waiting:
-            return "waiting"
-        return "pending"
-
-    confirmation_done = explicit_confirmed or spec_done or frontend_done or backend_done or quality_done or delivery_done
-    confirmation_waiting = docs_done and not confirmation_done
-
-    stages = [
-        {
-            "id": "research",
-            "name": "同类产品研究",
-            "status": _status(research_done, running=running_phase in {"discovery", "intelligence"} and not research_done),
-            "description": "让宿主先联网研究同类产品，并沉淀 research 文档。",
-        },
-        {
-            "id": "core_docs",
-            "name": "三份核心文档",
-            "status": _status(docs_done, running=running_phase == "drafting" and not docs_done),
-            "description": "生成 PRD、架构、UIUX 三份核心文档。",
-        },
-        {
-            "id": "confirmation_gate",
-            "name": "等待用户确认",
-            "status": (
-                "completed"
-                if confirmation_done
-                else ("waiting" if confirmation_waiting or explicit_revision_requested or explicit_waiting_review else "pending")
-            ),
-            "description": "三文档生成后，必须先向用户汇报并等待确认或修改。",
-        },
-        {
-            "id": "spec",
-            "name": "Spec 与任务清单",
-            "status": _status(spec_done, running=running_phase == "drafting" and docs_done and not spec_done),
-            "description": "用户确认后，创建 proposal 与 tasks.md。",
-        },
-        {
-            "id": "frontend",
-            "name": "前端实现与运行验证",
-            "status": _status(frontend_done, running=running_phase == "delivery" and spec_done and not frontend_done),
-            "description": "先实现前端主流程，并运行验证可演示状态。",
-        },
-        {
-            "id": "backend",
-            "name": "后端实现与联调",
-            "status": _status(backend_done, running=running_phase == "delivery" and frontend_done and not backend_done),
-            "description": "在前端可运行后，再进入后端、认证、数据层与联调。",
-        },
-        {
-            "id": "quality",
-            "name": "质量门禁",
-            "status": _status(
-                quality_done,
-                running=running_phase in {"redteam", "qa"} and backend_done and not quality_done,
-            ),
-            "description": "执行红队审查、UI 审查与质量门禁。",
-        },
-        {
-            "id": "delivery",
-            "name": "交付与发布",
-            "status": _status(
-                delivery_done,
-                running=running_phase == "deployment" and quality_done and not delivery_done,
-            ),
-            "description": "生成交付包、部署配置和审计产物。",
-        },
-    ]
-
-    current_stage = next((stage for stage in stages if stage["status"] in {"running", "waiting", "pending"}), stages[-1])
-    if all(stage["status"] == "completed" for stage in stages):
-        current_stage = stages[-1]
-
-    blocker = ""
-    if explicit_revision_requested:
-        blocker = "用户已要求修改三份核心文档，当前应先修正文档并再次提交确认。"
-    elif explicit_ui_revision_requested:
-        blocker = "当前存在 UI 改版请求，应先更新 output/*-uiux.md，并重新执行前端运行验证与 UI review。"
-    elif explicit_architecture_revision_requested:
-        blocker = "当前存在架构返工请求，应先更新 output/*-architecture.md，并同步调整实现方案与任务拆解。"
-    elif explicit_quality_revision_requested:
-        blocker = "当前存在质量返工请求，应先修复质量/安全问题，并重新执行 quality gate 与 release proof-pack。"
-    elif confirmation_waiting:
-        blocker = "三份核心文档已生成，当前必须等待用户确认或提出修改意见。"
-    elif not research_done:
-        blocker = "当前尚未完成同类产品研究。"
-    elif not docs_done:
-        blocker = "当前尚未完成 PRD、架构、UIUX 三份核心文档。"
-    elif not spec_done:
-        blocker = "当前尚未创建 Spec proposal 与 tasks.md。"
-    elif not frontend_done:
-        blocker = "当前尚未完成前端实现与运行验证。"
-    elif not backend_done:
-        blocker = "当前尚未完成后端实现与联调。"
-    elif not quality_done:
-        blocker = "当前尚未完成红队 / UI / 质量门禁。"
-    elif not delivery_done:
-        if not delivery_manifest_ready:
-            blocker = "当前交付包仍未达到 ready 状态。"
-        elif not rehearsal_report_passed:
-            blocker = "当前尚未通过发布演练验证。"
-        else:
-            blocker = "当前尚未完成交付包与部署产物。"
-
-    completed_count = len([stage for stage in stages if stage["status"] == "completed"])
-    summary = {
-        "current_stage_id": current_stage["id"],
-        "current_stage_name": current_stage["name"],
-        "blocker": blocker,
-        "completed_count": completed_count,
-        "total_count": len(stages),
-        "stages": stages,
-        "artifacts": {
-            "research": research_done,
-            "prd": prd_done,
-            "architecture": architecture_done,
-            "uiux": uiux_done,
-            "spec": spec_done,
-            "frontend": frontend_done,
-            "frontend_runtime_report": frontend_runtime_path,
-            "backend": backend_done,
-            "quality": quality_done,
-            "delivery": delivery_done,
-            "delivery_manifest_ready": delivery_manifest_ready,
-            "delivery_manifest_path": delivery_manifest_path,
-            "rehearsal_report_passed": rehearsal_report_passed,
-            "rehearsal_report_path": rehearsal_report_path,
-        },
-        "knowledge": knowledge_summary,
-        "docs_confirmation": {
-            "status": docs_confirmation_status,
-            "comment": docs_confirmation_comment,
-            "run_id": docs_confirmation_run_id,
-            "updated_at": docs_confirmation.get("updated_at", ""),
-            "actor": docs_confirmation.get("actor", ""),
-            "exists": bool(docs_confirmation),
-        },
-        "ui_revision": {
-            "status": ui_revision_status,
-            "comment": ui_revision_comment,
-            "run_id": ui_revision_run_id,
-            "updated_at": ui_revision.get("updated_at", ""),
-            "actor": ui_revision.get("actor", ""),
-            "exists": bool(ui_revision),
-        },
-        "architecture_revision": {
-            "status": architecture_revision_status,
-            "comment": architecture_revision_comment,
-            "run_id": architecture_revision_run_id,
-            "updated_at": architecture_revision.get("updated_at", ""),
-            "actor": architecture_revision.get("actor", ""),
-            "exists": bool(architecture_revision),
-        },
-        "quality_revision": {
-            "status": quality_revision_status,
-            "comment": quality_revision_comment,
-            "run_id": quality_revision_run_id,
-            "updated_at": quality_revision.get("updated_at", ""),
-            "actor": quality_revision.get("actor", ""),
-            "exists": bool(quality_revision),
-        },
-    }
-
-    if run_results:
-        summary["phase_results_count"] = len(run_results)
-    return summary
+    return detect_pipeline_summary(project_dir, run)
 
 
 def _with_pipeline_summary(run: dict[str, Any], project_dir: Path) -> dict[str, Any]:
@@ -802,7 +544,7 @@ def _normalize_run_status(status: Any) -> str:
         return "failed"
     if normalized in {"cancelled"}:
         return "cancelled"
-    if normalized in {"running", "cancelling", "waiting_confirmation", "waiting_ui_revision", "waiting_architecture_revision", "waiting_quality_revision"}:
+    if normalized in {"running", "cancelling", "waiting_confirmation", "waiting_preview_confirmation", "waiting_ui_revision", "waiting_architecture_revision", "waiting_quality_revision"}:
         return "running"
     if normalized in {"queued"}:
         return "queued"
@@ -922,15 +664,418 @@ def _detect_host_targets(available_targets: list[str]) -> tuple[list[str], dict[
                 reasons.append(f"cmd:{command}")
                 break
 
-        for candidate in host_path_candidates(target):
+        for source, candidate in host_detection_path_candidates(target):
             if glob.glob(candidate):
-                reasons.append(f"path:{candidate}")
+                reasons.append(f"{source}:{candidate}")
                 break
 
         if reasons:
             detected.append(target)
             details[target] = reasons
     return detected, details
+
+
+def _format_detection_reason(reason: str) -> str:
+    source, _, value = str(reason).partition(":")
+    source_labels = {
+        "cmd": "命令命中",
+        "path": "默认安装路径",
+        "env": "自定义路径覆盖",
+        "registry": "Windows 注册信息",
+        "shim": "Windows shim / 包管理器目录",
+    }
+    label = source_labels.get(source, source or "检测来源")
+    return f"{label}: {value}" if value else label
+
+
+def _explain_detection_details(detected_meta: dict[str, list[str]]) -> dict[str, list[str]]:
+    return {
+        host: [_format_detection_reason(item) for item in reasons]
+        for host, reasons in detected_meta.items()
+    }
+
+
+def _host_runtime_checklist(target: str, usage: dict[str, Any]) -> list[str]:
+    trigger = str(usage.get("final_trigger", "")).strip() or "-"
+    common = [
+        f"在宿主中使用最终触发命令进入 Super Dev 流水线：{trigger}",
+        "确认首轮响应明确进入 research，而不是直接开始编码。",
+        "确认真实写入 output/*-research.md、output/*-prd.md、output/*-architecture.md、output/*-uiux.md。",
+        "确认三文档完成后暂停等待用户确认，而不是直接继续实现。",
+        "确认文档确认后能继续进入 Spec、前端运行验证、后端与交付阶段。",
+    ]
+    overrides = host_runtime_validation_overrides(target)
+    return [*overrides.get("runtime_checklist", []), *common]
+
+
+def _host_runtime_pass_criteria(target: str) -> list[str]:
+    common = [
+        "首轮响应符合 Super Dev 首轮契约。",
+        "关键文档真实落盘到项目目录。",
+        "确认门真实生效。",
+        "后续恢复路径可用。",
+    ]
+    overrides = host_runtime_validation_overrides(target)
+    return [*overrides.get("pass_criteria", []), *common]
+
+
+def _project_has_super_dev_context(project_dir: Path) -> bool:
+    project_dir = Path(project_dir).resolve()
+    return any(
+        path.exists()
+        for path in (
+            project_dir / "super-dev.yaml",
+            project_dir / ".super-dev" / "WORKFLOW.md",
+            project_dir / "output" / f"{project_dir.name}-prd.md",
+            project_dir / "output" / f"{project_dir.name}-architecture.md",
+            project_dir / "output" / f"{project_dir.name}-proof-pack.json",
+        )
+    )
+
+
+def _build_resume_probe_prompt(project_dir: Path, target: str, usage: dict[str, Any]) -> str:
+    if not _project_has_super_dev_context(project_dir):
+        return ""
+    trigger = str(usage.get("trigger_command", "")).strip()
+    instruction = (
+        "继续当前项目的 Super Dev 流程，不要当作普通聊天。"
+        "先读取 .super-dev/SESSION_BRIEF.md、.super-dev/workflow-state.json、.super-dev/WORKFLOW.md、output/*、.super-dev/review-state/* 和最近的 tasks.md。"
+    )
+    if target in {"codex-cli", "trae"}:
+        return f"super-dev: {instruction}"
+    if "/super-dev" in trigger:
+        escaped = instruction.replace('"', '\\"')
+        return f'/super-dev "{escaped}"'
+    return f"super-dev: {instruction}"
+
+
+def _host_resume_checklist(target: str) -> list[str]:
+    common = [
+        "重开宿主或新开会话后，使用恢复探针而不是普通闲聊进入当前流程。",
+        "确认宿主先读取 `.super-dev/SESSION_BRIEF.md`，并继续当前流程而不是重新开始。",
+        "确认用户继续说“改一下 / 补充 / 继续改 / 确认 / 通过”时，宿主仍然留在当前 Super Dev 流程内。",
+    ]
+    overrides = host_runtime_validation_overrides(target)
+    return [*overrides.get("resume_checklist", []), *common]
+
+
+def _build_session_resume_card(project_dir: Path, target: str, usage: dict[str, Any]) -> dict[str, Any]:
+    host_first_sentence = _build_resume_probe_prompt(project_dir, target, usage)
+    enabled = bool(host_first_sentence)
+    workflow_mode = ""
+    workflow_mode_display = ""
+    action_title = ""
+    action_examples: list[str] = []
+    rules: list[str] = []
+    recommended_workflow_command = ""
+    summary: dict[str, Any] = {}
+    if enabled:
+        summary = _detect_pipeline_summary(project_dir)
+        recommended_workflow_command = str(summary.get("recommended_command", "")).strip() or "super-dev run --resume"
+        workflow_mode = str(summary.get("workflow_mode", "")).strip()
+        if workflow_mode:
+            workflow_mode_display = workflow_mode_label(workflow_mode)
+        action_card = summary.get("action_card")
+        if isinstance(action_card, dict):
+            action_title = str(action_card.get("title", "")).strip()
+            raw_examples = action_card.get("examples")
+            if isinstance(raw_examples, list):
+                action_examples = [str(item).strip() for item in raw_examples if str(item).strip()]
+            raw_rules = action_card.get("continuity_rules")
+            if isinstance(raw_rules, list):
+                rules = [str(item).strip() for item in raw_rules if str(item).strip()]
+            raw_shortcuts = action_card.get("shortcuts")
+            if isinstance(raw_shortcuts, list):
+                user_action_shortcuts = [str(item).strip() for item in raw_shortcuts if str(item).strip()]
+            else:
+                user_action_shortcuts = workflow_mode_shortcuts(workflow_mode, examples=action_examples)
+        else:
+            user_action_shortcuts = workflow_mode_shortcuts(workflow_mode)
+        if not rules:
+            rules = workflow_continuity_rules(str(summary.get("workflow_status", "")).strip())
+    else:
+        user_action_shortcuts = []
+    session_brief_path = str((project_dir / ".super-dev" / "SESSION_BRIEF.md").resolve()) if enabled else ""
+    workflow_state_path = str(workflow_state_file(project_dir).resolve()) if enabled else ""
+    lines = []
+    if enabled:
+        generic_continue_rule = "用户说“改一下 / 补充 / 继续改 / 确认 / 通过”时，仍然留在当前 Super Dev 流程。"
+        generic_exit_rule = "只有用户明确说取消当前流程、重新开始或切回普通聊天，才允许离开流程。"
+        primary_rule = str(rules[0]).strip() if rules else ""
+        exit_rule = str(rules[1]).strip() if len(rules) > 1 else ""
+        lines = [
+            f"动作类型: {workflow_mode_display}" if workflow_mode_display else "",
+            f"当前动作: {action_title}" if action_title else "",
+            f"宿主第一句: {host_first_sentence}",
+            f"流程状态卡: {session_brief_path}",
+            f"工作流状态 JSON: {workflow_state_path}",
+            f"继续规则: {generic_continue_rule}",
+            f"当前门禁规则: {primary_rule}" if primary_rule and primary_rule != generic_continue_rule else "",
+            f"退出条件: {generic_exit_rule}",
+            f"当前门禁退出条件: {exit_rule}" if exit_rule and exit_rule != generic_exit_rule else "",
+        ]
+        if user_action_shortcuts:
+            lines.insert(2, f"你现在可以直接说: {' / '.join(user_action_shortcuts[:4])}")
+        if action_examples:
+            lines.insert(3 if user_action_shortcuts else 2, f"自然语言示例: {', '.join(action_examples[:3])}")
+        if recommended_workflow_command:
+            lines.append(f"机器侧动作: {recommended_workflow_command}")
+        lines = [line for line in lines if line]
+    return {
+        "enabled": enabled,
+        "host_first_sentence": host_first_sentence,
+        "session_brief_path": session_brief_path,
+        "workflow_state_path": workflow_state_path,
+        "workflow_mode": workflow_mode if enabled else "",
+        "workflow_mode_label": workflow_mode_display if enabled else "",
+        "action_title": action_title if enabled else "",
+        "action_examples": action_examples if enabled else [],
+        "user_action_shortcuts": user_action_shortcuts if enabled else [],
+        "rules": (
+            [
+                generic_continue_rule,
+                *[str(item).strip() for item in rules if str(item).strip()],
+                generic_exit_rule,
+            ]
+            if enabled
+            else []
+        ),
+        "recommended_workflow_command": recommended_workflow_command,
+        "lines": lines,
+    }
+
+
+def _build_no_host_decision_card() -> dict[str, Any]:
+    next_actions = [
+        "先安装一个受支持宿主，优先 Claude Code 或 Codex。",
+        "如果宿主装在自定义目录，先设置对应的 SUPER_DEV_HOST_PATH_* 环境变量。",
+        "安装后先执行 detect / doctor，再开始接入。",
+    ]
+    first_action = next_actions[0]
+    return {
+        "scenario": "no-host-detected",
+        "workflow_mode": "start",
+        "workflow_mode_label": workflow_mode_label("start"),
+        "action_title": "先完成宿主安装与接入",
+        "action_examples": ["先装 Codex", "我先用 Claude Code", "先把宿主接好再开始"],
+        "user_action_shortcuts": workflow_mode_shortcuts("start", examples=["先装 Codex", "我先用 Claude Code", "先把宿主接好再开始"]),
+        "title": "未检测到可用宿主",
+        "summary": "当前机器上没有命中受支持宿主，或宿主不在默认路径与当前 PATH 中。",
+        "recommended_reason": "先保证机器上至少有一个正式支持的宿主可用，再进入接入流程。",
+        "first_action": first_action,
+        "secondary_actions": next_actions[1:],
+        "path_override_hint": "如果装在自定义目录，先设置 `SUPER_DEV_HOST_PATH_CODEX_CLI=<安装路径>` 这类环境变量再重试。",
+        "path_override_examples": [
+            {
+                "id": host_id,
+                "name": host_display,
+                "env_key": str(host_path_override_guide(host_id).get("env_key", "")),
+                "unix_example": str(host_path_override_guide(host_id).get("unix_example", "")),
+                "windows_example": str(host_path_override_guide(host_id).get("windows_example", "")),
+            }
+            for host_id, host_display in (("claude-code", "Claude Code"), ("codex-cli", "Codex"))
+        ],
+        "next_actions": next_actions,
+        "lines": [
+            f"动作类型: {workflow_mode_label('start')}",
+            "当前动作: 先完成宿主安装与接入",
+            f"先做这一步: {first_action}",
+            "当前机器上未命中受支持宿主。",
+            "如果装在自定义目录，先设置 `SUPER_DEV_HOST_PATH_CODEX_CLI=<安装路径>` 这类环境变量再重试。",
+            "自然语言示例: 先装 Codex, 我先用 Claude Code, 先把宿主接好再开始",
+        ],
+    }
+
+
+def _build_detected_host_decision_card(
+    *,
+    project_dir: Path,
+    integration_manager: IntegrationManager,
+    detected_targets: list[str],
+    detected_meta: dict[str, list[str]],
+    preferred_targets: list[str] | None = None,
+) -> dict[str, Any]:
+    candidate_targets = list(dict.fromkeys([*(preferred_targets or []), *detected_targets]))
+    if not candidate_targets:
+        return _build_no_host_decision_card()
+    candidate_display_limit = 3
+    def _sort_key(target: str) -> tuple[int, int, int, str]:
+        profile = integration_manager.get_adapter_profile(target)
+        certification_rank = 0 if profile.certification_level == "certified" else (1 if profile.certification_level == "compatible" else 2)
+        return (
+            certification_rank,
+            0 if integration_manager.supports_slash(target) else 1,
+            0 if profile.category == "cli" else 1,
+            target,
+        )
+
+    ranked_targets = sorted(candidate_targets, key=_sort_key)
+    preferred_set = {target for target in (preferred_targets or []) if target}
+    if preferred_set:
+        ranked_targets = sorted(
+            ranked_targets,
+            key=lambda target: (0 if target in preferred_set else 1, ranked_targets.index(target)),
+        )
+    selected_host = ranked_targets[0]
+    usage = _serialize_host_usage_profile(integration_manager=integration_manager, target=selected_host)
+    session_resume_card = _build_session_resume_card(project_dir, selected_host, usage)
+    selected_profile = integration_manager.get_adapter_profile(selected_host)
+    if selected_profile.certification_level == "certified" and integration_manager.supports_slash(selected_host):
+        recommended_reason = "它当前是已检测宿主里认证等级最高、触发入口最直接的一项。"
+    elif selected_profile.certification_level == "certified":
+        recommended_reason = "它当前是已检测宿主里认证等级最高的一项。"
+    elif integration_manager.supports_slash(selected_host):
+        recommended_reason = "它当前触发入口最直接，适合作为默认宿主。"
+    else:
+        recommended_reason = "它当前在已检测宿主里综合优先级最高。"
+    first_action = (
+        f"重开后第一句直接复制 {session_resume_card.get('host_first_sentence')}"
+        if session_resume_card.get("enabled")
+        else f"先在 {usage['host']} 里输入 {str(selected_profile.trigger_command).replace('<需求描述>', '你的需求')}"
+    )
+    workflow_mode = "continue" if session_resume_card.get("enabled") else "start"
+    action_title = (
+        str(session_resume_card.get("action_title", "")).strip()
+        if session_resume_card.get("enabled")
+        else f"在 {usage['host']} 里启动 Super Dev"
+    )
+    action_examples = (
+        list(session_resume_card.get("action_examples") or [])
+        if session_resume_card.get("enabled")
+        else ["开始这个项目", "做一个商业级官网", "用 Super Dev 开始处理当前需求"]
+    )
+    user_action_shortcuts = workflow_mode_shortcuts(workflow_mode, examples=action_examples)
+    candidates: list[dict[str, Any]] = []
+    for target in ranked_targets:
+        candidate_usage = _serialize_host_usage_profile(integration_manager=integration_manager, target=target)
+        profile = integration_manager.get_adapter_profile(target)
+        if profile.certification_level == "certified" and integration_manager.supports_slash(target):
+            candidate_reason = "它当前是已检测宿主里认证等级最高、触发入口最直接的一项。"
+        elif profile.certification_level == "certified":
+            candidate_reason = "它当前是已检测宿主里认证等级最高的一项。"
+        elif integration_manager.supports_slash(target):
+            candidate_reason = "它当前触发入口最直接，适合作为默认宿主。"
+        else:
+            candidate_reason = "它当前在已检测宿主里综合优先级最高。"
+        candidates.append(
+            {
+                "id": target,
+                "name": candidate_usage["host"],
+                "certification_label": profile.certification_label,
+                "certification_level": profile.certification_level,
+                "recommended": target == selected_host,
+                "recommended_reason": candidate_reason,
+                "reasons": _explain_detection_details({target: detected_meta.get(target, [])}).get(target, []),
+                "trigger": str(profile.trigger_command).replace("<需求描述>", "你的需求"),
+                "path_override": host_path_override_guide(target),
+            }
+        )
+    display_candidates = candidates[:candidate_display_limit]
+    remaining_candidate_count = max(0, len(candidates) - len(display_candidates))
+    secondary_actions = [
+        "如果当前是重开宿主后的第一轮输入，先不要普通聊天起手，直接用建议入口。",
+        "如果命令或技能还没刷新，先关闭旧宿主会话再开新会话。",
+    ]
+    selection_source = "explicit" if preferred_set else "detected"
+    lines = [
+        f"动作类型: {workflow_mode_label(workflow_mode)}",
+        f"当前动作: {action_title}",
+        f"先做这一步: {first_action}",
+        f"默认推荐先用 {usage['host']}，{recommended_reason}",
+        f"当前建议入口: {usage['primary_entry']}",
+    ]
+    if selection_source == "explicit":
+        lines.insert(3, f"当前模式: 仅围绕 {usage['host']} 给出建议。")
+    if action_examples:
+        lines.append(f"自然语言示例: {', '.join(str(item) for item in action_examples[:3])}")
+    candidate_summary = "、".join(
+        f"{item['name']} [{item['certification_label']}]"
+        for item in display_candidates
+    )
+    if candidate_summary:
+        lines.append(f"优先候选: {candidate_summary}")
+    if remaining_candidate_count:
+        lines.append(f"另外还有 {remaining_candidate_count} 个候选已折叠，默认不建议先看。")
+    if session_resume_card.get("enabled"):
+        lines.append(f"继续当前流程第一句: {session_resume_card.get('host_first_sentence')}")
+    elif candidates:
+        lines.append(f"第一句建议: {candidates[0]['trigger']}")
+    return {
+        "scenario": "multi-host-detected" if len(candidate_targets) > 1 else "single-host-detected",
+        "selection_source": selection_source,
+        "workflow_mode": workflow_mode,
+        "workflow_mode_label": workflow_mode_label(workflow_mode),
+        "action_title": action_title,
+        "action_examples": action_examples,
+        "user_action_shortcuts": user_action_shortcuts,
+        "title": "已检测到宿主",
+        "summary": (
+            f"当前已按你指定的宿主给出默认建议，共纳入 {len(candidate_targets)} 个候选。"
+            if selection_source == "explicit"
+            else f"当前检测到 {len(detected_targets)} 个宿主，已按优先级给出默认推荐。"
+        ),
+        "recommended_reason": recommended_reason,
+        "first_action": first_action,
+        "secondary_actions": secondary_actions,
+        "selected_host": selected_host,
+        "selected_host_name": usage["host"],
+        "selected_path_override": host_path_override_guide(selected_host),
+        "candidate_count": len(candidates),
+        "remaining_candidate_count": remaining_candidate_count,
+        "candidates": display_candidates,
+        "session_resume_card": session_resume_card,
+        "lines": lines,
+    }
+
+
+def _build_primary_repair_action(
+    *,
+    report: dict[str, Any],
+    targets: list[str],
+    integration_manager: IntegrationManager,
+    decision_card: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    hosts = report.get("hosts", {})
+    if isinstance(decision_card, dict) and decision_card.get("scenario") == "no-host-detected":
+        first_action = str(decision_card.get("first_action", "")).strip()
+        if first_action:
+            secondary_actions = decision_card.get("secondary_actions", [])
+            return {
+                "host": "当前机器",
+                "reason": str(decision_card.get("summary", "")).strip(),
+                "command": first_action,
+                "secondary_actions": secondary_actions if isinstance(secondary_actions, list) else [],
+            }
+    if not isinstance(hosts, dict):
+        return {"host": "", "reason": "", "command": "", "secondary_actions": []}
+    for target in targets:
+        host = hosts.get(target, {})
+        if not isinstance(host, dict) or bool(host.get("ready", False)):
+            continue
+        diagnosis = host.get("diagnosis", {})
+        if not isinstance(diagnosis, dict):
+            continue
+        command = str(diagnosis.get("suggested_command", "")).strip()
+        if not command:
+            continue
+        reason = str(diagnosis.get("blocker_summary", "")).strip()
+        suggestions = host.get("suggestions", [])
+        secondary_actions: list[str] = []
+        if isinstance(suggestions, list):
+            for item in suggestions:
+                text = str(item).strip()
+                if not text or text == command or text in secondary_actions:
+                    continue
+                secondary_actions.append(text)
+                if len(secondary_actions) >= 2:
+                    break
+        return {
+            "host": _serialize_host_usage_profile(integration_manager=integration_manager, target=target)["host"],
+            "reason": reason,
+            "command": command,
+            "secondary_actions": secondary_actions,
+        }
+    return {"host": "", "reason": "", "command": "", "secondary_actions": []}
 
 
 def _collect_host_diagnostics(
@@ -1133,6 +1278,7 @@ def _serialize_host_usage_profile(
         "smoke_test_prompt": profile.smoke_test_prompt,
         "smoke_test_steps": list(profile.smoke_test_steps),
         "smoke_success_signal": profile.smoke_success_signal,
+        "path_override": host_path_override_guide(target),
         "precondition_status": profile.precondition_status,
         "precondition_label": profile.precondition_label,
         "precondition_guidance": list(profile.precondition_guidance),
@@ -1277,19 +1423,10 @@ def _build_host_runtime_validation_payload(
                 "precondition_items": precondition_items if isinstance(precondition_items, list) else [],
                 "smoke_test_prompt": usage.get("smoke_test_prompt", ""),
                 "smoke_success_signal": usage.get("smoke_success_signal", ""),
-                "runtime_checklist": [
-                    "在宿主中使用最终触发命令进入 Super Dev 流水线。",
-                    "确认首轮响应明确进入 research，而不是直接开始编码。",
-                    "确认真实写入 output/*-research.md、output/*-prd.md、output/*-architecture.md、output/*-uiux.md。",
-                    "确认三文档完成后暂停等待用户确认，而不是直接继续实现。",
-                    "确认文档确认后能继续进入 Spec、前端运行验证、后端与交付阶段。",
-                ],
-                "pass_criteria": [
-                    "首轮响应符合 Super Dev 首轮契约。",
-                    "关键文档真实落盘到项目目录。",
-                    "确认门真实生效。",
-                    "后续恢复路径可用。",
-                ],
+                "runtime_checklist": _host_runtime_checklist(target, usage),
+                "pass_criteria": _host_runtime_pass_criteria(target),
+                "resume_probe_prompt": _build_resume_probe_prompt(project_dir, target, usage),
+                "resume_checklist": _host_resume_checklist(target),
             }
         )
 
@@ -1307,6 +1444,7 @@ def _build_host_runtime_validation_payload(
         "runtime_state_updated_at": runtime_state.get("updated_at", ""),
         "detected_hosts": list(detected_meta.keys()),
         "detection_details": detected_meta,
+        "detection_details_pretty": _explain_detection_details(detected_meta),
         "selected_targets": targets,
         "summary": {
             "overall_status": "ready" if total_hosts > 0 and fully_ready_count == total_hosts else "attention",
@@ -1858,7 +1996,7 @@ async def list_policy_presets() -> dict[str, Any]:
     }
 
 
-@app.put("/api/policy", response_model=PipelinePolicyResponse)
+@app.put("/api/policy", response_model=PipelinePolicyResponse, dependencies=[Depends(get_api_key)])
 async def update_policy(
     request: PipelinePolicyUpdateRequest,
     project_dir: str = ".",
@@ -1951,7 +2089,7 @@ async def update_policy(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/init")
+@app.post("/api/init", dependencies=[Depends(get_api_key)])
 async def init_project(request: ProjectInitRequest, project_dir: str = ".") -> dict:
     """初始化项目"""
     try:
@@ -1993,7 +2131,7 @@ async def init_project(request: ProjectInitRequest, project_dir: str = ".") -> d
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.put("/api/config")
+@app.put("/api/config", dependencies=[Depends(get_api_key)])
 async def update_config(
     updates: dict,
     project_dir: str = "."
@@ -2015,7 +2153,7 @@ async def update_config(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/workflow/run")
+@app.post("/api/workflow/run", dependencies=[Depends(get_api_key)])
 async def run_workflow(
     request: WorkflowRunRequest,
     background_tasks: BackgroundTasks,
@@ -2255,7 +2393,7 @@ async def get_workflow_docs_confirmation(project_dir: str = ".") -> dict:
     }
 
 
-@app.post("/api/workflow/docs-confirmation")
+@app.post("/api/workflow/docs-confirmation", dependencies=[Depends(get_api_key)])
 async def update_workflow_docs_confirmation(
     request: WorkflowDocsConfirmationRequest,
     project_dir: str = ".",
@@ -2280,6 +2418,48 @@ async def update_workflow_docs_confirmation(
     }
 
 
+@app.get("/api/workflow/preview-confirmation")
+async def get_workflow_preview_confirmation(project_dir: str = ".") -> dict:
+    """获取前端预览确认状态。"""
+    project_dir_path = _validate_project_dir(project_dir)
+    payload = load_preview_confirmation(project_dir_path) or {}
+    return {
+        "project_dir": str(project_dir_path),
+        "status": str(payload.get("status", "")).strip() or "pending_review",
+        "comment": str(payload.get("comment", "")).strip(),
+        "actor": str(payload.get("actor", "")).strip(),
+        "run_id": str(payload.get("run_id", "")).strip(),
+        "updated_at": str(payload.get("updated_at", "")).strip(),
+        "exists": bool(payload),
+        "file_path": str(preview_confirmation_file(project_dir_path)),
+    }
+
+
+@app.post("/api/workflow/preview-confirmation", dependencies=[Depends(get_api_key)])
+async def update_workflow_preview_confirmation(
+    request: WorkflowPreviewConfirmationRequest,
+    project_dir: str = ".",
+    run_id: str = "",
+) -> dict:
+    """更新前端预览确认状态。"""
+    project_dir_path = _validate_project_dir(project_dir)
+    payload = {
+        "status": request.status,
+        "comment": request.comment.strip(),
+        "actor": request.actor.strip() or "user",
+        "run_id": run_id.strip(),
+    }
+    file_path = save_preview_confirmation(project_dir_path, payload)
+    return {
+        "status": request.status,
+        "comment": payload["comment"],
+        "actor": payload["actor"],
+        "run_id": payload["run_id"],
+        "updated_at": (load_preview_confirmation(project_dir_path) or {}).get("updated_at", ""),
+        "file_path": str(file_path),
+    }
+
+
 @app.get("/api/workflow/ui-revision")
 async def get_workflow_ui_revision(project_dir: str = ".") -> dict:
     """获取 UI 改版状态。"""
@@ -2297,7 +2477,7 @@ async def get_workflow_ui_revision(project_dir: str = ".") -> dict:
     }
 
 
-@app.post("/api/workflow/ui-revision")
+@app.post("/api/workflow/ui-revision", dependencies=[Depends(get_api_key)])
 async def update_workflow_ui_revision(
     request: WorkflowUIRevisionRequest,
     project_dir: str = ".",
@@ -2339,7 +2519,7 @@ async def get_workflow_architecture_revision(project_dir: str = ".") -> dict:
     }
 
 
-@app.post("/api/workflow/architecture-revision")
+@app.post("/api/workflow/architecture-revision", dependencies=[Depends(get_api_key)])
 async def update_workflow_architecture_revision(
     request: WorkflowArchitectureRevisionRequest,
     project_dir: str = ".",
@@ -2381,7 +2561,7 @@ async def get_workflow_quality_revision(project_dir: str = ".") -> dict:
     }
 
 
-@app.post("/api/workflow/quality-revision")
+@app.post("/api/workflow/quality-revision", dependencies=[Depends(get_api_key)])
 async def update_workflow_quality_revision(
     request: WorkflowQualityRevisionRequest,
     project_dir: str = ".",
@@ -2406,7 +2586,7 @@ async def update_workflow_quality_revision(
     }
 
 
-@app.post("/api/workflow/cancel/{run_id}")
+@app.post("/api/workflow/cancel/{run_id}", dependencies=[Depends(get_api_key)])
 async def cancel_workflow(run_id: str, project_dir: str = ".") -> dict:
     """取消工作流运行"""
     project_dir_path = _validate_project_dir(project_dir)
@@ -2581,7 +2761,7 @@ async def list_experts() -> dict:
     return {"experts": list_expert_catalog()}
 
 
-@app.post("/api/experts/{expert_id}/advice")
+@app.post("/api/experts/{expert_id}/advice", dependencies=[Depends(get_api_key)])
 async def generate_expert_advice(
     expert_id: str,
     request: ExpertAdviceRequest,
@@ -2682,11 +2862,12 @@ async def doctor_hosts(
     """诊断宿主接入状态，并返回兼容性评分。"""
     project_dir_path = _validate_project_dir(project_dir)
     integration_manager = IntegrationManager(project_dir_path)
-    available_targets = [item.name for item in integration_manager.list_targets()]
+    all_targets = [item.name for item in integration_manager.list_targets()]
+    available_targets = _public_host_targets(integration_manager=integration_manager)
     detected_targets, detected_meta = _detect_host_targets(available_targets)
 
     if host:
-        if host not in available_targets:
+        if host not in all_targets:
             raise HTTPException(status_code=400, detail=f"不支持的 host: {host}")
         targets = [host]
     elif auto:
@@ -2744,18 +2925,43 @@ async def doctor_hosts(
     if repair:
         report["repair_actions"] = repair_actions
 
+    usage_profiles = {
+        target: _serialize_host_usage_profile(
+            integration_manager=integration_manager,
+            target=target,
+        )
+        for target in targets
+    }
+    decision_card = _build_detected_host_decision_card(
+        project_dir=project_dir_path,
+        integration_manager=integration_manager,
+        detected_targets=detected_targets,
+        detected_meta=detected_meta,
+        preferred_targets=targets if host else None,
+    )
+
     return {
         "status": "success",
         "project_dir": str(project_dir_path),
         "selected_targets": targets,
         "detected_targets": detected_targets,
         "detection_details": detected_meta,
+        "detection_details_pretty": _explain_detection_details(detected_meta),
         "report": report,
         "compatibility": compatibility,
-        "usage_profiles": {
-            target: _serialize_host_usage_profile(
-                integration_manager=integration_manager,
-                target=target,
+        "usage_profiles": usage_profiles,
+        "decision_card": decision_card,
+        "primary_repair_action": _build_primary_repair_action(
+            report=report,
+            targets=targets,
+            integration_manager=integration_manager,
+            decision_card=decision_card,
+        ),
+        "session_resume_cards": {
+            target: _build_session_resume_card(
+                project_dir_path,
+                target,
+                usage_profiles[target],
             )
             for target in targets
         },
@@ -2773,11 +2979,12 @@ async def validate_hosts(
 ) -> dict[str, Any]:
     project_dir_path = _validate_project_dir(project_dir)
     integration_manager = IntegrationManager(project_dir_path)
-    available_targets = [item.name for item in integration_manager.list_targets()]
+    all_targets = [item.name for item in integration_manager.list_targets()]
+    available_targets = _public_host_targets(integration_manager=integration_manager)
     detected_targets, detected_meta = _detect_host_targets(available_targets)
 
     if host:
-        if host not in available_targets:
+        if host not in all_targets:
             raise HTTPException(status_code=400, detail=f"不支持的 host: {host}")
         targets = [host]
     elif auto:
@@ -2800,6 +3007,13 @@ async def validate_hosts(
         )
         for target in targets
     }
+    decision_card = _build_detected_host_decision_card(
+        project_dir=project_dir_path,
+        integration_manager=integration_manager,
+        detected_targets=detected_targets,
+        detected_meta=detected_meta,
+        preferred_targets=targets if host else None,
+    )
     payload = _build_host_runtime_validation_payload(
         project_dir=project_dir_path,
         targets=targets,
@@ -2814,8 +3028,14 @@ async def validate_hosts(
         "selected_targets": targets,
         "detected_targets": detected_targets,
         "detection_details": detected_meta,
+        "detection_details_pretty": _explain_detection_details(detected_meta),
         "report": payload,
         "usage_profiles": usage_profiles,
+        "decision_card": decision_card,
+        "session_resume_cards": {
+            target: _build_session_resume_card(project_dir_path, target, usage_profiles[target])
+            for target in targets
+        },
         "auto": auto,
     }
 
@@ -2831,7 +3051,7 @@ async def get_hosts_runtime_validation(
     return await validate_hosts(project_dir=project_dir, host=host, auto=auto, skill_name=skill_name)
 
 
-@app.post("/api/hosts/runtime-validation")
+@app.post("/api/hosts/runtime-validation", dependencies=[Depends(get_api_key)])
 async def update_hosts_runtime_validation(
     request: HostRuntimeValidationRequest,
     project_dir: str = ".",
@@ -2949,7 +3169,7 @@ async def get_deploy_remediation(
     }
 
 
-@app.post("/api/deploy/remediation/export")
+@app.post("/api/deploy/remediation/export", dependencies=[Depends(get_api_key)])
 async def export_deploy_remediation(
     request: DeployRemediationExportRequest,
     project_dir: str = ".",
@@ -3055,7 +3275,7 @@ async def download_deploy_remediation_archive(
     )
 
 
-@app.post("/api/deploy/generate")
+@app.post("/api/deploy/generate", dependencies=[Depends(get_api_key)])
 async def generate_deploy_configs(
     request: DeployGenerateRequest,
     project_dir: str = ".",

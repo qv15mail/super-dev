@@ -48,14 +48,26 @@ class TestAIPromptGenerator:
         assert "阶段 3. 前端优先实现并运行验证" in prompt
         assert "商业级 UI/UX 强制规则" in prompt
         assert "UI 达到商业级完成度而不是模板化页面" in prompt
+        assert "默认避免复刻 Claude / ChatGPT 式界面骨架" in prompt
+        assert "必须先明确本轮图标库" in prompt
+        assert "主视觉气质、版式骨架、字体组合、图标库、配色逻辑" in prompt
         assert "本项目 UI 实现基线" in prompt
+        assert "材质/版式提示" in prompt
+        assert "设计系统优先级" in prompt
+        assert "备选组件生态与适用边界" in prompt
+        assert "设计知识库关键词" in prompt
         assert "首选组件生态" in prompt
         assert "宿主 UI 生成执行契约（必须遵守）" in prompt
         assert "每个关键页面必须提供 **2 个视觉方案**" in prompt
         assert "Token → Primitive → Pattern → Surface" in prompt
+        assert "不存在任何 emoji 功能图标" in prompt
         assert "非技术与专业用户都能使用同一套交互" in prompt
         assert "Web/H5/微信小程序/APP/桌面端" in prompt
         assert "TDesign 小程序 / RN / Flutter / SwiftUI / Electron / Tauri" in prompt
+        assert "实现收尾与自审闭环（必须遵守）" in prompt
+        assert "本轮新增的函数、方法、字段、组件、配置、日志埋点" in prompt
+        assert "未接入则删除" in prompt
+        assert "build / compile / type-check / test / runtime smoke" in prompt
 
     def test_generate_bugfix_prompt_requires_lightweight_docs(self, temp_project_dir: Path):
         output_dir = temp_project_dir / "output"

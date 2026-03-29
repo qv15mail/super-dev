@@ -7,6 +7,7 @@ from urllib import error as urllib_error
 
 import pytest
 
+from super_dev.catalogs import PRIMARY_HOST_TOOL_IDS
 from super_dev.integrations import IntegrationManager
 from super_dev.skills import SkillManager
 
@@ -63,6 +64,14 @@ class TestIntegrationManager:
         assert "super-dev：" in content
         assert "output/*-prd.md" in content
         assert "actual project files" in content or "repository workspace" in content
+        assert "Do not spend a turn saying you will read the skill first" in content
+
+    def test_codex_expected_skill_paths_include_compatibility_mirror(self, temp_project_dir: Path):
+        manager = IntegrationManager(temp_project_dir)
+        paths = manager.expected_skill_paths("codex-cli")
+        normalized = {path.as_posix() for path in paths}
+        assert any(item.endswith("/.agents/skills/super-dev-core/SKILL.md") for item in normalized)
+        assert any(item.endswith("/.codex/skills/super-dev-core/SKILL.md") for item in normalized)
 
     def test_adapter_profiles_cover_all_targets(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)
@@ -89,7 +98,7 @@ class TestIntegrationManager:
         assert codex.adapter_mode == "native-cli-session"
         assert codex.terminal_entry_scope.startswith("仅触发本地编排")
         assert codex.slash_command_file == ""
-        assert codex.skill_dir.startswith("~/.codex/")
+        assert codex.skill_dir.startswith("~/.agents/")
         assert codex.certification_level == "certified"
         assert codex.certification_label == "Certified"
         assert codex.certification_reason
@@ -102,21 +111,23 @@ class TestIntegrationManager:
         assert any("不要输入 /super-dev" in note for note in codex.usage_notes)
         assert codex.host_protocol_mode == "official-skill"
         assert codex.host_protocol_summary == "官方 AGENTS.md + 官方 Skills"
-        assert "~/.codex/skills/super-dev-core/SKILL.md" in codex.official_user_surfaces
+        assert "~/.agents/skills/super-dev-core/SKILL.md" in codex.official_user_surfaces
+        assert "~/.codex/skills/super-dev-core/SKILL.md" in codex.observed_compatibility_surfaces
         assert "Skill" in codex.primary_entry or "AGENTS" in codex.notes
 
         qoder = by_host["qoder"]
         assert qoder.category == "ide"
         assert qoder.adapter_mode == "native-ide-rule-file"
-        assert qoder.integration_files[0] == ".qoder/rules.md"
+        assert qoder.integration_files[0] == ".qoder/rules/super-dev.md"
         assert qoder.docs_verified is True
         assert qoder.certification_level == "experimental"
         assert qoder.usage_mode == "native-slash"
         assert qoder.slash_command_file == ".qoder/commands/super-dev.md"
-        assert ".qoder/rules.md" in qoder.official_project_surfaces
+        assert ".qoder/rules/super-dev.md" in qoder.official_project_surfaces
         assert "~/.qoder/commands/super-dev.md" in qoder.official_user_surfaces
-        assert "~/.qoderwork/skills/super-dev-core/SKILL.md" in qoder.official_user_surfaces
+        assert "~/.qoder/skills/super-dev-core/SKILL.md" in qoder.official_user_surfaces
         assert ".qoder/skills/super-dev-core/SKILL.md" in qoder.official_project_surfaces
+        assert "AGENTS.md" in qoder.observed_compatibility_surfaces
 
         codebuddy = by_host["codebuddy"]
         assert codebuddy.host_protocol_mode == "official-subagent"
@@ -125,11 +136,20 @@ class TestIntegrationManager:
         assert ".codebuddy/agents/super-dev-core.md" in codebuddy.official_project_surfaces
         assert "~/.codebuddy/agents/super-dev-core.md" in codebuddy.official_user_surfaces
         assert "~/.codebuddy/skills/super-dev-core/SKILL.md" in codebuddy.official_user_surfaces
+        assert ".codebuddy/rules.md" in codebuddy.observed_compatibility_surfaces
+
+        codebuddy_cli = by_host["codebuddy-cli"]
+        assert codebuddy_cli.host_protocol_summary == "官方 commands + skills + AGENTS.md compatibility"
+        assert ".codebuddy/skills/super-dev-core/SKILL.md" in codebuddy_cli.integration_files
+        assert ".codebuddy/skills/super-dev-core/SKILL.md" in codebuddy_cli.official_project_surfaces
+        assert ".codebuddy/AGENTS.md" in codebuddy_cli.observed_compatibility_surfaces
 
         claude = by_host["claude-code"]
         assert claude.host_protocol_mode == "official-subagent"
         assert claude.host_protocol_summary == "官方 commands + subagents"
         assert ".claude/agents/super-dev-core.md" in claude.official_project_surfaces
+        assert ".claude/commands/super-dev.md" in claude.official_project_surfaces
+        assert "~/.claude/commands/super-dev.md" in claude.official_user_surfaces
         assert "~/.claude/agents/super-dev-core.md" in claude.official_user_surfaces
         assert claude.skill_dir == ""
 
@@ -138,6 +158,7 @@ class TestIntegrationManager:
         assert gemini.host_protocol_summary == "官方 commands + GEMINI.md"
         assert "GEMINI.md" in gemini.official_project_surfaces
         assert "~/.gemini/GEMINI.md" in gemini.official_user_surfaces
+        assert "~/.gemini/commands/super-dev.md" in gemini.official_user_surfaces
 
         iflow = by_host["iflow"]
         assert iflow.precondition_status == "host-auth-required"
@@ -156,6 +177,8 @@ class TestIntegrationManager:
         assert cursor.precondition_status == "project-context-required"
         assert cursor.precondition_items
         assert any("目标项目" in item for item in cursor.precondition_guidance)
+        assert cursor.host_protocol_summary == "官方 commands + rules + AGENTS.md compatibility"
+        assert "AGENTS.md" in cursor.observed_compatibility_surfaces
 
         kimi = by_host["kimi-cli"]
         assert kimi.category == "cli"
@@ -174,26 +197,46 @@ class TestIntegrationManager:
         assert "SMOKE_OK" in kimi.smoke_success_signal
 
         kiro_cli = by_host["kiro-cli"]
-        assert kiro_cli.host_protocol_mode == "official-context"
-        assert kiro_cli.host_protocol_summary == "官方 commands + AGENTS.md"
-        assert ".kiro/AGENTS.md" in kiro_cli.official_project_surfaces
+        assert kiro_cli.host_protocol_mode == "official-steering"
+        assert kiro_cli.host_protocol_summary == "官方 steering + skills"
+        assert ".kiro/steering/super-dev.md" in kiro_cli.official_project_surfaces
+        assert ".kiro/skills/super-dev-core/SKILL.md" in kiro_cli.official_project_surfaces
+        assert "~/.kiro/skills/super-dev-core/SKILL.md" in kiro_cli.official_user_surfaces
 
         kiro = by_host["kiro"]
         assert kiro.host_protocol_mode == "official-steering"
         assert ".kiro/steering/super-dev.md" in kiro.official_project_surfaces
         assert "~/.kiro/steering/AGENTS.md" in kiro.official_user_surfaces
+        assert "~/.kiro/skills/super-dev-core/SKILL.md" in kiro.official_user_surfaces
 
         roo = by_host["roo-code"]
         assert roo.host_protocol_mode == "official-skill"
         assert roo.capability_labels["slash"] == "native"
         assert roo.slash_command_file == ".roo/commands/super-dev.md"
+        assert roo.host_protocol_summary == "官方 commands + rules"
         assert ".roo/rules/super-dev.md" in roo.official_project_surfaces
+
+        cline = by_host["cline"]
+        assert cline.host_protocol_mode == "official-context"
+        assert cline.host_protocol_summary == "官方 .clinerules + skills + AGENTS.md compatibility"
+        assert ".clinerules/super-dev.md" in cline.official_project_surfaces
+        assert ".cline/skills/super-dev-core/SKILL.md" in cline.official_project_surfaces
+        assert "~/.cline/skills/super-dev-core/SKILL.md" in cline.official_user_surfaces
+        assert "AGENTS.md" in cline.observed_compatibility_surfaces
 
         copilot = by_host["vscode-copilot"]
         assert copilot.host_protocol_mode == "official-context"
         assert copilot.capability_labels["slash"] == "none"
         assert copilot.trigger_command == "super-dev: <需求描述>"
         assert ".github/copilot-instructions.md" in copilot.official_project_surfaces
+        assert "AGENTS.md" in copilot.observed_compatibility_surfaces
+
+        copilot_cli = by_host["copilot-cli"]
+        assert copilot_cli.host_protocol_summary == "官方 copilot-instructions + skills + AGENTS.md compatibility"
+        assert ".github/skills/super-dev-core/SKILL.md" in copilot_cli.integration_files
+        assert ".github/skills/super-dev-core/SKILL.md" in copilot_cli.official_project_surfaces
+        assert "~/.copilot/skills/super-dev-core/SKILL.md" in copilot_cli.official_user_surfaces
+        assert "AGENTS.md" in copilot_cli.observed_compatibility_surfaces
 
         aider = by_host["aider"]
         assert aider.category == "cli"
@@ -303,9 +346,71 @@ class TestIntegrationManager:
         manager = IntegrationManager(temp_project_dir)
         files = manager.setup("qoder", force=True)
 
+        assert len(files) == 2
+        rules_content = (temp_project_dir / ".qoder" / "rules" / "super-dev.md").read_text(encoding="utf-8")
+        skill_content = (temp_project_dir / ".qoder" / "skills" / "super-dev-core" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        assert "Super Dev" in rules_content
+        assert "super-dev：" in skill_content
+
+    def test_cline_rules_and_project_skill_generated(self, temp_project_dir: Path):
+        manager = IntegrationManager(temp_project_dir)
+        files = manager.setup("cline", force=True)
+
+        assert len(files) == 2
+        rules_content = (temp_project_dir / ".clinerules" / "super-dev.md").read_text(encoding="utf-8")
+        skill_content = (temp_project_dir / ".cline" / "skills" / "super-dev-core" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        assert "Super Dev" in rules_content
+        assert "super-dev：" in skill_content
+
+    def test_antigravity_context_and_workflow_generated(self, temp_project_dir: Path):
+        manager = IntegrationManager(temp_project_dir)
+        files = manager.setup("antigravity", force=True)
+        slash_file = manager.setup_slash_command(target="antigravity", force=True)
+
+        assert len(files) == 2
+        context_content = (temp_project_dir / "GEMINI.md").read_text(encoding="utf-8")
+        workflow_content = (temp_project_dir / ".agent" / "workflows" / "super-dev.md").read_text(encoding="utf-8")
+        assert slash_file is not None
+        command_content = slash_file.read_text(encoding="utf-8")
+        assert "Super Dev" in context_content
+        assert "/super-dev" in command_content
+        assert "必须暂停等待用户确认" in workflow_content
+
+    def test_trae_project_and_compatibility_rules_generated(self, temp_project_dir: Path):
+        manager = IntegrationManager(temp_project_dir)
+        files = manager.setup("trae", force=True)
+
+        assert len(files) == 2
+        project_rules = (temp_project_dir / ".trae" / "project_rules.md").read_text(encoding="utf-8")
+        compatibility_rules = (temp_project_dir / ".trae" / "rules.md").read_text(encoding="utf-8")
+        assert "super-dev：" in project_rules
+        assert "continue Super Dev" in project_rules
+        assert project_rules == compatibility_rules
+
+    def test_roo_code_rules_and_slash_command_generated(self, temp_project_dir: Path):
+        manager = IntegrationManager(temp_project_dir)
+        files = manager.setup("roo-code", force=True)
+        slash_file = manager.setup_slash_command(target="roo-code", force=True)
+
         assert len(files) == 1
-        content = files[0].read_text(encoding="utf-8")
-        assert "Super Dev" in content
+        rules_content = (temp_project_dir / ".roo" / "rules" / "super-dev.md").read_text(encoding="utf-8")
+        assert slash_file is not None
+        command_content = slash_file.read_text(encoding="utf-8")
+        assert "Super Dev" in rules_content
+        assert "/super-dev" in command_content
+
+    def test_kilo_code_rules_generated(self, temp_project_dir: Path):
+        manager = IntegrationManager(temp_project_dir)
+        files = manager.setup("kilo-code", force=True)
+
+        assert len(files) == 1
+        rules_content = (temp_project_dir / ".kilocode" / "rules" / "super-dev.md").read_text(encoding="utf-8")
+        assert "Super Dev" in rules_content
+        assert "super-dev：" in rules_content
 
     def test_slash_content_requires_host_research_first(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)
@@ -328,6 +433,7 @@ class TestIntegrationManager:
         content = manager._trae_rules()
 
         assert "super-dev：" in content
+        assert "first natural-language requirement in a new session must also continue Super Dev" in content
         assert "project workspace" in content
         assert "instead of only replying in chat" in content
         assert "treat the step as incomplete" in content
@@ -343,10 +449,13 @@ class TestIntegrationManager:
 
         assert "super-dev：" in embedded
         assert "必须真实写入项目文件" in embedded
+        assert "第一次自然语言需求也必须继续当前流程" in embedded
         assert "Chat-only summaries do not count" in antigravity
         assert "write them as project files" in antigravity
         assert "workspace files" in claude_agent
         assert "chat-only summaries" in claude_agent
+        assert "first natural-language requirement" in claude_agent
+        assert "continue Super Dev" in claude_agent
         assert "workspace files" in codebuddy_agent
         assert "chat-only explanations" in codebuddy_agent
         assert "只在聊天里总结不算完成" in workflow
@@ -391,20 +500,28 @@ class TestIntegrationManager:
         assert "The host remains responsible for model execution" in cli_rules
         assert "Treat Super Dev as a local Python CLI plus host-side rules/skills" in cli_rules
         assert "First-Response Contract" in cli_rules
+        assert "the first natural-language requirement in a new host session must also default to continuing Super Dev" in cli_rules
         assert "current phase is `research`" in cli_rules
         assert "stop after the three core documents and wait for approval" in cli_rules
         assert "Read relevant files under `knowledge/` before drafting documents." in cli_rules
         assert "wait for explicit confirmation before creating Spec or coding" in cli_rules
+        assert ".super-dev/SESSION_BRIEF.md" in cli_rules
+        assert "Do not silently exit Super Dev mode" in cli_rules
         assert "host remains responsible for actual coding" in ide_rules
         assert "Read relevant files under `knowledge/` before drafting the three core documents." in ide_rules
         assert "Treat Super Dev as the local Python workflow tool plus this host rule file" in ide_rules
         assert "First-Response Contract" in ide_rules
+        assert "the first natural-language requirement in a new host session must also default to continuing Super Dev" in ide_rules
         assert "current phase is `research`" in ide_rules
+        assert ".super-dev/SESSION_BRIEF.md" in ide_rules
         assert "Claude Code remains the execution host" in claude_rules
         assert "Read relevant files under `knowledge/` before drafting PRD, architecture, and UIUX." in claude_rules
         assert "First-Response Contract" in claude_rules
+        assert "first natural-language requirement" in claude_rules
+        assert "continuing Super Dev" in claude_rules
         assert "stop after the three core documents and wait for approval" in claude_rules
         assert "wait for explicit confirmation before creating Spec or coding" in claude_rules
+        assert ".super-dev/SESSION_BRIEF.md" in claude_rules
 
     @pytest.mark.parametrize(
         "target, expected_file",
@@ -473,14 +590,77 @@ class TestIntegrationManager:
         assert command_file.resolve() == expected.resolve()
         assert expected.exists()
 
+    def test_opencode_setup_uses_root_agents_and_global_agents(
+        self,
+        temp_project_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+
+        manager = IntegrationManager(temp_project_dir)
+        written = manager.setup("opencode", force=True)
+        global_file = manager.setup_global_protocol(target="opencode", force=True)
+
+        root_agents = temp_project_dir / "AGENTS.md"
+        assert root_agents.resolve() in [item.resolve() for item in written]
+        assert (temp_project_dir / ".opencode" / "skills" / "super-dev-core" / "SKILL.md").resolve() in [
+            item.resolve() for item in written
+        ]
+        assert root_agents.exists()
+        root_content = root_agents.read_text(encoding="utf-8")
+        assert "BEGIN SUPER DEV OPENCODE" in root_content
+        assert '/super-dev "<需求描述>"' in root_content
+
+        assert global_file is not None
+        expected_global = fake_home / ".config" / "opencode" / "AGENTS.md"
+        assert global_file.resolve() == expected_global.resolve()
+        assert expected_global.exists()
+
+    def test_windsurf_rules_and_project_skill_generated(self, temp_project_dir: Path):
+        manager = IntegrationManager(temp_project_dir)
+        files = manager.setup("windsurf", force=True)
+        workflow_file = manager.setup_slash_command(target="windsurf", force=True)
+
+        assert len(files) == 2
+        rules_content = (temp_project_dir / ".windsurf" / "rules" / "super-dev.md").read_text(encoding="utf-8")
+        skill_content = (temp_project_dir / ".windsurf" / "skills" / "super-dev-core" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        assert workflow_file is not None
+        workflow_content = workflow_file.read_text(encoding="utf-8")
+        assert "Super Dev" in rules_content
+        assert "super-dev：" in skill_content
+        assert "/super-dev" in workflow_content
+
+    def test_remove_opencode_preserves_codex_agents_block(self, temp_project_dir: Path):
+        manager = IntegrationManager(temp_project_dir)
+        manager.setup("codex-cli", force=True)
+        manager.setup("opencode", force=True)
+
+        agents = temp_project_dir / "AGENTS.md"
+        content_before = agents.read_text(encoding="utf-8")
+        assert "BEGIN SUPER DEV CODEX" in content_before
+        assert "BEGIN SUPER DEV OPENCODE" in content_before
+
+        manager.remove("opencode")
+
+        content_after = agents.read_text(encoding="utf-8")
+        assert "BEGIN SUPER DEV CODEX" in content_after
+        assert "BEGIN SUPER DEV OPENCODE" not in content_after
+
     def test_skill_only_target_skips_slash_mapping(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)
         assert manager.supports_slash("codex-cli") is False
         assert manager.supports_slash("kimi-cli") is False
+        assert manager.supports_slash("kiro-cli") is False
         assert manager.setup_slash_command(target="codex-cli", force=True) is None
         assert manager.setup_slash_command(target="kimi-cli", force=True) is None
+        assert manager.setup_slash_command(target="kiro-cli", force=True) is None
         assert manager.setup_global_slash_command(target="codex-cli", force=True) is None
         assert manager.setup_global_slash_command(target="kimi-cli", force=True) is None
+        assert manager.setup_global_slash_command(target="kiro-cli", force=True) is None
         assert manager.supports_slash("kiro") is False
         assert manager.supports_slash("qoder") is True
         assert manager.supports_slash("trae") is False
@@ -517,3 +697,39 @@ class TestIntegrationManager:
         assert profile.usage_mode == "native-slash"
         assert profile.trigger_command == '/super-dev "<需求描述>"'
         assert profile.slash_command_file == command_file
+
+    @pytest.mark.parametrize("target", ["codex-cli", "opencode", "claude-code", "cursor"])
+    def test_host_rules_embed_ui_governance_constraints(self, temp_project_dir: Path, target: str):
+        manager = IntegrationManager(temp_project_dir)
+        written = manager.setup(target, force=True)
+        assert written
+
+        merged = "\n".join(path.read_text(encoding="utf-8") for path in written if path.exists())
+        assert "emoji" in merged.lower()
+        assert "图标库" in merged or "icon" in merged.lower()
+        assert "output/*-uiux.md" in merged
+        assert "Claude / ChatGPT" in merged or "claude / chatgpt" in merged.lower()
+        assert "design token" in merged.lower() or "design tokens" in merged.lower()
+
+    @pytest.mark.parametrize("target", PRIMARY_HOST_TOOL_IDS)
+    def test_primary_hosts_always_embed_uiux_and_continuity_contracts(self, temp_project_dir: Path, target: str):
+        manager = IntegrationManager(temp_project_dir)
+        written = manager.setup(target, force=True)
+
+        merged = "\n".join(path.read_text(encoding="utf-8") for path in written if path.exists())
+        lowered = merged.lower()
+        assert "output/*-uiux.md" in merged
+        assert ".super-dev/SESSION_BRIEF.md" in merged
+        assert "emoji" in lowered
+        assert "design token" in lowered
+
+    def test_codex_rules_require_ui_contract_before_implementation(self, temp_project_dir: Path):
+        manager = IntegrationManager(temp_project_dir)
+        manager.setup("codex-cli", force=True)
+
+        agents = temp_project_dir / "AGENTS.md"
+        content = agents.read_text(encoding="utf-8")
+        assert "开始任何 UI 实现前" in content
+        assert "图标库" in content
+        assert "output/*-uiux.md" in content
+        assert "emoji" in content.lower()

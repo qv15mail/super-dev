@@ -170,6 +170,38 @@ class SpecGenerator:
                 )
                 tasks.append(task)
 
+        # 根据 tech_stack 生成差异化任务
+        if tech_stack:
+            task_id[0] += 1
+            task_id[1] = 0
+            frontend_tech = tech_stack.get("frontend")
+            if frontend_tech:
+                task_id[1] += 1
+                tasks.append(Task(
+                    id=f"{task_id[0]}.{task_id[1]}",
+                    title=f"前端实现: {frontend_tech} 组件开发",
+                    description=f"基于 {frontend_tech} 技术栈实现前端组件与页面",
+                    status=TaskStatus.PENDING,
+                ))
+            backend_tech = tech_stack.get("backend")
+            if backend_tech:
+                task_id[1] += 1
+                tasks.append(Task(
+                    id=f"{task_id[0]}.{task_id[1]}",
+                    title=f"后端实现: {backend_tech} API 开发",
+                    description=f"基于 {backend_tech} 技术栈实现后端 API 接口",
+                    status=TaskStatus.PENDING,
+                ))
+            database_tech = tech_stack.get("database")
+            if database_tech:
+                task_id[1] += 1
+                tasks.append(Task(
+                    id=f"{task_id[0]}.{task_id[1]}",
+                    title="数据库: Schema 设计与迁移脚本",
+                    description=f"设计 {database_tech} 数据库 Schema 并编写迁移脚本",
+                    status=TaskStatus.PENDING,
+                ))
+
         # 添加测试任务
         task_id[0] += 1
         task_id[1] = 0
@@ -190,6 +222,10 @@ class SpecGenerator:
 
         return tasks
 
+    # PRD 标题匹配模式（支持中英文变体）
+    _OVERVIEW_PATTERNS = ("## 概述", "## 产品概述", "## Overview", "## 1. 产品愿景", "## 简介", "## Introduction")
+    _FEATURES_PATTERNS = ("## 功能需求", "## 核心功能", "## Features", "## 2. 功能需求", "## 需求列表", "## Requirements")
+
     def propose_from_prd(self, prd_content: str) -> Change:
         """从 PRD 内容生成变更提案 (简化版)"""
         # 解析 PRD 提取关键信息
@@ -197,16 +233,19 @@ class SpecGenerator:
 
         title = "Feature from PRD"
         description = ""
-        features = []
+        features: list[str] = []
 
-        current_section = None
+        current_section: str | None = None
         for line in lines:
             if line.startswith("# "):
                 title = line[2:].strip()
-            elif line.startswith("## 概述") or line.startswith("## Overview"):
+            elif any(line.startswith(p) for p in self._OVERVIEW_PATTERNS):
                 current_section = "overview"
-            elif line.startswith("## 功能需求") or line.startswith("## Features"):
+            elif any(line.startswith(p) for p in self._FEATURES_PATTERNS):
                 current_section = "features"
+            elif line.startswith("## "):
+                # 遇到其他二级标题时重置 section，避免误收集
+                current_section = None
             elif line.startswith("- ") or line.startswith("* "):
                 if current_section == "features":
                     features.append(line[2:].strip())

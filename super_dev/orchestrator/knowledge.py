@@ -19,6 +19,7 @@ from typing import Any
 
 import requests  # type: ignore[import-untyped]
 
+from ..knowledge_tracker import KnowledgeTracker
 from ..utils import get_logger
 
 
@@ -44,6 +45,40 @@ class KnowledgeItem:
             "evidence_level": self.evidence_level,
             "source_domain": self.source_domain,
         }
+
+
+# 中英文关键词映射表
+KEYWORD_TRANSLATIONS: dict[str, list[str]] = {
+    "购物车": ["shopping cart", "cart"],
+    "电商": ["ecommerce", "e-commerce", "online shop"],
+    "博客": ["blog"],
+    "认证": ["authentication", "auth", "login"],
+    "支付": ["payment", "checkout"],
+    "搜索": ["search"],
+    "用户": ["user"],
+    "订单": ["order"],
+    "商品": ["product", "goods"],
+    "库存": ["inventory", "stock"],
+    "物流": ["logistics", "shipping"],
+    "评论": ["comment", "review"],
+    "通知": ["notification"],
+    "权限": ["permission", "authorization", "rbac"],
+    "缓存": ["cache", "caching"],
+    "消息队列": ["message queue", "mq"],
+    "微服务": ["microservice", "micro-service"],
+    "api": ["接口"],
+    "database": ["数据库", "db"],
+    "security": ["安全"],
+    "performance": ["性能"],
+    "testing": ["测试"],
+    "docker": ["容器"],
+    "kubernetes": ["k8s"],
+    "frontend": ["前端"],
+    "backend": ["后端"],
+    "deployment": ["部署", "deploy"],
+    "monitoring": ["监控"],
+    "logging": ["日志"],
+}
 
 
 class KnowledgeAugmenter:
@@ -126,6 +161,13 @@ class KnowledgeAugmenter:
             "filtered_out_count": 0,
         }
 
+        # 知识引用追踪
+        self._tracker: KnowledgeTracker | None = None
+        try:
+            self._tracker = KnowledgeTracker(str(self.knowledge_dir))
+        except Exception:
+            pass
+
     def augment(
         self,
         requirement: str,
@@ -160,7 +202,7 @@ class KnowledgeAugmenter:
         )
         knowledge_application_plan = self._build_knowledge_application_plan(local_items)
 
-        return {
+        result = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "original_requirement": requirement,
             "domain": domain,
@@ -180,6 +222,34 @@ class KnowledgeAugmenter:
             "knowledge_application_plan": knowledge_application_plan,
             "enriched_requirement": enriched_requirement,
         }
+
+        # 追加知识引用追踪统计
+        if self._tracker:
+            try:
+                domains_hit: list[str] = []
+                seen_domains: set[str] = set()
+                for r in self._tracker.references:
+                    parts = r.knowledge_file.split("/")
+                    if len(parts) > 1:
+                        d = parts[1] if parts[0] == "" else parts[0]
+                    else:
+                        d = ""
+                    # 尝试从 knowledge/ 之后取领域名
+                    for i, p in enumerate(parts):
+                        if p == "knowledge" and i + 1 < len(parts):
+                            d = parts[i + 1]
+                            break
+                    if d and d not in seen_domains:
+                        seen_domains.add(d)
+                        domains_hit.append(d)
+                result["knowledge_tracking"] = {
+                    "referenced_files": len(self._tracker.references),
+                    "domains_hit": domains_hit,
+                }
+            except Exception:
+                pass
+
+        return result
 
     def to_markdown(self, bundle: dict[str, Any]) -> str:
         """将增强结果渲染为 Markdown 报告"""
@@ -393,7 +463,29 @@ class KnowledgeAugmenter:
                 continue
             if token not in unique:
                 unique.append(token)
-        return unique[:12]
+
+        # 扩展中英文对应词
+        try:
+            unique = self._expand_keywords(unique)
+        except Exception:
+            pass
+
+        return unique[:16]
+
+    def _expand_keywords(self, keywords: list[str]) -> list[str]:
+        """根据中英文映射表扩展关键词"""
+        expanded = list(keywords)
+        for kw in keywords:
+            kw_lower = kw.lower()
+            for cn, en_list in KEYWORD_TRANSLATIONS.items():
+                en_lower_list = [e.lower() for e in en_list]
+                if kw_lower == cn or kw_lower in en_lower_list:
+                    if cn not in expanded:
+                        expanded.append(cn)
+                    for en in en_list:
+                        if en.lower() not in [e.lower() for e in expanded]:
+                            expanded.append(en)
+        return list(dict.fromkeys(expanded))  # 去重保序
 
     def _iter_local_files(self) -> list[Path]:
         files: list[Path] = []
@@ -412,7 +504,7 @@ class KnowledgeAugmenter:
             files.extend(self.builtin_data_dir.rglob("*.csv"))
         return files
 
-    def _collect_local_items(self, keywords: list[str], max_results: int) -> list[KnowledgeItem]:
+    def _collect_local_items(self, keywords: list[str], max_results: int, current_stage: str = "research") -> list[KnowledgeItem]:
         if not keywords:
             return []
 
@@ -437,17 +529,56 @@ class KnowledgeAugmenter:
             score += self._local_source_boost(file_path)
 
             snippet = self._first_matching_snippet(content, keywords)
+            source_path = self._format_source_path(file_path)
+            is_standard = any(
+                token in source_path.lower()
+                for token in ("standard", "checklist", "baseline", "gate")
+            )
             items.append(
                 KnowledgeItem(
-                    source=self._format_source_path(file_path),
+                    source=source_path,
                     title=file_path.stem,
                     snippet=snippet,
                     score=score,
                 )
             )
 
+            # 记录知识引用追踪
+            if self._tracker:
+                try:
+                    # 将 augmenter 阶段名映射到 tracker 有效阶段名
+                    tracker_phase = self._map_stage_to_tracker_phase(current_stage)
+                    # 归一化 score 到 0-1 区间
+                    max_possible = len(keywords) + 1.5  # 关键词数 + 最大 boost
+                    normalized_score = min(score / max_possible, 1.0) if max_possible > 0 else 0.5
+                    self._tracker.track_reference(
+                        knowledge_file=str(file_path),
+                        phase=tracker_phase,
+                        usage_type="constraint" if is_standard else "reference",
+                        relevance_score=normalized_score,
+                        excerpt=snippet[:200],
+                    )
+                except Exception:
+                    pass
+
         items.sort(key=lambda item: item.score, reverse=True)
         return items[:max_results]
+
+    @staticmethod
+    def _map_stage_to_tracker_phase(stage: str) -> str:
+        """将 augmenter 的阶段名映射到 KnowledgeTracker 的有效阶段名"""
+        mapping = {
+            "research": "research",
+            "prd": "docs",
+            "architecture": "docs",
+            "uiux": "docs",
+            "spec": "spec",
+            "frontend": "frontend",
+            "backend": "backend",
+            "quality": "quality",
+            "delivery": "delivery",
+        }
+        return mapping.get(stage, "research")
 
     def _local_source_boost(self, file_path: Path) -> float:
         source = self._format_source_path(file_path)

@@ -7,11 +7,10 @@
 """
 
 import argparse
-import glob
+import importlib.util
 import json
 import os
-import shutil
-import subprocess
+import subprocess as _subprocess
 import sys
 import tempfile
 import time
@@ -28,58 +27,67 @@ except ImportError:
 
 try:
     import requests
-    from rich.console import Group
-    from rich.live import Live
-    from rich.panel import Panel
-    from rich.table import Table
-    from rich.text import Text
-    RICH_AVAILABLE = True
-except ImportError:
-    RICH_AVAILABLE = False
+except ImportError:  # pragma: no cover - optional dependency seam for tests/runtime
+    requests = None
 
 from . import __description__, __version__
 from .catalogs import (
     CICD_PLATFORM_IDS,
     DOMAIN_IDS,
     FULL_FRONTEND_TEMPLATE_IDS,
-    HOST_COMMAND_CANDIDATES,
     HOST_TOOL_IDS,
     PIPELINE_BACKEND_IDS,
     PIPELINE_FRONTEND_TEMPLATE_IDS,
     PLATFORM_IDS,
     PRIMARY_HOST_TOOL_IDS,
-    host_path_candidates,
+    SPECIAL_INSTALL_HOST_TOOL_IDS,
+    host_display_name,
 )
+from .catalogs import (
+    host_path_candidates as _host_path_candidates,
+)
+from .cli_analysis_mixin import CliAnalysisMixin
+from .cli_deploy_runtime_mixin import CliDeployRuntimeMixin
+from .cli_experience_mixin import CliExperienceMixin
+from .cli_host_ops_mixin import CliHostOpsMixin
+from .cli_parser_mixin import CliParserMixin
+from .cli_release_quality_mixin import CliReleaseQualityMixin
+from .cli_spec_mixin import CliSpecMixin
 from .config import ConfigManager, ProjectConfig, get_config_manager
 from .exceptions import SuperDevError
-from .orchestrator import Phase, WorkflowContext, WorkflowEngine
-from .proof_pack import ProofPackBuilder
-from .release_readiness import ReleaseReadinessEvaluator
 from .review_state import (
     architecture_revision_file,
     docs_confirmation_file,
-    host_runtime_validation_file,
     load_architecture_revision,
     load_docs_confirmation,
-    load_host_runtime_validation,
+    load_preview_confirmation,
     load_quality_revision,
     load_ui_revision,
+    preview_confirmation_file,
     quality_revision_file,
     save_architecture_revision,
     save_docs_confirmation,
-    save_host_runtime_validation,
+    save_preview_confirmation,
     save_quality_revision,
     save_ui_revision,
+    save_workflow_state,
     ui_revision_file,
+    workflow_state_file,
 )
 from .terminal import (
     create_console,
-    normalize_terminal_text,
-    output_mode_label,
-    output_mode_reason,
-    symbol,
 )
 from .utils import get_logger
+from .workflow_state import (
+    detect_pipeline_summary,
+    workflow_continuity_rules,
+    workflow_mode_label,
+    workflow_mode_shortcuts,
+)
+
+RICH_AVAILABLE = importlib.util.find_spec("rich") is not None
+host_path_candidates = _host_path_candidates
+subprocess = _subprocess
 
 CICDPlatform = Literal["github", "gitlab", "jenkins", "azure", "bitbucket", "all"]
 
@@ -91,2022 +99,16 @@ SUPPORTED_DOMAINS = list(DOMAIN_IDS)
 SUPPORTED_CICD = list(CICD_PLATFORM_IDS)
 SUPPORTED_HOST_TOOLS = list(HOST_TOOL_IDS)
 PRIMARY_SUPPORTED_HOST_TOOLS = list(PRIMARY_HOST_TOOL_IDS)
+SPECIAL_INSTALL_HOST_TOOLS = list(SPECIAL_INSTALL_HOST_TOOL_IDS)
 
 
-class SuperDevCLI:
+class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliDeployRuntimeMixin, CliExperienceMixin, CliHostOpsMixin, CliSpecMixin):
     """Super Dev 命令行接口"""
 
     def __init__(self):
         self.console = create_console()
         self.parser = self._create_parser()
         self.logger = get_logger('cli', level='WARNING')  # CLI只记录WARNING及以上级别
-
-    def _create_parser(self) -> argparse.ArgumentParser:
-        """创建命令行参数解析器"""
-        parser = argparse.ArgumentParser(
-            prog="super-dev",
-            description=__description__,
-            formatter_class=argparse.RawDescriptionHelpFormatter,
-            epilog="""
-示例:
-  super-dev init my-project        初始化新项目
-  super-dev analyze [path]         分析现有项目
-  super-dev workflow               运行完整工作流
-  super-dev expert PM              调用产品经理专家
-  super-dev quality                运行质量检查
-  super-dev preview                生成原型预览
-  super-dev deploy                 生成部署配置
-            """
-        )
-
-        parser.add_argument(
-            "-v", "--version",
-            action="version",
-            version=f"%(prog)s {__version__}"
-        )
-
-        # 子命令
-        subparsers = parser.add_subparsers(
-            dest="command",
-            title="可用命令",
-            description="使用 'super-dev <command> -h' 查看帮助"
-        )
-
-        # init 命令
-        init_parser = subparsers.add_parser(
-            "init",
-            help="初始化新项目",
-            description="创建一个新的 Super Dev 项目"
-        )
-        init_parser.add_argument(
-            "name",
-            help="项目名称"
-        )
-        init_parser.add_argument(
-            "-d", "--description",
-            default="",
-            help="项目描述"
-        )
-        init_parser.add_argument(
-            "-p", "--platform",
-            choices=SUPPORTED_PLATFORMS,
-            default="web",
-            help="目标平台"
-        )
-        init_parser.add_argument(
-            "-f", "--frontend",
-            choices=SUPPORTED_INIT_FRONTENDS,
-            default="next",
-            help="前端框架"
-        )
-        init_parser.add_argument(
-            "--ui-library",
-            choices=[
-                "mui", "ant-design", "chakra-ui", "mantine", "shadcn-ui", "radix-ui",
-                "element-plus", "naive-ui", "vuetify", "primevue", "arco-design",
-                "angular-material", "primeng",
-                "skeleton-ui", "svelte-material-ui",
-                "tailwind", "daisyui"
-            ],
-            help="UI 组件库"
-        )
-        init_parser.add_argument(
-            "--style",
-            choices=["tailwind", "css-modules", "styled-components", "emotion", "scss", "less", "unocss"],
-            help="样式方案"
-        )
-        init_parser.add_argument(
-            "--state",
-            choices=["react-query", "swr", "zustand", "redux-toolkit", "jotai", "pinia", "xstate"],
-            action="append",
-            help="状态管理方案 (可多选)"
-        )
-        init_parser.add_argument(
-            "--testing",
-            choices=["vitest", "jest", "playwright", "cypress", "testing-library"],
-            action="append",
-            help="测试框架 (可多选)"
-        )
-        init_parser.add_argument(
-            "-b", "--backend",
-            choices=SUPPORTED_PIPELINE_BACKENDS,
-            default="node",
-            help="后端框架"
-        )
-        init_parser.add_argument(
-            "--domain",
-            choices=SUPPORTED_DOMAINS,
-            default="",
-            help="业务领域"
-        )
-        bootstrap_parser = subparsers.add_parser(
-            "bootstrap",
-            help="显式初始化 Super Dev 工作流契约",
-            description="创建项目配置、SDD 目录、工作流契约和 bootstrap 摘要，让初始化规范可见"
-        )
-        bootstrap_parser.add_argument(
-            "--name",
-            help="项目名称；默认使用当前目录名"
-        )
-        bootstrap_parser.add_argument(
-            "-d", "--description",
-            default="",
-            help="项目描述"
-        )
-        bootstrap_parser.add_argument(
-            "-p", "--platform",
-            choices=SUPPORTED_PLATFORMS,
-            default="web",
-            help="目标平台"
-        )
-        bootstrap_parser.add_argument(
-            "-f", "--frontend",
-            choices=SUPPORTED_INIT_FRONTENDS,
-            default="next",
-            help="前端框架"
-        )
-        bootstrap_parser.add_argument(
-            "--ui-library",
-            choices=[
-                "mui", "ant-design", "chakra-ui", "mantine", "shadcn-ui", "radix-ui",
-                "element-plus", "naive-ui", "vuetify", "primevue", "arco-design",
-                "angular-material", "primeng",
-                "skeleton-ui", "svelte-material-ui",
-                "tailwind", "daisyui"
-            ],
-            help="UI 组件库"
-        )
-        bootstrap_parser.add_argument(
-            "--style",
-            choices=["tailwind", "css-modules", "styled-components", "emotion", "scss", "less", "unocss"],
-            help="样式方案"
-        )
-        bootstrap_parser.add_argument(
-            "--state",
-            choices=["react-query", "swr", "zustand", "redux-toolkit", "jotai", "pinia", "xstate"],
-            action="append",
-            help="状态管理方案 (可多选)"
-        )
-        bootstrap_parser.add_argument(
-            "--testing",
-            choices=["vitest", "jest", "playwright", "cypress", "testing-library"],
-            action="append",
-            help="测试框架 (可多选)"
-        )
-        bootstrap_parser.add_argument(
-            "-b", "--backend",
-            choices=SUPPORTED_PIPELINE_BACKENDS,
-            default="node",
-            help="后端框架"
-        )
-        bootstrap_parser.add_argument(
-            "--domain",
-            choices=SUPPORTED_DOMAINS,
-            default="",
-            help="业务领域"
-        )
-
-        # analyze 命令
-        analyze_parser = subparsers.add_parser(
-            "analyze",
-            help="分析现有项目",
-            description="自动检测和分析现有项目的结构、技术栈和架构模式"
-        )
-        analyze_parser.add_argument(
-            "path",
-            nargs="?",
-            default=".",
-                       help="项目路径 (默认为当前目录)"
-        )
-        analyze_parser.add_argument(
-            "-o", "--output",
-            help="输出报告文件路径 (Markdown 格式)"
-        )
-        analyze_parser.add_argument(
-            "-f", "--format",
-            choices=["json", "markdown", "text"],
-            default="text",
-            help="输出格式"
-        )
-        analyze_parser.add_argument(
-            "--json",
-            action="store_true",
-            help="以 JSON 格式输出"
-        )
-
-        repo_map_parser = subparsers.add_parser(
-            "repo-map",
-            help="生成代码库地图",
-            description="输出项目级代码库地图，帮助宿主和开发者先理解代码结构再进入实现",
-        )
-        repo_map_parser.add_argument(
-            "path",
-            nargs="?",
-            default=".",
-            help="项目路径 (默认为当前目录)",
-        )
-        repo_map_parser.add_argument(
-            "-o", "--output",
-            help="输出报告路径（默认为 output/<project>-repo-map.md 或 .json）",
-        )
-        repo_map_parser.add_argument(
-            "-f", "--format",
-            choices=["json", "markdown", "text"],
-            default="text",
-            help="输出格式",
-        )
-        repo_map_parser.add_argument(
-            "--json",
-            action="store_true",
-            help="以 JSON 格式输出",
-        )
-
-        feature_checklist_parser = subparsers.add_parser(
-            "feature-checklist",
-            help="审计 PRD 范围覆盖率",
-            description="基于 PRD、tasks 和 gap 证据生成功能清单，区分流程完成与范围完成。",
-        )
-        feature_checklist_parser.add_argument(
-            "path",
-            nargs="?",
-            default=".",
-            help="项目路径 (默认为当前目录)",
-        )
-        feature_checklist_parser.add_argument(
-            "-o", "--output",
-            help="输出报告路径（默认为 output/<project>-feature-checklist.md 或 .json）",
-        )
-        feature_checklist_parser.add_argument(
-            "-f", "--format",
-            choices=["json", "markdown", "text"],
-            default="text",
-            help="输出格式",
-        )
-        feature_checklist_parser.add_argument(
-            "--json",
-            action="store_true",
-            help="以 JSON 格式输出",
-        )
-
-        impact_parser = subparsers.add_parser(
-            "impact",
-            help="分析变更影响范围",
-            description="基于 Repo Map 推断变更会影响的模块、入口、集成面和回归重点",
-        )
-        impact_parser.add_argument(
-            "description",
-            nargs="?",
-            default="",
-            help="变更描述，例如“修改登录流程”",
-        )
-        impact_parser.add_argument(
-            "--files",
-            nargs="*",
-            default=[],
-            help="已知会修改的文件列表，用于提升影响分析准确度",
-        )
-        impact_parser.add_argument(
-            "--path",
-            default=".",
-            help="项目路径 (默认为当前目录)",
-        )
-        impact_parser.add_argument(
-            "-o", "--output",
-            help="输出报告路径（默认为 output/<project>-impact-analysis.md 或 .json）",
-        )
-        impact_parser.add_argument(
-            "-f", "--format",
-            choices=["json", "markdown", "text"],
-            default="text",
-            help="输出格式",
-        )
-        impact_parser.add_argument(
-            "--json",
-            action="store_true",
-            help="以 JSON 格式输出",
-        )
-
-        regression_guard_parser = subparsers.add_parser(
-            "regression-guard",
-            help="生成回归检查清单",
-            description="基于 Impact Analysis 输出可执行的回归检查清单，减少修复或重构带来的连带回退。",
-        )
-        regression_guard_parser.add_argument(
-            "description",
-            nargs="?",
-            default="",
-            help="变更描述，例如“修改登录流程”",
-        )
-        regression_guard_parser.add_argument(
-            "--files",
-            nargs="*",
-            default=[],
-            help="已知会修改的文件列表，用于提升回归清单准确度",
-        )
-        regression_guard_parser.add_argument(
-            "--path",
-            default=".",
-            help="项目路径 (默认为当前目录)",
-        )
-        regression_guard_parser.add_argument(
-            "-o", "--output",
-            help="输出报告路径（默认为 output/<project>-regression-guard.md 或 .json）",
-        )
-        regression_guard_parser.add_argument(
-            "-f", "--format",
-            choices=["json", "markdown", "text"],
-            default="text",
-            help="输出格式",
-        )
-        regression_guard_parser.add_argument(
-            "--json",
-            action="store_true",
-            help="以 JSON 格式输出",
-        )
-
-        dependency_graph_parser = subparsers.add_parser(
-            "dependency-graph",
-            help="生成依赖图与关键路径",
-            description="输出内部依赖图、关键节点和关键路径，帮助宿主在改动前理解 blast radius。",
-        )
-        dependency_graph_parser.add_argument(
-            "path",
-            nargs="?",
-            default=".",
-            help="项目路径 (默认为当前目录)",
-        )
-        dependency_graph_parser.add_argument(
-            "-o", "--output",
-            help="输出报告路径（默认为 output/<project>-dependency-graph.md 或 .json）",
-        )
-        dependency_graph_parser.add_argument(
-            "-f", "--format",
-            choices=["json", "markdown", "text"],
-            default="text",
-            help="输出格式",
-        )
-        dependency_graph_parser.add_argument(
-            "--json",
-            action="store_true",
-            help="以 JSON 格式输出",
-        )
-
-        # workflow 命令
-        workflow_parser = subparsers.add_parser(
-            "workflow",
-            help="运行工作流",
-            description="执行 Super Dev 7 阶段工作流"
-        )
-        workflow_parser.add_argument(
-            "--phase",
-            choices=["discovery", "intelligence", "drafting", "redteam", "qa", "delivery", "deployment"],
-            nargs="*",
-            help="指定要执行的阶段"
-        )
-        workflow_parser.add_argument(
-            "-q", "--quality-gate",
-            type=int,
-            help="质量门禁阈值 (0-100)"
-        )
-
-        # studio 命令
-        studio_parser = subparsers.add_parser(
-            "studio",
-            help="启动交互工作台",
-            description="启动 Super Dev Web 工作台 API 服务"
-        )
-        studio_parser.add_argument(
-            "--host",
-            default="127.0.0.1",
-            help="监听地址 (默认: 127.0.0.1)"
-        )
-        studio_parser.add_argument(
-            "--port",
-            type=int,
-            default=8765,
-            help="监听端口 (默认: 8765)"
-        )
-        studio_parser.add_argument(
-            "--reload",
-            action="store_true",
-            help="启用热重载 (开发模式)"
-        )
-
-        # expert 命令
-        expert_parser = subparsers.add_parser(
-            "expert",
-            help="调用专家",
-            description="直接调用特定专家"
-        )
-        expert_parser.add_argument(
-            "--list",
-            action="store_true",
-            help="列出所有可用专家"
-        )
-        expert_parser.add_argument(
-            "expert_name",
-            nargs="?",
-            choices=["PM", "ARCHITECT", "UI", "UX", "SECURITY", "CODE", "DBA", "QA", "DEVOPS", "RCA"],
-            help="专家名称"
-        )
-        expert_parser.add_argument(
-            "prompt",
-            nargs="*",
-            help="提示词"
-        )
-
-        # quality 命令
-        quality_parser = subparsers.add_parser(
-            "quality",
-            help="质量检查",
-            description="运行质量检查脚本"
-        )
-        quality_parser.add_argument(
-            "-t", "--type",
-            choices=["prd", "architecture", "ui", "ux", "ui-review", "code", "all"],
-            default="all",
-            help="检查类型"
-        )
-
-        # metrics 命令
-        metrics_parser = subparsers.add_parser(
-            "metrics",
-            help="流水线指标",
-            description="查看最近一次 pipeline 指标报告"
-        )
-        metrics_parser.add_argument(
-            "--project",
-            help="项目名（可选，默认自动匹配最近文件）",
-        )
-        metrics_parser.add_argument(
-            "--history",
-            action="store_true",
-            help="显示多次流水线历史趋势",
-        )
-        metrics_parser.add_argument(
-            "--limit",
-            type=int,
-            default=10,
-            help="历史记录条数（默认 10）",
-        )
-
-        # preview 命令
-        preview_parser = subparsers.add_parser(
-            "preview",
-            help="生成原型",
-            description="从 UI 设计生成可交互的原型"
-        )
-        preview_parser.add_argument(
-            "-o", "--output",
-            default="preview.html",
-            help="输出文件路径"
-        )
-
-        # deploy 命令
-        deploy_parser = subparsers.add_parser(
-            "deploy",
-            help="生成部署配置",
-            description="生成 Dockerfile 和 CI/CD 配置"
-        )
-        deploy_parser.add_argument(
-            "--docker",
-            action="store_true",
-            help="生成 Dockerfile"
-        )
-        deploy_parser.add_argument(
-            "--cicd",
-            choices=SUPPORTED_CICD,
-            help="生成 CI/CD 配置"
-        )
-        deploy_parser.add_argument(
-            "--rehearsal",
-            action="store_true",
-            help="生成发布演练清单与回滚手册",
-        )
-        deploy_parser.add_argument(
-            "--rehearsal-verify",
-            action="store_true",
-            help="执行发布演练验证并生成评分报告",
-        )
-
-        # config 命令
-        config_parser = subparsers.add_parser(
-            "config",
-            help="配置管理",
-            description="查看和修改项目配置"
-        )
-        config_parser.add_argument(
-            "action",
-            choices=["get", "set", "list"],
-            help="操作"
-        )
-        config_parser.add_argument(
-            "key",
-            nargs="?",
-            help="配置键"
-        )
-        config_parser.add_argument(
-            "value",
-            nargs="?",
-            help="配置值"
-        )
-
-        # skill 命令 - 多平台 Skill 安装/管理
-        skill_parser = subparsers.add_parser(
-            "skill",
-            help="Skill 管理",
-            description="安装、列出、卸载跨平台 AI Coding Skills"
-        )
-        skill_parser.add_argument(
-            "action",
-            choices=["list", "install", "uninstall", "targets"],
-            help="操作类型"
-        )
-        skill_parser.add_argument(
-            "source_or_name",
-            nargs="?",
-            help="install 时为来源（目录/git/super-dev），uninstall 时为 skill 名称"
-        )
-        skill_parser.add_argument(
-            "-t", "--target",
-            choices=SUPPORTED_HOST_TOOLS,
-            default="claude-code",
-            help="目标平台 (默认: claude-code)"
-        )
-        skill_parser.add_argument(
-            "--name",
-            help="安装后的 skill 名称（可选）"
-        )
-        skill_parser.add_argument(
-            "--force",
-            action="store_true",
-            help="覆盖已存在的 skill"
-        )
-
-        # integrate 命令 - 多平台适配配置
-        integrate_parser = subparsers.add_parser(
-            "integrate",
-            help="平台集成配置",
-            description="为 CLI/IDE AI Coding 工具生成集成配置文件"
-        )
-        integrate_parser.add_argument(
-            "action",
-            choices=["list", "setup", "harden", "matrix", "smoke", "audit", "validate"],
-            help="操作类型"
-        )
-        integrate_parser.add_argument(
-            "-t", "--target",
-            choices=SUPPORTED_HOST_TOOLS,
-            help="目标平台"
-        )
-        integrate_parser.add_argument(
-            "--all",
-            action="store_true",
-            help="对所有平台执行 setup"
-        )
-        integrate_parser.add_argument(
-            "--auto",
-            action="store_true",
-            help="自动探测本机已安装宿主，仅对检测到的宿主执行审计"
-        )
-        integrate_parser.add_argument(
-            "--force",
-            action="store_true",
-            help="覆盖已存在的配置文件"
-        )
-        integrate_parser.add_argument(
-            "--json",
-            action="store_true",
-            help="以 JSON 输出集成矩阵（用于自动化）"
-        )
-        integrate_parser.add_argument(
-            "--repair",
-            action="store_true",
-            help="审计时自动重装缺失或过期的宿主接入面"
-        )
-        integrate_parser.add_argument(
-            "--no-save",
-            action="store_true",
-            help="不将审计结果写入 output 报告"
-        )
-        integrate_parser.add_argument(
-            "--status",
-            choices=["pending", "passed", "failed"],
-            help="用于 validate：写入某个宿主的真人运行时验收状态"
-        )
-        integrate_parser.add_argument(
-            "--comment",
-            help="用于 validate：补充真人运行时验收备注"
-        )
-        integrate_parser.add_argument(
-            "--actor",
-            default="user",
-            help="用于 validate：记录操作者（默认: user）"
-        )
-        integrate_parser.add_argument(
-            "--verify-docs",
-            action="store_true",
-            help="对宿主官方文档链接执行在线可达性核验（matrix/audit）",
-        )
-        integrate_parser.add_argument(
-            "--official-compare",
-            action="store_true",
-            help="对照官方文档内容校验 slash/rules/skills 能力声明（matrix/audit/harden）",
-        )
-        integrate_parser.add_argument(
-            "--parity-threshold",
-            type=float,
-            default=95.0,
-            help="宿主一致性总分门槛（默认: 95.0）",
-        )
-
-        # onboard 命令 - 首次安装向导（宿主选择 + 集成 + skill + slash）
-        onboard_parser = subparsers.add_parser(
-            "onboard",
-            help="首次接入向导",
-            description="选择宿主 AI Coding 工具并自动完成集成、Skill 安装与 /super-dev 命令映射"
-        )
-        onboard_parser.add_argument(
-            "--host",
-            choices=SUPPORTED_HOST_TOOLS,
-            help="宿主工具（不填则进入选择模式）"
-        )
-        onboard_parser.add_argument(
-            "--all",
-            action="store_true",
-            help="对所有宿主工具执行接入"
-        )
-        onboard_parser.add_argument(
-            "--auto",
-            action="store_true",
-            help="自动探测本机已安装宿主，仅对检测到的宿主执行接入"
-        )
-        onboard_parser.add_argument(
-            "--skill-name",
-            default="super-dev-core",
-            help="安装后的 Skill 名称（默认: super-dev-core）"
-        )
-        onboard_parser.add_argument(
-            "--skip-integrate",
-            action="store_true",
-            help="跳过规则文件集成"
-        )
-        onboard_parser.add_argument(
-            "--skip-skill",
-            action="store_true",
-            help="跳过内置 Skill 安装"
-        )
-        onboard_parser.add_argument(
-            "--skip-slash",
-            action="store_true",
-            help="跳过 /super-dev 命令映射文件生成"
-        )
-        onboard_parser.add_argument(
-            "--yes",
-            action="store_true",
-            help="非交互模式（未指定 --host 时默认等价 --all）"
-        )
-        onboard_parser.add_argument(
-            "--force",
-            action="store_true",
-            help="覆盖已存在文件并重装 Skill"
-        )
-        onboard_parser.add_argument(
-            "--dry-run",
-            action="store_true",
-            help="预览将要写入的文件，不实际执行"
-        )
-        onboard_parser.add_argument(
-            "--stable-only",
-            action="store_true",
-            help="仅安装 Certified 和 Compatible 级别的宿主"
-        )
-
-        # doctor 命令 - 宿主接入诊断
-        doctor_parser = subparsers.add_parser(
-            "doctor",
-            help="接入状态诊断",
-            description="诊断当前项目在各宿主 AI Coding 工具中的集成、Skill、/super-dev 命令映射状态"
-        )
-        doctor_parser.add_argument(
-            "--host",
-            choices=SUPPORTED_HOST_TOOLS,
-            help="仅诊断指定宿主（默认诊断全部）"
-        )
-        doctor_parser.add_argument(
-            "--all",
-            action="store_true",
-            help="诊断全部宿主工具"
-        )
-        doctor_parser.add_argument(
-            "--auto",
-            action="store_true",
-            help="自动探测本机已安装宿主，仅诊断检测到的宿主"
-        )
-        doctor_parser.add_argument(
-            "--skill-name",
-            default="super-dev-core",
-            help="需要校验的 Skill 名称（默认: super-dev-core）"
-        )
-        doctor_parser.add_argument(
-            "--skip-integrate",
-            action="store_true",
-            help="跳过集成规则文件检查"
-        )
-        doctor_parser.add_argument(
-            "--skip-skill",
-            action="store_true",
-            help="跳过 Skill 检查"
-        )
-        doctor_parser.add_argument(
-            "--skip-slash",
-            action="store_true",
-            help="跳过 /super-dev 命令映射检查"
-        )
-        doctor_parser.add_argument(
-            "--json",
-            action="store_true",
-            help="输出 JSON 诊断结果"
-        )
-        doctor_parser.add_argument(
-            "--repair",
-            action="store_true",
-            help="自动修复缺失项（集成规则 / Skill / slash 映射）"
-        )
-        doctor_parser.add_argument(
-            "--force",
-            action="store_true",
-            help="修复时覆盖已有文件并重装 Skill"
-        )
-
-        # setup 命令 - 非技术用户一步接入
-        setup_parser = subparsers.add_parser(
-            "setup",
-            help="一步接入安装",
-            description="一步完成宿主接入（规则 + Skill + /super-dev）并执行诊断"
-        )
-        setup_parser.add_argument(
-            "--host",
-            choices=SUPPORTED_HOST_TOOLS,
-            help="宿主工具（不填默认全部）"
-        )
-        setup_parser.add_argument(
-            "--all",
-            action="store_true",
-            help="接入全部宿主工具"
-        )
-        setup_parser.add_argument(
-            "--auto",
-            action="store_true",
-            help="自动探测本机已安装宿主，仅对检测到的宿主执行接入"
-        )
-        setup_parser.add_argument(
-            "--skill-name",
-            default="super-dev-core",
-            help="安装后的 Skill 名称（默认: super-dev-core）"
-        )
-        setup_parser.add_argument(
-            "--skip-integrate",
-            action="store_true",
-            help="跳过规则文件集成"
-        )
-        setup_parser.add_argument(
-            "--skip-skill",
-            action="store_true",
-            help="跳过内置 Skill 安装"
-        )
-        setup_parser.add_argument(
-            "--skip-slash",
-            action="store_true",
-            help="跳过 /super-dev 命令映射文件生成"
-        )
-        setup_parser.add_argument(
-            "--skip-doctor",
-            action="store_true",
-            help="跳过接入诊断"
-        )
-        setup_parser.add_argument(
-            "--force",
-            action="store_true",
-            help="覆盖已存在文件并重装 Skill"
-        )
-        setup_parser.add_argument(
-            "--yes",
-            action="store_true",
-            help="非交互模式（未指定 --host 时默认等价 --all）"
-        )
-
-        # install 命令 - 面向 PyPI 用户的一键安装入口
-        install_parser = subparsers.add_parser(
-            "install",
-            help="安装向导（宿主多选）",
-            description="在终端内选择要接入的 AI Coding 宿主并完成接入安装"
-        )
-        install_parser.add_argument(
-            "--host",
-            choices=SUPPORTED_HOST_TOOLS,
-            help="宿主工具（指定后只安装该宿主）"
-        )
-        install_parser.add_argument(
-            "--all",
-            action="store_true",
-            help="安装全部宿主工具"
-        )
-        install_parser.add_argument(
-            "--auto",
-            action="store_true",
-            help="自动探测本机已安装宿主并安装"
-        )
-        install_parser.add_argument(
-            "--skill-name",
-            default="super-dev-core",
-            help="安装后的 Skill 名称（默认: super-dev-core）"
-        )
-        install_parser.add_argument(
-            "--no-skill",
-            action="store_true",
-            help="只安装规则与 /super-dev 映射，不安装 skill"
-        )
-        install_parser.add_argument(
-            "--skip-integrate",
-            action="store_true",
-            help="跳过规则文件集成"
-        )
-        install_parser.add_argument(
-            "--skip-slash",
-            action="store_true",
-            help="跳过 /super-dev 命令映射文件生成"
-        )
-        install_parser.add_argument(
-            "--skip-doctor",
-            action="store_true",
-            help="跳过安装后诊断"
-        )
-        install_parser.add_argument(
-            "--force",
-            action="store_true",
-            help="覆盖已存在文件并重装 Skill"
-        )
-        install_parser.add_argument(
-            "--yes",
-            action="store_true",
-            help="非交互模式（未指定 --host 时默认等价 --all）"
-        )
-
-        start_parser = subparsers.add_parser(
-            "start",
-            help="非技术用户起步入口",
-            description="自动选择合适宿主、完成接入，并输出可直接复制的试用步骤"
-        )
-        start_parser.add_argument(
-            "--idea",
-            help="你的需求描述（可选，提供后会生成宿主内可直接使用的触发语句）"
-        )
-        start_parser.add_argument(
-            "--host",
-            choices=SUPPORTED_HOST_TOOLS,
-            help="指定宿主；默认自动检测并选择最合适的宿主"
-        )
-        start_parser.add_argument(
-            "--skip-onboard",
-            action="store_true",
-            help="只输出起步步骤，不自动写入规则、Skill 与命令映射"
-        )
-        start_parser.add_argument(
-            "--no-save-profile",
-            action="store_true",
-            help="不写入 super-dev.yaml 的宿主画像"
-        )
-        start_parser.add_argument(
-            "--force",
-            action="store_true",
-            help="覆盖已存在的规则、Skill 或命令映射"
-        )
-        start_parser.add_argument(
-            "--json",
-            action="store_true",
-            help="以 JSON 输出起步说明"
-        )
-
-        # detect 命令 - 宿主自动探测与兼容性报告
-        detect_parser = subparsers.add_parser(
-            "detect",
-            help="宿主探测与兼容性报告",
-            description="自动探测本机可用宿主并输出接入兼容性评分"
-        )
-        detect_parser.add_argument(
-            "--host",
-            choices=SUPPORTED_HOST_TOOLS,
-            help="仅分析指定宿主"
-        )
-        detect_parser.add_argument(
-            "--all",
-            action="store_true",
-            help="分析全部宿主（默认仅分析自动探测到的宿主）"
-        )
-        detect_parser.add_argument(
-            "--auto",
-            action="store_true",
-            help="显式启用自动探测模式（默认行为）"
-        )
-        detect_parser.add_argument(
-            "--skill-name",
-            default="super-dev-core",
-            help="用于兼容性评分的 Skill 名称（默认: super-dev-core）"
-        )
-        detect_parser.add_argument(
-            "--skip-integrate",
-            action="store_true",
-            help="评分时跳过集成规则文件检查"
-        )
-        detect_parser.add_argument(
-            "--skip-skill",
-            action="store_true",
-            help="评分时跳过 Skill 检查"
-        )
-        detect_parser.add_argument(
-            "--skip-slash",
-            action="store_true",
-            help="评分时跳过 /super-dev 命令映射检查"
-        )
-        detect_parser.add_argument(
-            "--json",
-            action="store_true",
-            help="输出 JSON 结果"
-        )
-        detect_parser.add_argument(
-            "--no-save",
-            action="store_true",
-            help="不写入 output/host-compatibility 报告文件"
-        )
-        detect_parser.add_argument(
-            "--save-profile",
-            action="store_true",
-            help="将本次 selected_targets 保存到 super-dev.yaml 的 host_profile_targets，并启用 host_profile_enforce_selected"
-        )
-
-        update_parser = subparsers.add_parser(
-            "update",
-            help="升级到最新版本",
-            description="检查 PyPI 最新版本并使用 pip 或 uv 升级当前 super-dev"
-        )
-        update_parser.add_argument(
-            "--check",
-            action="store_true",
-            help="只检查最新版本，不执行升级"
-        )
-        update_parser.add_argument(
-            "--method",
-            choices=["auto", "pip", "uv"],
-            default="auto",
-            help="升级方式（默认: auto）"
-        )
-
-        clean_parser = subparsers.add_parser(
-            "clean",
-            help="清理历史产物文件",
-            description="清理 output/ 目录中的历史产物文件，保留最近一次运行的结果"
-        )
-        clean_parser.add_argument(
-            "--all",
-            action="store_true",
-            help="删除 output/ 目录下的所有产物文件"
-        )
-        clean_parser.add_argument(
-            "--keep",
-            type=int,
-            default=1,
-            help="保留最近 N 次运行的产物（默认: 1）"
-        )
-        clean_parser.add_argument(
-            "--dry-run",
-            action="store_true",
-            help="只显示将要删除的文件，不实际删除"
-        )
-
-        review_parser = subparsers.add_parser(
-            "review",
-            help="管理文档确认等评审状态",
-            description="记录或查看三文档确认状态"
-        )
-        review_subparsers = review_parser.add_subparsers(dest="review_command")
-
-        review_docs_parser = review_subparsers.add_parser(
-            "docs",
-            help="查看或更新三文档确认状态"
-        )
-        review_docs_parser.add_argument(
-            "--status",
-            choices=["pending_review", "revision_requested", "confirmed"],
-            help="要写入的三文档确认状态；不传则仅查看当前状态"
-        )
-        review_docs_parser.add_argument(
-            "--comment",
-            default="",
-            help="确认意见或修改要求"
-        )
-        review_docs_parser.add_argument(
-            "--run-id",
-            default="",
-            help="关联的运行 ID（可选）"
-        )
-        review_docs_parser.add_argument(
-            "--actor",
-            default="user",
-            help="记录操作者（默认: user）"
-        )
-        review_docs_parser.add_argument(
-            "--json",
-            action="store_true",
-            help="以 JSON 格式输出"
-        )
-
-        review_ui_parser = review_subparsers.add_parser(
-            "ui",
-            help="查看或更新 UI 改版状态"
-        )
-        review_ui_parser.add_argument(
-            "--status",
-            choices=["pending_review", "revision_requested", "confirmed"],
-            help="要写入的 UI 改版状态；不传则仅查看当前状态"
-        )
-        review_ui_parser.add_argument(
-            "--comment",
-            default="",
-            help="UI 改版意见或确认说明"
-        )
-        review_ui_parser.add_argument(
-            "--run-id",
-            default="",
-            help="关联的运行 ID（可选）"
-        )
-        review_ui_parser.add_argument(
-            "--actor",
-            default="user",
-            help="记录操作者（默认: user）"
-        )
-        review_ui_parser.add_argument(
-            "--json",
-            action="store_true",
-            help="以 JSON 格式输出"
-        )
-
-        review_architecture_parser = review_subparsers.add_parser(
-            "architecture",
-            help="查看或更新架构返工状态"
-        )
-        review_architecture_parser.add_argument(
-            "--status",
-            choices=["pending_review", "revision_requested", "confirmed"],
-            help="要写入的架构返工状态；不传则仅查看当前状态"
-        )
-        review_architecture_parser.add_argument(
-            "--comment",
-            default="",
-            help="架构返工意见或确认说明"
-        )
-        review_architecture_parser.add_argument(
-            "--run-id",
-            default="",
-            help="关联的运行 ID（可选）"
-        )
-        review_architecture_parser.add_argument(
-            "--actor",
-            default="user",
-            help="记录操作者（默认: user）"
-        )
-        review_architecture_parser.add_argument(
-            "--json",
-            action="store_true",
-            help="以 JSON 格式输出"
-        )
-
-        review_quality_parser = review_subparsers.add_parser(
-            "quality",
-            help="查看或更新质量返工状态"
-        )
-        review_quality_parser.add_argument(
-            "--status",
-            choices=["pending_review", "revision_requested", "confirmed"],
-            help="要写入的质量返工状态；不传则仅查看当前状态"
-        )
-        review_quality_parser.add_argument(
-            "--comment",
-            default="",
-            help="质量返工意见或确认说明"
-        )
-        review_quality_parser.add_argument(
-            "--run-id",
-            default="",
-            help="关联的运行 ID（可选）"
-        )
-        review_quality_parser.add_argument(
-            "--actor",
-            default="user",
-            help="记录操作者（默认: user）"
-        )
-        review_quality_parser.add_argument(
-            "--json",
-            action="store_true",
-            help="以 JSON 格式输出"
-        )
-
-        release_parser = subparsers.add_parser(
-            "release",
-            help="发布收尾与就绪度检查",
-            description="检查当前仓库距离对外发布还剩哪些关键缺口"
-        )
-        release_subparsers = release_parser.add_subparsers(dest="release_command")
-
-        release_readiness_parser = release_subparsers.add_parser(
-            "readiness",
-            help="发布就绪度评估"
-        )
-        release_readiness_parser.add_argument(
-            "--verify-tests",
-            action="store_true",
-            help="执行 pytest -q，并把测试结果纳入发布就绪度评分"
-        )
-        release_readiness_parser.add_argument(
-            "--json",
-            action="store_true",
-            help="以 JSON 输出结果"
-        )
-        release_proof_pack_parser = release_subparsers.add_parser(
-            "proof-pack",
-            help="生成交付证据包摘要"
-        )
-        release_proof_pack_parser.add_argument(
-            "--verify-tests",
-            action="store_true",
-            help="执行 release readiness 时纳入 pytest -q 结果"
-        )
-        release_proof_pack_parser.add_argument(
-            "--json",
-            action="store_true",
-            help="以 JSON 输出结果"
-        )
-
-        # create 命令 - 一键创建项目
-        create_parser = subparsers.add_parser(
-            "create",
-            help="一键创建项目 (从想法到规范)",
-            description="从一句话描述自动生成 PRD、架构、UI/UX 文档并创建 Spec"
-        )
-        create_parser.add_argument(
-            "description",
-            help="功能描述 (如 '用户认证系统')"
-        )
-        create_parser.add_argument(
-            "--mode",
-            choices=["feature", "bugfix"],
-            default="feature",
-            help="请求模式（默认 feature；bugfix 会生成轻量补丁文档）",
-        )
-        create_parser.add_argument(
-            "-p", "--platform",
-            choices=SUPPORTED_PLATFORMS,
-            default="web",
-            help="目标平台"
-        )
-        create_parser.add_argument(
-            "-f", "--frontend",
-            choices=SUPPORTED_PIPELINE_FRONTENDS,
-            default="react",
-            help="前端框架"
-        )
-        create_parser.add_argument(
-            "-b", "--backend",
-            choices=SUPPORTED_PIPELINE_BACKENDS,
-            default="node",
-            help="后端框架"
-        )
-        create_parser.add_argument(
-            "-d", "--domain",
-            choices=SUPPORTED_DOMAINS,
-            default="",
-            help="业务领域"
-        )
-        create_parser.add_argument(
-            "--name",
-            help="项目名称 (默认根据描述生成)"
-        )
-        create_parser.add_argument(
-            "--skip-docs",
-            action="store_true",
-            help="跳过文档生成，只创建 Spec"
-        )
-
-        # wizard 命令 - 零门槛向导
-        wizard_parser = subparsers.add_parser(
-            "wizard",
-            help="零门槛向导模式",
-            description="通过向导收集业务需求并自动执行完整流水线"
-        )
-        wizard_parser.add_argument(
-            "--idea",
-            help="需求描述（提供后跳过交互输入）"
-        )
-        wizard_parser.add_argument(
-            "--name",
-            help="项目名称 (可选)"
-        )
-        wizard_parser.add_argument(
-            "-p", "--platform",
-            choices=SUPPORTED_PLATFORMS,
-            help="目标平台（可选）"
-        )
-        wizard_parser.add_argument(
-            "-f", "--frontend",
-            choices=SUPPORTED_PIPELINE_FRONTENDS,
-            help="前端框架（可选）"
-        )
-        wizard_parser.add_argument(
-            "-b", "--backend",
-            choices=SUPPORTED_PIPELINE_BACKENDS,
-            help="后端框架（可选）"
-        )
-        wizard_parser.add_argument(
-            "-d", "--domain",
-            choices=SUPPORTED_DOMAINS,
-            help="业务领域（可选）"
-        )
-        wizard_parser.add_argument(
-            "--cicd",
-            choices=SUPPORTED_CICD,
-            help="CI/CD 平台（可选）"
-        )
-        wizard_parser.add_argument(
-            "--offline",
-            action="store_true",
-            help="离线模式（禁用联网检索）"
-        )
-        wizard_parser.add_argument(
-            "--quick",
-            action="store_true",
-            help="快速模式：使用默认值（需配合 --idea）"
-        )
-
-        # design 命令 - 设计智能引擎
-        design_parser = subparsers.add_parser(
-            "design",
-            help="设计智能引擎",
-            description="搜索设计资产、生成设计系统、创建 design tokens"
-        )
-        design_subparsers = design_parser.add_subparsers(
-            dest="design_command",
-            title="设计命令",
-            description="使用 'super-dev design <command> -h' 查看帮助"
-        )
-
-        # design search
-        design_search_parser = design_subparsers.add_parser(
-            "search",
-            help="搜索设计资产",
-            description="搜索 UI 风格、配色、字体、组件等设计资产"
-        )
-        design_search_parser.add_argument(
-            "query",
-            help="搜索关键词"
-        )
-        design_search_parser.add_argument(
-            "-d", "--domain",
-            choices=["style", "color", "typography", "component", "layout", "animation", "ux", "chart", "product"],
-            help="搜索领域 (默认自动检测)"
-        )
-        design_search_parser.add_argument(
-            "-n", "--max-results",
-            type=int,
-            default=5,
-            help="最大结果数 (默认: 5)"
-        )
-
-        # design generate
-        design_generate_parser = design_subparsers.add_parser(
-            "generate",
-            help="生成完整设计系统",
-            description="基于产品类型和行业生成完整的设计系统"
-        )
-        design_generate_parser.add_argument(
-            "--product",
-            required=True,
-            help="产品类型 (SaaS, E-commerce, Portfolio, Dashboard)"
-        )
-        design_generate_parser.add_argument(
-            "--industry",
-            required=True,
-            help="行业 (Fintech, Healthcare, Education, Gaming)"
-        )
-        design_generate_parser.add_argument(
-            "--keywords",
-            nargs="+",
-            help="关键词列表"
-        )
-        design_generate_parser.add_argument(
-            "-p", "--platform",
-            choices=["web", "mobile", "desktop"],
-            default="web",
-            help="目标平台 (默认: web)"
-        )
-        design_generate_parser.add_argument(
-            "-a", "--aesthetic",
-            help="美学方向 (可选)"
-        )
-        design_generate_parser.add_argument(
-            "-o", "--output",
-            default="output/design",
-            help="输出目录 (默认: output/design)"
-        )
-
-        # design tokens
-        design_tokens_parser = design_subparsers.add_parser(
-            "tokens",
-            help="生成 design tokens",
-            description="生成 CSS 变量、Tailwind 配置等 design tokens"
-        )
-        design_tokens_parser.add_argument(
-            "--primary",
-            required=True,
-            help="主色 (hex 值，如 #3B82F6)"
-        )
-        design_tokens_parser.add_argument(
-            "--type",
-            choices=["monochromatic", "analogous", "complementary", "triadic"],
-            default="monochromatic",
-            help="调色板类型 (默认: monochromatic)"
-        )
-        design_tokens_parser.add_argument(
-            "--format",
-            choices=["css", "json", "tailwind"],
-            default="css",
-            help="输出格式 (默认: css)"
-        )
-        design_tokens_parser.add_argument(
-            "-o", "--output",
-            help="输出文件路径"
-        )
-
-        # design landing - Landing 页面模式
-        design_landing_parser = design_subparsers.add_parser(
-            "landing",
-            help="Landing 页面模式生成",
-            description="搜索和推荐 Landing 页面布局模式"
-        )
-        design_landing_parser.add_argument(
-            "query",
-            nargs="?",
-            help="搜索关键词（可选）"
-        )
-        design_landing_parser.add_argument(
-            "--product-type",
-            help="产品类型 (SaaS, E-commerce, Mobile, etc.)"
-        )
-        design_landing_parser.add_argument(
-            "--goal",
-            help="目标 (signup, purchase, demo, etc.)"
-        )
-        design_landing_parser.add_argument(
-            "--audience",
-            help="受众 (B2B, B2C, Enterprise, etc.)"
-        )
-        design_landing_parser.add_argument(
-            "-n", "--max-results",
-            type=int,
-            default=5,
-            help="最大结果数 (默认: 5)"
-        )
-        design_landing_parser.add_argument(
-            "--list",
-            action="store_true",
-            help="列出所有可用模式"
-        )
-
-        # design chart - 图表类型推荐
-        design_chart_parser = design_subparsers.add_parser(
-            "chart",
-            help="图表类型推荐",
-            description="根据数据类型推荐最佳图表类型"
-        )
-        design_chart_parser.add_argument(
-            "data_description",
-            help="数据描述（如 'time series sales data'）"
-        )
-        design_chart_parser.add_argument(
-            "-f", "--framework",
-            choices=["react", "vue", "svelte", "angular", "next", "vanilla"],
-            default="react",
-            help="前端框架 (默认: react)"
-        )
-        design_chart_parser.add_argument(
-            "-n", "--max-results",
-            type=int,
-            default=3,
-            help="最大结果数 (默认: 3)"
-        )
-        design_chart_parser.add_argument(
-            "--list",
-            action="store_true",
-            help="列出所有图表类型"
-        )
-
-        # design ux - UX 指南查询
-        design_ux_parser = design_subparsers.add_parser(
-            "ux",
-            help="UX 指南查询",
-            description="查询 UX 最佳实践和反模式"
-        )
-        design_ux_parser.add_argument(
-            "query",
-            help="搜索查询"
-        )
-        design_ux_parser.add_argument(
-            "-d", "--domain",
-            help="领域过滤 (Animation, A11y, Performance, etc.)"
-        )
-        design_ux_parser.add_argument(
-            "-n", "--max-results",
-            type=int,
-            default=5,
-            help="最大结果数 (默认: 5)"
-        )
-        design_ux_parser.add_argument(
-            "--quick-wins",
-            action="store_true",
-            help="显示快速见效的改进建议"
-        )
-        design_ux_parser.add_argument(
-            "--checklist",
-            action="store_true",
-            help="显示 UX 检查清单"
-        )
-        design_ux_parser.add_argument(
-            "--list-domains",
-            action="store_true",
-            help="列出所有领域"
-        )
-
-        # design stack - 技术栈最佳实践
-        design_stack_parser = design_subparsers.add_parser(
-            "stack",
-            help="技术栈最佳实践",
-            description="查询技术栈最佳实践、性能优化和设计模式"
-        )
-        design_stack_parser.add_argument(
-            "stack",
-            help="技术栈名称 (Next.js, React, Vue, SvelteKit, etc.)"
-        )
-        design_stack_parser.add_argument(
-            "query",
-            nargs="?",
-            help="搜索查询（可选）"
-        )
-        design_stack_parser.add_argument(
-            "-c", "--category",
-            help="类别过滤 (architecture, performance, state_management, etc.)"
-        )
-        design_stack_parser.add_argument(
-            "--patterns",
-            action="store_true",
-            help="显示设计模式"
-        )
-        design_stack_parser.add_argument(
-            "--performance",
-            action="store_true",
-            help="显示性能优化建议"
-        )
-        design_stack_parser.add_argument(
-            "--quick-wins",
-            action="store_true",
-            help="显示快速见效的性能优化"
-        )
-        design_stack_parser.add_argument(
-            "-n", "--max-results",
-            type=int,
-            default=5,
-            help="最大结果数 (默认: 5)"
-        )
-        design_stack_parser.add_argument(
-            "--list",
-            action="store_true",
-            help="列出所有支持的技术栈"
-        )
-
-        # design codegen - 代码片段生成
-        design_codegen_parser = design_subparsers.add_parser(
-            "codegen",
-            help="代码片段生成",
-            description="生成多框架的 UI 组件代码片段"
-        )
-        design_codegen_parser.add_argument(
-            "component",
-            help="组件名称 (button, card, input, etc.)"
-        )
-        design_codegen_parser.add_argument(
-            "-f", "--framework",
-            choices=["react", "nextjs", "vue", "svelte", "html", "tailwind"],
-            default="react",
-            help="目标框架 (默认: react)"
-        )
-        design_codegen_parser.add_argument(
-            "-o", "--output",
-            help="输出文件路径"
-        )
-        design_codegen_parser.add_argument(
-            "--list",
-            action="store_true",
-            help="列出所有可用组件"
-        )
-        design_codegen_parser.add_argument(
-            "--search",
-            help="搜索组件"
-        )
-
-        # spec 命令 - Spec-Driven Development
-        spec_parser = subparsers.add_parser(
-            "spec",
-            help="规范驱动开发 (SDD)",
-            description="管理规范和变更提案"
-        )
-        spec_subparsers = spec_parser.add_subparsers(
-            dest="spec_action",
-            title="SDD 命令",
-            description="使用 'super-dev spec <command> -h' 查看帮助"
-        )
-
-        # spec init
-        spec_subparsers.add_parser(
-            "init",
-            help="初始化 SDD 目录结构"
-        )
-
-        # spec list
-        spec_list_parser = spec_subparsers.add_parser(
-            "list",
-            help="列出所有变更"
-        )
-        spec_list_parser.add_argument(
-            "--status",
-            choices=["draft", "proposed", "approved", "in_progress", "completed", "archived"],
-            help="按状态过滤"
-        )
-
-        # spec show
-        spec_show_parser = spec_subparsers.add_parser(
-            "show",
-            help="显示变更详情"
-        )
-        spec_show_parser.add_argument(
-            "change_id",
-            help="变更 ID"
-        )
-
-        # spec propose
-        spec_propose_parser = spec_subparsers.add_parser(
-            "propose",
-            help="创建变更提案"
-        )
-        spec_propose_parser.add_argument(
-            "change_id",
-            help="变更 ID (如 add-user-auth)"
-        )
-        spec_propose_parser.add_argument(
-            "--title",
-            required=True,
-            help="变更标题"
-        )
-        spec_propose_parser.add_argument(
-            "--description",
-            required=True,
-            help="变更描述"
-        )
-        spec_propose_parser.add_argument(
-            "--motivation",
-            help="变更动机/背景"
-        )
-        spec_propose_parser.add_argument(
-            "--impact",
-            help="影响范围"
-        )
-        spec_propose_parser.add_argument(
-            "--no-scaffold",
-            action="store_true",
-            help="仅创建 proposal，不生成 spec/plan/tasks/checklist 模板"
-        )
-
-        # spec add-req
-        spec_add_req_parser = spec_subparsers.add_parser(
-            "add-req",
-            help="向变更添加需求"
-        )
-        spec_add_req_parser.add_argument(
-            "change_id",
-            help="变更 ID"
-        )
-        spec_add_req_parser.add_argument(
-            "spec_name",
-            help="规范名称 (如 auth, user-profile)"
-        )
-        spec_add_req_parser.add_argument(
-            "req_name",
-            help="需求名称"
-        )
-        spec_add_req_parser.add_argument(
-            "description",
-            help="需求描述"
-        )
-
-        spec_scaffold_parser = spec_subparsers.add_parser(
-            "scaffold",
-            help="为变更生成 spec/plan/tasks/checklist 四件套"
-        )
-        spec_scaffold_parser.add_argument(
-            "change_id",
-            help="变更 ID"
-        )
-        spec_scaffold_parser.add_argument(
-            "--force",
-            action="store_true",
-            help="强制覆盖已存在文件"
-        )
-
-        spec_quality_parser = spec_subparsers.add_parser(
-            "quality",
-            help="评估 Spec 完整度与质量分"
-        )
-        spec_quality_parser.add_argument(
-            "change_id",
-            help="变更 ID"
-        )
-        spec_quality_parser.add_argument(
-            "--json",
-            action="store_true",
-            help="以 JSON 格式输出"
-        )
-
-        # spec archive
-        spec_archive_parser = spec_subparsers.add_parser(
-            "archive",
-            help="归档已完成的变更"
-        )
-        spec_archive_parser.add_argument(
-            "change_id",
-            help="变更 ID"
-        )
-        spec_archive_parser.add_argument(
-            "-y", "--yes",
-            action="store_true",
-            help="跳过确认"
-        )
-
-        # spec validate
-        spec_validate_parser = spec_subparsers.add_parser(
-            "validate",
-            help="验证规格格式和结构"
-        )
-        spec_validate_parser.add_argument(
-            "change_id",
-            nargs="?",
-            help="变更 ID (留空则验证所有变更)"
-        )
-        spec_validate_parser.add_argument(
-            "-v", "--verbose",
-            action="store_true",
-            help="显示详细信息"
-        )
-
-        # spec view
-        spec_view_parser = spec_subparsers.add_parser(
-            "view",
-            help="交互式仪表板 - 显示所有规范和变更"
-        )
-        spec_view_parser.add_argument(
-            "--refresh",
-            action="store_true",
-            help="强制刷新数据"
-        )
-
-        # task 命令 - 独立执行/查看 Spec 任务闭环
-        task_parser = subparsers.add_parser(
-            "task",
-            help="Spec 任务闭环执行",
-            description="执行或查看 `.super-dev/changes/*/tasks.md` 的任务状态"
-        )
-        task_parser.add_argument(
-            "action",
-            choices=["run", "status", "list"],
-            help="任务操作类型"
-        )
-        task_parser.add_argument(
-            "change_id",
-            nargs="?",
-            help="变更 ID（run/status 必填）"
-        )
-        task_parser.add_argument(
-            "-p", "--platform",
-            choices=SUPPORTED_PLATFORMS,
-            help="目标平台（可选，默认取项目配置）"
-        )
-        task_parser.add_argument(
-            "-f", "--frontend",
-            choices=SUPPORTED_PIPELINE_FRONTENDS,
-            help="前端框架（可选，默认取项目配置）"
-        )
-        task_parser.add_argument(
-            "-b", "--backend",
-            choices=SUPPORTED_PIPELINE_BACKENDS,
-            help="后端框架（可选，默认取项目配置）"
-        )
-        task_parser.add_argument(
-            "-d", "--domain",
-            choices=SUPPORTED_DOMAINS,
-            help="业务领域（可选，默认取项目配置）"
-        )
-        task_parser.add_argument(
-            "--project-name",
-            help="任务执行报告中的项目名（默认取配置名或 change_id）"
-        )
-        task_parser.add_argument(
-            "--max-retries",
-            type=int,
-            default=1,
-            help="失败自动修复重试次数（默认: 1）"
-        )
-
-        # pipeline 命令 - 完整流水线
-        pipeline_parser = subparsers.add_parser(
-            "pipeline",
-            help="运行完整流水线 (从想法到部署)",
-            description="执行完整开发流水线：需求增强 → 文档 → 前端骨架 → Spec → 实现骨架 → 审查与门禁 → 交付配置"
-        )
-        pipeline_parser.add_argument(
-            "description",
-            help="功能描述 (如 '用户认证系统')"
-        )
-        pipeline_parser.add_argument(
-            "--mode",
-            choices=["feature", "bugfix"],
-            default="feature",
-            help="请求模式（默认 feature；bugfix 会启用轻量缺陷修复路径）",
-        )
-        pipeline_parser.add_argument(
-            "-p", "--platform",
-            choices=SUPPORTED_PLATFORMS,
-            default="web",
-            help="目标平台"
-        )
-        pipeline_parser.add_argument(
-            "-f", "--frontend",
-            choices=SUPPORTED_PIPELINE_FRONTENDS,
-            default="react",
-            help="前端框架"
-        )
-        pipeline_parser.add_argument(
-            "-b", "--backend",
-            choices=SUPPORTED_PIPELINE_BACKENDS,
-            default="node",
-            help="后端框架"
-        )
-        pipeline_parser.add_argument(
-            "-d", "--domain",
-            choices=SUPPORTED_DOMAINS,
-            default="",
-            help="业务领域"
-        )
-        pipeline_parser.add_argument(
-            "--name",
-            help="项目名称 (默认根据描述生成)"
-        )
-        pipeline_parser.add_argument(
-            "--cicd",
-            choices=SUPPORTED_CICD,
-            default="all",
-            help="CI/CD 平台"
-        )
-        pipeline_parser.add_argument(
-            "--skip-redteam",
-            action="store_true",
-            help="跳过红队审查"
-        )
-        pipeline_parser.add_argument(
-            "--skip-scaffold",
-            action="store_true",
-            help="跳过前后端实现骨架生成"
-        )
-        pipeline_parser.add_argument(
-            "--skip-quality-gate",
-            action="store_true",
-            help="跳过质量门禁检查"
-        )
-        pipeline_parser.add_argument(
-            "--offline",
-            action="store_true",
-            help="离线模式（禁用联网检索）"
-        )
-        pipeline_parser.add_argument(
-            "--quality-threshold",
-            type=int,
-            default=None,
-            help="质量门禁阈值（可选；默认按场景自动判定）"
-        )
-        pipeline_parser.add_argument(
-            "--skip-rehearsal-verify",
-            action="store_true",
-            help="跳过发布演练验证（默认执行）",
-        )
-        pipeline_parser.add_argument(
-            "--resume",
-            action="store_true",
-            help="恢复模式：优先复用上次已完成阶段产物（含自动降级与审计报告）",
-        )
-
-        fix_parser = subparsers.add_parser(
-            "fix",
-            help="显式缺陷修复模式",
-            description="以轻量 bugfix 路径执行问题复现、补丁文档、修复与回归验证",
-        )
-        fix_parser.add_argument(
-            "description",
-            help="缺陷描述 (如 '修复登录接口 500 并补充回归验证')",
-        )
-        fix_parser.add_argument(
-            "-p", "--platform",
-            choices=SUPPORTED_PLATFORMS,
-            default="web",
-            help="目标平台"
-        )
-        fix_parser.add_argument(
-            "-f", "--frontend",
-            choices=SUPPORTED_PIPELINE_FRONTENDS,
-            default="react",
-            help="前端框架"
-        )
-        fix_parser.add_argument(
-            "-b", "--backend",
-            choices=SUPPORTED_PIPELINE_BACKENDS,
-            default="node",
-            help="后端框架"
-        )
-        fix_parser.add_argument(
-            "-d", "--domain",
-            choices=SUPPORTED_DOMAINS,
-            default="",
-            help="业务领域"
-        )
-        fix_parser.add_argument(
-            "--name",
-            help="项目名称 (默认根据描述生成)"
-        )
-        fix_parser.add_argument(
-            "--cicd",
-            choices=SUPPORTED_CICD,
-            default="all",
-            help="CI/CD 平台"
-        )
-        fix_parser.add_argument(
-            "--skip-redteam",
-            action="store_true",
-            help="跳过红队审查"
-        )
-        fix_parser.add_argument(
-            "--skip-scaffold",
-            action="store_true",
-            help="跳过前后端实现骨架生成"
-        )
-        fix_parser.add_argument(
-            "--skip-quality-gate",
-            action="store_true",
-            help="跳过质量门禁检查"
-        )
-        fix_parser.add_argument(
-            "--offline",
-            action="store_true",
-            help="离线模式（禁用联网检索）"
-        )
-        fix_parser.add_argument(
-            "--quality-threshold",
-            type=int,
-            default=None,
-            help="质量门禁阈值（可选；默认按场景自动判定）"
-        )
-        fix_parser.add_argument(
-            "--skip-rehearsal-verify",
-            action="store_true",
-            help="跳过发布演练验证（默认执行）",
-        )
-
-        # run 命令 - 运行控制（如失败恢复）
-        run_parser = subparsers.add_parser(
-            "run",
-            help="运行控制",
-            description="运行控制命令（恢复、状态、阶段回跳、阶段确认）"
-        )
-        run_parser.add_argument(
-            "stage_selector",
-            nargs="?",
-            help="快捷阶段入口（如 research/prd/architecture/uiux/frontend/backend/quality）",
-        )
-        run_parser.add_argument(
-            "--resume",
-            action="store_true",
-            help="恢复最近一次失败的 pipeline 运行",
-        )
-        run_parser.add_argument(
-            "--status",
-            action="store_true",
-            help="查看当前流程状态、阶段确认与推荐下一步",
-        )
-        run_parser.add_argument(
-            "--phase",
-            help="从指定阶段继续执行（如 docs/spec/frontend/backend/quality/delivery）",
-        )
-        run_parser.add_argument(
-            "--jump",
-            help="跳转到指定阶段并继续执行（会先展示影响面）",
-        )
-        run_parser.add_argument(
-            "--confirm",
-            dest="confirm_phase",
-            help="确认指定阶段（docs/ui/architecture/quality/frontend/backend/delivery）",
-        )
-        run_parser.add_argument(
-            "--comment",
-            default="",
-            help="阶段确认备注",
-        )
-        run_parser.add_argument(
-            "--actor",
-            default="cli-user",
-            help="阶段确认操作者",
-        )
-        run_parser.add_argument(
-            "--json",
-            action="store_true",
-            help="状态输出使用 JSON 格式",
-        )
-
-        status_parser = subparsers.add_parser(
-            "status",
-            help="查看当前流程状态",
-            description="快捷别名，等同于 super-dev run --status",
-        )
-        status_parser.add_argument(
-            "--json",
-            action="store_true",
-            help="状态输出使用 JSON 格式",
-        )
-
-        jump_parser = subparsers.add_parser(
-            "jump",
-            help="跳转到指定阶段",
-            description="快捷别名，等同于 super-dev run --jump <stage>",
-        )
-        jump_parser.add_argument(
-            "stage",
-            help="目标阶段（如 docs/frontend/backend/quality）",
-        )
-
-        confirm_parser = subparsers.add_parser(
-            "confirm",
-            help="确认指定阶段",
-            description="快捷别名，等同于 super-dev run --confirm <phase>",
-        )
-        confirm_parser.add_argument(
-            "phase",
-            help="需要确认的阶段（如 docs/preview/frontend/backend/quality）",
-        )
-        confirm_parser.add_argument(
-            "--comment",
-            default="",
-            help="阶段确认备注",
-        )
-        confirm_parser.add_argument(
-            "--actor",
-            default="cli-user",
-            help="阶段确认操作者",
-        )
-
-        policy_parser = subparsers.add_parser(
-            "policy",
-            help="流水线治理策略",
-            description="管理 Super Dev 的流水线策略（Policy DSL）"
-        )
-        policy_subparsers = policy_parser.add_subparsers(dest="action")
-        policy_subparsers.add_parser("show", help="显示当前策略")
-        policy_subparsers.add_parser("presets", help="显示可用策略预设")
-        policy_init_parser = policy_subparsers.add_parser("init", help="生成策略文件")
-        policy_init_parser.add_argument(
-            "--preset",
-            choices=["default", "balanced", "enterprise"],
-            default="default",
-            help="策略预设（默认 default）",
-        )
-        policy_init_parser.add_argument(
-            "--force",
-            action="store_true",
-            help="强制覆盖已有策略文件",
-        )
-
-        return parser
 
     def _public_host_targets(self, *, integration_manager) -> list[str]:
         available_targets = [item.name for item in integration_manager.list_targets()]
@@ -2146,6 +148,8 @@ class SuperDevCLI:
         parsed_args = self.parser.parse_args(argv)
 
         if parsed_args.command is None:
+            if self._project_has_super_dev_context(Path.cwd()):
+                return self._cmd_resume(argparse.Namespace(json=False))
             install_args = argparse.Namespace(
                 host=None,
                 all=False,
@@ -2205,707 +209,6 @@ class SuperDevCLI:
 
     # ==================== 命令处理器 ====================
 
-    def _cmd_init(self, args) -> int:
-        """初始化项目"""
-        config_manager = get_config_manager()
-
-        # 检查是否已初始化
-        if config_manager.exists():
-            self.console.print("[yellow]项目已初始化，使用 'super-dev config set' 修改配置[/yellow]")
-            return 0
-
-        # 创建配置
-        config = config_manager.create(
-            name=args.name,
-            description=args.description,
-            platform=args.platform,
-            frontend=args.frontend,
-            backend=args.backend,
-            domain=args.domain,
-            ui_library=getattr(args, 'ui_library', None),
-            style_solution=getattr(args, 'style', None),
-            state_management=getattr(args, 'state', []) or [],
-            testing_frameworks=getattr(args, 'testing', []) or [],
-        )
-
-        # 创建输出目录
-        output_dir = Path.cwd() / config.output_dir
-        output_dir.mkdir(exist_ok=True)
-        workflow_file, summary_file = self._bootstrap_project_contract(
-            project_dir=Path.cwd(),
-            config=config,
-        )
-
-        self.console.print(f"[green]✓[/green] 项目已初始化: {config.name}")
-        self.console.print(f"  平台: {config.platform}")
-        self.console.print(f"  前端框架: {config.frontend}")
-        if config.ui_library:
-            self.console.print(f"  UI 组件库: {config.ui_library}")
-        if config.style_solution:
-            self.console.print(f"  样式方案: {config.style_solution}")
-        if config.state_management:
-            self.console.print(f"  状态管理: {', '.join(config.state_management)}")
-        if config.testing_frameworks:
-            self.console.print(f"  测试框架: {', '.join(config.testing_frameworks)}")
-        self.console.print(f"  后端: {config.backend}")
-        if config.domain:
-            self.console.print(f"  领域: {config.domain}")
-        self.console.print(f"  工作流契约: {workflow_file}")
-        self.console.print(f"  Bootstrap 摘要: {summary_file}")
-
-        self.console.print("\n[dim]下一步:[/dim]")
-        self.console.print("  1. 查看 output/*-bootstrap.md 确认初始化结果")
-        self.console.print("  2. 运行 'super-dev start --idea \"你的需求\"' 或在宿主中触发 /super-dev")
-        self.console.print("  3. 如需手动管理 SDD，可运行 'super-dev spec init'")
-
-        return 0
-
-    def _cmd_bootstrap(self, args) -> int:
-        """显式初始化 bootstrap 契约。"""
-        project_dir = Path.cwd()
-        config_manager = get_config_manager()
-
-        if config_manager.exists():
-            config = config_manager.config
-        else:
-            config = config_manager.create(
-                name=args.name or project_dir.name,
-                description=args.description,
-                platform=args.platform,
-                frontend=args.frontend,
-                backend=args.backend,
-                domain=args.domain,
-                ui_library=getattr(args, "ui_library", None),
-                style_solution=getattr(args, "style", None),
-                state_management=getattr(args, "state", []) or [],
-                testing_frameworks=getattr(args, "testing", []) or [],
-            )
-
-        workflow_file, summary_file = self._bootstrap_project_contract(
-            project_dir=project_dir,
-            config=config,
-        )
-        self.console.print("[green]✓[/green] Bootstrap 已完成")
-        self.console.print(f"  项目配置: {config_manager.config_path}")
-        self.console.print(f"  工作流契约: {workflow_file}")
-        self.console.print(f"  Bootstrap 摘要: {summary_file}")
-        self.console.print("")
-        self.console.print("[cyan]下一步:[/cyan]")
-        self.console.print("  1. 运行 super-dev start --idea \"你的需求\"")
-        self.console.print("  2. 或直接在已接入宿主中触发 /super-dev / super-dev:")
-        return 0
-
-    def _bootstrap_project_contract(self, project_dir: Path, config) -> tuple[Path, Path]:
-        """创建显式 bootstrap 工作流契约与摘要。"""
-        from .specs import SpecGenerator
-
-        output_dir = project_dir / config.output_dir
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        generator = SpecGenerator(project_dir)
-        generator.init_sdd()
-
-        workflow_file = project_dir / ".super-dev" / "WORKFLOW.md"
-        workflow_file.write_text(
-            self._render_workflow_contract_markdown(config=config, project_dir=project_dir),
-            encoding="utf-8",
-        )
-
-        summary_file = output_dir / f"{config.name}-bootstrap.md"
-        summary_file.write_text(
-            self._render_bootstrap_summary_markdown(config=config, project_dir=project_dir),
-            encoding="utf-8",
-        )
-        return workflow_file, summary_file
-
-    def _render_workflow_contract_markdown(self, config, project_dir: Path) -> str:
-        timestamp = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
-        return f"""# Super Dev Workflow Contract
-
-> Generated by `super-dev bootstrap`
-> Updated: {timestamp}
-
-## Project
-
-- Name: {config.name}
-- Description: {config.description or "待补充"}
-- Platform: {config.platform}
-- Frontend: {config.frontend}
-- Backend: {config.backend}
-- Domain: {config.domain or "未指定"}
-
-## Bootstrap Outcome
-
-This repository has been explicitly bootstrapped for Super Dev.
-
-The following surfaces are now the project bootstrap contract:
-
-- `super-dev.yaml`
-- `.super-dev/WORKFLOW.md`
-- `.super-dev/project.md`
-- `.super-dev/AGENTS.md`
-- `.super-dev/specs/`
-- `.super-dev/changes/`
-- `output/{config.name}-bootstrap.md`
-
-## Required Pipeline Order
-
-1. research
-2. PRD / Architecture / UIUX
-3. wait for user confirmation
-4. Spec / tasks
-5. frontend first + runtime validation
-6. backend / integration / tests
-7. quality gate
-8. delivery ready + rehearsal passed
-
-## Trigger Rules
-
-- Slash hosts: `/super-dev <需求描述>`
-- Text-trigger hosts: `super-dev: <需求描述>` or `super-dev：<需求描述>`
-
-## Bootstrap Guidance
-
-Use `super-dev start --idea "<需求描述>"` for the shortest guided path.
-
-If the repository already has a host onboarded, trigger Super Dev directly inside the host.
-
-## Project Context File
-
-Fill `.super-dev/project.md` with domain constraints, architecture notes, delivery expectations, and team conventions.
-"""
-
-    def _render_bootstrap_summary_markdown(self, config, project_dir: Path) -> str:
-        timestamp = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
-        return f"""# {config.name} Bootstrap Summary
-
-> Generated by `super-dev bootstrap`
-> Updated: {timestamp}
-
-## Result
-
-Super Dev has explicitly initialized this repository.
-
-Generated bootstrap assets:
-
-- `super-dev.yaml`
-- `.super-dev/WORKFLOW.md`
-- `.super-dev/project.md`
-- `.super-dev/AGENTS.md`
-- `.super-dev/specs/`
-- `.super-dev/changes/`
-
-## Current Stack
-
-- Platform: `{config.platform}`
-- Frontend: `{config.frontend}`
-- Backend: `{config.backend}`
-- Domain: `{config.domain or "未指定"}`
-
-## How To Start
-
-### Option 1. Guided bootstrap
-
-```bash
-super-dev start --idea "你的需求"
-```
-
-### Option 2. Host trigger
-
-- Slash hosts: `/super-dev 你的需求`
-- Text-trigger hosts: `super-dev: 你的需求` or `super-dev：你的需求`
-
-## What Happens Next
-
-1. Super Dev enforces `research` first.
-2. The host writes:
-   - `output/*-research.md`
-   - `output/*-prd.md`
-   - `output/*-architecture.md`
-   - `output/*-uiux.md`
-3. The workflow pauses for user confirmation.
-4. Only then can Spec / tasks and implementation continue.
-
-## Notes
-
-- This bootstrap summary is the visible initialization artifact for repository operators.
-- `.super-dev/WORKFLOW.md` is the repository workflow contract for hosts and maintainers.
-- `super-dev spec init` can be used later to reinitialize SDD directories if needed.
-"""
-
-    def _cmd_analyze(self, args) -> int:
-        """分析现有项目"""
-        from .analyzer import ProjectAnalyzer
-
-        project_path = Path(args.path).resolve()
-
-        if not project_path.exists():
-            self.console.print(f"[red]项目不存在: {project_path}[/red]")
-            return 1
-
-        try:
-            analyzer = ProjectAnalyzer(project_path)
-            report = analyzer.analyze()
-
-            # 根据格式输出
-            output_format = "json" if args.json else args.format
-
-            if output_format == "json":
-                import json
-                output = json.dumps(report.to_dict(), indent=2, ensure_ascii=False)
-
-                if args.output:
-                    Path(args.output).write_text(output, encoding="utf-8")
-                else:
-                    sys.stdout.write(output + "\n")
-                return 0
-
-            self.console.print(f"[cyan]正在分析项目: {project_path}[/cyan]")
-
-            if output_format == "markdown":
-                output = report.to_markdown()
-
-                if args.output:
-                    Path(args.output).write_text(output, encoding="utf-8")
-                    self.console.print(f"[green]报告已保存到: {args.output}[/green]")
-                else:
-                    self.console.print(output)
-
-            else:  # text
-                framework_value = (
-                    report.tech_stack.framework.value
-                    if hasattr(report.tech_stack.framework, "value")
-                    else str(report.tech_stack.framework)
-                )
-                self.console.print("[cyan]项目分析报告[/cyan]")
-                self.console.print(f"  路径: {report.project_path}")
-                self.console.print(f"  类型: {report.category.value}")
-                self.console.print(f"  语言: {report.tech_stack.language}")
-                self.console.print(f"  框架: {framework_value}")
-                if report.tech_stack.ui_library:
-                    self.console.print(f"  UI 库: {report.tech_stack.ui_library}")
-                if report.tech_stack.state_management:
-                    self.console.print(f"  状态管理: {report.tech_stack.state_management}")
-                self.console.print(f"  文件数: {report.file_count}")
-                self.console.print(f"  代码行数: {report.total_lines:,}")
-                self.console.print(f"  依赖数: {len(report.tech_stack.dependencies)}")
-
-                if args.output:
-                    Path(args.output).write_text(report.to_markdown(), encoding="utf-8")
-                    self.console.print(f"[green]报告已保存到: {args.output}[/green]")
-
-            return 0
-
-        except FileNotFoundError as e:
-            self.console.print(f"[red]路径不存在: {e}[/red]")
-            self.logger.error("分析失败: 文件不存在", extra={'path': str(e)})
-            return 1
-
-        except PermissionError as e:
-            self.console.print(f"[red]权限不足: {e}[/red]")
-            self.logger.error("分析失败: 权限错误", extra={'path': str(e)})
-            return 1
-
-        except Exception as e:
-            self.console.print(f"[red]分析失败: {e}[/red]")
-            self.logger.error(
-                f"分析异常: {type(e).__name__}",
-                extra={
-                    'error_message': str(e),
-                    'traceback': traceback.format_exc()
-                }
-            )
-
-            if '--debug' in sys.argv or '-d' in sys.argv:
-                self.console.print(traceback.format_exc())
-
-            return 1
-
-    def _cmd_repo_map(self, args) -> int:
-        """生成代码库地图。"""
-        from .analyzer import RepoMapBuilder
-
-        project_path = Path(args.path).resolve()
-        if not project_path.exists():
-            self.console.print(f"[red]项目不存在: {project_path}[/red]")
-            return 1
-
-        try:
-            builder = RepoMapBuilder(project_path)
-            report = builder.build()
-            output_format = "json" if args.json else args.format
-
-            if output_format == "json":
-                output = json.dumps(report.to_dict(), ensure_ascii=False, indent=2)
-                if args.output:
-                    Path(args.output).write_text(output, encoding="utf-8")
-                else:
-                    builder.write(report)
-                    sys.stdout.write(output + "\n")
-                return 0
-
-            self.console.print(f"[cyan]正在生成 Repo Map: {project_path}[/cyan]")
-
-            if output_format == "markdown":
-                output = report.to_markdown()
-                if args.output:
-                    Path(args.output).write_text(output, encoding="utf-8")
-                    self.console.print(f"[green]Repo Map 已保存到: {args.output}[/green]")
-                else:
-                    paths = builder.write(report)
-                    self.console.print("[green]Repo Map 已生成[/green]")
-                    self.console.print(f"  Markdown: {paths['markdown']}")
-                    self.console.print(f"  JSON: {paths['json']}")
-                return 0
-
-            paths = builder.write(report)
-            self.console.print("[green]Repo Map 已生成[/green]")
-            self.console.print(f"  项目: {report.project_name}")
-            self.console.print(f"  Markdown: {paths['markdown']}")
-            self.console.print(f"  JSON: {paths['json']}")
-            self.console.print(f"  入口文件: {len(report.entry_points)}")
-            self.console.print(f"  核心模块: {len(report.top_modules)}")
-            self.console.print(f"  集成面: {len(report.integration_surfaces)}")
-            self.console.print(f"  风险点: {len(report.risk_points)}")
-            self.console.print("")
-            self.console.print("[cyan]建议阅读顺序:[/cyan]")
-            for item in report.recommended_reading_order[:5]:
-                self.console.print(f"  - {item.path}: {item.summary}")
-            return 0
-
-        except Exception as e:
-            self.console.print(f"[red]生成 Repo Map 失败: {e}[/red]")
-            self.logger.error(
-                "Repo Map 生成失败",
-                extra={"error_type": type(e).__name__, "error_message": str(e), "traceback": traceback.format_exc()},
-            )
-            if '--debug' in sys.argv or '-d' in sys.argv:
-                self.console.print(traceback.format_exc())
-            return 1
-
-    def _cmd_feature_checklist(self, args) -> int:
-        """审计 PRD 范围覆盖率。"""
-        from .analyzer import FeatureChecklistBuilder
-
-        project_path = Path(args.path).resolve()
-        if not project_path.exists():
-            self.console.print(f"[red]项目不存在: {project_path}[/red]")
-            return 1
-
-        try:
-            builder = FeatureChecklistBuilder(project_path)
-            report = builder.build()
-            output_format = "json" if args.json else args.format
-
-            if output_format == "json":
-                output = json.dumps(report.to_dict(), ensure_ascii=False, indent=2)
-                if args.output:
-                    Path(args.output).write_text(output, encoding="utf-8")
-                else:
-                    builder.write(report)
-                    sys.stdout.write(output + "\n")
-                return 0
-
-            self.console.print(f"[cyan]正在审计范围覆盖率: {project_path}[/cyan]")
-
-            if output_format == "markdown":
-                output = report.to_markdown()
-                if args.output:
-                    Path(args.output).write_text(output, encoding="utf-8")
-                    self.console.print(f"[green]Feature Checklist 已保存到: {args.output}[/green]")
-                else:
-                    paths = builder.write(report)
-                    self.console.print("[green]Feature Checklist 已生成[/green]")
-                    self.console.print(f"  Markdown: {paths['markdown']}")
-                    self.console.print(f"  JSON: {paths['json']}")
-                return 0
-
-            paths = builder.write(report)
-            coverage_text = (
-                f"{report.coverage_rate:.1f}%"
-                if report.coverage_rate is not None
-                else "unknown"
-            )
-            self.console.print("[green]Feature Checklist 已生成[/green]")
-            self.console.print(f"  项目: {report.project_name}")
-            self.console.print(f"  状态: {report.status}")
-            self.console.print(f"  覆盖率: {coverage_text}")
-            self.console.print(f"  Markdown: {paths['markdown']}")
-            self.console.print(f"  JSON: {paths['json']}")
-            self.console.print(f"  功能项总数: {report.total_features}")
-            self.console.print(f"  已覆盖: {report.covered_count}")
-            self.console.print(f"  规划中: {report.planned_count}")
-            self.console.print(f"  缺失: {report.missing_count}")
-            self.console.print(f"  未知: {report.unknown_count}")
-            self.console.print(f"  高优先级缺口: {report.high_priority_gap_count}")
-            self.console.print("")
-            self.console.print(f"[cyan]{report.summary}[/cyan]")
-            return 0
-
-        except Exception as e:
-            self.console.print(f"[red]Feature Checklist 生成失败: {e}[/red]")
-            self.logger.error(
-                "Feature Checklist 生成失败",
-                extra={"error_type": type(e).__name__, "error_message": str(e), "traceback": traceback.format_exc()},
-            )
-            if '--debug' in sys.argv or '-d' in sys.argv:
-                self.console.print(traceback.format_exc())
-            return 1
-
-    def _cmd_impact(self, args) -> int:
-        """分析变更影响范围。"""
-        from .analyzer import ImpactAnalyzer
-
-        project_path = Path(args.path).resolve()
-        if not project_path.exists():
-            self.console.print(f"[red]项目不存在: {project_path}[/red]")
-            return 1
-
-        if not args.description and not args.files:
-            self.console.print("[yellow]请提供变更描述或 --files 列表，例如 `super-dev impact \"修改登录流程\" --files services/auth.py`[/yellow]")
-            return 1
-
-        try:
-            analyzer = ImpactAnalyzer(project_path)
-            report = analyzer.build(description=args.description, files=list(args.files or []))
-            output_format = "json" if args.json else args.format
-
-            if output_format == "json":
-                output = json.dumps(report.to_dict(), ensure_ascii=False, indent=2)
-                if args.output:
-                    Path(args.output).write_text(output, encoding="utf-8")
-                else:
-                    analyzer.write(report)
-                    sys.stdout.write(output + "\n")
-                return 0
-
-            self.console.print(f"[cyan]正在分析变更影响范围: {project_path}[/cyan]")
-
-            if output_format == "markdown":
-                output = report.to_markdown()
-                if args.output:
-                    Path(args.output).write_text(output, encoding="utf-8")
-                    self.console.print(f"[green]Impact Analysis 已保存到: {args.output}[/green]")
-                else:
-                    paths = analyzer.write(report)
-                    self.console.print("[green]Impact Analysis 已生成[/green]")
-                    self.console.print(f"  Markdown: {paths['markdown']}")
-                    self.console.print(f"  JSON: {paths['json']}")
-                return 0
-
-            paths = analyzer.write(report)
-            self.console.print("[green]Impact Analysis 已生成[/green]")
-            self.console.print(f"  项目: {report.project_name}")
-            self.console.print(f"  风险等级: {report.risk_level}")
-            self.console.print(f"  Markdown: {paths['markdown']}")
-            self.console.print(f"  JSON: {paths['json']}")
-            self.console.print(f"  受影响模块: {len(report.affected_modules)}")
-            self.console.print(f"  受影响入口: {len(report.affected_entry_points)}")
-            self.console.print(f"  受影响集成面: {len(report.affected_integration_surfaces)}")
-            self.console.print("")
-            self.console.print(f"[cyan]{report.summary}[/cyan]")
-            self.console.print("")
-            self.console.print("[cyan]回归重点:[/cyan]")
-            for item in report.regression_focus:
-                self.console.print(f"  - {item}")
-            self.console.print("")
-            self.console.print("[cyan]建议动作:[/cyan]")
-            for item in report.recommended_steps:
-                self.console.print(f"  - {item}")
-            return 0
-
-        except Exception as e:
-            self.console.print(f"[red]Impact Analysis 生成失败: {e}[/red]")
-            self.logger.error(
-                "Impact Analysis 生成失败",
-                extra={"error_type": type(e).__name__, "error_message": str(e), "traceback": traceback.format_exc()},
-            )
-            if '--debug' in sys.argv or '-d' in sys.argv:
-                self.console.print(traceback.format_exc())
-            return 1
-
-    def _cmd_regression_guard(self, args) -> int:
-        """生成回归检查清单。"""
-        from .analyzer import RegressionGuardBuilder
-
-        project_path = Path(args.path).resolve()
-        if not project_path.exists():
-            self.console.print(f"[red]项目不存在: {project_path}[/red]")
-            return 1
-
-        if not args.description and not args.files:
-            self.console.print(
-                "[yellow]请提供变更描述或 --files 列表，例如 `super-dev regression-guard \"修改登录流程\" --files services/auth.py`[/yellow]"
-            )
-            return 1
-
-        try:
-            builder = RegressionGuardBuilder(project_path)
-            report = builder.build(description=args.description, files=list(args.files or []))
-            output_format = "json" if args.json else args.format
-
-            if output_format == "json":
-                output = json.dumps(report.to_dict(), ensure_ascii=False, indent=2)
-                if args.output:
-                    Path(args.output).write_text(output, encoding="utf-8")
-                else:
-                    builder.write(report)
-                    sys.stdout.write(output + "\n")
-                return 0
-
-            self.console.print(f"[cyan]正在生成 Regression Guard: {project_path}[/cyan]")
-
-            if output_format == "markdown":
-                output = report.to_markdown()
-                if args.output:
-                    Path(args.output).write_text(output, encoding="utf-8")
-                    self.console.print(f"[green]Regression Guard 已保存到: {args.output}[/green]")
-                else:
-                    paths = builder.write(report)
-                    self.console.print("[green]Regression Guard 已生成[/green]")
-                    self.console.print(f"  Markdown: {paths['markdown']}")
-                    self.console.print(f"  JSON: {paths['json']}")
-                return 0
-
-            paths = builder.write(report)
-            self.console.print("[green]Regression Guard 已生成[/green]")
-            self.console.print(f"  项目: {report.project_name}")
-            self.console.print(f"  风险等级: {report.risk_level}")
-            self.console.print(f"  Markdown: {paths['markdown']}")
-            self.console.print(f"  JSON: {paths['json']}")
-            self.console.print(f"  高优先级检查: {len(report.high_priority_checks)}")
-            self.console.print(f"  中优先级检查: {len(report.medium_priority_checks)}")
-            self.console.print(f"  支撑性检查: {len(report.supporting_checks)}")
-            self.console.print("")
-            self.console.print(f"[cyan]{report.summary}[/cyan]")
-            self.console.print("")
-            self.console.print("[cyan]推荐命令:[/cyan]")
-            for item in report.recommended_commands:
-                self.console.print(f"  - {item}")
-            return 0
-
-        except Exception as e:
-            self.console.print(f"[red]Regression Guard 生成失败: {e}[/red]")
-            self.logger.error(
-                "Regression Guard 生成失败",
-                extra={"error_type": type(e).__name__, "error_message": str(e), "traceback": traceback.format_exc()},
-            )
-            if '--debug' in sys.argv or '-d' in sys.argv:
-                self.console.print(traceback.format_exc())
-            return 1
-
-    def _cmd_dependency_graph(self, args) -> int:
-        """生成依赖图与关键路径。"""
-        from .analyzer import DependencyGraphBuilder
-
-        project_path = Path(args.path).resolve()
-        if not project_path.exists():
-            self.console.print(f"[red]项目不存在: {project_path}[/red]")
-            return 1
-
-        try:
-            builder = DependencyGraphBuilder(project_path)
-            report = builder.build()
-            output_format = "json" if args.json else args.format
-
-            if output_format == "json":
-                output = json.dumps(report.to_dict(), ensure_ascii=False, indent=2)
-                if args.output:
-                    Path(args.output).write_text(output, encoding="utf-8")
-                else:
-                    builder.write(report)
-                    sys.stdout.write(output + "\n")
-                return 0
-
-            self.console.print(f"[cyan]正在生成 Dependency Graph: {project_path}[/cyan]")
-
-            if output_format == "markdown":
-                output = report.to_markdown()
-                if args.output:
-                    Path(args.output).write_text(output, encoding="utf-8")
-                    self.console.print(f"[green]Dependency Graph 已保存到: {args.output}[/green]")
-                else:
-                    paths = builder.write(report)
-                    self.console.print("[green]Dependency Graph 已生成[/green]")
-                    self.console.print(f"  Markdown: {paths['markdown']}")
-                    self.console.print(f"  JSON: {paths['json']}")
-                return 0
-
-            paths = builder.write(report)
-            self.console.print("[green]Dependency Graph 已生成[/green]")
-            self.console.print(f"  项目: {report.project_name}")
-            self.console.print(f"  Markdown: {paths['markdown']}")
-            self.console.print(f"  JSON: {paths['json']}")
-            self.console.print(f"  节点数: {report.node_count}")
-            self.console.print(f"  边数: {report.edge_count}")
-            self.console.print(f"  关键节点: {len(report.critical_nodes)}")
-            self.console.print(f"  关键路径: {len(report.critical_paths)}")
-            self.console.print("")
-            self.console.print(f"[cyan]{report.summary}[/cyan]")
-            return 0
-
-        except Exception as e:
-            self.console.print(f"[red]Dependency Graph 生成失败: {e}[/red]")
-            self.logger.error(
-                "Dependency Graph 生成失败",
-                extra={"error_type": type(e).__name__, "error_message": str(e), "traceback": traceback.format_exc()},
-            )
-            if '--debug' in sys.argv or '-d' in sys.argv:
-                self.console.print(traceback.format_exc())
-            return 1
-
-    def _cmd_workflow(self, args) -> int:
-        """运行工作流"""
-        project_dir = Path.cwd()
-        config_manager = ConfigManager(project_dir)
-
-        if not config_manager.exists():
-            self.console.print("[red]未找到项目配置，请先运行 'super-dev init'[/red]")
-            return 1
-
-        # 更新质量门禁
-        if args.quality_gate is not None:
-            config_manager.update(quality_gate=args.quality_gate)
-
-        # 确定要执行的阶段
-        phases = None
-        if args.phase:
-            phase_map = {
-                "discovery": Phase.DISCOVERY,
-                "intelligence": Phase.INTELLIGENCE,
-                "drafting": Phase.DRAFTING,
-                "redteam": Phase.REDTEAM,
-                "qa": Phase.QA,
-                "delivery": Phase.DELIVERY,
-                "deployment": Phase.DEPLOYMENT,
-            }
-            phases = [phase_map[p] for p in args.phase]
-
-        # 运行工作流
-        import asyncio
-        config = config_manager.config
-        context = WorkflowContext(
-            project_dir=project_dir,
-            config=config_manager,
-            user_input={
-                "name": config.name or project_dir.name,
-                "description": config.description,
-                "platform": config.platform,
-                "frontend": config.frontend,
-                "backend": config.backend,
-                "domain": config.domain,
-                "language_preferences": config.language_preferences,
-                "quality_threshold": args.quality_gate,
-            },
-        )
-        engine = WorkflowEngine(project_dir)
-        results = asyncio.run(engine.run(phases=phases, context=context))
-
-        # 检查是否全部成功
-        all_success = bool(results) and all(r.success and not r.errors for r in results.values())
-
-        return 0 if all_success else 1
-
     def _cmd_review(self, args) -> int:
         """查看或更新评审状态"""
         review_specs = {
@@ -2922,6 +225,13 @@ super-dev start --idea "你的需求"
                 "save": save_ui_revision,
                 "file": ui_revision_file,
                 "type": "ui",
+            },
+            "preview": {
+                "title": "前端预览确认状态",
+                "load": load_preview_confirmation,
+                "save": save_preview_confirmation,
+                "file": preview_confirmation_file,
+                "type": "preview",
             },
             "architecture": {
                 "title": "架构返工状态",
@@ -2940,7 +250,7 @@ super-dev start --idea "你的需求"
         }
         if args.review_command not in review_specs:
             self.console.print(
-                "[yellow]请指定 review 子命令，例如 `super-dev review docs`、`super-dev review ui`、`super-dev review architecture` 或 `super-dev review quality`[/yellow]"
+                "[yellow]请指定 review 子命令，例如 `super-dev review docs`、`super-dev review preview`、`super-dev review ui`、`super-dev review architecture` 或 `super-dev review quality`[/yellow]"
             )
             return 1
 
@@ -2985,11 +295,14 @@ super-dev start --idea "你的需求"
             },
         )
         payload = load_fn(project_dir) or {}
+        self._write_session_brief(project_dir=project_dir, payload=self._build_next_step_payload(project_dir))
         if args.json:
             self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             if review_type == "ui":
                 action = "已确认 UI 改版通过" if args.status == "confirmed" else ("已记录 UI 改版请求" if args.status == "revision_requested" else "已重置为待确认")
+            elif review_type == "preview":
+                action = "已确认前端预览通过" if args.status == "confirmed" else ("已记录预览返工请求" if args.status == "revision_requested" else "已重置为待确认")
             elif review_type == "architecture":
                 action = "已确认架构返工通过" if args.status == "confirmed" else ("已记录架构返工请求" if args.status == "revision_requested" else "已重置为待确认")
             elif review_type == "quality":
@@ -3004,336 +317,14 @@ super-dev start --idea "你的需求"
             self.console.print(f"  文件: {file_path}")
             if review_type == "ui" and args.status == "revision_requested":
                 self.console.print("[dim]下一步: 先更新 output/*-uiux.md，再重做前端，并重新执行 frontend runtime 与 UI review[/dim]")
+            elif review_type == "preview" and args.status == "revision_requested":
+                self.console.print("[dim]下一步: 继续修改前端预览，重新生成 frontend runtime 与预览页，再次提交预览确认[/dim]")
             elif review_type == "architecture" and args.status == "revision_requested":
                 self.console.print("[dim]下一步: 先更新 output/*-architecture.md，再调整技术方案与实现，并重新通过相关质量门禁[/dim]")
             elif review_type == "quality" and args.status == "revision_requested":
                 self.console.print("[dim]下一步: 先修复质量/安全问题，重新执行 quality gate 与 release proof-pack，再继续后续动作[/dim]")
         return 0
 
-    def _cmd_release(self, args) -> int:
-        """发布就绪度检查"""
-        if args.release_command == "proof-pack":
-            project_dir = Path.cwd()
-            builder = ProofPackBuilder(project_dir)
-            report = builder.build(verify_tests=bool(args.verify_tests))
-            files = builder.write(report)
-            payload = report.to_dict()
-            payload["report_file"] = str(files["markdown"])
-            payload["json_file"] = str(files["json"])
-            payload["summary_file"] = str(files["summary"])
-
-            if args.json:
-                self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
-                return 0 if report.status == "ready" else 1
-
-            status = "[green]ready[/green]" if report.status == "ready" else "[yellow]incomplete[/yellow]"
-            self.console.print(f"[cyan]Proof Pack[/cyan] {status} 证据就绪: {report.ready_count}/{report.total_count}")
-            self.console.print(f"  [green]✓[/green] Markdown: {files['markdown']}")
-            self.console.print(f"  [green]✓[/green] JSON: {files['json']}")
-            self.console.print(f"  [green]✓[/green] Summary: {files['summary']}")
-            self.console.print(f"  [dim]{report.executive_summary}[/dim]")
-            if report.blockers:
-                self.console.print("  [yellow]待补齐项:[/yellow]")
-                for artifact in report.blockers[:8]:
-                    self.console.print(f"    - {artifact.name}: {artifact.summary}")
-                self.console.print("  [cyan]推荐动作:[/cyan]")
-                for action in report.next_actions[:5]:
-                    self.console.print(f"    - {action}")
-            else:
-                self.console.print("  [green]所有关键交付证据均已就绪。[/green]")
-            return 0 if report.status == "ready" else 1
-
-        if args.release_command != "readiness":
-            self.console.print("[yellow]请指定 release 子命令，例如 `super-dev release readiness` 或 `super-dev release proof-pack`[/yellow]")
-            return 1
-
-        project_dir = Path.cwd()
-        evaluator = ReleaseReadinessEvaluator(project_dir)
-        report = evaluator.evaluate(verify_tests=bool(args.verify_tests))
-        files = evaluator.write(report)
-        payload = report.to_dict()
-        payload["report_file"] = str(files["markdown"])
-        payload["json_file"] = str(files["json"])
-
-        if args.json:
-            self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
-            return 0 if report.passed else 1
-
-        status = "[green]通过[/green]" if report.passed else "[yellow]未完成[/yellow]"
-        self.console.print(f"[cyan]发布就绪度[/cyan] {status} 分数: {report.score}/100")
-        self.console.print(f"  [green]✓[/green] Markdown: {files['markdown']}")
-        self.console.print(f"  [green]✓[/green] JSON: {files['json']}")
-
-        if report.failed_checks:
-            self.console.print("  [yellow]待收尾项:[/yellow]")
-            for check in report.failed_checks[:8]:
-                recommendation = f" | 建议: {check.recommendation}" if check.recommendation else ""
-                self.console.print(f"    - {check.name}: {check.detail}{recommendation}")
-        else:
-            self.console.print("  [green]所有关键发布项均已满足。[/green]")
-
-        return 0 if report.passed else 1
-
-    def _cmd_studio(self, args) -> int:
-        """启动交互工作台 API"""
-        try:
-            import uvicorn
-        except ImportError:
-            self.console.print("[red]缺少依赖: uvicorn[/red]")
-            self.console.print("[dim]请安装: pip install fastapi uvicorn[/dim]")
-            return 1
-
-        self.console.print(f"[cyan]启动 Super Dev Studio: http://{args.host}:{args.port}[/cyan]")
-        uvicorn.run(
-            "super_dev.web.api:app",
-            host=args.host,
-            port=args.port,
-            reload=args.reload,
-            log_level="info",
-        )
-        return 0
-
-    def _cmd_expert(self, args) -> int:
-        """调用专家"""
-        from .experts import has_expert, list_experts, save_expert_advice
-
-        # 处理 --list 选项
-        if args.list:
-            self.console.print("[cyan]可用专家列表:[/cyan]")
-            for expert in list_experts():
-                self.console.print(f"  [green]{expert['id']:<10}[/green] {expert['name']} - {expert['description']}")
-            return 0
-
-        # 如果没有提供专家名称，显示帮助
-        if not args.expert_name:
-            self.console.print("[yellow]请提供专家名称或使用 --list 查看可用专家[/yellow]")
-            return 1
-
-        prompt = " ".join(args.prompt) if args.prompt else ""
-        self.console.print(f"[cyan]调用专家: {args.expert_name}[/cyan]")
-        self.console.print(f"[dim]提示词: {prompt or '(无)'}[/dim]")
-        if not has_expert(args.expert_name):
-            self.console.print(f"[red]未知专家: {args.expert_name}[/red]")
-            return 1
-
-        report_file, _ = save_expert_advice(
-            project_dir=Path.cwd(),
-            expert_id=args.expert_name,
-            prompt=prompt,
-        )
-        self.console.print(f"[green]✓[/green] 专家建议已生成: {report_file}")
-        return 0
-
-    def _cmd_quality(self, args) -> int:
-        """质量检查"""
-        from .reviewers import QualityGateChecker, UIReviewReviewer
-
-        project_dir = Path.cwd()
-        output_dir = project_dir / "output"
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        config_manager = ConfigManager(project_dir)
-        config = config_manager.load()
-
-        project_name = self._sanitize_project_name(config.name or project_dir.name)
-        tech_stack = {
-            "platform": config.platform,
-            "frontend": self._normalize_pipeline_frontend(config.frontend),
-            "backend": config.backend,
-            "domain": config.domain,
-        }
-
-        self.console.print(f"[cyan]运行质量检查: {args.type}[/cyan]")
-
-        if args.type == "ui-review":
-            reviewer = UIReviewReviewer(
-                project_dir=project_dir,
-                name=project_name,
-                tech_stack=tech_stack,
-            )
-            report = reviewer.review()
-            review_file = output_dir / f"{project_name}-ui-review.md"
-            review_json_file = output_dir / f"{project_name}-ui-review.json"
-            review_file.write_text(report.to_markdown(), encoding="utf-8")
-            review_json_file.write_text(
-                json.dumps(report.to_dict(), ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            status = "[green]通过[/green]" if report.passed else "[yellow]需修正[/yellow]"
-            self.console.print(f"  {status} 总分: {report.score}/100")
-            self.console.print(f"  [green]✓[/green] 报告: {review_file}")
-            self.console.print(f"  [green]✓[/green] JSON: {review_json_file}")
-            if report.findings:
-                self.console.print("[yellow]主要问题:[/yellow]")
-                for finding in report.findings[:5]:
-                    self.console.print(f"  - [{finding.level}] {finding.title}")
-            return 0 if report.passed else 1
-
-        # 轻量文档检查
-        if args.type in {"prd", "architecture", "ui", "ux"}:
-            pattern_map = {
-                "prd": "*-prd.md",
-                "architecture": "*-architecture.md",
-                "ui": "*-uiux.md",
-                "ux": "*-uiux.md",
-            }
-            expected_pattern = pattern_map[args.type]
-            matched = sorted(output_dir.glob(expected_pattern))
-            if matched:
-                self.console.print(f"[green]✓[/green] 检测到 {len(matched)} 个文档: {expected_pattern}")
-                for file_path in matched[:5]:
-                    self.console.print(f"  - {file_path}")
-                return 0
-
-            self.console.print(f"[red]未找到文档: output/{expected_pattern}[/red]")
-            return 1
-
-        # 代码或全量检查走质量门禁评估
-        gate_checker = QualityGateChecker(
-            project_dir=project_dir,
-            name=project_name,
-            tech_stack=tech_stack,
-            host_compatibility_min_score_override=config.host_compatibility_min_score,
-            host_compatibility_min_ready_hosts_override=config.host_compatibility_min_ready_hosts,
-        )
-        gate_result = gate_checker.check(redteam_report=None)
-
-        gate_file = output_dir / f"{project_name}-quality-gate.md"
-        gate_file.write_text(gate_result.to_markdown(), encoding="utf-8")
-        if gate_checker.latest_ui_review_report is not None:
-            ui_review_file = output_dir / f"{project_name}-ui-review.md"
-            ui_review_json_file = output_dir / f"{project_name}-ui-review.json"
-            ui_review_file.write_text(
-                gate_checker.latest_ui_review_report.to_markdown(),
-                encoding="utf-8",
-            )
-            ui_review_json_file.write_text(
-                json.dumps(
-                    gate_checker.latest_ui_review_report.to_dict(),
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-                encoding="utf-8",
-            )
-
-        scenario_label = "0-1 新建项目" if gate_result.scenario == "0-1" else "1-N+1 增量开发"
-        status = "[green]通过[/green]" if gate_result.passed else "[red]未通过[/red]"
-
-        self.console.print(f"  [dim]场景: {scenario_label}[/dim]")
-        self.console.print(f"  {status} 总分: {gate_result.total_score}/100")
-        self.console.print(f"  [green]✓[/green] 报告: {gate_file}")
-        if gate_checker.latest_ui_review_report is not None:
-            self.console.print(
-                f"  [green]✓[/green] UI 审查: {output_dir / f'{project_name}-ui-review.md'}"
-            )
-            self.console.print(
-                f"  [green]✓[/green] UI 审查 JSON: {output_dir / f'{project_name}-ui-review.json'}"
-            )
-
-        if not gate_result.passed and gate_result.critical_failures:
-            self.console.print("[yellow]关键失败项:[/yellow]")
-            for failure in gate_result.critical_failures:
-                self.console.print(f"  - {failure}")
-
-        return 0 if gate_result.passed else 1
-
-    def _cmd_metrics(self, args) -> int:
-        """查看最近一次流水线指标"""
-        output_dir = Path.cwd() / "output"
-        if not output_dir.exists():
-            self.console.print("[yellow]未找到 output 目录，请先执行流水线[/yellow]")
-            return 1
-
-        if args.history:
-            limit = max(1, int(args.limit))
-            history_dir = output_dir / "metrics-history"
-            candidates: list[Path] = []
-            if history_dir.exists():
-                candidates.extend(history_dir.glob("*-pipeline-metrics-*.json"))
-            if not candidates:
-                candidates.extend(output_dir.glob("*-pipeline-metrics.json"))
-            if args.project:
-                prefix = f"{self._sanitize_project_name(args.project)}-pipeline-metrics"
-                candidates = [item for item in candidates if item.name.startswith(prefix)]
-            candidates = sorted(candidates, key=lambda path: path.stat().st_mtime, reverse=True)[:limit]
-            if not candidates:
-                self.console.print("[yellow]未找到 pipeline 历史指标文件[/yellow]")
-                return 1
-
-            items: list[dict[str, Any]] = []
-            for file_path in candidates:
-                try:
-                    payload = json.loads(file_path.read_text(encoding="utf-8"))
-                except Exception:
-                    continue
-                items.append(
-                    {
-                        "file": file_path.name,
-                        "project": payload.get("project_name", ""),
-                        "success": bool(payload.get("success", False)),
-                        "success_rate": float(payload.get("success_rate", 0)),
-                        "duration": float(payload.get("total_duration_seconds", 0)),
-                        "started_at": str(payload.get("started_at", "")),
-                    }
-                )
-
-            if not items:
-                self.console.print("[yellow]指标文件存在但无法解析[/yellow]")
-                return 1
-
-            run_count = len(items)
-            success_count = sum(1 for item in items if item["success"])
-            avg_duration = sum(item["duration"] for item in items) / run_count
-            avg_success_rate = sum(item["success_rate"] for item in items) / run_count
-            self.console.print("[cyan]Pipeline 历史趋势[/cyan]")
-            self.console.print(f"  记录数: {run_count}")
-            self.console.print(f"  成功次数: {success_count}/{run_count}")
-            self.console.print(f"  平均成功率: {avg_success_rate:.1f}%")
-            self.console.print(f"  平均耗时: {avg_duration:.2f}s")
-            self.console.print("  最近记录:")
-            for item in items:
-                marker = "✓" if item["success"] else "✗"
-                started_at = item["started_at"] or "-"
-                self.console.print(
-                    f"    {marker} {item['file']} | {item['project']} | "
-                    f"success_rate={item['success_rate']:.1f}% | duration={item['duration']:.2f}s | start={started_at}"
-                )
-            return 0
-
-        if args.project:
-            metrics_file = output_dir / f"{self._sanitize_project_name(args.project)}-pipeline-metrics.json"
-            if not metrics_file.exists():
-                self.console.print(f"[red]未找到指标文件: {metrics_file.name}[/red]")
-                return 1
-        else:
-            candidates = sorted(
-                output_dir.glob("*-pipeline-metrics.json"),
-                key=lambda path: path.stat().st_mtime,
-                reverse=True,
-            )
-            if not candidates:
-                self.console.print("[yellow]未找到 pipeline 指标文件，请先运行 super-dev \"需求\"[/yellow]")
-                return 1
-            metrics_file = candidates[0]
-
-        try:
-            payload = json.loads(metrics_file.read_text(encoding="utf-8"))
-        except Exception:
-            self.console.print(f"[red]指标文件解析失败: {metrics_file.name}[/red]")
-            return 1
-        self.console.print(f"[cyan]Pipeline 指标: {metrics_file.name}[/cyan]")
-        self.console.print(f"  项目: {payload.get('project_name', '')}")
-        self.console.print(f"  成功: {payload.get('success', False)}")
-        self.console.print(f"  成功率: {payload.get('success_rate', 0)}%")
-        self.console.print(f"  总耗时: {payload.get('total_duration_seconds', 0)}s")
-        if payload.get("started_at"):
-            self.console.print(f"  开始时间(UTC): {payload.get('started_at')}")
-        if payload.get("finished_at"):
-            self.console.print(f"  结束时间(UTC): {payload.get('finished_at')}")
-        self.console.print(f"  阶段数: {len(payload.get('stages', []))}")
-        if payload.get("failure_reason"):
-            self.console.print(f"  失败原因: {payload['failure_reason']}")
-        self.console.print(f"  文件: {metrics_file}")
         return 0
 
     # 阶段编号映射表
@@ -3444,10 +435,10 @@ super-dev start --idea "你的需求"
         from rich.table import Table
         self.console.print("")
         table = Table(title="可用环节", expand=True, border_style="dim", title_style="bold cyan")
-        table.add_column("编号", style="bold cyan", width=6, justify="center")
-        table.add_column("专家", style="bold", min_width=16)
-        table.add_column("环节", style="bold")
-        table.add_column("说明", style="dim")
+        table.add_column("编号", style="bold cyan", min_width=4, max_width=6, justify="center")
+        table.add_column("专家", style="bold", min_width=12, ratio=1)
+        table.add_column("环节", style="bold", ratio=1)
+        table.add_column("说明", style="dim", ratio=3, overflow="fold")
 
         expert_short = {
             "research": "PM + ARCHITECT",
@@ -3475,6 +466,92 @@ super-dev start --idea "你的需求"
     def _cmd_status(self, args) -> int:
         """快捷别名：查看当前流程状态"""
         return self._cmd_run_status(args)
+
+    def _cmd_next(self, args) -> int:
+        """统一的下一步路由入口"""
+        project_dir = Path.cwd()
+        payload = self._build_next_step_payload(project_dir)
+        self._write_session_brief(project_dir=project_dir, payload=payload)
+        if getattr(args, "json", False):
+            sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+            return 0
+
+        self._render_next_step_payload(payload, title="Super Dev Next")
+        return 0
+
+    def _cmd_continue(self, args) -> int:
+        """更自然的继续入口"""
+        project_dir = Path.cwd()
+        payload = self._build_next_step_payload(project_dir)
+        self._write_session_brief(project_dir=project_dir, payload=payload)
+        if getattr(args, "json", False):
+            payload = dict(payload)
+            payload["entrypoint"] = "continue"
+            sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+            return 0
+
+        self._render_next_step_payload(payload, title="Super Dev Continue")
+        return 0
+
+    def _cmd_resume(self, args) -> int:
+        """更符合真实恢复场景的继续入口"""
+        project_dir = Path.cwd()
+        payload = self._build_next_step_payload(project_dir)
+        self._write_session_brief(project_dir=project_dir, payload=payload)
+        if getattr(args, "json", False):
+            payload = dict(payload)
+            payload["entrypoint"] = "resume"
+            sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+            return 0
+
+        self._render_next_step_payload(payload, title="Super Dev Resume")
+        return 0
+
+    def _render_next_step_payload(self, payload: dict[str, Any], *, title: str) -> None:
+        action_card = payload.get("action_card") if isinstance(payload.get("action_card"), dict) else {}
+        self.console.print(f"[cyan]{title}[/cyan]")
+        workflow_mode = str(payload.get("workflow_mode", "")).strip()
+        if workflow_mode:
+            self.console.print(f"  动作类型: {self._workflow_mode_label(workflow_mode)}")
+        self.console.print(f"  当前步骤: {payload.get('current_step_label', payload.get('status', '-'))}")
+        self.console.print(f"  用户下一步: {payload.get('user_next_action', payload.get('recommended_command', '-'))}")
+        user_action_shortcuts = payload.get("user_action_shortcuts") if isinstance(payload.get("user_action_shortcuts"), list) else []
+        if user_action_shortcuts:
+            self.console.print(f"  你现在可以直接说: {' / '.join(str(item) for item in user_action_shortcuts[:4])}")
+        preferred_host_name = str(payload.get("preferred_host_name", "")).strip()
+        host_continue_prompt = str(payload.get("host_continue_prompt", "")).strip()
+        if preferred_host_name and host_continue_prompt:
+            self.console.print(f"  宿主第一句 ({preferred_host_name}): {host_continue_prompt}")
+        self.console.print(f"  机器侧动作: {payload.get('recommended_command', '-')}")
+        examples = action_card.get("examples") if isinstance(action_card.get("examples"), list) else []
+        if examples:
+            self.console.print(f"  自然语言示例: {', '.join(str(item) for item in examples[:3])}")
+        self.console.print(f"  当前状态: {payload.get('status', '-')}")
+        self.console.print(f"  原因: {payload.get('reason', '-')}")
+        if payload.get("session_brief_path"):
+            self.console.print(f"  流程状态卡: {payload.get('session_brief_path')}")
+        if payload.get("evidence"):
+            self.console.print(f"  依据: {payload['evidence']}")
+
+    def _workflow_mode_label(self, workflow_mode: str) -> str:
+        return workflow_mode_label(workflow_mode)
+
+    def _workflow_mode_shortcuts(self, workflow_mode: str, *, action_card: dict[str, Any] | None = None) -> list[str]:
+        if isinstance(action_card, dict):
+            raw_shortcuts = action_card.get("shortcuts")
+            if isinstance(raw_shortcuts, list):
+                shortcuts = [str(item).strip() for item in raw_shortcuts if str(item).strip()]
+                if shortcuts:
+                    return shortcuts
+            raw_examples = action_card.get("examples")
+            examples = (
+                [str(item).strip() for item in raw_examples if str(item).strip()]
+                if isinstance(raw_examples, list)
+                else []
+            )
+        else:
+            examples = []
+        return workflow_mode_shortcuts(workflow_mode, examples=examples)
 
     def _cmd_jump(self, args) -> int:
         """快捷别名：跳转到指定阶段"""
@@ -3515,6 +592,10 @@ super-dev start --idea "你的需求"
                 self.console.print("[yellow]最近一次 pipeline 已停在文档确认门，请先确认三文档后再恢复[/yellow]")
                 self.console.print("[dim]可执行: super-dev review docs --status confirmed --comment \"三文档已确认\"[/dim]")
                 return 1
+            if any((project_dir / "output").glob("*-frontend-runtime.json")) and not self._preview_confirmation_is_confirmed(project_dir):
+                self.console.print("[yellow]最近一次 pipeline 还缺前端预览确认，请先确认预览后再恢复[/yellow]")
+                self.console.print("[dim]可执行: super-dev review preview --status confirmed --comment \"前端预览已确认\"[/dim]")
+                return 1
             if not self._ui_revision_is_clear(project_dir):
                 self.console.print("[yellow]最近一次 pipeline 存在待处理 UI 改版请求，请先完成 UI 返工再恢复[/yellow]")
                 self.console.print("[dim]可执行: super-dev review ui --status confirmed --comment \"UI 改版已通过\"[/dim]")
@@ -3526,6 +607,11 @@ super-dev start --idea "你的需求"
             if not self._quality_revision_is_clear(project_dir):
                 self.console.print("[yellow]最近一次 pipeline 存在待处理质量返工请求，请先完成质量整改再恢复[/yellow]")
                 self.console.print("[dim]可执行: super-dev review quality --status confirmed --comment \"质量返工已通过\"[/dim]")
+                return 1
+        elif status == "waiting_preview_confirmation":
+            if not self._preview_confirmation_is_confirmed(project_dir):
+                self.console.print("[yellow]最近一次 pipeline 已停在前端预览确认门，请先确认预览或继续完成前端返工[/yellow]")
+                self.console.print("[dim]可执行: super-dev review preview --status confirmed --comment \"前端预览已确认\"[/dim]")
                 return 1
         elif status == "waiting_ui_revision":
             if not self._ui_revision_is_clear(project_dir):
@@ -3582,6 +668,7 @@ super-dev start --idea "你的需求"
         project_dir = Path.cwd()
         run_state = self._read_pipeline_run_state(project_dir) or {}
         docs_state = self._get_docs_confirmation_state(project_dir)
+        preview_state = self._get_preview_confirmation_state(project_dir)
         ui_state = self._get_ui_revision_state(project_dir)
         architecture_state = self._get_architecture_revision_state(project_dir)
         quality_state = self._get_quality_revision_state(project_dir)
@@ -3601,6 +688,7 @@ super-dev start --idea "你的需求"
             "scope_gap_count": int(run_state.get("scope_gap_count", 0) or 0),
             "scope_high_priority_gap_count": int(run_state.get("scope_high_priority_gap_count", 0) or 0),
             "docs_confirmation": docs_state,
+            "preview_confirmation": preview_state,
             "ui_revision": ui_state,
             "architecture_revision": architecture_state,
             "quality_revision": quality_state,
@@ -3608,6 +696,7 @@ super-dev start --idea "你的需求"
             "recommended_next": self._run_status_recommendation(
                 run_state=run_state,
                 docs_state=docs_state,
+                preview_state=preview_state,
                 ui_state=ui_state,
                 architecture_state=architecture_state,
                 quality_state=quality_state,
@@ -3662,6 +751,7 @@ super-dev start --idea "你的需求"
                     "run_id": "",
                 },
             )
+            self._write_session_brief(project_dir=project_dir, payload=self._build_next_step_payload(project_dir))
             self.console.print(f"[green]✓[/green] 已确认 docs 阶段: {path}")
             return 0
         if normalized in {"ui", "frontend-ui"}:
@@ -3674,6 +764,7 @@ super-dev start --idea "你的需求"
                     "run_id": "",
                 },
             )
+            self._write_session_brief(project_dir=project_dir, payload=self._build_next_step_payload(project_dir))
             self.console.print(f"[green]✓[/green] 已确认 ui 阶段: {path}")
             return 0
         if normalized in {"architecture", "arch"}:
@@ -3686,6 +777,7 @@ super-dev start --idea "你的需求"
                     "run_id": "",
                 },
             )
+            self._write_session_brief(project_dir=project_dir, payload=self._build_next_step_payload(project_dir))
             self.console.print(f"[green]✓[/green] 已确认 architecture 阶段: {path}")
             return 0
         if normalized in {"quality", "qa"}:
@@ -3698,6 +790,7 @@ super-dev start --idea "你的需求"
                     "run_id": "",
                 },
             )
+            self._write_session_brief(project_dir=project_dir, payload=self._build_next_step_payload(project_dir))
             self.console.print(f"[green]✓[/green] 已确认 quality 阶段: {path}")
             return 0
         run_state = self._read_pipeline_run_state(project_dir) or {}
@@ -3713,6 +806,7 @@ super-dev start --idea "你的需求"
         run_state["phase_confirmations"] = phase_confirmations
         run_state["updated_at"] = datetime.now(timezone.utc).isoformat()
         self._write_pipeline_run_state(project_dir, run_state)
+        self._write_session_brief(project_dir=project_dir, payload=self._build_next_step_payload(project_dir))
         self.console.print(f"[green]✓[/green] 已确认阶段: {normalized}")
         return 0
 
@@ -3809,6 +903,12 @@ super-dev start --idea "你的需求"
         }
         file_path, factory = target_map[target]
         file_path.write_text(factory(), encoding="utf-8")
+        if target == "uiux":
+            contract_path = output_dir / f"{project_name}-ui-contract.json"
+            contract_path.write_text(
+                json.dumps(generator.generate_ui_contract(), ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
         self.console.print(f"[green]✓[/green] 已重跑 {target}: {file_path}")
         return 0
 
@@ -3845,12 +945,15 @@ super-dev start --idea "你的需求"
         *,
         run_state: dict[str, Any],
         docs_state: dict[str, Any],
+        preview_state: dict[str, Any],
         ui_state: dict[str, Any],
         architecture_state: dict[str, Any],
         quality_state: dict[str, Any],
     ) -> str:
         if docs_state.get("status") != "confirmed":
             return 'super-dev review docs --status confirmed --comment "三文档已确认"'
+        if preview_state.get("status") == "revision_requested":
+            return 'super-dev review preview --status confirmed --comment "前端预览已确认"'
         if ui_state.get("status") == "revision_requested":
             return 'super-dev review ui --status confirmed --comment "UI 改版已通过"'
         if architecture_state.get("status") == "revision_requested":
@@ -3865,9 +968,457 @@ super-dev start --idea "你的需求"
             return "super-dev feature-checklist"
         if status == "success" and skipped_gates:
             return "按当前策略补跑被跳过的红队 / 质量 / 发布演练门禁"
-        if status in {"failed", "running", "waiting_confirmation", "waiting_ui_revision", "waiting_architecture_revision", "waiting_quality_revision"}:
+        if status in {"failed", "running", "waiting_confirmation", "waiting_preview_confirmation", "waiting_ui_revision", "waiting_architecture_revision", "waiting_quality_revision"}:
             return "super-dev run --resume"
         return "super-dev run --phase frontend"
+
+    def _current_workflow_description(self, project_dir: Path) -> str:
+        run_state = self._read_pipeline_run_state(project_dir) or {}
+        pipeline_args = run_state.get("pipeline_args") if isinstance(run_state, dict) else {}
+        if isinstance(pipeline_args, dict):
+            description = str(pipeline_args.get("description", "")).strip()
+            if description:
+                return description
+        config = get_config_manager(project_dir).config
+        return str(config.description or "").strip()
+
+    def _session_brief_path(self, project_dir: Path) -> Path:
+        return Path(project_dir).resolve() / ".super-dev" / "SESSION_BRIEF.md"
+
+    def _workflow_state_path(self, project_dir: Path) -> Path:
+        return workflow_state_file(project_dir)
+
+    def _write_workflow_state(self, *, project_dir: Path, payload: dict[str, Any]) -> Path:
+        project_dir = Path(project_dir).resolve()
+        run_state = self._read_pipeline_run_state(project_dir) or {}
+        docs_state = self._get_docs_confirmation_state(project_dir)
+        preview_state = self._get_preview_confirmation_state(project_dir)
+        ui_state = self._get_ui_revision_state(project_dir)
+        architecture_state = self._get_architecture_revision_state(project_dir)
+        quality_state = self._get_quality_revision_state(project_dir)
+        workflow_payload = {
+            "status": str(payload.get("status", "")).strip(),
+            "current_step_label": str(payload.get("current_step_label", "")).strip(),
+            "user_next_action": str(payload.get("user_next_action", "")).strip(),
+            "recommended_command": str(payload.get("recommended_command", "")).strip(),
+            "reason": str(payload.get("reason", "")).strip(),
+            "evidence": str(payload.get("evidence", "")).strip(),
+            "preferred_host": str(payload.get("preferred_host", "")).strip(),
+            "preferred_host_name": str(payload.get("preferred_host_name", "")).strip(),
+            "host_continue_prompt": str(payload.get("host_continue_prompt", "")).strip(),
+            "session_brief_path": str(self._session_brief_path(project_dir)),
+            "continuity_rules": list(payload.get("continuity_rules") or []),
+            "gates": {
+                "docs_confirmation": {
+                    "status": str(docs_state.get("status", "")).strip(),
+                    "comment": str(docs_state.get("comment", "")).strip(),
+                },
+                "preview_confirmation": {
+                    "status": str(preview_state.get("status", "")).strip(),
+                    "comment": str(preview_state.get("comment", "")).strip(),
+                },
+                "ui_revision": {
+                    "status": str(ui_state.get("status", "")).strip(),
+                    "comment": str(ui_state.get("comment", "")).strip(),
+                },
+                "architecture_revision": {
+                    "status": str(architecture_state.get("status", "")).strip(),
+                    "comment": str(architecture_state.get("comment", "")).strip(),
+                },
+                "quality_revision": {
+                    "status": str(quality_state.get("status", "")).strip(),
+                    "comment": str(quality_state.get("comment", "")).strip(),
+                },
+            },
+            "pipeline_run_state": {
+                "status": str(run_state.get("status", "")).strip(),
+                "current_stage": str(run_state.get("current_stage", "")).strip(),
+                "current_stage_title": str(run_state.get("current_stage_title", "")).strip(),
+                "scope_coverage_status": str(run_state.get("scope_coverage_status", "")).strip(),
+                "scope_high_priority_gap_count": int(run_state.get("scope_high_priority_gap_count", 0) or 0),
+                "skipped_gates": list(run_state.get("skipped_gates") or []),
+            },
+        }
+        return save_workflow_state(project_dir, workflow_payload)
+
+    def _build_session_continuity_rules(self, *, status: str) -> list[str]:
+        return workflow_continuity_rules(status)
+
+    def _build_continue_interaction_clause(self, *, status: str, current_step_label: str) -> str:
+        rules = self._build_session_continuity_rules(status=status)
+        leading = f"当前步骤是“{current_step_label}”。" if current_step_label else ""
+        return leading + "".join(rules)
+
+    def _write_session_brief(self, *, project_dir: Path, payload: dict[str, Any]) -> Path:
+        project_dir = Path(project_dir).resolve()
+        brief_path = self._session_brief_path(project_dir)
+        brief_path.parent.mkdir(parents=True, exist_ok=True)
+        preferred_host_name = str(payload.get("preferred_host_name", "")).strip() or host_display_name(
+            str(payload.get("preferred_host", "")).strip() or self._preferred_host_target_for_project(project_dir)
+        )
+        host_prompt = str(payload.get("host_continue_prompt", "")).strip()
+        continuity_rules = payload.get("continuity_rules") or []
+        action_card = payload.get("action_card") if isinstance(payload.get("action_card"), dict) else {}
+        if not isinstance(continuity_rules, list):
+            continuity_rules = []
+        lines = [
+            "# Super Dev Session Brief",
+            "",
+            f"- 动作类型: {self._workflow_mode_label(str(payload.get('workflow_mode', '')).strip())}",
+            f"- 当前步骤: {payload.get('current_step_label', payload.get('status', '-'))}",
+            f"- 当前状态: {payload.get('status', '-')}",
+            f"- 用户下一步: {payload.get('user_next_action', payload.get('recommended_command', '-'))}",
+            f"- 机器侧动作: {payload.get('recommended_command', '-')}",
+            f"- 推荐宿主: {preferred_host_name or '-'}",
+            f"- 工作流状态 JSON: {self._workflow_state_path(project_dir)}",
+        ]
+        user_action_shortcuts = payload.get("user_action_shortcuts") if isinstance(payload.get("user_action_shortcuts"), list) else []
+        if user_action_shortcuts:
+            lines.append(f"- 你现在可以直接说: {' / '.join(str(item) for item in user_action_shortcuts[:4])}")
+        action_examples = action_card.get("examples") if isinstance(action_card.get("examples"), list) else []
+        if action_examples:
+            lines.append(f"- 自然语言示例: {', '.join(str(item) for item in action_examples[:3])}")
+        if host_prompt:
+            lines.append(f"- 宿主第一句: {host_prompt}")
+        if payload.get("reason"):
+            lines.append(f"- 原因: {payload.get('reason')}")
+        if payload.get("evidence"):
+            lines.append(f"- 依据: {payload.get('evidence')}")
+        if continuity_rules:
+            lines.extend(["", "## 会话连续性规则"])
+            for item in continuity_rules:
+                lines.append(f"- {item}")
+        lines.extend(
+            [
+                "",
+                "## 离开当前流程的唯一条件",
+                "- 用户明确说要取消当前流程。",
+                "- 用户明确说要重新开始一条新的流程。",
+                "- 用户明确说要切回普通聊天，而不是继续 Super Dev。",
+                "",
+                "## 下次回来怎么继续",
+                "- 回到项目根目录后，优先执行 `super-dev resume`。",
+                "- 如果只想看系统推荐的唯一下一步，也可以执行 `super-dev next`。",
+            ]
+        )
+        brief_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self._write_workflow_state(project_dir=project_dir, payload=payload)
+        return brief_path
+
+    def _build_host_continue_prompt(
+        self,
+        *,
+        project_dir: Path,
+        target: str,
+        next_payload: dict[str, Any] | None = None,
+    ) -> str:
+        next_payload = dict(next_payload or {})
+        status = str(next_payload.get("status", "")).strip()
+        current_step_label = str(next_payload.get("current_step_label", "")).strip()
+        continuity_clause = self._build_continue_interaction_clause(
+            status=status,
+            current_step_label=current_step_label,
+        )
+        description = self._current_workflow_description(project_dir)
+        if description:
+            instruction = (
+                f"继续当前项目“{description}”的 Super Dev 流程，不要当作普通聊天。"
+                "先读取 .super-dev/SESSION_BRIEF.md、.super-dev/workflow-state.json、.super-dev/WORKFLOW.md、output/*、.super-dev/review-state/* 和最近的 tasks.md。"
+                f"{continuity_clause}"
+            )
+        else:
+            instruction = (
+                "继续当前项目的 Super Dev 流程，不要当作普通聊天。"
+                "先读取 .super-dev/SESSION_BRIEF.md、.super-dev/workflow-state.json、.super-dev/WORKFLOW.md、output/*、.super-dev/review-state/* 和最近的 tasks.md。"
+                f"{continuity_clause}"
+            )
+        return self._build_host_trigger_example(target=target, idea=instruction)
+
+    def _build_host_start_prompt(self, *, project_dir: Path, target: str) -> str:
+        description = self._current_workflow_description(project_dir)
+        if description:
+            instruction = (
+                f"请用 Super Dev 流程开始处理当前项目“{description}”，不要当作普通聊天。"
+                "先做 research，再产出 PRD、Architecture、UIUX 三文档，完成后停下来等我确认。"
+            )
+        else:
+            instruction = (
+                "请用 Super Dev 流程开始处理当前需求，不要当作普通聊天。"
+                "先做 research，再产出 PRD、Architecture、UIUX 三文档，完成后停下来等我确认。"
+            )
+        return self._build_host_trigger_example(target=target, idea=instruction)
+
+    def _build_workflow_session_hint(self, *, project_dir: Path, target: str) -> dict[str, Any]:
+        if not self._project_has_super_dev_context(project_dir):
+            return {
+                "session_mode": "fresh_start",
+                "continue_prompt": "",
+                "recommended_workflow_command": "",
+                "workflow_reason": "",
+                "continuity_rules": [],
+            }
+        next_payload = self._build_next_step_payload(project_dir)
+        self._write_session_brief(project_dir=project_dir, payload=next_payload)
+        action_card = next_payload.get("action_card") if isinstance(next_payload.get("action_card"), dict) else {}
+        return {
+            "session_mode": "continue_super_dev",
+            "continue_prompt": self._build_host_continue_prompt(project_dir=project_dir, target=target, next_payload=next_payload),
+            "recommended_workflow_command": str(next_payload.get("recommended_command", "")).strip(),
+            "workflow_reason": str(next_payload.get("reason", "")).strip(),
+            "workflow_status": str(next_payload.get("status", "")).strip(),
+            "workflow_mode": str(next_payload.get("workflow_mode", "")).strip(),
+            "action_title": str(action_card.get("title", "")).strip() or str(next_payload.get("current_step_label", "")).strip(),
+            "action_examples": list(action_card.get("examples") or []),
+            "user_action_shortcuts": list(next_payload.get("user_action_shortcuts") or []),
+            "continuity_rules": list(next_payload.get("continuity_rules") or action_card.get("continuity_rules") or []),
+        }
+
+    def _project_has_super_dev_context(self, project_dir: Path) -> bool:
+        project_dir = Path(project_dir).resolve()
+        return any(
+            path.exists()
+            for path in (
+                project_dir / "super-dev.yaml",
+                project_dir / ".super-dev" / "WORKFLOW.md",
+                project_dir / "output" / f"{project_dir.name}-prd.md",
+                project_dir / "output" / f"{project_dir.name}-architecture.md",
+                project_dir / "output" / f"{project_dir.name}-proof-pack.json",
+            )
+        )
+
+    def _preferred_host_target_for_project(self, project_dir: Path) -> str:
+        from .integrations import IntegrationManager
+
+        project_dir = Path(project_dir).resolve()
+        config = get_config_manager(project_dir).config
+        available_targets = [item.name for item in IntegrationManager(project_dir).list_targets()]
+        preferred_order = list(dict.fromkeys(("codex-cli", "opencode", "claude-code", *PRIMARY_HOST_TOOL_IDS)))
+
+        def _pick_best(candidates: list[str]) -> str | None:
+            for host_id in preferred_order:
+                if host_id in candidates:
+                    return host_id
+            return candidates[0] if candidates else None
+
+        configured_targets = [item for item in config.host_profile_targets if item in available_targets]
+        if configured_targets:
+            best = _pick_best(configured_targets)
+            if best:
+                return best
+
+        configured_surfaces = self._collect_configured_host_targets(
+            project_dir=project_dir,
+            available_targets=available_targets,
+        )
+        if configured_surfaces:
+            best = _pick_best(configured_surfaces)
+            if best:
+                return best
+
+        detected_targets, _ = self._detect_host_targets(available_targets=available_targets)
+        if detected_targets:
+            best = _pick_best(detected_targets)
+            if best:
+                return best
+        return "codex-cli"
+
+    def _describe_next_step(self, *, status: str, recommended_command: str) -> tuple[str, str]:
+        status_map = {
+            "not_initialized": (
+                "还没完成宿主接入",
+                "先把 Super Dev 装进一个宿主，并确认可以触发。",
+            ),
+            "missing_core_docs": (
+                "三文档还没补齐",
+                "先让宿主按 Super Dev 流程补齐 PRD、Architecture、UIUX 三文档。",
+            ),
+            "waiting_docs_confirmation": (
+                "等待三文档确认",
+                "先确认 PRD、Architecture、UIUX 三文档，再继续后续阶段。",
+            ),
+            "waiting_confirmation": (
+                "等待流程确认门",
+                "先处理当前确认门，再继续恢复当前流水线。",
+            ),
+            "waiting_ui_revision": (
+                "等待 UI 改版闭环",
+                "先更新 UIUX 文档并完成前端返工，再恢复流程。",
+            ),
+            "waiting_preview_confirmation": (
+                "等待前端预览确认",
+                "先评审并确认当前前端预览，再决定是否进入后端和后续阶段。",
+            ),
+            "waiting_architecture_revision": (
+                "等待架构返工闭环",
+                "先更新架构文档并同步实现，再恢复流程。",
+            ),
+            "waiting_quality_revision": (
+                "等待质量整改闭环",
+                "先完成质量整改并重新过门禁，再恢复流程。",
+            ),
+            "delivery_closure_incomplete": (
+                "交付证据还没闭环",
+                "先补齐质量与发布证据，再进入交付。",
+            ),
+            "product_revision_required": (
+                "产品审查要求修订",
+                "先处理产品审查里的高优先级问题。",
+            ),
+            "proof_pack_incomplete": (
+                "proof-pack 还没补齐",
+                "先重新生成交付证据包。",
+            ),
+            "ready": (
+                "当前流程可以继续推进",
+                "先打开状态面板确认当前阶段，再继续执行。",
+            ),
+        }
+        if status in status_map:
+            return status_map[status]
+
+        command_map = {
+            "super-dev run --resume": (
+                "当前流程可从中断点恢复",
+                "先从上次中断的位置继续，不要重新开一轮。",
+            ),
+            "super-dev run --status": (
+                "当前流程需要先看状态面板",
+                "先看状态面板，确认当前卡在哪一步。",
+            ),
+            "super-dev quality --type all": (
+                "当前卡在质量/交付闭环",
+                "先跑完整质量门禁，补齐交付闭环。",
+            ),
+            "super-dev product-audit": (
+                "当前卡在产品审查",
+                "先重新执行产品审查并处理要求修订项。",
+            ),
+        }
+        return command_map.get(
+            recommended_command,
+            ("当前流程存在待处理项", "先按推荐动作继续当前流程，不要另起一轮普通聊天。"),
+        )
+
+    def _finalize_next_step_payload(self, *, project_dir: Path, payload: dict[str, Any]) -> dict[str, Any]:
+        project_dir = Path(project_dir).resolve()
+        preferred_host = self._preferred_host_target_for_project(project_dir)
+        preferred_host_name = host_display_name(preferred_host)
+        action_card = payload.get("action_card") if isinstance(payload.get("action_card"), dict) else {}
+        current_step_label = str(action_card.get("title", "")).strip()
+        user_next_action = str(action_card.get("user_action", "")).strip()
+        if not current_step_label or not user_next_action:
+            current_step_label, user_next_action = self._describe_next_step(
+                status=str(payload.get("status", "")).strip(),
+                recommended_command=str(payload.get("recommended_command", "")).strip(),
+            )
+        if self._project_has_super_dev_context(project_dir):
+            host_continue_prompt = self._build_host_continue_prompt(
+                project_dir=project_dir,
+                target=preferred_host,
+                next_payload={**payload, "current_step_label": current_step_label, "user_next_action": user_next_action},
+            )
+        else:
+            host_continue_prompt = self._build_host_start_prompt(project_dir=project_dir, target=preferred_host)
+        enriched = dict(payload)
+        enriched.update(
+            {
+                "current_step_label": current_step_label,
+                "user_next_action": user_next_action,
+                "preferred_host": preferred_host,
+                "preferred_host_name": preferred_host_name,
+                "host_continue_prompt": host_continue_prompt,
+                "session_brief_path": str(self._session_brief_path(project_dir)),
+                "workflow_state_path": str(self._workflow_state_path(project_dir)),
+                "continuity_rules": self._build_session_continuity_rules(status=str(payload.get("status", "")).strip()),
+                "workflow_mode": str(action_card.get("mode", payload.get("workflow_mode", ""))).strip() or "continue",
+                "action_card": action_card,
+                "user_action_shortcuts": self._workflow_mode_shortcuts(
+                    str(action_card.get("mode", payload.get("workflow_mode", ""))).strip() or "continue",
+                    action_card=action_card,
+                ),
+            }
+        )
+        return enriched
+
+    def _build_next_step_payload(self, project_dir: Path) -> dict[str, Any]:
+        project_dir = Path(project_dir).resolve()
+        if not self._project_has_super_dev_context(project_dir):
+            return self._finalize_next_step_payload(project_dir=project_dir, payload={
+                "status": "not_initialized",
+                "reason": "当前目录还没有进入 Super Dev 工作流。",
+                "recommended_command": "super-dev onboard",
+                "evidence": "未检测到 super-dev.yaml / .super-dev/WORKFLOW.md / output 基础产物",
+            })
+
+        summary = detect_pipeline_summary(project_dir, self._read_pipeline_run_state(project_dir) or {})
+        checkpoint_status = str(summary.get("workflow_status", "")).strip() or "ready"
+        recommended_command = str(summary.get("recommended_command", "")).strip() or "super-dev run --status"
+        blocker = str(summary.get("blocker", "")).strip()
+        evidence = str(summary.get("evidence", "")).strip()
+
+        if checkpoint_status not in {"ready", "missing_quality", "missing_delivery"}:
+            return self._finalize_next_step_payload(project_dir=project_dir, payload={
+                "status": checkpoint_status,
+                "reason": blocker or "当前仓库存在运行态、确认门或范围门禁，需要先沿当前流程继续。",
+                "recommended_command": recommended_command,
+                "evidence": evidence or f"workflow_status={checkpoint_status}",
+                "workflow_mode": str(summary.get("workflow_mode", "")).strip(),
+                "action_card": summary.get("action_card"),
+            })
+
+        readiness_path = project_dir / "output" / f"{project_dir.name}-release-readiness.json"
+        if readiness_path.exists():
+            try:
+                readiness_payload = json.loads(readiness_path.read_text(encoding="utf-8"))
+            except Exception:
+                readiness_payload = {}
+            failed_checks = list(readiness_payload.get("failed_checks") or []) if isinstance(readiness_payload, dict) else []
+            if "Delivery Closure" in failed_checks:
+                return self._finalize_next_step_payload(project_dir=project_dir, payload={
+                    "status": "delivery_closure_incomplete",
+                    "reason": "发布闭环证据还没有齐。",
+                    "recommended_command": "super-dev quality --type all",
+                    "evidence": "release readiness failed_checks 包含 Delivery Closure",
+                })
+
+        product_audit_path = project_dir / "output" / f"{project_dir.name}-product-audit.json"
+        if product_audit_path.exists():
+            try:
+                product_audit_payload = json.loads(product_audit_path.read_text(encoding="utf-8"))
+            except Exception:
+                product_audit_payload = {}
+            product_status = str(product_audit_payload.get("status", "")).strip()
+            if product_status == "revision_required":
+                return self._finalize_next_step_payload(project_dir=project_dir, payload={
+                    "status": "product_revision_required",
+                    "reason": "产品审查仍然要求修订。",
+                    "recommended_command": "super-dev product-audit",
+                    "evidence": f"product_audit.status={product_status}",
+                })
+
+        proof_pack_path = project_dir / "output" / f"{project_dir.name}-proof-pack.json"
+        if proof_pack_path.exists():
+            try:
+                proof_pack_payload = json.loads(proof_pack_path.read_text(encoding="utf-8"))
+            except Exception:
+                proof_pack_payload = {}
+            proof_pack_status = str(proof_pack_payload.get("status", "")).strip()
+            if proof_pack_status == "incomplete":
+                return self._finalize_next_step_payload(project_dir=project_dir, payload={
+                    "status": "proof_pack_incomplete",
+                    "reason": "当前交付证据包还没有齐。",
+                    "recommended_command": "super-dev release proof-pack",
+                    "evidence": f"proof_pack.status={proof_pack_status}",
+                })
+
+        return self._finalize_next_step_payload(project_dir=project_dir, payload={
+            "status": "ready",
+            "reason": blocker or "当前没有检测到待恢复的流程门禁，建议从状态面板继续。",
+            "recommended_command": "super-dev run --status",
+            "evidence": evidence or "未检测到更高优先级阻断项",
+            "workflow_mode": str(summary.get("workflow_mode", "")).strip(),
+            "action_card": summary.get("action_card"),
+        })
 
     def _resolve_pipeline_stage_selector(self, value: str) -> int | None:
         normalized = str(value).strip().lower()
@@ -3992,1057 +1543,6 @@ super-dev start --idea "你的需求"
                 "[yellow]提示: 当前策略要求宿主画像，但尚未指定关键宿主；如需强校验，请在 .super-dev/policy.yaml 中填写 required_hosts。[/yellow]"
             )
         return 0
-
-    def _cmd_preview(self, args) -> int:
-        """生成原型"""
-        output_path = Path(args.output).expanduser()
-        if not output_path.is_absolute():
-            output_path = Path.cwd() / output_path
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        self.console.print(f"[cyan]生成原型: {output_path}[/cyan]")
-        if self._export_preview_from_output_frontend(output_path):
-            self.console.print("[green]✓[/green] 已基于 output/frontend 生成可预览页面")
-            return 0
-
-        # 回退：生成文档概览预览页
-        output_dir = Path.cwd() / "output"
-        docs = sorted(output_dir.glob("*.md")) if output_dir.exists() else []
-        rows = "\n".join(
-            f"<li><a href=\"{doc.name}\" target=\"_blank\">{doc.name}</a></li>"
-            for doc in docs[:20]
-        ) or "<li>未找到可预览文档，请先在宿主会话触发 /super-dev，或运行 super-dev start / super-dev create 生成治理产物。</li>"
-
-        fallback_html = f"""<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Super Dev Preview</title>
-  <style>
-    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 32px; line-height: 1.6; }}
-    h1 {{ margin-bottom: 8px; }}
-    .hint {{ color: #555; margin-bottom: 16px; }}
-    ul {{ padding-left: 18px; }}
-  </style>
-</head>
-<body>
-  <h1>Super Dev 预览页</h1>
-  <p class="hint">未检测到宿主已实现的 output/frontend 前端骨架，以下为当前治理产物文档列表：</p>
-  <ul>{rows}</ul>
-</body>
-</html>
-"""
-        output_path.write_text(fallback_html, encoding="utf-8")
-        self.console.print("[yellow]未检测到 output/frontend，已生成文档概览预览页[/yellow]")
-        return 0
-
-    def _export_preview_from_output_frontend(self, output_path: Path) -> bool:
-        import shutil
-
-        frontend_dir = Path.cwd() / "output" / "frontend"
-        index_file = frontend_dir / "index.html"
-        css_file = frontend_dir / "styles.css"
-        js_file = frontend_dir / "app.js"
-
-        if not index_file.exists():
-            return False
-
-        html = index_file.read_text(encoding="utf-8")
-        output_path.write_text(html, encoding="utf-8")
-
-        if css_file.exists():
-            shutil.copyfile(css_file, output_path.parent / "styles.css")
-        if js_file.exists():
-            shutil.copyfile(js_file, output_path.parent / "app.js")
-        return True
-
-    def _frontend_runtime_report_paths(self, output_dir: Path, project_name: str) -> dict[str, Path]:
-        return {
-            "markdown": output_dir / f"{project_name}-frontend-runtime.md",
-            "json": output_dir / f"{project_name}-frontend-runtime.json",
-        }
-
-    def _load_frontend_runtime_validation(self, *, output_dir: Path, project_name: str) -> dict[str, Any]:
-        report_file = self._frontend_runtime_report_paths(output_dir=output_dir, project_name=project_name)["json"]
-        if not report_file.exists():
-            return {"passed": False, "checks": {}, "preview_file": "", "report_file": str(report_file)}
-        try:
-            payload = json.loads(report_file.read_text(encoding="utf-8"))
-        except Exception:
-            return {"passed": False, "checks": {}, "preview_file": "", "report_file": str(report_file)}
-        if not isinstance(payload, dict):
-            return {"passed": False, "checks": {}, "preview_file": "", "report_file": str(report_file)}
-        payload["report_file"] = str(report_file)
-        return payload
-
-    def _write_frontend_runtime_validation(
-        self,
-        *,
-        project_dir: Path,
-        output_dir: Path,
-        project_name: str,
-    ) -> dict[str, Any]:
-        frontend_dir = output_dir / "frontend"
-        index_file = frontend_dir / "index.html"
-        css_file = frontend_dir / "styles.css"
-        js_file = frontend_dir / "app.js"
-        preview_file = project_dir / "preview.html"
-
-        exported_preview = self._export_preview_from_output_frontend(preview_file) if index_file.exists() else False
-        checks = {
-            "output_frontend_index": index_file.exists(),
-            "output_frontend_styles": css_file.exists(),
-            "output_frontend_script": js_file.exists(),
-            "preview_html": preview_file.exists(),
-        }
-        passed = all(checks.values())
-        report = {
-            "project_name": project_name,
-            "passed": passed,
-            "checks": checks,
-            "preview_file": str(preview_file) if preview_file.exists() else "",
-            "generated_from_output_frontend": exported_preview,
-        }
-        report_paths = self._frontend_runtime_report_paths(output_dir=output_dir, project_name=project_name)
-        report_paths["json"].write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-
-        lines = [
-            "# Frontend Runtime Validation",
-            "",
-            f"- Passed: {'yes' if passed else 'no'}",
-            f"- Preview file: `{preview_file}`" if preview_file.exists() else "- Preview file: missing",
-            "",
-            "## Checks",
-            "",
-        ]
-        for key, value in checks.items():
-            lines.append(f"- {key}: {'ok' if value else 'missing'}")
-        report_paths["markdown"].write_text("\n".join(lines) + "\n", encoding="utf-8")
-        report["report_files"] = {name: str(path) for name, path in report_paths.items()}
-        return report
-
-    def _cmd_deploy(self, args) -> int:
-        """生成部署配置"""
-        from .deployers import CICDGenerator, LaunchRehearsalGenerator, LaunchRehearsalRunner
-
-        project_dir = Path.cwd()
-        config_manager = ConfigManager(project_dir)
-        config = config_manager.load()
-
-        tech_stack = {
-            "platform": config.platform,
-            "frontend": self._normalize_pipeline_frontend(config.frontend),
-            "backend": config.backend,
-            "domain": config.domain,
-        }
-        project_name = self._sanitize_project_name(config.name or project_dir.name)
-
-        platform = self._normalize_cicd_platform(args.cicd or "github")
-        generator = CICDGenerator(
-            project_dir=project_dir,
-            name=project_name,
-            tech_stack=tech_stack,
-            platform=platform,
-        )
-        generated_files = generator.generate()
-
-        cicd_map = {
-            "github": [".github/workflows/ci.yml", ".github/workflows/cd.yml"],
-            "gitlab": [".gitlab-ci.yml"],
-            "jenkins": ["Jenkinsfile"],
-            "azure": [".azure-pipelines.yml"],
-            "bitbucket": ["bitbucket-pipelines.yml"],
-            "all": [
-                ".github/workflows/ci.yml",
-                ".github/workflows/cd.yml",
-                ".gitlab-ci.yml",
-                "Jenkinsfile",
-                ".azure-pipelines.yml",
-                "bitbucket-pipelines.yml",
-            ],
-        }
-        docker_related = [
-            "Dockerfile",
-            "docker-compose.yml",
-            ".dockerignore",
-            "k8s/deployment.yaml",
-            "k8s/service.yaml",
-            "k8s/ingress.yaml",
-            "k8s/configmap.yaml",
-            "k8s/secret.yaml",
-        ]
-
-        want_cicd = bool(args.cicd) or (not args.cicd and not args.docker)
-        want_docker = bool(args.docker) or (not args.cicd and not args.docker)
-
-        selected_keys: list[str] = []
-        if want_cicd:
-            selected_keys.extend(cicd_map.get(platform, []))
-        if want_docker:
-            selected_keys.extend(docker_related)
-
-        selected_keys = [key for key in selected_keys if key in generated_files]
-        if not selected_keys:
-            self.console.print("[yellow]没有可生成的部署配置[/yellow]")
-            if not args.rehearsal:
-                return 0
-
-        self.console.print("[cyan]生成部署配置...[/cyan]")
-        written = 0
-        for relative_path in selected_keys:
-            full_path = project_dir / relative_path
-            full_path.parent.mkdir(parents=True, exist_ok=True)
-            full_path.write_text(generated_files[relative_path], encoding="utf-8")
-            self.console.print(f"  [green]✓[/green] {relative_path}")
-            written += 1
-
-        self.console.print(f"[green]✓[/green] 已生成 {written} 个部署文件")
-
-        if args.rehearsal:
-            rehearsal_generator = LaunchRehearsalGenerator(
-                project_dir=project_dir,
-                name=project_name,
-                tech_stack=tech_stack,
-            )
-            rehearsal_files = rehearsal_generator.generate(cicd_platform=args.cicd or "github")
-            self.console.print("[cyan]生成发布演练文档...[/cyan]")
-            for relative_path, content in rehearsal_files.items():
-                full_path = project_dir / relative_path
-                full_path.parent.mkdir(parents=True, exist_ok=True)
-                full_path.write_text(content, encoding="utf-8")
-                self.console.print(f"  [green]✓[/green] {relative_path}")
-
-        if args.rehearsal_verify:
-            runner = LaunchRehearsalRunner(
-                project_dir=project_dir,
-                project_name=project_name,
-                cicd_platform=args.cicd or "github",
-            )
-            rehearsal_result = runner.run()
-            report_files = runner.write(rehearsal_result)
-            status = "[green]通过[/green]" if rehearsal_result.passed else "[red]未通过[/red]"
-            self.console.print("[cyan]发布演练验证...[/cyan]")
-            self.console.print(f"  {status} 分数: {rehearsal_result.score}/100")
-            self.console.print(f"  [green]✓[/green] 报告: {report_files['markdown']}")
-            self.console.print(f"  [green]✓[/green] 数据: {report_files['json']}")
-            if not rehearsal_result.passed:
-                self.console.print("[yellow]演练未通过，请根据报告补齐缺失项后重试[/yellow]")
-                return 1
-
-        return 0
-
-    def _cmd_wizard(self, args) -> int:
-        """零门槛向导：收集需求并执行完整流水线"""
-        self.console.print("[cyan]Super Dev 向导模式[/cyan]")
-
-        if args.quick and not args.idea:
-            self.console.print("[red]--quick 需要配合 --idea 使用[/red]")
-            return 2
-
-        interactive = not bool(args.idea)
-        if interactive and not sys.stdin.isatty():
-            self.console.print("[red]非交互环境请使用 --idea 提供需求[/red]")
-            return 2
-
-        idea = args.idea
-        if interactive:
-            raw = input("请输入你的业务需求（例如：做一个企业级 CRM 系统）: ").strip()
-            if not raw:
-                self.console.print("[red]需求不能为空[/red]")
-                return 2
-            idea = raw
-        if not idea:
-            self.console.print("[red]需求不能为空[/red]")
-            return 2
-
-        def _pick_choice(
-            provided: str | None,
-            prompt: str,
-            choices: list[str],
-            default: str,
-        ) -> str:
-            if provided:
-                return provided
-            if not interactive or args.quick:
-                return default
-            self.console.print(f"[dim]{prompt} 可选: {', '.join(choices)}[/dim]")
-            selected = input(f"{prompt} (默认 {default}): ").strip().lower()
-            if not selected:
-                return default
-            if selected in choices:
-                return selected
-            self.console.print(f"[yellow]输入无效，已使用默认值: {default}[/yellow]")
-            return default
-
-        platform = _pick_choice(args.platform, "目标平台", SUPPORTED_PLATFORMS, "web")
-        frontend = _pick_choice(args.frontend, "前端框架", SUPPORTED_PIPELINE_FRONTENDS, "react")
-        backend = _pick_choice(args.backend, "后端框架", SUPPORTED_PIPELINE_BACKENDS, "node")
-        domain_candidates = [item for item in SUPPORTED_DOMAINS if item]
-        domain = _pick_choice(args.domain, "业务领域", domain_candidates, "saas")
-        cicd = _pick_choice(args.cicd, "CI/CD 平台", SUPPORTED_CICD, "all")
-
-        offline = bool(args.offline)
-        if interactive and not args.quick and not args.offline:
-            offline_answer = input("是否离线模式（禁用联网检索）? [y/N]: ").strip().lower()
-            offline = offline_answer in {"y", "yes"}
-
-        self.console.print("")
-        self.console.print("[cyan]向导结果[/cyan]")
-        self.console.print(f"  需求: {idea}")
-        self.console.print(f"  技术栈: {platform} | {frontend} | {backend}")
-        self.console.print(f"  领域: {domain}")
-        self.console.print(f"  CI/CD: {cicd}")
-        self.console.print(f"  离线模式: {'yes' if offline else 'no'}")
-        if args.name:
-            self.console.print(f"  项目名: {args.name}")
-        self.console.print("")
-
-        pipeline_args = argparse.Namespace(
-            description=idea,
-            mode="feature",
-            platform=platform,
-            frontend=frontend,
-            backend=backend,
-            domain=domain,
-            name=args.name,
-            cicd=cicd,
-            skip_redteam=False,
-            skip_scaffold=False,
-            skip_quality_gate=False,
-            skip_rehearsal_verify=False,
-            offline=offline,
-            quality_threshold=None,
-            resume=False,
-        )
-        return self._cmd_pipeline(pipeline_args)
-
-    def _cmd_fix(self, args) -> int:
-        """显式缺陷修复模式。"""
-        self.console.print("[cyan]Super Dev Bugfix Mode[/cyan]")
-        self.console.print("[dim]将执行：问题复现与影响分析 -> 轻量补丁文档 -> 定点修复与回归验证 -> 质量门禁与交付[/dim]")
-        self.console.print("")
-        pipeline_args = argparse.Namespace(
-            description=args.description,
-            mode="bugfix",
-            platform=args.platform,
-            frontend=args.frontend,
-            backend=args.backend,
-            domain=args.domain,
-            name=args.name,
-            cicd=args.cicd,
-            skip_redteam=bool(args.skip_redteam),
-            skip_scaffold=bool(args.skip_scaffold),
-            skip_quality_gate=bool(args.skip_quality_gate),
-            skip_rehearsal_verify=bool(args.skip_rehearsal_verify),
-            offline=bool(args.offline),
-            quality_threshold=args.quality_threshold,
-            resume=False,
-        )
-        return self._cmd_pipeline(pipeline_args)
-
-    def _cmd_create(self, args) -> int:
-        """一键创建项目 - 从想法到规范"""
-        from .creators import ProjectCreator
-
-        self.console.print("[cyan]Super Dev 项目创建器[/cyan]")
-        self._print_governance_boundary_notice(
-            "当前命令生成治理产物与执行提示，不替代宿主 AI 的实际编码。"
-        )
-        self.console.print(f"[dim]描述: {args.description}[/dim]")
-        self.console.print(f"[dim]请求模式: {args.mode}[/dim]")
-        self.console.print(f"[dim]平台: {args.platform} | 前端: {args.frontend} | 后端: {args.backend}[/dim]")
-        self.console.print("")
-
-        # 确定项目名称
-        project_name = args.name
-        if not project_name:
-            # 从描述生成项目名称
-            import re
-            words = re.findall(r'[\w]+', args.description)
-            if words:
-                project_name = '-'.join(words[:3]).lower()
-            else:
-                project_name = "my-project"
-        project_name = self._sanitize_project_name(project_name)
-
-        # 创建项目目录
-        project_dir = Path.cwd()
-        project_config = ConfigManager(project_dir).load()
-
-        try:
-            creator = ProjectCreator(
-                project_dir=project_dir,
-                name=project_name,
-                description=args.description,
-                request_mode=args.mode,
-                platform=args.platform,
-                frontend=args.frontend,
-                backend=args.backend,
-                domain=args.domain,
-                ui_library=getattr(args, 'ui_library', None),
-                style_solution=getattr(args, 'style', None),
-                state_management=getattr(args, 'state', []) or [],
-                testing_frameworks=getattr(args, 'testing', []) or [],
-                language_preferences=project_config.language_preferences,
-            )
-
-            # 1. 生成文档
-            if not args.skip_docs:
-                self.console.print("[cyan]第 1 步: 生成专业文档...[/cyan]")
-                docs = creator.generate_documents()
-                self.console.print(f"  [green]✓[/green] PRD: {docs['prd']}")
-                self.console.print(f"  [green]✓[/green] 架构: {docs['architecture']}")
-                self.console.print(f"  [green]✓[/green] UI/UX: {docs['uiux']}")
-                if docs.get("plan"):
-                    self.console.print(f"  [green]✓[/green] 执行路线图: {docs['plan']}")
-                if docs.get("frontend_blueprint"):
-                    self.console.print(f"  [green]✓[/green] 前端蓝图: {docs['frontend_blueprint']}")
-                self.console.print("")
-
-            # 2. 创建 Spec
-            self.console.print("[cyan]第 2 步: 创建 Spec 规范...[/cyan]")
-            change_id = creator.create_spec()
-            self.console.print(f"  [green]✓[/green] 变更 ID: {change_id}")
-            self.console.print("")
-
-            # 3. 生成 AI 提示词
-            self.console.print("[cyan]第 3 步: 生成 AI 提示词...[/cyan]")
-            prompt_file = creator.generate_ai_prompt()
-            self.console.print(f"  [green]✓[/green] 提示词: {prompt_file}")
-            self.console.print("")
-
-            # 完成
-            self.console.print("[green]✓ 项目创建完成！[/green]")
-            self.console.print("")
-            self.console.print("[cyan]下一步:[/cyan]")
-            self.console.print("  1. 查看生成的文档:")
-            self.console.print(f"     - PRD: output/{project_name}-prd.md")
-            self.console.print(f"     - 架构: output/{project_name}-architecture.md")
-            self.console.print(f"     - UI/UX: output/{project_name}-uiux.md")
-            self.console.print(f"     - 执行路线图: output/{project_name}-execution-plan.md")
-            self.console.print(f"     - 前端蓝图: output/{project_name}-frontend-blueprint.md")
-            self.console.print(f"  2. 查看规范: super-dev spec show {change_id}")
-            self.console.print(f"  3. 复制治理提示词并交给宿主会话: cat {prompt_file}")
-            self.console.print("  4. 在宿主会话中按 tasks 顺序开发并持续更新规范")
-
-        except Exception as e:
-            self.console.print(f"[red]创建失败: {e}[/red]")
-            import traceback
-            self.console.print(traceback.format_exc())
-            return 1
-
-        return 0
-
-    def _cmd_design(self, args) -> int:
-        """设计智能引擎命令"""
-        from .design import DesignIntelligenceEngine, DesignSystemGenerator, TokenGenerator
-
-        if args.design_command == "search":
-            # 搜索设计资产
-            self.console.print(f"[cyan]搜索设计资产: {args.query}[/cyan]")
-
-            engine = DesignIntelligenceEngine()
-
-            result = engine.search(
-                query=args.query,
-                domain=args.domain,
-                max_results=args.max_results,
-            )
-
-            # 显示结果
-            if "error" in result:
-                self.console.print(f"[red]搜索失败: {result['error']}[/red]")
-                return 1
-
-            domain_name = {
-                "style": "风格",
-                "color": "配色",
-                "typography": "字体",
-                "component": "组件",
-                "layout": "布局",
-                "animation": "动画",
-                "ux": "UX 指南",
-                "chart": "图表",
-                "product": "产品",
-            }.get(result["domain"], result["domain"])
-
-            self.console.print(f"\n[green]找到 {result['count']} 个{domain_name}结果:[/green]\n")
-
-            for idx, item in enumerate(result["results"], 1):
-                relevance_color = {
-                    "high": "green",
-                    "medium": "yellow",
-                    "low": "dim",
-                }.get(item.get("relevance", "low"), "dim")
-
-                self.console.print(f"[{relevance_color}]{idx}.[/] [bold]{item.get('name', item.get('Style Category', item.get('Font Pairing Name', 'N/A')))}[/] (相关度: {item.get('relevance', 'N/A')})")
-
-                # 显示关键信息
-                if "description" in item:
-                    self.console.print(f"    {item['description']}")
-                if "keywords" in item:
-                    self.console.print(f"    关键词: {item['keywords']}")
-                if "primary_colors" in item:
-                    self.console.print(f"    色彩: {item['primary_colors']}")
-                if "mood" in item:
-                    self.console.print(f"    风格: {item['mood']}")
-
-                self.console.print()
-
-            return 0
-
-        elif args.design_command == "generate":
-            # 生成完整设计系统
-            self.console.print("[cyan]生成设计系统[/cyan]")
-            self.console.print(f"  产品: {args.product}")
-            self.console.print(f"  行业: {args.industry}")
-            self.console.print(f"  关键词: {' '.join(args.keywords) if args.keywords else 'N/A'}")
-            self.console.print(f"  平台: {args.platform}")
-            self.console.print()
-
-            generator = DesignSystemGenerator()
-
-            design_system = generator.generate(
-                product_type=args.product,
-                industry=args.industry,
-                keywords=args.keywords or [],
-                platform=args.platform,
-                aesthetic=args.aesthetic,
-            )
-
-            self.console.print("[green]设计系统已生成:[/green]\n")
-            self.console.print(f"  名称: {design_system.name}")
-            self.console.print(f"  描述: {design_system.description}")
-
-            if design_system.aesthetic:
-                self.console.print(f"  美学方向: {design_system.aesthetic.name}")
-                self.console.print(f"  差异化特征: {design_system.aesthetic.differentiation}")
-
-            self.console.print("\n[cyan]生成文件...[/cyan]")
-
-            output_dir = Path(args.output)
-            generated_files = generator.generate_documentation(design_system, output_dir)
-
-            for file_path in generated_files:
-                self.console.print(f"  [green]✓[/green] {file_path}")
-
-            self.console.print("\n[dim]下一步:[/dim]")
-            self.console.print(f"  1. 查看 {output_dir / 'DESIGN_SYSTEM.md'} 了解设计系统")
-            self.console.print(f"  2. 使用 {output_dir / 'design-tokens.css'} 导入 CSS 变量")
-            self.console.print(f"  3. 使用 {output_dir / 'tailwind.config.json'} 配置 Tailwind")
-
-            return 0
-
-        elif args.design_command == "tokens":
-            # 生成 design tokens
-            self.console.print("[cyan]生成 design tokens[/cyan]")
-            self.console.print(f"  主色: {args.primary}")
-            self.console.print(f"  类型: {args.type}")
-            self.console.print()
-
-            token_gen = TokenGenerator()
-
-            if args.format == "css":
-                tokens = token_gen.generate_all_tokens(args.primary, args.type)
-
-                css_content = [":root {"]
-                css_content.append("  /* Colors */")
-
-                for name, value in tokens["colors"].items():
-                    css_content.append(f"  --color-{name}: {value};")
-
-                css_content.append("")
-                css_content.append("  /* Spacing */")
-
-                for name, value in tokens["spacing"].items():
-                    css_content.append(f"  --space-{name}: {value};")
-
-                css_content.append("")
-                css_content.append("  /* Shadows */")
-
-                for name, value in tokens["shadows"].items():
-                    css_content.append(f"  --shadow-{name}: {value};")
-
-                css_content.append("}")
-
-                output = "\n".join(css_content)
-
-                if args.output:
-                    Path(args.output).write_text(output, encoding="utf-8")
-                    self.console.print(f"[green]✓[/green] 已保存到 {args.output}")
-                else:
-                    self.console.print(output)
-
-            elif args.format == "json":
-                tokens = token_gen.generate_all_tokens(args.primary, args.type)
-                output = json.dumps(tokens, indent=2)
-
-                if args.output:
-                    Path(args.output).write_text(output, encoding="utf-8")
-                    self.console.print(f"[green]✓[/green] 已保存到 {args.output}")
-                else:
-                    self.console.print(output)
-
-            elif args.format == "tailwind":
-                tokens = token_gen.generate_all_tokens(args.primary, args.type)
-
-                tailwind_config = {
-                    "theme": {
-                        "extend": {
-                            "colors": {f"{k}": v for k, v in tokens["colors"].items()},
-                            "spacing": tokens["spacing"],
-                            "boxShadow": tokens["shadows"],
-                        }
-                    }
-                }
-
-                output = json.dumps(tailwind_config, indent=2)
-
-                if args.output:
-                    Path(args.output).write_text(output, encoding="utf-8")
-                    self.console.print(f"[green]✓[/green] 已保存到 {args.output}")
-                else:
-                    self.console.print(output)
-
-            return 0
-
-        elif args.design_command == "landing":
-            # Landing 页面模式生成
-            from .design import get_landing_generator
-
-            landing_gen = get_landing_generator()
-
-            # 列出所有模式
-            if hasattr(args, 'list') and args.list:
-                pattern_names = landing_gen.list_patterns()
-                self.console.print(f"\n[green]可用的 Landing 页面模式 ({len(pattern_names)} 个):[/green]\n")
-                for i, pattern_name in enumerate(pattern_names, 1):
-                    self.console.print(f"  {i}. {pattern_name}")
-                self.console.print()
-                return 0
-
-            # 智能推荐
-            if hasattr(args, 'product_type') and args.product_type:
-                self.console.print("[cyan]智能推荐 Landing 页面模式[/cyan]")
-                self.console.print(f"  产品类型: {args.product_type}")
-                self.console.print(f"  目标: {args.goal if hasattr(args, 'goal') and args.goal else 'N/A'}")
-                self.console.print(f"  受众: {args.audience if hasattr(args, 'audience') and args.audience else 'N/A'}")
-                self.console.print()
-
-                recommended = landing_gen.recommend(
-                    product_type=args.product_type,
-                    goal=args.goal if hasattr(args, 'goal') and args.goal else "",
-                    audience=args.audience if hasattr(args, 'audience') and args.audience else ""
-                )
-
-                if recommended:
-                    self.console.print(f"[green]推荐模式: {recommended.name}[/green]")
-                    self.console.print(f"  {recommended.description}")
-                    self.console.print(f"  适合: {', '.join(recommended.best_for)}")
-                    self.console.print(f"  复杂度: {recommended.complexity}")
-                    self.console.print()
-                    return 0
-
-            # 搜索模式
-            query = args.query if hasattr(args, 'query') and args.query else ""
-            if query:
-                self.console.print(f"[cyan]搜索 Landing 页面模式: {query}[/cyan]\n")
-
-                landing_results = landing_gen.search(query, max_results=args.max_results)
-
-                if not landing_results:
-                    self.console.print("[yellow]未找到匹配的模式[/yellow]")
-                    return 1
-
-                self.console.print(f"[green]找到 {len(landing_results)} 个结果:[/green]\n")
-
-                for idx, landing_pattern in enumerate(landing_results, 1):
-                    self.console.print(f"[cyan]{idx}. {landing_pattern.name}[/cyan]")
-                    self.console.print(f"    {landing_pattern.description}")
-                    self.console.print(f"    适合: {', '.join(landing_pattern.best_for)}")
-                    self.console.print(f"    复杂度: {landing_pattern.complexity}")
-                    self.console.print()
-
-                return 0
-
-            # 默认显示所有模式
-            pattern_names = landing_gen.list_patterns()
-            self.console.print(f"\n[green]可用的 Landing 页面模式 ({len(pattern_names)} 个):[/green]\n")
-            for i, pattern_name in enumerate(pattern_names, 1):
-                self.console.print(f"  {i}. {pattern_name}")
-            self.console.print()
-            return 0
-
-        elif args.design_command == "chart":
-            # 图表类型推荐
-            from .design import get_chart_recommender
-
-            chart_recommender = get_chart_recommender()
-
-            # 列出所有图表类型
-            if hasattr(args, 'list') and args.list:
-                chart_types = chart_recommender.list_chart_types()
-                categories = chart_recommender.list_categories()
-                self.console.print(f"\n[green]可用的图表类型 ({len(chart_types)} 个, {len(categories)} 个类别):[/green]\n")
-                for category in sorted(categories):
-                    types = [ct for ct in chart_types if ct in [c.name for c in chart_recommender.chart_types if c.category.value == category]]
-                    self.console.print(f"  [cyan]{category}:[/cyan]")
-                    for ct in sorted(types):
-                        self.console.print(f"    - {ct}")
-                self.console.print()
-                return 0
-
-            # 推荐图表类型
-            data_description = args.data_description if hasattr(args, 'data_description') else ""
-            if data_description:
-                self.console.print("[cyan]推荐图表类型[/cyan]")
-                self.console.print(f"  数据描述: {data_description}")
-                self.console.print(f"  框架: {args.framework}")
-                self.console.print()
-
-                chart_recommendations = chart_recommender.recommend(
-                    data_description=data_description,
-                    framework=args.framework,
-                    max_results=args.max_results
-                )
-
-                if not chart_recommendations:
-                    self.console.print("[yellow]未找到合适的图表类型[/yellow]")
-                    return 1
-
-                self.console.print("[green]推荐结果:[/green]\n")
-
-                for idx, chart_rec in enumerate(chart_recommendations, 1):
-                    confidence_pct = int(chart_rec.confidence * 100)
-                    self.console.print(f"[cyan]{idx}. {chart_rec.chart_type.name}[/cyan] (置信度: {confidence_pct}%)")
-                    self.console.print(f"    {chart_rec.chart_type.description}")
-                    self.console.print(f"    理由: {chart_rec.reasoning}")
-                    self.console.print(f"    推荐库: {chart_rec.library_recommendation}")
-                    self.console.print(f"    无障碍: {chart_rec.chart_type.accessibility_notes}")
-                    if chart_rec.alternatives:
-                        self.console.print(f"    替代方案: {', '.join([a.name for a in chart_rec.alternatives])}")
-                    self.console.print()
-
-                return 0
-
-            # 默认显示所有图表类型
-            chart_types = chart_recommender.list_chart_types()
-            self.console.print(f"\n[green]可用的图表类型 ({len(chart_types)} 个):[/green]\n")
-            for i, ct in enumerate(chart_types, 1):
-                self.console.print(f"  {i}. {ct}")
-            self.console.print()
-            return 0
-
-        elif args.design_command == "ux":
-            # UX 指南查询
-            from .design import get_ux_guide
-
-            ux_guide = get_ux_guide()
-
-            # 列出所有领域
-            if hasattr(args, 'list_domains') and args.list_domains:
-                domains = ux_guide.list_domains()
-                self.console.print(f"\n[green]UX 指南领域 ({len(domains)} 个):[/green]\n")
-                for i, domain in enumerate(domains, 1):
-                    self.console.print(f"  {i}. {domain}")
-                self.console.print()
-                return 0
-
-            # 快速见效的改进
-            if hasattr(args, 'quick_wins') and args.quick_wins:
-                self.console.print("[cyan]快速见效的 UX 改进建议[/cyan]\n")
-
-                ux_quick_wins = ux_guide.get_quick_wins(max_results=args.max_results)
-
-                if not ux_quick_wins:
-                    self.console.print("[yellow]未找到快速见效的建议[/yellow]")
-                    return 1
-
-                for idx, ux_rec in enumerate(ux_quick_wins, 1):
-                    self.console.print(f"[cyan]{idx}. {ux_rec.guideline.topic}[/cyan] ({ux_rec.guideline.domain.value})")
-                    self.console.print(f"    [green]最佳实践:[/green] {ux_rec.guideline.best_practice}")
-                    self.console.print(f"    [red]反模式:[/red] {ux_rec.guideline.anti_pattern}")
-                    self.console.print(f"    影响: {ux_rec.guideline.impact}")
-                    self.console.print(f"    优先级: {ux_rec.priority} | 实现难度: {ux_rec.implementation_effort} | 用户影响: {ux_rec.user_impact}")
-                    if ux_rec.resources:
-                        self.console.print(f"    资源: {', '.join(ux_rec.resources)}")
-                    self.console.print()
-
-                return 0
-
-            # 检查清单
-            if hasattr(args, 'checklist') and args.checklist:
-                self.console.print("[cyan]UX 检查清单[/cyan]\n")
-
-                checklist = ux_guide.get_checklist(domains=[args.domain] if hasattr(args, 'domain') and args.domain else None)
-
-                for domain, items in sorted(checklist.items()):
-                    self.console.print(f"[cyan]{domain}:[/cyan]")
-                    for item in items:
-                        self.console.print(f"  {item}")
-                    self.console.print()
-
-                return 0
-
-            # 搜索 UX 指南
-            query = args.query if hasattr(args, 'query') and args.query else ""
-            if query:
-                self.console.print(f"[cyan]搜索 UX 指南: {query}[/cyan]\n")
-
-                ux_recommendations = ux_guide.search(
-                    query=query,
-                    domain=args.domain if hasattr(args, 'domain') else None,
-                    max_results=args.max_results
-                )
-
-                if not ux_recommendations:
-                    self.console.print("[yellow]未找到匹配的 UX 指南[/yellow]")
-                    return 1
-
-                self.console.print(f"[green]找到 {len(ux_recommendations)} 个结果:[/green]\n")
-
-                for idx, ux_rec in enumerate(ux_recommendations, 1):
-                    self.console.print(f"[cyan]{idx}. {ux_rec.guideline.topic}[/cyan] ({ux_rec.guideline.domain.value})")
-                    self.console.print(f"    [green]最佳实践:[/green] {ux_rec.guideline.best_practice}")
-                    self.console.print(f"    [red]反模式:[/red] {ux_rec.guideline.anti_pattern}")
-                    self.console.print(f"    影响: {ux_rec.guideline.impact}")
-                    self.console.print(f"    优先级: {ux_rec.priority} | 实现难度: {ux_rec.implementation_effort} | 用户影响: {ux_rec.user_impact}")
-                    if ux_rec.resources:
-                        self.console.print(f"    资源: {', '.join(ux_rec.resources)}")
-                    self.console.print()
-
-                return 0
-
-            # 默认显示所有领域
-            domains = ux_guide.list_domains()
-            self.console.print(f"\n[green]UX 指南领域 ({len(domains)} 个):[/green]\n")
-            for i, domain in enumerate(domains, 1):
-                self.console.print(f"  {i}. {domain}")
-            self.console.print()
-            return 0
-
-        elif args.design_command == "stack":
-            # 技术栈最佳实践
-            from .design import get_tech_stack_engine
-
-            tech_engine = get_tech_stack_engine()
-
-            # 列出所有技术栈
-            if hasattr(args, 'list') and args.list:
-                stacks = tech_engine.list_stacks()
-                self.console.print(f"\n[green]支持的技术栈 ({len(stacks)} 个):[/green]\n")
-                for i, stack in enumerate(stacks, 1):
-                    self.console.print(f"  {i}. {stack}")
-                self.console.print()
-                return 0
-
-            # 查询参数
-            stack_name = args.stack
-            query = args.query if hasattr(args, 'query') and args.query else None
-            category = args.category if hasattr(args, 'category') else None
-
-            # 显示设计模式
-            if hasattr(args, 'patterns') and args.patterns:
-                tech_patterns = tech_engine.get_patterns(stack_name)
-
-                if not tech_patterns:
-                    self.console.print(f"[yellow]未找到 {stack_name} 的设计模式[/yellow]")
-                    return 1
-
-                self.console.print(f"\n[cyan]{stack_name} 设计模式 ({len(tech_patterns)} 个):[/cyan]\n")
-
-                for idx, tech_pattern in enumerate(tech_patterns, 1):
-                    self.console.print(f"[cyan]{idx}. {tech_pattern.name}[/cyan]")
-                    self.console.print(f"    描述: {tech_pattern.description}")
-                    self.console.print(f"    使用场景: {tech_pattern.use_case}")
-                    if tech_pattern.pros:
-                        self.console.print(f"    优点: {', '.join(tech_pattern.pros)}")
-                    if tech_pattern.cons:
-                        self.console.print(f"    缺点: {', '.join(tech_pattern.cons)}")
-                    self.console.print()
-
-                return 0
-
-            # 显示性能优化建议
-            if hasattr(args, 'performance') and args.performance:
-                tips = tech_engine.get_performance_tips(stack_name)
-
-                if not tips:
-                    self.console.print(f"[yellow]未找到 {stack_name} 的性能建议[/yellow]")
-                    return 1
-
-                self.console.print(f"\n[cyan]{stack_name} 性能优化建议 ({len(tips)} 个):[/cyan]\n")
-
-                for idx, tip in enumerate(tips, 1):
-                    self.console.print(f"[cyan]{idx}. {tip.topic} - {tip.technique}[/cyan]")
-                    self.console.print(f"    描述: {tip.description}")
-                    self.console.print(f"    影响: {tip.impact} | 实施难度: {tip.effort}")
-                    if tip.code_snippet:
-                        self.console.print(f"    代码示例:\n    [dim]{tip.code_snippet}[/dim]")
-                    self.console.print()
-
-                return 0
-
-            # 快速见效的性能优化
-            if hasattr(args, 'quick_wins') and args.quick_wins:
-                tips = tech_engine.get_quick_wins(stack_name)
-
-                if not tips:
-                    self.console.print(f"[yellow]未找到 {stack_name} 的快速性能优化[/yellow]")
-                    return 1
-
-                self.console.print(f"\n[cyan]{stack_name} 快速见效的性能优化 ({len(tips)} 个):[/cyan]\n")
-
-                for idx, tip in enumerate(tips, 1):
-                    self.console.print(f"[cyan]{idx}. {tip.topic} - {tip.technique}[/cyan]")
-                    self.console.print(f"    描述: {tip.description}")
-                    if tip.code_snippet:
-                        self.console.print(f"    代码示例:\n    [dim]{tip.code_snippet}[/dim]")
-                    self.console.print()
-
-                return 0
-
-            # 搜索最佳实践
-            self.console.print(f"[cyan]搜索 {stack_name} 最佳实践[/cyan]\n")
-
-            if query:
-                self.console.print(f"查询: {query}\n")
-
-            stack_recommendations = tech_engine.search_practices(
-                stack=stack_name,
-                query=query,
-                category=category,
-                max_results=args.max_results
-            )
-
-            if not stack_recommendations:
-                self.console.print("[yellow]未找到匹配的最佳实践[/yellow]")
-                return 1
-
-            for idx, stack_rec in enumerate(stack_recommendations, 1):
-                self.console.print(f"[cyan]{idx}. {stack_rec.practice.topic}[/cyan] ({stack_rec.practice.category.value})")
-                self.console.print(f"    [green]最佳实践:[/green] {stack_rec.practice.practice}")
-                self.console.print(f"    [red]反模式:[/red] {stack_rec.practice.anti_pattern}")
-                self.console.print(f"    好处: {stack_rec.practice.benefits}")
-                self.console.print(f"    优先级: {stack_rec.priority} | 复杂度: {stack_rec.practice.complexity}")
-                if stack_rec.context:
-                    self.console.print(f"    上下文: {stack_rec.context}")
-                if stack_rec.alternatives:
-                    self.console.print(
-                        f"    替代方案: {', '.join([a.value if hasattr(a, 'value') else str(a) for a in stack_rec.alternatives])}"
-                    )
-                if stack_rec.resources:
-                    self.console.print(f"    资源: {', '.join(stack_rec.resources)}")
-                if stack_rec.practice.code_example:
-                    self.console.print(f"    代码示例:\n    [dim]{stack_rec.practice.code_example[:200]}...[/dim]")
-                self.console.print()
-
-            return 0
-
-        elif args.design_command == "codegen":
-            # 代码片段生成
-            from .design import get_code_generator
-            from .design.codegen import Framework
-
-            codegen = get_code_generator()
-
-            # 列出所有可用组件
-            if hasattr(args, 'list') and args.list:
-                components = codegen.get_available_components(
-                    framework=Framework(args.framework) if hasattr(args, 'framework') else None
-                )
-
-                self.console.print(f"\n[green]可用组件 ({args.framework or 'all'}):[/green]\n")
-
-                for category, comp_list in sorted(components.items()):
-                    self.console.print(f"[cyan]{category}:[/cyan]")
-                    for comp in comp_list:
-                        self.console.print(f"  - {comp}")
-                    self.console.print()
-
-                return 0
-
-            # 搜索组件
-            if hasattr(args, 'search') and args.search:
-                component_snippets = codegen.search_components(
-                    query=args.search,
-                    framework=args.framework if hasattr(args, 'framework') else None
-                )
-
-                if not component_snippets:
-                    self.console.print(f"[yellow]未找到匹配的组件: {args.search}[/yellow]")
-                    return 1
-
-                self.console.print(f"\n[green]找到 {len(component_snippets)} 个组件:[/green]\n")
-
-                for idx, snippet in enumerate(component_snippets, 1):
-                    self.console.print(f"[cyan]{idx}. {snippet.name}[/cyan] ({snippet.framework.value})")
-                    self.console.print(f"    类别: {snippet.category.value}")
-                    self.console.print(f"    描述: {snippet.description}")
-                    self.console.print(f"    依赖: {', '.join(snippet.dependencies)}")
-                    if snippet.preview:
-                        self.console.print(f"    预览: [dim]{snippet.preview}[/dim]")
-                    self.console.print()
-
-                return 0
-
-            # 生成组件代码
-            component_name = args.component
-            framework = args.framework if hasattr(args, 'framework') else "react"
-
-            self.console.print(f"[cyan]生成 {component_name} 组件 ({framework})[/cyan]\n")
-
-            component = codegen.generate_component(
-                component_name=component_name,
-                framework=Framework(framework)
-            )
-
-            if not component:
-                self.console.print(f"[yellow]未找到组件: {component_name}[/yellow]")
-                self.console.print("使用 --list 查看可用组件")
-                return 1
-
-            self.console.print(f"[green]组件名称:[/green] {component_name}")
-            self.console.print(f"[green]描述:[/green] {component.description}\n")
-
-            self.console.print("[cyan]代码:[/cyan]")
-            self.console.print(f"```{framework}")
-            self.console.print(component.code)
-            self.console.print("```\n")
-
-            if component.imports:
-                self.console.print("[cyan]导入语句:[/cyan]")
-                for imp in component.imports:
-                    self.console.print(f"  {imp}")
-                self.console.print()
-
-            if component.dependencies:
-                self.console.print("[cyan]依赖:[/cyan]")
-                self.console.print(f"  {', '.join(component.dependencies)}")
-                self.console.print()
-
-            if component.usage_example:
-                self.console.print("[cyan]使用示例:[/cyan]")
-                self.console.print(f"  [dim]{component.usage_example}[/dim]")
-
-            # 输出到文件
-            if hasattr(args, 'output') and args.output:
-                output_path = Path(args.output)
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-
-                with open(output_path, 'w', encoding='utf-8') as f:
-                    f.write(component.code)
-
-                self.console.print(f"\n[green]已保存到: {output_path}[/green]")
-
-            return 0
-
-        else:
-            self.console.print("[yellow]请指定设计子命令[/yellow]")
-            self.console.print("  可用命令: search, generate, tokens, landing, chart, ux, stack, codegen")
-            self.console.print("  使用 'super-dev design <command> -h' 查看帮助")
-            return 1
 
     def _cmd_pipeline(self, args) -> int:
         """运行完整流水线 - 从想法到部署"""
@@ -5222,6 +1722,10 @@ super-dev start --idea "你的需求"
             contract_report.finalize(success=success, failure_reason=reason)
             return contract_report.write(output_dir=output_dir)
 
+        def _write_contract_snapshot() -> dict[str, Path]:
+            """写入当前运行中的契约快照，供发布演练等进行中校验读取。"""
+            return contract_report.write(output_dir=output_dir)
+
         def _persist_run_state(status: str, extra: dict[str, Any] | None = None) -> None:
             payload = {
                 "status": status,
@@ -5269,7 +1773,7 @@ super-dev start --idea "你的需求"
                     else ""
                 )
                 fallback_reasons: list[str] = []
-                if run_status in {"waiting_confirmation", "waiting_ui_revision", "waiting_architecture_revision", "waiting_quality_revision"}:
+                if run_status in {"waiting_confirmation", "waiting_preview_confirmation", "waiting_ui_revision", "waiting_architecture_revision", "waiting_quality_revision"}:
                     failed_stage = None
                     resume_from_stage = None
                     if isinstance(run_state, dict):
@@ -5279,7 +1783,11 @@ super-dev start --idea "你的需求"
                     if resume_from_stage is None:
                         resume_from_stage = 2
                     initial_resume_stage = resume_from_stage
-                    if run_status == "waiting_ui_revision":
+                    if run_status == "waiting_preview_confirmation":
+                        self.console.print(
+                            f"[cyan]恢复模式：前端预览确认已通过，将从第 {resume_from_stage} 阶段继续[/cyan]"
+                        )
+                    elif run_status == "waiting_ui_revision":
                         self.console.print(
                             f"[cyan]恢复模式：UI 改版门已通过，将从第 {resume_from_stage} 阶段继续[/cyan]"
                         )
@@ -5516,6 +2024,10 @@ super-dev start --idea "你的需求"
                 prd_file.write_text(prd_content, encoding="utf-8")
                 arch_file.write_text(arch_content, encoding="utf-8")
                 uiux_file.write_text(uiux_content, encoding="utf-8")
+                (output_dir / f"{project_name}-ui-contract.json").write_text(
+                    json.dumps(doc_generator.generate_ui_contract(), ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
 
                 plan_file = output_dir / f"{project_name}-execution-plan.md"
                 frontend_blueprint_file = output_dir / f"{project_name}-frontend-blueprint.md"
@@ -5867,14 +2379,20 @@ super-dev start --idea "你的需求"
 
                 # 保存红队审查报告
                 redteam_file = project_dir / "output" / f"{project_name}-redteam.md"
+                redteam_json_file = project_dir / "output" / f"{project_name}-redteam.json"
                 redteam_file.parent.mkdir(parents=True, exist_ok=True)
                 redteam_file.write_text(redteam_report.to_markdown(), encoding="utf-8")
+                redteam_json_file.write_text(
+                    json.dumps(redteam_report.to_dict(), ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
 
                 self.console.print(f"  [green]✓[/green] 安全问题: {sum(1 for i in redteam_report.security_issues if i.severity in ('critical', 'high'))} high/critical")
                 self.console.print(f"  [green]✓[/green] 性能问题: {sum(1 for i in redteam_report.performance_issues if i.severity in ('critical', 'high'))} high/critical")
                 self.console.print(f"  [green]✓[/green] 架构问题: {sum(1 for i in redteam_report.architecture_issues if i.severity in ('critical', 'high'))} high/critical")
                 self.console.print(f"  [green]✓[/green] 总分: {redteam_report.total_score}/100")
                 self.console.print(f"  [green]✓[/green] 报告: {redteam_file}")
+                self.console.print(f"  [green]✓[/green] JSON: {redteam_json_file}")
                 self.console.print("")
 
                 # 红队未通过时直接阻断，确保“先通过红队，再进入质量门禁”
@@ -5956,6 +2474,8 @@ super-dev start --idea "你的需求"
                 if gate_checker.latest_ui_review_report is not None:
                     ui_review_file = project_dir / "output" / f"{project_name}-ui-review.md"
                     ui_review_json_file = project_dir / "output" / f"{project_name}-ui-review.json"
+                    alignment_file = project_dir / "output" / f"{project_name}-ui-contract-alignment.md"
+                    alignment_json_file = project_dir / "output" / f"{project_name}-ui-contract-alignment.json"
                     ui_review_file.write_text(
                         gate_checker.latest_ui_review_report.to_markdown(),
                         encoding="utf-8",
@@ -5968,6 +2488,25 @@ super-dev start --idea "你的需求"
                         ),
                         encoding="utf-8",
                     )
+                    alignment_file.write_text(
+                        gate_checker.latest_ui_review_report.alignment_markdown(),
+                        encoding="utf-8",
+                    )
+                    alignment_json_file.write_text(
+                        json.dumps(
+                            gate_checker.latest_ui_review_report.alignment_summary,
+                            ensure_ascii=False,
+                            indent=2,
+                        ),
+                        encoding="utf-8",
+                    )
+                    frontend_index = output_dir / "frontend" / "index.html"
+                    if frontend_index.exists():
+                        frontend_runtime = self._write_frontend_runtime_validation(
+                            project_dir=project_dir,
+                            output_dir=output_dir,
+                            project_name=project_name,
+                        )
 
                 status = "[green]通过[/green]" if gate_result.passed else "[red]未通过[/red]"
                 self.console.print(f"  {status} 总分: {gate_result.total_score}/100")
@@ -5975,6 +2514,7 @@ super-dev start --idea "你的需求"
                 if gate_checker.latest_ui_review_report is not None:
                     self.console.print(f"  [green]✓[/green] UI 审查: {ui_review_file}")
                     self.console.print(f"  [green]✓[/green] UI 审查 JSON: {ui_review_json_file}")
+                    self.console.print(f"  [green]✓[/green] UI 契约对齐: {alignment_file}")
                 self.console.print("")
 
                 # 质量门禁未通过，停止流水线
@@ -6236,6 +2776,7 @@ super-dev start --idea "你的需求"
                 )
             else:
                 metrics_snapshot_file = _write_metrics_snapshot()
+                _write_contract_snapshot()
                 runner = LaunchRehearsalRunner(
                     project_dir=project_dir,
                     project_name=project_name,
@@ -7095,7 +3636,7 @@ super-dev start --idea "你的需求"
             self.console.print(f"[dim]项目目录: {project_dir}[/dim]")
             if detected_meta:
                 self.console.print(
-                    f"[cyan]自动检测到 {len(detected_meta)} 个宿主：{', '.join(detected_meta)}[/cyan]"
+                    f"[cyan]自动检测到 {len(detected_meta)} 个宿主：{', '.join(self._host_label(target) for target in detected_meta)}[/cyan]"
                 )
             self.console.print(
                 f"[cyan]兼容性评分: {compatibility['overall_score']:.2f}/100 "
@@ -7272,7 +3813,7 @@ super-dev start --idea "你的需求"
             self.console.print(f"[dim]项目目录: {project_dir}[/dim]")
             if detected_meta:
                 self.console.print(
-                    f"[cyan]自动检测到 {len(detected_meta)} 个宿主：{', '.join(detected_meta)}[/cyan]"
+                    f"[cyan]自动检测到 {len(detected_meta)} 个宿主：{', '.join(self._host_label(target) for target in detected_meta)}[/cyan]"
                 )
             summary = payload.get("summary", {})
             if isinstance(summary, dict):
@@ -7301,10 +3842,16 @@ super-dev start --idea "你的需求"
                 self.console.print(f"  触发命令: {host.get('final_trigger', '-')}")
                 self.console.print(f"  宿主协议: {host.get('host_protocol_summary', '-')}")
                 self.console.print(f"  人工验收状态: {host.get('manual_runtime_status_label', '-')}")
+                if host.get("resume_probe_prompt"):
+                    self.console.print("  继续当前流程:")
+                    self.console.print(f"    - 宿主第一句: {host.get('resume_probe_prompt')}")
+                    self.console.print(f"    - 流程状态卡: {self._session_brief_path(Path(payload.get('project_dir', Path.cwd())))}")
                 if host.get("blocking_reason"):
                     self.console.print(f"  阻塞原因: {host.get('blocking_reason')}")
                 if host.get("recommended_action"):
                     self.console.print(f"  建议动作: {host.get('recommended_action')}")
+                if host.get("resume_probe_prompt"):
+                    self.console.print(f"  恢复探针: {host.get('resume_probe_prompt')}")
                 comment = host.get("manual_runtime_comment", "")
                 if isinstance(comment, str) and comment.strip():
                     self.console.print(f"  验收备注: {comment.strip()}")
@@ -7317,6 +3864,11 @@ super-dev start --idea "你的需求"
                 criteria = host.get("pass_criteria", [])
                 if isinstance(criteria, list):
                     for item in criteria:
+                        self.console.print(f"    - {item}")
+                resume_checklist = host.get("resume_checklist", [])
+                if isinstance(resume_checklist, list) and resume_checklist:
+                    self.console.print("  恢复检查清单:")
+                    for item in resume_checklist:
                         self.console.print(f"    - {item}")
             if "report_files" in payload:
                 report_files = payload["report_files"]
@@ -7337,3339 +3889,6 @@ super-dev start --idea "你的需求"
         self.console.print("[yellow]未知 integrate 操作[/yellow]")
         return 1
 
-    def _resolve_onboard_targets(
-        self,
-        *,
-        available_targets: list[str],
-        host: str | None,
-        all_targets: bool,
-        non_interactive: bool,
-    ) -> list[str]:
-        targets: list[str] = []
-        if all_targets:
-            return available_targets
-        if host:
-            return [host]
-        if non_interactive:
-            return available_targets
-
-        interactive_targets = self._interactive_host_selector(available_targets=available_targets)
-        if interactive_targets is not None:
-            return interactive_targets
-
-        self._render_host_selection_guide(available_targets=available_targets)
-        raw = input("宿主选择: ").strip()
-        if not raw:
-            return available_targets
-        try:
-            selected_indices = [int(item.strip()) for item in raw.split(",") if item.strip()]
-        except ValueError:
-            raise ValueError("输入无效，请输入数字编号（如 1,3）")
-        for index in selected_indices:
-            if index < 1 or index > len(available_targets):
-                raise ValueError(f"编号超出范围: {index}")
-
-        seen = set()
-        for index in selected_indices:
-            target = available_targets[index - 1]
-            if target in seen:
-                continue
-            seen.add(target)
-            targets.append(target)
-        return targets
-
-    def _super_dev_ascii_banner(self) -> str:
-        return (
-            "  ____                        ____             \n"
-            " / ___| _   _ _ __   ___ _ __|  _ \\  _____   __\n"
-            " \\___ \\| | | | '_ \\ / _ \\ '__| | | |/ _ \\ \\ / /\n"
-            "  ___) | |_| | |_) |  __/ |  | |_| |  __/\\ V / \n"
-            " |____/ \\__,_| .__/ \\___|_|  |____/ \\___| \\_/  \n"
-            "             |_|                               "
-        )
-
-    def _read_single_key(self) -> str:
-        if os.name == "nt":
-            import msvcrt
-
-            key = msvcrt.getwch()
-            if key in ("\x00", "\xe0"):
-                special = msvcrt.getwch()
-                return {
-                    "H": "UP",
-                    "P": "DOWN",
-                }.get(special, special)
-            if key == "\r":
-                return "ENTER"
-            if key == " ":
-                return "SPACE"
-            if key == "\x1b":
-                return "ESC"
-            return key
-
-        import termios
-        import tty
-
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
-        try:
-            tty.setraw(fd)
-            first = sys.stdin.read(1)
-            if first == "\x1b":
-                second = sys.stdin.read(1)
-                if second == "[":
-                    third = sys.stdin.read(1)
-                    return {
-                        "A": "UP",
-                        "B": "DOWN",
-                    }.get(third, "ESC")
-                return "ESC"
-            if first in ("\r", "\n"):
-                return "ENTER"
-            if first == " ":
-                return "SPACE"
-            return first
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-
-    def _interactive_host_selector(self, *, available_targets: list[str]) -> list[str] | None:
-        from .integrations import IntegrationManager
-
-        if not RICH_AVAILABLE:
-            return None
-        if not sys.stdin.isatty() or not sys.stdout.isatty():
-            return None
-
-        integration_manager = IntegrationManager(Path.cwd())
-        detected_targets, _ = self._detect_host_targets(available_targets=available_targets)
-        selected: set[str] = set(detected_targets)
-        cursor = 0
-        status_message = ""
-
-        def renderable() -> Group:
-            subtitle = (
-                "Space 勾选，Enter 安装，U 卸载选中，↑/↓ 移动，A 全选，C 仅 CLI，I 仅 IDE，R 清空，Esc 取消\n"
-                f"[{symbol('cursor')}] 当前光标  [{symbol('selected')}] 已选中  [{symbol('unselected')}] 未选中\n"
-                "slash 宿主用 /super-dev；非 slash 宿主用 super-dev: / super-dev："
-            )
-            header = Panel(f"{self._super_dev_ascii_banner()}\n\n{normalize_terminal_text(subtitle)}", title="Super Dev")
-
-            table = Table(title="选择宿主工具", show_header=True, header_style="bold cyan")
-            table.add_column("当前", width=6)
-            table.add_column("#", width=4, style="cyan")
-            table.add_column("宿主", style="bold")
-            table.add_column("认证", width=12)
-            table.add_column("触发", width=12)
-            table.add_column("协议", overflow="fold")
-            table.add_column("检测", width=8)
-
-            for idx, target in enumerate(available_targets, 1):
-                profile = integration_manager.get_adapter_profile(target)
-                selected_mark = f"[{symbol('selected')}]" if target in selected else f"[{symbol('unselected')}]"
-                pointer = f"[{symbol('cursor')}]" if idx - 1 == cursor else "   "
-                trigger = "/super-dev" if integration_manager.supports_slash(target) else "super-dev:"
-                detected = "已检测" if target in detected_targets else ""
-                host_label = Text()
-                host_label.append(f"{selected_mark} ", style="green" if target in selected else "dim")
-                host_label.append(target, style="bold white" if idx - 1 == cursor else "bold")
-                table.add_row(
-                    pointer,
-                    str(idx),
-                    host_label,
-                    profile.certification_label,
-                    trigger,
-                    profile.host_protocol_summary or profile.host_protocol_mode,
-                    detected,
-                )
-
-            selected_text = ", ".join(sorted(selected)) if selected else "未选择"
-            footer = Text()
-            footer.append("当前选择: ", style="cyan")
-            footer.append(selected_text, style="bold white")
-
-            parts: list[object] = [header, table, footer]
-            if status_message:
-                parts.append(Text(status_message, style="yellow"))
-            return Group(*parts)
-
-        with Live(renderable(), console=self.console, refresh_per_second=8, transient=True, auto_refresh=False) as live:
-            while True:
-                key = self._read_single_key()
-                status_message = ""
-                if key == "UP":
-                    cursor = (cursor - 1) % len(available_targets)
-                    live.update(renderable(), refresh=True)
-                    continue
-                if key == "DOWN":
-                    cursor = (cursor + 1) % len(available_targets)
-                    live.update(renderable(), refresh=True)
-                    continue
-                if key == "SPACE":
-                    target = available_targets[cursor]
-                    if target in selected:
-                        selected.remove(target)
-                    else:
-                        selected.add(target)
-                    live.update(renderable(), refresh=True)
-                    continue
-                if key in ("a", "A"):
-                    selected = set(available_targets)
-                    live.update(renderable(), refresh=True)
-                    continue
-                if key in ("c", "C"):
-                    selected = {
-                        target for target in available_targets
-                        if integration_manager.get_adapter_profile(target).category == "cli"
-                    }
-                    live.update(renderable(), refresh=True)
-                    continue
-                if key in ("i", "I"):
-                    selected = {
-                        target for target in available_targets
-                        if integration_manager.get_adapter_profile(target).category == "ide"
-                    }
-                    live.update(renderable(), refresh=True)
-                    continue
-                if key in ("r", "R"):
-                    selected.clear()
-                    live.update(renderable(), refresh=True)
-                    continue
-                if key in ("u", "U"):
-                    if not selected:
-                        status_message = "请先选中要卸载的宿主"
-                        live.update(renderable(), refresh=True)
-                        continue
-                    # 卸载选中宿主的 super-dev 集成
-                    from .skills import SkillManager
-                    skill_manager = SkillManager(Path.cwd())
-                    uninstalled_count = 0
-                    for target in sorted(selected):
-                        try:
-                            removed = integration_manager.remove(target=target)
-                            if removed:
-                                uninstalled_count += len(removed)
-                        except Exception:
-                            pass
-                        try:
-                            if skill_manager.skill_surface_available(target):
-                                skill_manager.uninstall("super-dev-core", target)
-                                uninstalled_count += 1
-                        except Exception:
-                            pass
-                    status_message = f"已从 {len(selected)} 个宿主卸载 Super Dev（{uninstalled_count} 个文件）"
-                    selected.clear()
-                    live.update(renderable(), refresh=True)
-                    continue
-                if key == "ENTER":
-                    chosen = [target for target in available_targets if target in selected]
-                    if chosen:
-                        return chosen
-                    status_message = "请至少选择一个宿主"
-                    live.update(renderable(), refresh=True)
-                    continue
-                if key == "ESC":
-                    raise ValueError("已取消宿主选择")
-                live.update(renderable(), refresh=True)
-
-    def _build_install_summary(self, *, available_targets: list[str]) -> str:
-        from .integrations import IntegrationManager
-
-        integration_manager = IntegrationManager(Path.cwd())
-        slash_hosts = [target for target in available_targets if integration_manager.supports_slash(target)]
-        text_hosts = [target for target in available_targets if not integration_manager.supports_slash(target)]
-        return (
-            f"slash 宿主 ({len(slash_hosts)}): " + ", ".join(slash_hosts) + "\n"
-            f"text 宿主 ({len(text_hosts)}): " + ", ".join(text_hosts)
-        )
-
-    def _render_host_selection_guide(self, *, available_targets: list[str]) -> None:
-        from .integrations import IntegrationManager
-
-        if not RICH_AVAILABLE:
-            self.console.print("[cyan]请选择宿主 AI Coding 工具（可多选）:[/cyan]")
-            for idx, target in enumerate(available_targets, 1):
-                self.console.print(f"  {idx}. {target}")
-            self.console.print("[dim]输入编号（逗号分隔），直接回车表示全部[/dim]")
-            return
-
-        integration_manager = IntegrationManager(Path.cwd())
-        detected_targets, _ = self._detect_host_targets(available_targets=available_targets)
-        intro = (
-            "安装后直接在宿主里触发。\n"
-            "支持 slash 的宿主使用 `/super-dev 你的需求`。\n"
-            f"不支持 slash 的宿主使用 `super-dev: 你的需求` 或 `super-dev：你的需求`。\n"
-            f"当前版本内置 {len(available_targets)} 个宿主适配配置。"
-        )
-        self.console.print(Panel(intro, title="Super Dev 安装向导", padding=(1, 2)))
-
-        table = Table(title="宿主选择", show_header=True, header_style="bold cyan")
-        table.add_column("#", style="cyan", width=4)
-        table.add_column("宿主", style="bold")
-        table.add_column("认证", width=12)
-        table.add_column("触发", width=12)
-        table.add_column("宿主协议", overflow="fold")
-        table.add_column("检测", width=8)
-
-        for idx, target in enumerate(available_targets, 1):
-            profile = integration_manager.get_adapter_profile(target)
-            trigger = "/super-dev" if integration_manager.supports_slash(target) else "super-dev:"
-            detected = "已检测" if target in detected_targets else ""
-            table.add_row(
-                str(idx),
-                target,
-                profile.certification_label,
-                trigger,
-                profile.host_protocol_summary or profile.host_protocol_mode,
-                detected,
-            )
-        self.console.print(table)
-        self.console.print("[dim]输入编号（逗号分隔），直接回车表示全部[/dim]")
-
-    def _render_install_intro(self, *, args) -> None:
-        from .integrations import IntegrationManager
-
-        if not RICH_AVAILABLE:
-            self.console.print("[cyan]Super Dev 安装入口[/cyan]")
-            self.console.print("宿主负责编码与模型调用；Super Dev 负责流程、门禁、审计与交付标准。")
-            self.console.print("slash 宿主输入 /super-dev；非 slash 宿主输入 super-dev: 或 super-dev：")
-            return
-
-        integration_manager = IntegrationManager(Path.cwd())
-        available_targets = self._public_host_targets(integration_manager=integration_manager)
-        lines = [
-            "宿主负责编码、工具调用和模型能力。",
-            "Super Dev 负责 research → 三文档 → 确认门 → Spec → 前端优先 → 质量门禁 → 交付。",
-            "slash 宿主输入 `/super-dev 你的需求`，非 slash 宿主输入 `super-dev: 你的需求` 或 `super-dev：你的需求`。",
-            "",
-            self._build_install_summary(available_targets=available_targets),
-        ]
-        if getattr(args, "auto", False):
-            lines.append("当前模式: 自动检测宿主。")
-        elif getattr(args, "host", None):
-            lines.append(f"当前模式: 仅接入 {args.host}。")
-        elif getattr(args, "all", False):
-            lines.append("当前模式: 接入全部宿主。")
-        self.console.print(Panel("\n".join(lines), title="Super Dev 安装入口", padding=(1, 2)))
-
-    def _detect_host_targets(
-        self,
-        *,
-        available_targets: list[str],
-    ) -> tuple[list[str], dict[str, list[str]]]:
-        detected: list[str] = []
-        details: dict[str, list[str]] = {}
-
-        for target in available_targets:
-            reasons: list[str] = []
-
-            for command in HOST_COMMAND_CANDIDATES.get(target, []):
-                if shutil.which(command):
-                    reasons.append(f"cmd:{command}")
-                    break
-
-            for candidate in host_path_candidates(target):
-                if glob.glob(candidate):
-                    reasons.append(f"path:{candidate}")
-                    break
-
-            if reasons:
-                detected.append(target)
-                details[target] = reasons
-
-        return detected, details
-
-    def _collect_configured_host_targets(
-        self,
-        *,
-        project_dir: Path,
-        available_targets: list[str],
-    ) -> list[str]:
-        from .integrations import IntegrationManager
-        from .skills import SkillManager
-
-        configured: list[str] = []
-        skill_manager = SkillManager(project_dir)
-        for target in available_targets:
-            integration_files = IntegrationManager.TARGETS[target].files
-
-            has_integration = any((project_dir / relative).exists() for relative in integration_files)
-            if IntegrationManager.supports_slash(target):
-                project_slash_exists = IntegrationManager.resolve_slash_command_path(
-                    target=target,
-                    scope="project",
-                    project_dir=project_dir,
-                ).exists()
-                global_slash_exists = IntegrationManager.resolve_slash_command_path(
-                    target=target,
-                    scope="global",
-                ).exists()
-            else:
-                project_slash_exists = False
-                global_slash_exists = False
-            has_slash = project_slash_exists or global_slash_exists
-            has_skill = False
-            if IntegrationManager.requires_skill(target):
-                try:
-                    has_skill = skill_manager.skill_surface_available(target)
-                except ValueError:
-                    has_skill = False
-            if has_integration or has_slash or has_skill:
-                configured.append(target)
-        return configured
-
-    def _is_env_truthy(self, key: str) -> bool:
-        value = os.getenv(key, "").strip().lower()
-        return value in {"1", "true", "yes", "on"}
-
-    def _ensure_pipeline_host_ready(self, *, project_dir: Path, config: ProjectConfig) -> bool:
-        from .integrations import IntegrationManager
-
-        if self._is_env_truthy("SUPER_DEV_ALLOW_NO_HOST"):
-            self.console.print("[dim]检测到 SUPER_DEV_ALLOW_NO_HOST=1，跳过宿主硬门禁[/dim]")
-            return True
-
-        available_targets = [item.name for item in IntegrationManager(project_dir).list_targets()]
-        detected_targets, _ = self._detect_host_targets(available_targets=available_targets)
-        configured_targets = self._collect_configured_host_targets(
-            project_dir=project_dir,
-            available_targets=available_targets,
-        )
-
-        if config.host_profile_enforce_selected and config.host_profile_targets:
-            candidate_targets = [item for item in config.host_profile_targets if item in available_targets]
-        else:
-            candidate_targets = sorted(set(detected_targets + configured_targets))
-
-        if not candidate_targets:
-            self.console.print("[red]流水线宿主校验失败：未检测到可用宿主[/red]")
-            self.console.print("[dim]请先执行: super-dev install --auto --force --yes[/dim]")
-            self.console.print("[dim]或手动接入: super-dev setup --host codex-cli --force --yes[/dim]")
-            return False
-
-        report = self._collect_host_diagnostics(
-            project_dir=project_dir,
-            targets=candidate_targets,
-            skill_name="super-dev-core",
-            check_integrate=True,
-            check_skill=True,
-            check_slash=True,
-        )
-        compatibility = self._build_compatibility_summary(
-            report=report,
-            targets=candidate_targets,
-            check_integrate=True,
-            check_skill=True,
-            check_slash=True,
-        )
-
-        host_scores = compatibility.get("hosts", {})
-        if not isinstance(host_scores, dict):
-            host_scores = {}
-        ready_targets = [
-            target for target in candidate_targets
-            if bool((host_scores.get(target) or {}).get("ready", False))
-        ]
-        ready_detected_targets = [target for target in ready_targets if target in detected_targets]
-
-        if ready_detected_targets:
-            self.console.print(
-                "[dim]宿主硬门禁通过: "
-                + ", ".join(ready_detected_targets)
-                + "[/dim]"
-            )
-            return True
-
-        self.console.print("[red]流水线宿主校验失败：未找到 ready 的已检测宿主[/red]")
-        if ready_targets:
-            self.console.print(
-                "[yellow]检测到已接入宿主但未识别到本机可执行宿主: "
-                + ", ".join(ready_targets)
-                + "[/yellow]"
-            )
-
-        hosts_report = report.get("hosts", {})
-        if isinstance(hosts_report, dict):
-            for target in candidate_targets:
-                host = hosts_report.get(target, {})
-                if not isinstance(host, dict):
-                    continue
-                suggestions = host.get("suggestions", [])
-                if isinstance(suggestions, list):
-                    for item in suggestions:
-                        self.console.print(f"[dim]- {item}[/dim]")
-
-        self.console.print("[dim]建议先执行: super-dev detect --auto --save-profile[/dim]")
-        return False
-
-    def _collect_host_diagnostics(
-        self,
-        *,
-        project_dir: Path,
-        targets: list[str],
-        skill_name: str,
-        check_integrate: bool,
-        check_skill: bool,
-        check_slash: bool,
-    ) -> dict[str, Any]:
-        from .integrations import IntegrationManager
-        from .skills import SkillManager
-
-        integration_manager = IntegrationManager(project_dir)
-        integration_targets = IntegrationManager.TARGETS
-        skill_manager = SkillManager(project_dir)
-
-        report: dict[str, Any] = {"hosts": {}, "overall_ready": True}
-        for target in targets:
-            host_report: dict[str, Any] = {
-                "ready": True,
-                "checks": {},
-                "missing": [],
-                "suggestions": [],
-            }
-
-            surface_audit: dict[str, dict[str, Any]] = {}
-            for surface_key, surface_path in integration_manager.collect_managed_surface_paths(
-                target=target,
-                skill_name=skill_name,
-            ).items():
-                exists = surface_path.exists()
-                audit_entry: dict[str, Any] = {
-                    "path": str(surface_path),
-                    "exists": exists,
-                    "missing_markers": [],
-                }
-                if exists:
-                    try:
-                        content = surface_path.read_text(encoding="utf-8")
-                    except Exception as exc:
-                        audit_entry["read_error"] = str(exc)
-                        audit_entry["missing_markers"] = ["unreadable"]
-                    else:
-                        audit_entry["missing_markers"] = integration_manager.audit_surface_contract(
-                            target,
-                            surface_key,
-                            surface_path,
-                            content,
-                        )
-                surface_audit[surface_key] = audit_entry
-
-            invalid_surfaces = {
-                key: value
-                for key, value in surface_audit.items()
-                if value.get("exists") and value.get("missing_markers")
-            }
-            host_report["checks"]["contract"] = {
-                "ok": not invalid_surfaces,
-                "surfaces": surface_audit,
-                "invalid_surfaces": invalid_surfaces,
-            }
-            if invalid_surfaces:
-                host_report["ready"] = False
-                host_report["missing"].append("contract")
-                host_report["suggestions"].append(
-                    f"super-dev onboard --host {target} --force --yes"
-                )
-
-            if check_integrate:
-                integrate_files = [project_dir / item for item in integration_targets[target].files]
-                integrate_ok = all(path.exists() for path in integrate_files)
-                host_report["checks"]["integrate"] = {
-                    "ok": integrate_ok,
-                    "files": [str(item) for item in integrate_files],
-                }
-                if not integrate_ok:
-                    host_report["ready"] = False
-                    host_report["missing"].append("integrate")
-                    host_report["suggestions"].append(
-                        f"super-dev integrate setup --target {target} --force"
-                    )
-
-            if check_skill and IntegrationManager.requires_skill(target):
-                skill_root = skill_manager._target_dir(target)
-                skill_file = skill_root / skill_name / "SKILL.md"
-                surface_available = skill_manager.skill_surface_available(target)
-                skill_ok = skill_file.exists() if surface_available else True
-                host_report["checks"]["skill"] = {
-                    "ok": skill_ok,
-                    "file": str(skill_file),
-                    "surface_available": surface_available,
-                    "mode": "managed" if surface_available else "compatibility-surface-unavailable",
-                }
-                if surface_available and not skill_ok:
-                    host_report["ready"] = False
-                    host_report["missing"].append("skill")
-                    host_report["suggestions"].append(
-                        f"super-dev skill install super-dev --target {target} --name {skill_name} --force"
-                    )
-
-            if check_slash:
-                if IntegrationManager.supports_slash(target):
-                    project_slash = IntegrationManager.resolve_slash_command_path(
-                        target=target,
-                        scope="project",
-                        project_dir=project_dir,
-                    )
-                    global_slash = IntegrationManager.resolve_slash_command_path(
-                        target=target,
-                        scope="global",
-                    )
-                    project_ok = project_slash.exists()
-                    global_ok = global_slash.exists()
-                    slash_ok = project_ok or global_ok
-                    scope = "project" if project_ok else ("global" if global_ok else "missing")
-                    host_report["checks"]["slash"] = {
-                        "ok": slash_ok,
-                        "scope": scope,
-                        "project_file": str(project_slash),
-                        "global_file": str(global_slash),
-                    }
-                    if not slash_ok:
-                        host_report["ready"] = False
-                        host_report["missing"].append("slash")
-                        host_report["suggestions"].append(
-                            f"super-dev onboard --host {target} --skip-integrate --skip-skill --force --yes"
-                        )
-                else:
-                    host_report["checks"]["slash"] = {
-                        "ok": True,
-                        "scope": "n/a",
-                        "project_file": "",
-                        "global_file": "",
-                        "mode": "rules-only",
-                    }
-
-            host_report["usage_profile"] = self._build_host_usage_profile(
-                integration_manager=integration_manager,
-                target=target,
-            )
-            usage_profile = host_report["usage_profile"]
-            if isinstance(usage_profile, dict):
-                precondition_status = str(usage_profile.get("precondition_status", "")).strip()
-                precondition_label = str(usage_profile.get("precondition_label", "")).strip()
-                precondition_guidance = usage_profile.get("precondition_guidance", [])
-                precondition_signals = usage_profile.get("precondition_signals", {})
-                precondition_items = usage_profile.get("precondition_items", [])
-                host_report["preconditions"] = {
-                    "status": precondition_status,
-                    "label": precondition_label,
-                    "guidance": precondition_guidance if isinstance(precondition_guidance, list) else [],
-                    "signals": precondition_signals if isinstance(precondition_signals, dict) else {},
-                    "items": precondition_items if isinstance(precondition_items, list) else [],
-                }
-                if precondition_status == "host-auth-required":
-                    host_report["suggestions"].append(
-                        "若宿主报 Invalid API key provided，请先在宿主内完成 /auth 或更新宿主 API key 配置。"
-                    )
-                if precondition_status == "session-restart-required":
-                    host_report["suggestions"].append("接入后先关闭旧宿主会话，再开一个新会话后重试。")
-                if precondition_status == "project-context-required":
-                    host_report["suggestions"].append("确认当前聊天/终端绑定的是目标项目，再重新触发 Super Dev。")
-            report["hosts"][target] = host_report
-            if not host_report["ready"]:
-                report["overall_ready"] = False
-
-        return report
-
-    def _build_compatibility_summary(
-        self,
-        *,
-        report: dict[str, Any],
-        targets: list[str],
-        check_integrate: bool,
-        check_skill: bool,
-        check_slash: bool,
-    ) -> dict[str, Any]:
-        from .integrations import IntegrationManager
-
-        enabled_checks = ["contract"]
-        if check_integrate:
-            enabled_checks.append("integrate")
-        if check_skill and any(IntegrationManager.requires_skill(target) for target in targets):
-            enabled_checks.append("skill")
-        if check_slash and any(IntegrationManager.supports_slash(target) for target in targets):
-            enabled_checks.append("slash")
-
-        per_host: dict[str, dict[str, Any]] = {}
-        total_passed = 0
-        total_possible = 0
-        ready_hosts = 0
-        flow_consistent_hosts = 0
-        hosts = report.get("hosts", {})
-        if not isinstance(hosts, dict):
-            hosts = {}
-
-        for target in targets:
-            host = hosts.get(target, {})
-            checks = host.get("checks", {}) if isinstance(host, dict) else {}
-            if not isinstance(checks, dict):
-                checks = {}
-            passed = 0
-            possible = len(enabled_checks)
-            for check_name in enabled_checks:
-                check_value = checks.get(check_name, {})
-                if isinstance(check_value, dict) and bool(check_value.get("ok", False)):
-                    passed += 1
-            flow_consistent = False
-            contract_check = checks.get("contract", {})
-            if isinstance(contract_check, dict):
-                flow_consistent = True
-                surfaces = contract_check.get("surfaces", {})
-                if isinstance(surfaces, dict):
-                    for item in surfaces.values():
-                        if not isinstance(item, dict):
-                            continue
-                        missing_markers = item.get("missing_markers", [])
-                        if isinstance(missing_markers, list) and "flow" in missing_markers:
-                            flow_consistent = False
-                            break
-            score = round((passed / possible) * 100, 2) if possible > 0 else 100.0
-            per_host[target] = {
-                "score": score,
-                "passed": passed,
-                "possible": possible,
-                "ready": bool(host.get("ready", False)) if isinstance(host, dict) else False,
-                "flow_consistent": flow_consistent,
-            }
-            total_passed += passed
-            total_possible += possible
-            if bool(host.get("ready", False)) if isinstance(host, dict) else False:
-                ready_hosts += 1
-            if flow_consistent:
-                flow_consistent_hosts += 1
-
-        overall_score = round((total_passed / total_possible) * 100, 2) if total_possible > 0 else 100.0
-        flow_consistency_score = round((flow_consistent_hosts / len(targets)) * 100, 2) if targets else 100.0
-        return {
-            "overall_score": overall_score,
-            "ready_hosts": ready_hosts,
-            "total_hosts": len(targets),
-            "enabled_checks": enabled_checks,
-            "flow_consistent_hosts": flow_consistent_hosts,
-            "flow_consistency_score": flow_consistency_score,
-            "hosts": per_host,
-        }
-
-    def _build_official_compare_summary(self, *, hardening_results: dict[str, Any]) -> dict[str, Any]:
-        total = 0
-        passed = 0
-        partial = 0
-        unknown = 0
-        failed = 0
-        per_host: dict[str, str] = {}
-        for host, item in hardening_results.items():
-            total += 1
-            status = "unknown"
-            if isinstance(item, dict):
-                official_compare = item.get("official_compare", {})
-                if isinstance(official_compare, dict):
-                    status = str(official_compare.get("status", "unknown")).strip() or "unknown"
-            per_host[str(host)] = status
-            if status == "passed":
-                passed += 1
-            elif status == "partial":
-                partial += 1
-            elif status == "failed":
-                failed += 1
-            else:
-                unknown += 1
-        score = round((passed / total) * 100, 2) if total else 100.0
-        return {
-            "total": total,
-            "passed": passed,
-            "partial": partial,
-            "failed": failed,
-            "unknown": unknown,
-            "score": score,
-            "hosts": per_host,
-        }
-
-    def _build_host_parity_summary(self, *, usage_profiles: dict[str, dict[str, Any]]) -> dict[str, Any]:
-        total = 0
-        passed = 0
-        per_host: dict[str, dict[str, Any]] = {}
-        required_keys = ("slash", "rules", "skills", "trigger")
-        for host, usage in usage_profiles.items():
-            total += 1
-            labels = usage.get("capability_labels", {}) if isinstance(usage, dict) else {}
-            trigger_command = str(usage.get("trigger_command", "")) if isinstance(usage, dict) else ""
-            smoke_prompt = str(usage.get("smoke_test_prompt", "")) if isinstance(usage, dict) else ""
-            smoke_signal = str(usage.get("smoke_success_signal", "")) if isinstance(usage, dict) else ""
-            protocol_mode = str(usage.get("host_protocol_mode", "")).strip() if isinstance(usage, dict) else ""
-            slash_label = str((labels or {}).get("slash", "")).strip()
-            trigger_ok = (
-                trigger_command.startswith("/super-dev")
-                if slash_label == "native"
-                else trigger_command.startswith("super-dev:")
-            )
-            checks = {
-                "trigger": trigger_ok,
-                "smoke_prompt": "SMOKE_OK" in smoke_prompt,
-                "smoke_signal": "SMOKE_OK" in smoke_signal,
-                "protocol_mode": bool(protocol_mode),
-                "capability_labels": all(key in labels for key in required_keys),
-            }
-            check_total = len(checks)
-            check_passed = sum(1 for item in checks.values() if bool(item))
-            host_pass = check_passed == check_total
-            if host_pass:
-                passed += 1
-            per_host[str(host)] = {
-                "passed": host_pass,
-                "score": round((check_passed / check_total) * 100, 2) if check_total else 100.0,
-                "checks": checks,
-            }
-        score = round((passed / total) * 100, 2) if total else 100.0
-        return {
-            "total": total,
-            "passed": passed,
-            "score": score,
-            "hosts": per_host,
-        }
-
-    def _build_host_recovery_summary(
-        self,
-        *,
-        targets: list[str],
-        usage_profiles: dict[str, dict[str, Any]],
-    ) -> dict[str, Any]:
-        from .integrations import IntegrationManager
-
-        total = 0
-        passed = 0
-        hosts: dict[str, dict[str, Any]] = {}
-        for target in targets:
-            total += 1
-            usage = usage_profiles.get(target, {}) if isinstance(usage_profiles, dict) else {}
-            slash_label = ""
-            if isinstance(usage, dict):
-                labels = usage.get("capability_labels", {})
-                if isinstance(labels, dict):
-                    slash_label = str(labels.get("slash", "")).strip()
-            commands = [f"super-dev integrate setup --target {target} --force"]
-            if IntegrationManager.requires_skill(target):
-                commands.append(f"super-dev skill install super-dev --target {target} --name super-dev-core --force")
-            if slash_label == "native":
-                commands.append(f"super-dev onboard --host {target} --skip-integrate --skip-skill --force --yes")
-            commands.append(f"super-dev integrate audit --target {target} --repair --force")
-            checks = {
-                "has_setup": any(cmd.startswith("super-dev integrate setup --target ") for cmd in commands),
-                "has_repair_audit": any(cmd.startswith("super-dev integrate audit --target ") for cmd in commands),
-                "contains_target": all(f" {target} " in f" {cmd} " for cmd in commands),
-            }
-            if IntegrationManager.requires_skill(target):
-                checks["has_skill_install"] = any(cmd.startswith("super-dev skill install ") for cmd in commands)
-            if slash_label == "native":
-                checks["has_slash_recovery"] = any(cmd.startswith("super-dev onboard --host ") for cmd in commands)
-            host_pass = all(bool(item) for item in checks.values())
-            if host_pass:
-                passed += 1
-            hosts[target] = {
-                "passed": host_pass,
-                "checks": checks,
-                "recommended_commands": commands,
-            }
-        score = round((passed / total) * 100, 2) if total else 100.0
-        return {
-            "total": total,
-            "passed": passed,
-            "score": score,
-            "hosts": hosts,
-        }
-
-    def _build_host_gate_summary(self, *, report: dict[str, Any], targets: list[str]) -> dict[str, Any]:
-        total = 0
-        passed = 0
-        hosts: dict[str, dict[str, Any]] = {}
-        report_hosts = report.get("hosts", {}) if isinstance(report, dict) else {}
-        if not isinstance(report_hosts, dict):
-            report_hosts = {}
-        for target in targets:
-            total += 1
-            host = report_hosts.get(target, {})
-            checks = host.get("checks", {}) if isinstance(host, dict) else {}
-            contract = checks.get("contract", {}) if isinstance(checks, dict) else {}
-            surfaces = contract.get("surfaces", {}) if isinstance(contract, dict) else {}
-            docs_confirm_ok = True
-            preview_confirm_ok = True
-            if isinstance(surfaces, dict):
-                for surface in surfaces.values():
-                    if not isinstance(surface, dict):
-                        continue
-                    if not bool(surface.get("exists", False)):
-                        continue
-                    missing = surface.get("missing_markers", [])
-                    if not isinstance(missing, list):
-                        continue
-                    if "confirmation" in missing:
-                        docs_confirm_ok = False
-                    if "flow" in missing:
-                        preview_confirm_ok = False
-            host_pass = docs_confirm_ok and preview_confirm_ok
-            if host_pass:
-                passed += 1
-            hosts[target] = {
-                "passed": host_pass,
-                "checks": {
-                    "docs_confirm_gate": docs_confirm_ok,
-                    "preview_confirm_gate": preview_confirm_ok,
-                },
-            }
-        score = round((passed / total) * 100, 2) if total else 100.0
-        return {
-            "total": total,
-            "passed": passed,
-            "score": score,
-            "hosts": hosts,
-        }
-
-    def _build_host_runtime_script_summary(self, *, usage_profiles: dict[str, dict[str, Any]]) -> dict[str, Any]:
-        total = 0
-        passed = 0
-        hosts: dict[str, dict[str, Any]] = {}
-        for host, usage in usage_profiles.items():
-            total += 1
-            if not isinstance(usage, dict):
-                usage = {}
-            smoke_steps = usage.get("smoke_test_steps", [])
-            post_steps = usage.get("post_onboard_steps", [])
-            checks = {
-                "has_final_trigger": bool(str(usage.get("final_trigger", "")).strip()),
-                "has_smoke_prompt": "SMOKE_OK" in str(usage.get("smoke_test_prompt", "")),
-                "has_smoke_signal": "SMOKE_OK" in str(usage.get("smoke_success_signal", "")),
-                "has_smoke_steps": isinstance(smoke_steps, list) and len(smoke_steps) > 0,
-                "has_post_onboard_steps": isinstance(post_steps, list) and len(post_steps) > 0,
-            }
-            host_pass = all(bool(item) for item in checks.values())
-            if host_pass:
-                passed += 1
-            hosts[str(host)] = {
-                "passed": host_pass,
-                "checks": checks,
-            }
-        score = round((passed / total) * 100, 2) if total else 100.0
-        return {
-            "total": total,
-            "passed": passed,
-            "score": score,
-            "hosts": hosts,
-        }
-
-    def _build_host_parity_index(
-        self,
-        *,
-        threshold: float,
-        official_compare_summary: dict[str, Any] | None,
-        host_parity_summary: dict[str, Any] | None,
-        host_gate_summary: dict[str, Any] | None,
-        host_runtime_script_summary: dict[str, Any] | None,
-        host_recovery_summary: dict[str, Any] | None,
-        compatibility: dict[str, Any] | None,
-    ) -> dict[str, Any]:
-        metrics: dict[str, float] = {}
-        mapping: list[tuple[str, dict[str, Any] | None]] = [
-            ("official_compare", official_compare_summary),
-            ("host_parity", host_parity_summary),
-            ("host_gate", host_gate_summary),
-            ("runtime_script", host_runtime_script_summary),
-            ("host_recovery", host_recovery_summary),
-        ]
-        for name, summary in mapping:
-            if isinstance(summary, dict):
-                if name == "official_compare":
-                    total = int(summary.get("total", 0) or 0)
-                    passed = int(summary.get("passed", 0) or 0)
-                    partial = int(summary.get("partial", 0) or 0)
-                    failed = int(summary.get("failed", 0) or 0)
-                    if total <= 0 or (passed + partial + failed) <= 0:
-                        continue
-                try:
-                    metrics[name] = float(summary.get("score", 0))
-                except Exception:
-                    metrics[name] = 0.0
-        if isinstance(compatibility, dict):
-            try:
-                metrics["flow_consistency"] = float(compatibility.get("flow_consistency_score", 0))
-            except Exception:
-                metrics["flow_consistency"] = 0.0
-        if metrics:
-            score = round(sum(metrics.values()) / len(metrics), 2)
-        else:
-            score = 0.0
-        limit = float(threshold)
-        return {
-            "score": score,
-            "threshold": limit,
-            "passed": score >= limit,
-            "metrics": metrics,
-        }
-
-    def _repair_host_diagnostics(
-        self,
-        *,
-        project_dir: Path,
-        report: dict[str, Any],
-        skill_name: str,
-        force: bool,
-        check_integrate: bool,
-        check_skill: bool,
-        check_slash: bool,
-    ) -> dict[str, dict[str, str]]:
-        from .integrations import IntegrationManager
-        from .skills import SkillManager
-
-        integration_manager = IntegrationManager(project_dir)
-        skill_manager = SkillManager(project_dir)
-        actions: dict[str, dict[str, str]] = {}
-
-        hosts = report.get("hosts", {})
-        if not isinstance(hosts, dict):
-            return actions
-
-        for target, host in hosts.items():
-            if not isinstance(target, str) or not isinstance(host, dict):
-                continue
-            missing = host.get("missing", [])
-            if not isinstance(missing, list):
-                continue
-
-            host_actions: dict[str, str] = {}
-            contract_needs_repair = "contract" in missing
-
-            if contract_needs_repair:
-                try:
-                    integration_manager.setup(target=target, force=True)
-                    integration_manager.setup_global_protocol(target=target, force=True)
-                    if integration_manager.supports_slash(target):
-                        integration_manager.setup_slash_command(target=target, force=True)
-                        integration_manager.setup_global_slash_command(target=target, force=True)
-                    if check_skill and IntegrationManager.requires_skill(target) and skill_manager.skill_surface_available(target):
-                        skill_manager.install(
-                            source="super-dev",
-                            target=target,
-                            name=skill_name,
-                            force=True,
-                        )
-                    host_actions["contract"] = "refreshed"
-                except Exception as exc:
-                    host_actions["contract"] = f"failed: {exc}"
-
-            try:
-                if check_integrate and "integrate" in missing and not contract_needs_repair:
-                    integration_manager.setup(target=target, force=force)
-                    host_actions["integrate"] = "fixed"
-            except Exception as exc:
-                host_actions["integrate"] = f"failed: {exc}"
-
-            try:
-                if check_skill and IntegrationManager.requires_skill(target) and "skill" in missing and not contract_needs_repair:
-                    skill_manager.install(
-                        source="super-dev",
-                        target=target,
-                        name=skill_name,
-                        force=force,
-                    )
-                    host_actions["skill"] = "fixed"
-            except Exception as exc:
-                host_actions["skill"] = f"failed: {exc}"
-
-            try:
-                if check_slash and integration_manager.supports_slash(target) and not contract_needs_repair:
-                    integration_manager.setup_slash_command(target=target, force=force)
-                    integration_manager.setup_global_slash_command(target=target, force=force)
-                    if "slash" in missing:
-                        host_actions["slash"] = "fixed"
-            except Exception as exc:
-                host_actions["slash"] = f"failed: {exc}"
-
-            if host_actions:
-                actions[target] = host_actions
-
-        return actions
-
-    def _cmd_onboard(self, args) -> int:
-        """首次接入向导：宿主选择 + 集成 + skill + slash"""
-        from .integrations import IntegrationManager
-        from .skills import SkillManager
-
-        if not self._ensure_host_support_matrix():
-            return 1
-
-        project_dir = Path.cwd()
-        integration_manager = IntegrationManager(project_dir)
-        skill_manager = SkillManager(project_dir)
-
-        available_targets = self._public_host_targets(integration_manager=integration_manager)
-        targets: list[str]
-        detected_meta: dict[str, list[str]] = {}
-
-        if args.host:
-            targets = [args.host]
-        elif args.all:
-            targets = available_targets
-        elif args.auto:
-            targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
-            if not targets:
-                self.console.print("[red]未检测到可用宿主，请改用 --host 指定或使用 --all[/red]")
-                return 1
-            self.console.print(
-                f"[cyan]自动检测到 {len(targets)} 个宿主：{', '.join(targets)}[/cyan]"
-            )
-            for target in targets:
-                reasons = ", ".join(detected_meta.get(target, []))
-                if reasons:
-                    self.console.print(f"[dim]  - {target}: {reasons}[/dim]")
-        else:
-            try:
-                targets = self._resolve_onboard_targets(
-                    available_targets=available_targets,
-                    host=args.host,
-                    all_targets=bool(args.all),
-                    non_interactive=bool(args.yes),
-                )
-            except ValueError as exc:
-                self.console.print(f"[red]{exc}[/red]")
-                return 1
-
-        if not targets:
-            self.console.print("[red]未选择任何宿主工具[/red]")
-            return 1
-
-        if getattr(args, 'stable_only', False):
-            stable_targets = []
-            for t in targets:
-                profile = integration_manager.get_adapter_profile(t)
-                cert = profile.certification_label.lower()
-                if cert.startswith("certified") or cert.startswith("compatible"):
-                    stable_targets.append(t)
-            if not stable_targets:
-                self.console.print("[yellow]未找到 Certified 或 Compatible 级别的宿主[/yellow]")
-                return 1
-            skipped = set(targets) - set(stable_targets)
-            if skipped:
-                self.console.print(f"[dim]跳过 Experimental 宿主: {', '.join(sorted(skipped))}[/dim]")
-            targets = stable_targets
-
-        setattr(args, "_selected_targets", list(targets))
-
-        self.console.print("")
-        from rich.panel import Panel
-        from rich.rule import Rule
-        self.console.print(Panel(
-            f"[bold cyan]Super Dev Onboard[/bold cyan]\n\n"
-            f"  [dim]项目[/dim]      {project_dir.name}\n"
-            f"  [dim]目标宿主[/dim]  {len(targets)} 个\n"
-            f"  [dim]版本[/dim]      {__version__}",
-            border_style="cyan",
-            expand=True,
-            padding=(1, 2),
-        ))
-        self.console.print("")
-        has_error = False
-        for idx, target in enumerate(targets, 1):
-            protocol = integration_manager._protocol_profile(target=target)
-            protocol_summary = protocol.get("summary", "") if isinstance(protocol, dict) else ""
-            self.console.print(Rule(
-                f"[bold cyan] {idx}/{len(targets)} [/bold cyan] [bold]{target}[/bold]  [dim]{protocol_summary}[/dim]",
-                style="dim cyan",
-            ))
-            self.console.print("")
-            profile = integration_manager.get_adapter_profile(target)
-
-            if getattr(args, "dry_run", False):
-                surfaces = integration_manager.collect_managed_surface_paths(target=target)
-                self.console.print("  [dim]将写入以下文件:[/dim]")
-                for key, path in surfaces.items():
-                    exists = path.exists()
-                    status = "[dim]已存在[/dim]" if exists else "[cyan]新建[/cyan]"
-                    self.console.print(f"    {status} {path}")
-                self.console.print("")
-                continue
-
-            if not args.skip_integrate:
-                try:
-                    written_files = integration_manager.setup(target=target, force=args.force)
-                    if written_files:
-                        for item in written_files:
-                            self.console.print(f"  [green]✓[/green] 集成规则: {item}")
-                    else:
-                        self.console.print("  [dim]- 集成规则已存在（可加 --force 覆盖）[/dim]")
-                    global_protocol = integration_manager.setup_global_protocol(target=target, force=args.force)
-                    if global_protocol is not None:
-                        self.console.print(f"  [green]✓[/green] 宿主协议: {global_protocol}")
-                except Exception as exc:
-                    has_error = True
-                    self.console.print(f"  [red]✗[/red] 集成失败: {exc}")
-
-            if not args.skip_skill and IntegrationManager.requires_skill(target):
-                try:
-                    if not skill_manager.skill_surface_available(target):
-                        self.console.print("  [dim]- 未检测到官方或兼容 Skill 目录，已跳过宿主级 Skill 安装[/dim]")
-                    else:
-                        installed = set(skill_manager.list_installed(target))
-                        if args.skill_name in installed and not args.force:
-                            self.console.print(
-                                f"  [dim]- Skill 已存在: {args.skill_name}（可加 --force 重装）[/dim]"
-                            )
-                        else:
-                            install_result = skill_manager.install(
-                                source="super-dev",
-                                target=target,
-                                name=args.skill_name,
-                                force=args.force,
-                            )
-                            self.console.print(f"  [green]✓[/green] Skill: {install_result.path}")
-                except Exception as exc:
-                    has_error = True
-                    self.console.print(f"  [red]✗[/red] Skill 安装失败: {exc}")
-            elif not args.skip_skill:
-                self.console.print("  [dim]- 该宿主默认按项目规则运行，已跳过 Skill 安装[/dim]")
-
-            if not args.skip_slash:
-                try:
-                    if integration_manager.supports_slash(target):
-                        slash_file = integration_manager.setup_slash_command(
-                            target=target,
-                            force=args.force,
-                        )
-                        if slash_file is None:
-                            self.console.print("  [dim]- /super-dev 映射已存在（可加 --force 覆盖）[/dim]")
-                        else:
-                            self.console.print(f"  [green]✓[/green] /super-dev 映射: {slash_file}")
-                        global_slash_file = integration_manager.setup_global_slash_command(
-                            target=target,
-                            force=args.force,
-                        )
-                        if global_slash_file is None:
-                            self.console.print("  [dim]- 全局 /super-dev 映射已存在（可加 --force 覆盖）[/dim]")
-                        elif slash_file is None or global_slash_file.resolve() != slash_file.resolve():
-                            self.console.print(f"  [green]✓[/green] 全局 /super-dev 映射: {global_slash_file}")
-                    else:
-                        self.console.print("  [dim]- 该宿主不支持 /super-dev，已跳过 slash 映射[/dim]")
-                except Exception as exc:
-                    has_error = True
-                    self.console.print(f"  [red]✗[/red] /super-dev 映射失败: {exc}")
-
-            self.console.print(f"  [cyan]主入口[/cyan]: {profile.primary_entry}")
-            if profile.requires_restart_after_onboard:
-                self.console.print("  [yellow]注意[/yellow]: 接入完成后需要重启宿主")
-            for step in profile.post_onboard_steps:
-                self.console.print(f"  [dim]- {step}[/dim]")
-
-            contract_surfaces = integration_manager.collect_managed_surface_paths(target=target, skill_name=args.skill_name)
-            contract_failures: list[str] = []
-            for surface_key, surface_path in contract_surfaces.items():
-                if surface_key.startswith("skill:") and args.skip_skill:
-                    continue
-                if not surface_path.exists():
-                    continue
-                try:
-                    content = surface_path.read_text(encoding="utf-8")
-                except Exception:
-                    contract_failures.append(str(surface_path))
-                    continue
-                if integration_manager.audit_surface_contract(target, surface_key, surface_path, content):
-                    contract_failures.append(str(surface_path))
-            if contract_failures:
-                has_error = True
-                self.console.print("  [red]✗[/red] 宿主契约校验失败:")
-                for item in contract_failures[:6]:
-                    self.console.print(f"  [dim]- {item}[/dim]")
-            else:
-                self.console.print("  [green]✓[/green] 宿主契约校验通过")
-
-        self.console.print("")
-        if args.dry_run:
-            self.console.print(Panel(
-                "[bold cyan]Dry Run 完成[/bold cyan]\n\n"
-                "  以上为预览，未实际写入任何文件\n"
-                "  去掉 --dry-run 参数执行实际安装",
-                border_style="cyan",
-                expand=True,
-                padding=(1, 2),
-            ))
-            return 0
-        if has_error:
-            self.console.print(Panel(
-                "[bold red]Onboard 完成（部分失败）[/bold red]\n\n"
-                "  请检查上方错误信息\n"
-                "  使用 [cyan]super-dev doctor[/cyan] 诊断并自动修复",
-                border_style="red",
-                expand=True,
-                padding=(1, 2),
-            ))
-            return 1
-
-        next_steps = self._build_onboard_next_steps(targets=targets)
-        steps_text = "\n".join(f"  [green]>[/green] {line}" for line in next_steps)
-        self.console.print(Panel(
-            f"[bold green]Onboard 完成[/bold green]\n\n"
-            f"[bold]接下来这样用:[/bold]\n\n{steps_text}\n\n"
-            f"[dim]提示: 终端 super-dev \"你的需求\" 仅触发本地编排，不替代宿主会话编码[/dim]",
-            border_style="green",
-            expand=True,
-            padding=(1, 2),
-        ))
-        return 0
-
-    def _cmd_doctor(self, args) -> int:
-        """诊断宿主接入状态"""
-        from .integrations import IntegrationManager
-
-        if not self._ensure_host_support_matrix():
-            return 1
-
-        project_dir = Path.cwd()
-        integration_manager = IntegrationManager(project_dir)
-        available_targets = [item.name for item in integration_manager.list_targets()]
-        targets: list[str]
-        if args.host:
-            targets = [args.host]
-        elif args.auto:
-            targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
-            if not targets:
-                self.console.print("[yellow]未检测到可用宿主，已回退为诊断全部目标[/yellow]")
-                targets = available_targets
-            else:
-                self.console.print(
-                    f"[cyan]自动检测到 {len(targets)} 个宿主：{', '.join(targets)}[/cyan]"
-                )
-                for target in targets:
-                    reasons = ", ".join(detected_meta.get(target, []))
-                    if reasons:
-                        self.console.print(f"[dim]  - {target}: {reasons}[/dim]")
-        elif args.all:
-            targets = available_targets
-        else:
-            targets = available_targets
-
-        report = self._collect_host_diagnostics(
-            project_dir=project_dir,
-            targets=targets,
-            skill_name=args.skill_name,
-            check_integrate=not args.skip_integrate,
-            check_skill=not args.skip_skill,
-            check_slash=not args.skip_slash,
-        )
-        compatibility = self._build_compatibility_summary(
-            report=report,
-            targets=targets,
-            check_integrate=not args.skip_integrate,
-            check_skill=not args.skip_skill,
-            check_slash=not args.skip_slash,
-        )
-        repair_actions: dict[str, dict[str, str]] = {}
-        if args.repair:
-            repair_actions = self._repair_host_diagnostics(
-                project_dir=project_dir,
-                report=report,
-                skill_name=args.skill_name,
-                force=bool(args.force),
-                check_integrate=not args.skip_integrate,
-                check_skill=not args.skip_skill,
-                check_slash=not args.skip_slash,
-            )
-            report = self._collect_host_diagnostics(
-                project_dir=project_dir,
-                targets=targets,
-                skill_name=args.skill_name,
-                check_integrate=not args.skip_integrate,
-                check_skill=not args.skip_skill,
-                check_slash=not args.skip_slash,
-            )
-            compatibility = self._build_compatibility_summary(
-                report=report,
-                targets=targets,
-                check_integrate=not args.skip_integrate,
-                check_skill=not args.skip_skill,
-                check_slash=not args.skip_slash,
-            )
-            report["repair_actions"] = repair_actions
-        report["compatibility"] = compatibility
-
-        if args.json:
-            sys.stdout.write(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
-            return 0 if bool(report.get("overall_ready", False)) else 1
-
-        self.console.print("[cyan]Super Dev Doctor[/cyan]")
-        self.console.print(f"[dim]项目目录: {project_dir}[/dim]")
-        self.console.print(
-            f"[dim]终端输出: {output_mode_label()} ({output_mode_reason()})[/dim]"
-        )
-        self.console.print(
-            f"[cyan]兼容性评分: {compatibility['overall_score']:.2f}/100 "
-            f"(ready {compatibility['ready_hosts']}/{compatibility['total_hosts']})[/cyan]"
-        )
-        self.console.print(
-            f"[cyan]流程一致性: {compatibility.get('flow_consistency_score', 0):.2f}/100 "
-            f"({compatibility.get('flow_consistent_hosts', 0)}/{compatibility.get('total_hosts', 0)})[/cyan]"
-        )
-        certified_count = sum(
-            1 for t in targets
-            if integration_manager.get_adapter_profile(t).certification_label.lower().startswith("certified")
-        )
-        compatible_count = sum(
-            1 for t in targets
-            if integration_manager.get_adapter_profile(t).certification_label.lower().startswith("compatible")
-        )
-        experimental_count = len(targets) - certified_count - compatible_count
-        self.console.print(
-            f"[cyan]认证分布: Certified {certified_count} / Compatible {compatible_count} / Experimental {experimental_count}[/cyan]"
-        )
-        self.console.print("")
-        if args.repair:
-            self.console.print("[cyan]Repair 模式已执行[/cyan]")
-            if repair_actions:
-                for target, actions in repair_actions.items():
-                    action_text = ", ".join(f"{k}={v}" for k, v in actions.items())
-                    self.console.print(f"[dim]- {target}: {action_text}[/dim]")
-            else:
-                self.console.print("[dim]- 无需修复或未执行修复动作[/dim]")
-            self.console.print("")
-        # 摘要表格
-        from rich.table import Table
-        summary_table = Table(
-            title="宿主接入状态",
-            expand=True,
-            show_lines=False,
-            border_style="dim",
-            title_style="bold cyan",
-        )
-        summary_table.add_column("宿主", style="bold", min_width=18)
-        summary_table.add_column("状态", justify="center", min_width=8)
-        summary_table.add_column("集成规则", justify="center")
-        summary_table.add_column("Skill", justify="center")
-        summary_table.add_column("Slash", justify="center")
-        summary_table.add_column("认证", justify="center", min_width=12)
-        summary_table.add_column("协议", style="dim")
-
-        for target in targets:
-            host = report["hosts"][target]
-            protocol = integration_manager._protocol_profile(target=target)
-            protocol_summary = protocol.get("summary", "") if isinstance(protocol, dict) else ""
-
-            status = "[green]已就绪[/green]" if host["ready"] else "[red]未安装[/red]"
-
-            integrate_ok = bool(host.get("checks", {}).get("integrate", {}).get("ok", True))
-            skill_ok = bool(host.get("checks", {}).get("skill", {}).get("ok", True))
-            slash_ok = bool(host.get("checks", {}).get("slash", {}).get("ok", True))
-
-            integrate_text = "[green]已安装[/green]" if integrate_ok else "[red]未安装[/red]"
-            skill_text = "[green]已安装[/green]" if skill_ok else ("[dim]不适用[/dim]" if not IntegrationManager.requires_skill(target) else "[red]未安装[/red]")
-            slash_text = "[green]已安装[/green]" if slash_ok else ("[dim]不适用[/dim]" if not integration_manager.supports_slash(target) else "[red]未安装[/red]")
-
-            profile = integration_manager.get_adapter_profile(target)
-            cert_label = profile.certification_label
-            if "certified" in cert_label.lower():
-                cert_text = f"[bold green]{cert_label}[/bold green]"
-            elif "compatible" in cert_label.lower():
-                cert_text = f"[cyan]{cert_label}[/cyan]"
-            else:
-                cert_text = f"[yellow]{cert_label}[/yellow]"
-
-            summary_table.add_row(target, status, integrate_text, skill_text, slash_text, cert_text, protocol_summary)
-
-        self.console.print(summary_table)
-        self.console.print("")
-
-        for target in targets:
-            host = report["hosts"][target]
-            if host["ready"]:
-                self.console.print(f"[green]✓ {target}[/green] ready")
-            else:
-                self.console.print(f"[red]✗ {target}[/red] [red]未安装[/red]")
-                for check_name in host.get("missing", []):
-                    self.console.print(f"  [red]- 缺失: {check_name}[/red]")
-                for suggestion in host.get("suggestions", []):
-                    self.console.print(f"  [dim]建议: {suggestion}[/dim]")
-            self._print_host_usage_guidance(
-                integration_manager=integration_manager,
-                target=target,
-                indent="  ",
-            )
-
-        self.console.print("")
-        if bool(report.get("overall_ready", False)):
-            self.console.print("[green]✓ Doctor 通过：所有宿主接入完整[/green]")
-            return 0
-        self.console.print("[red]Doctor 未通过：请按建议修复后重试[/red]")
-        return 1
-
-    def _cmd_setup(self, args) -> int:
-        """一步接入：onboard + doctor"""
-        setup_all = bool(args.all or (bool(args.yes) and not args.host and not args.auto))
-        onboard_args = argparse.Namespace(
-            host=args.host,
-            all=setup_all,
-            auto=bool(args.auto and not args.host and not args.all),
-            skill_name=args.skill_name,
-            skip_integrate=bool(args.skip_integrate),
-            skip_skill=bool(args.skip_skill),
-            skip_slash=bool(args.skip_slash),
-            yes=bool(args.yes),
-            force=bool(args.force),
-            dry_run=False,
-            stable_only=False,
-        )
-        onboard_result = self._cmd_onboard(onboard_args)
-        if onboard_result != 0:
-            return onboard_result
-
-        if args.skip_doctor:
-            return 0
-
-        selected_targets = getattr(onboard_args, "_selected_targets", None)
-        if isinstance(selected_targets, list) and selected_targets:
-            final_code = 0
-            for target in selected_targets:
-                doctor_args = argparse.Namespace(
-                    host=target,
-                    all=False,
-                    auto=False,
-                    skill_name=args.skill_name,
-                    skip_integrate=bool(args.skip_integrate),
-                    skip_skill=bool(args.skip_skill),
-                    skip_slash=bool(args.skip_slash),
-                    json=False,
-                    repair=False,
-                    force=bool(args.force),
-                )
-                result = self._cmd_doctor(doctor_args)
-                if result != 0:
-                    final_code = result
-            return final_code
-
-        doctor_args = argparse.Namespace(
-            host=args.host,
-            all=setup_all,
-            auto=bool(args.auto and not args.host and not args.all),
-            skill_name=args.skill_name,
-            skip_integrate=bool(args.skip_integrate),
-            skip_skill=bool(args.skip_skill),
-            skip_slash=bool(args.skip_slash),
-            json=False,
-            repair=False,
-            force=bool(args.force),
-        )
-        return self._cmd_doctor(doctor_args)
-
-    def _cmd_install(self, args) -> int:
-        """面向 PyPI 用户的一键安装入口"""
-        self._render_install_intro(args=args)
-        setup_args = argparse.Namespace(
-            host=args.host,
-            all=bool(args.all),
-            auto=bool(args.auto),
-            skill_name=args.skill_name,
-            skip_integrate=bool(args.skip_integrate),
-            skip_skill=bool(args.no_skill),
-            skip_slash=bool(args.skip_slash),
-            skip_doctor=bool(args.skip_doctor),
-            force=bool(args.force),
-            yes=bool(args.yes),
-        )
-        return self._cmd_setup(setup_args)
-
-    def _cmd_start(self, args) -> int:
-        """面向非技术用户的起步入口：自动选宿主、接入并输出最短试用路径。"""
-        from .integrations import IntegrationManager
-
-        if not self._ensure_host_support_matrix():
-            return 1
-
-        project_dir = Path.cwd()
-        integration_manager = IntegrationManager(project_dir)
-        available_targets = self._public_host_targets(integration_manager=integration_manager)
-        detected_targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
-
-        target = args.host
-        selection_reason = "manual"
-        if not target:
-            if detected_targets:
-                target = self._select_best_start_host(
-                    integration_manager=integration_manager,
-                    targets=detected_targets,
-                )
-                selection_reason = "auto-detected"
-            else:
-                payload = {
-                    "status": "error",
-                    "reason": "no-host-detected",
-                    "message": "未检测到可用宿主，请先安装受支持宿主后重试。",
-                    "recommended_hosts": self._recommended_start_hosts(
-                        integration_manager=integration_manager
-                    ),
-                }
-                if args.json:
-                    sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
-                else:
-                    self.console.print("[red]未检测到可用宿主[/red]")
-                    self.console.print("[dim]请先安装至少一个受支持宿主，再执行 super-dev start[/dim]")
-                    self.console.print("[cyan]优先建议安装这些宿主:[/cyan]")
-                    for host in payload["recommended_hosts"]:
-                        self.console.print(
-                            f"  - {host['name']} ({host['id']}) [{host['certification_label']}]"
-                        )
-                return 1
-
-        usage = self._build_host_usage_profile(
-            integration_manager=integration_manager,
-            target=target,
-        )
-
-        onboard_performed = False
-        if not bool(args.skip_onboard):
-            onboard_args = argparse.Namespace(
-                host=target,
-                all=False,
-                auto=False,
-                skill_name="super-dev-core",
-                skip_integrate=False,
-                skip_skill=False,
-                skip_slash=False,
-                yes=True,
-                force=bool(args.force),
-            )
-            onboard_result = self._cmd_onboard(onboard_args)
-            onboard_performed = True
-            if onboard_result != 0:
-                return onboard_result
-
-        profile_saved = False
-        profile_save_error = ""
-        if not bool(args.no_save_profile):
-            try:
-                ConfigManager(project_dir).update(
-                    host_profile_targets=[target],
-                    host_profile_enforce_selected=True,
-                )
-                profile_saved = True
-            except Exception as exc:
-                profile_save_error = str(exc)
-
-        quick_start = self._build_host_quick_start_text(
-            host_profile=usage,
-            host_id=target,
-            host_name=integration_manager.TARGETS[target].description,
-            idea=args.idea,
-        )
-        payload = {
-            "status": "success",
-            "project_dir": str(project_dir),
-            "selected_host": target,
-            "selection_reason": selection_reason,
-            "detected_hosts": detected_targets,
-            "detection_details": detected_meta,
-            "onboard_performed": onboard_performed,
-            "profile_saved": profile_saved,
-            "profile_save_error": profile_save_error,
-            "usage_profile": usage,
-            "recommended_trigger": self._build_host_trigger_example(target=target, idea=args.idea),
-            "quick_start": quick_start,
-        }
-
-        if args.json:
-            sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
-            return 0
-
-        profile = integration_manager.get_adapter_profile(target)
-        self.console.print("[cyan]Super Dev Start[/cyan]")
-        self.console.print(f"[cyan]已选择宿主[/cyan]: {target}")
-        self.console.print(
-            f"[cyan]认证等级[/cyan]: {profile.certification_label} ({profile.certification_level})"
-        )
-        if selection_reason == "auto-detected":
-            reasons = ", ".join(detected_meta.get(target, []))
-            if reasons:
-                self.console.print(f"[dim]自动选择依据: {reasons}[/dim]")
-        self.console.print(f"[dim]{profile.certification_reason}[/dim]")
-        if profile_saved:
-            self.console.print("[green]✓[/green] 已写入宿主画像到 super-dev.yaml")
-        elif profile_save_error:
-            self.console.print(f"[yellow]宿主画像写入失败: {profile_save_error}[/yellow]")
-        self.console.print("")
-        self.console.print(quick_start)
-        return 0
-
-    def _cmd_detect(self, args) -> int:
-        """宿主探测 + 接入兼容性评分"""
-        from .integrations import IntegrationManager
-
-        if not self._ensure_host_support_matrix():
-            return 1
-
-        project_dir = Path.cwd()
-        integration_manager = IntegrationManager(project_dir)
-        available_targets = [item.name for item in integration_manager.list_targets()]
-        detected_targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
-
-        if args.host:
-            targets = [args.host]
-        elif args.all:
-            targets = available_targets
-        else:
-            targets = detected_targets
-
-        report = self._collect_host_diagnostics(
-            project_dir=project_dir,
-            targets=targets,
-            skill_name=args.skill_name,
-            check_integrate=not args.skip_integrate,
-            check_skill=not args.skip_skill,
-            check_slash=not args.skip_slash,
-        )
-        compatibility = self._build_compatibility_summary(
-            report=report,
-            targets=targets,
-            check_integrate=not args.skip_integrate,
-            check_skill=not args.skip_skill,
-            check_slash=not args.skip_slash,
-        )
-
-        payload: dict[str, Any] = {
-            "project_dir": str(project_dir),
-            "detected_hosts": detected_targets,
-            "detection_details": detected_meta,
-            "selected_targets": targets,
-            "report": report,
-            "compatibility": compatibility,
-            "usage_profiles": {
-                target: self._build_host_usage_profile(
-                    integration_manager=integration_manager,
-                    target=target,
-                )
-                for target in targets
-            },
-        }
-        if not bool(args.no_save):
-            report_files = self._write_host_compatibility_report(project_dir=project_dir, payload=payload)
-            payload["report_files"] = {name: str(path) for name, path in report_files.items()}
-
-        if bool(args.save_profile):
-            try:
-                config_manager = ConfigManager(project_dir)
-                config_manager.update(
-                    host_profile_targets=targets,
-                    host_profile_enforce_selected=True,
-                )
-                payload["host_profile_updated"] = True
-            except Exception as exc:
-                payload["host_profile_updated"] = False
-                payload["host_profile_update_error"] = str(exc)
-
-        if args.json:
-            sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
-            return 0
-
-        self.console.print("[cyan]Super Dev Host Detect[/cyan]")
-        self.console.print(f"[dim]项目目录: {project_dir}[/dim]")
-        if detected_targets:
-            self.console.print(
-                f"[cyan]自动检测到 {len(detected_targets)} 个宿主：{', '.join(detected_targets)}[/cyan]"
-            )
-            for target in detected_targets:
-                reasons = ", ".join(detected_meta.get(target, []))
-                if reasons:
-                    self.console.print(f"[dim]  - {target}: {reasons}[/dim]")
-        else:
-            self.console.print("[yellow]未检测到宿主（可用 --all 查看全部兼容评分）[/yellow]")
-
-        self.console.print("")
-        self.console.print(
-            f"[cyan]兼容性评分: {compatibility['overall_score']:.2f}/100 "
-            f"(ready {compatibility['ready_hosts']}/{compatibility['total_hosts']})[/cyan]"
-        )
-        self.console.print(
-            f"[cyan]流程一致性: {compatibility.get('flow_consistency_score', 0):.2f}/100 "
-            f"({compatibility.get('flow_consistent_hosts', 0)}/{compatibility.get('total_hosts', 0)})[/cyan]"
-        )
-        for target in targets:
-            host_compat = compatibility["hosts"].get(target, {})
-            score = host_compat.get("score", 0.0)
-            ready = bool(host_compat.get("ready", False))
-            badge = "[green]ready[/green]" if ready else "[yellow]not-ready[/yellow]"
-            self.console.print(f"  - {target}: {score:.2f}/100 {badge}")
-            self._print_host_usage_guidance(
-                integration_manager=integration_manager,
-                target=target,
-                indent="    ",
-            )
-        if not bool(args.no_save):
-            saved_report_files = payload.get("report_files", {})
-            if isinstance(saved_report_files, dict):
-                json_file = saved_report_files.get("json")
-                md_file = saved_report_files.get("markdown")
-                if isinstance(json_file, str) and isinstance(md_file, str):
-                    self.console.print(f"[dim]报告: {md_file}[/dim]")
-                    self.console.print(f"[dim]数据: {json_file}[/dim]")
-        if bool(args.save_profile):
-            if bool(payload.get("host_profile_updated", False)):
-                self.console.print("[green]✓[/green] 已更新宿主画像: host_profile_targets + host_profile_enforce_selected")
-            else:
-                err = payload.get("host_profile_update_error", "")
-                self.console.print(f"[yellow]宿主画像更新失败: {err}[/yellow]")
-
-        return 0
-
-    def _cmd_clean(self, args) -> int:
-        """清理历史产物文件"""
-        from .config import get_config_manager
-        project_dir = Path.cwd()
-        output_dir = project_dir / get_config_manager(project_dir).config.output_dir
-
-        if not output_dir.exists():
-            self.console.print("[yellow]output/ 目录不存在，无需清理[/yellow]")
-            return 0
-
-        # 收集所有产物文件（按修改时间排序）
-        artifact_extensions = {".md", ".json", ".html", ".css", ".js", ".tar.gz", ".zip"}
-        all_files: list[Path] = []
-        for f in output_dir.rglob("*"):
-            if f.is_file() and (f.suffix in artifact_extensions or ".tar" in f.name):
-                all_files.append(f)
-
-        if not all_files:
-            self.console.print("[green]output/ 目录已是干净状态[/green]")
-            return 0
-
-        all_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
-
-        if args.all:
-            files_to_delete = all_files
-        else:
-            # 按项目名分组，每组保留最近 keep 个文件
-            import re as _re
-            from collections import defaultdict
-
-            # 已知的产物后缀模式
-            artifact_suffixes = [
-                "-prd", "-architecture", "-uiux", "-research", "-execution-plan",
-                "-frontend-blueprint", "-redteam", "-quality-gate", "-code-review",
-                "-ai-prompt", "-release-readiness", "-pipeline-metrics",
-                "-ui-review", "-proof-pack", "-contract-report", "-knowledge-bundle",
-                "-frontend-runtime", "-repo-map", "-dependency-graph",
-                "-feature-checklist", "-resume-audit", "-rehearsal-report",
-            ]
-
-            groups: dict[str, list[Path]] = defaultdict(list)
-            for f in all_files:
-                name = f.stem
-                matched = False
-                for suffix in artifact_suffixes:
-                    if name.endswith(suffix):
-                        name = name[: -len(suffix)]
-                        matched = True
-                        break
-                if not matched:
-                    # 尝试正则提取（处理未知后缀）
-                    m = _re.match(r"^(.+?)(?:-[a-z]+-[a-z]+)$", name)
-                    if m:
-                        name = m.group(1)
-                groups[name].append(f)
-
-            files_to_delete = []
-            for _group_name, group_files in groups.items():
-                group_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
-                keep_count = args.keep
-                if len(group_files) > keep_count:
-                    files_to_delete.extend(group_files[keep_count:])
-
-        if not files_to_delete:
-            self.console.print(f"[green]无需清理（当前保留最近 {args.keep} 次运行的产物）[/green]")
-            return 0
-
-        self.console.print(f"[cyan]将清理 {len(files_to_delete)} 个文件：[/cyan]")
-        for f in files_to_delete[:20]:
-            try:
-                rel = f.relative_to(project_dir)
-            except ValueError:
-                rel = f.name
-            self.console.print(f"  [dim]{rel}[/dim]")
-        if len(files_to_delete) > 20:
-            self.console.print(f"  [dim]... 及其他 {len(files_to_delete) - 20} 个文件[/dim]")
-
-        if args.dry_run:
-            self.console.print("[yellow]--dry-run 模式，未实际删除[/yellow]")
-            return 0
-
-        deleted = 0
-        for f in files_to_delete:
-            try:
-                f.unlink()
-                deleted += 1
-            except OSError:
-                pass
-
-        # 清理空目录
-        for d in sorted(output_dir.rglob("*"), reverse=True):
-            if d.is_dir() and not any(d.iterdir()):
-                try:
-                    d.rmdir()
-                except OSError:
-                    pass
-
-        self.console.print(f"[green]已清理 {deleted} 个文件[/green]")
-        return 0
-
-    def _cmd_update(self, args) -> int:
-        latest_version = self._fetch_latest_pypi_version()
-        if latest_version is None:
-            self.console.print("[red]无法获取 PyPI 最新版本信息，请检查网络后重试[/red]")
-            return 1
-
-        current_version = __version__
-        self.console.print(f"[cyan]当前版本[/cyan]: {current_version}")
-        self.console.print(f"[cyan]PyPI 最新版本[/cyan]: {latest_version}")
-
-        method = self._resolve_update_method(args.method)
-        if args.check:
-            if self._is_version_newer(latest_version, current_version):
-                self.console.print("[yellow]发现新版本，可执行 `super-dev update` 完成升级[/yellow]")
-            elif self._version_key(current_version) > self._version_key(latest_version):
-                self.console.print("[yellow]当前本地版本高于 PyPI 最新版本，可能是尚未发布的开发版本[/yellow]")
-            else:
-                self.console.print("[green]✓ 当前已是最新版本[/green]")
-            return 0
-
-        if self._version_key(current_version) > self._version_key(latest_version):
-            self.console.print("[yellow]当前本地版本高于 PyPI 最新版本，将继续执行升级命令以刷新当前安装[/yellow]")
-        elif not self._is_version_newer(latest_version, current_version):
-            self.console.print("[green]当前版本已与 PyPI 一致，将继续执行升级命令以确保安装状态最新[/green]")
-
-        self.console.print(f"[cyan]升级方式[/cyan]: {method}")
-        command = self._build_update_command(method=method)
-        self.console.print(f"[dim]执行命令: {' '.join(command)}[/dim]")
-
-        # Windows 下 uv tool upgrade 可能因文件锁定失败，提供重试机制
-        max_retries = 3 if sys.platform == "win32" and method == "uv" else 1
-        completed = None
-        for attempt in range(max_retries):
-            try:
-                completed = subprocess.run(command, check=False)
-                if completed.returncode == 0:
-                    break
-                if attempt < max_retries - 1 and sys.platform == "win32":
-                    self.console.print(
-                        f"[yellow]升级失败（尝试 {attempt + 1}/{max_retries}），"
-                        "Windows 下文件可能被占用，等待 2 秒后重试...[/yellow]"
-                    )
-                    import time
-                    time.sleep(2)
-            except FileNotFoundError:
-                self.console.print(f"[red]未找到升级工具: {method}[/red]")
-                return 1
-
-        if completed is None or completed.returncode != 0:
-            if sys.platform == "win32" and method == "uv":
-                self.console.print("")
-                self.console.print(
-                    "[red]升级失败：Windows 下 super-dev.exe 可能被其他进程占用[/red]\n"
-                    "[yellow]请按以下步骤操作：[/yellow]\n"
-                    "  1. 关闭所有使用 super-dev 的终端窗口\n"
-                    "  2. 打开新的终端\n"
-                    "  3. 执行: uv tool upgrade super-dev\n"
-                    "  [dim]如果仍然失败，尝试: uv tool install super-dev --force --reinstall[/dim]"
-                )
-            else:
-                self.console.print("[red]升级失败，请根据上面的命令手动执行[/red]")
-            return completed.returncode if completed else 1
-
-        from rich.panel import Panel
-        self.console.print("")
-        self.console.print(Panel(
-            "[bold green]升级完成[/bold green]\n\n"
-            "  [bold]请关闭当前终端，重新打开后再使用 super-dev[/bold]\n\n"
-            "  [dim]当前进程仍加载旧版本代码，必须重启终端才能生效[/dim]\n"
-            "  [dim]验证: super-dev --version[/dim]",
-            border_style="green",
-            expand=True,
-            padding=(1, 2),
-        ))
-        return 0
-
-    def _fetch_latest_pypi_version(self) -> str | None:
-        try:
-            response = requests.get("https://pypi.org/pypi/super-dev/json", timeout=10)  # type: ignore[name-defined]
-            response.raise_for_status()
-            payload = response.json()
-        except (Exception, NameError):
-            return None
-        info = payload.get("info", {})
-        version = info.get("version")
-        return version if isinstance(version, str) and version.strip() else None
-
-    def _resolve_update_method(self, preferred: str) -> str:
-        if preferred in {"pip", "uv"}:
-            return preferred
-        uv_binary = shutil.which("uv")
-        runtime_markers = [
-            sys.executable,
-            shutil.which("super-dev") or "",
-            os.environ.get("UV_TOOL_BIN_DIR", ""),
-            os.environ.get("PATH", ""),
-        ]
-        if uv_binary and any(".local/share/uv" in marker or "/uv/tools/" in marker for marker in runtime_markers):
-            return "uv"
-        return "uv" if uv_binary and "uv" in sys.executable.lower() else "pip"
-
-    def _build_update_command(self, *, method: str) -> list[str]:
-        if method == "uv":
-            return ["uv", "tool", "upgrade", "super-dev"]
-        return [sys.executable, "-m", "pip", "install", "-U", "super-dev"]
-
-    def _is_version_newer(self, latest: str, current: str) -> bool:
-        return self._version_key(latest) > self._version_key(current)
-
-    def _version_key(self, version: str) -> tuple[int, ...]:
-        parts = []
-        for part in version.replace("-", ".").split("."):
-            digits = "".join(ch for ch in part if ch.isdigit())
-            parts.append(int(digits or 0))
-        return tuple(parts)
-
-    def _print_host_usage_guidance(
-        self,
-        *,
-        integration_manager,
-        target: str,
-        indent: str = "",
-    ) -> None:
-        usage = self._build_host_usage_profile(
-            integration_manager=integration_manager,
-            target=target,
-        )
-        self.console.print(f"{indent}[cyan]主入口[/cyan]: {usage['primary_entry']}")
-        self.console.print(
-            f"{indent}认证等级: {usage['certification_label']} ({usage['certification_level']})"
-        )
-        self.console.print(f"{indent}使用模式: {usage['usage_mode']}")
-        protocol_mode = str(usage.get("host_protocol_mode", "")).strip()
-        protocol_summary = str(usage.get("host_protocol_summary", "")).strip()
-        if protocol_mode or protocol_summary:
-            protocol_text = protocol_summary or protocol_mode
-            if protocol_mode and protocol_summary and protocol_mode != protocol_summary:
-                protocol_text = f"{protocol_summary} ({protocol_mode})"
-            self.console.print(f"{indent}宿主协议: {protocol_text}")
-        self.console.print(f"{indent}触发命令: {usage['trigger_command']}")
-        self.console.print(f"{indent}触发上下文: {usage['trigger_context']}")
-        self.console.print(f"{indent}触发位置: {usage['usage_location']}")
-        self.console.print(f"{indent}接入后重启: {usage['restart_required_label']}")
-        precondition_label = usage.get("precondition_label", "")
-        if isinstance(precondition_label, str) and precondition_label.strip():
-            self.console.print(f"{indent}宿主前置条件: {precondition_label}")
-        precondition_items = usage.get("precondition_items", [])
-        if isinstance(precondition_items, list) and precondition_items:
-            self.console.print(f"{indent}前置条件项:")
-            for item in precondition_items:
-                if not isinstance(item, dict):
-                    continue
-                item_label = str(item.get("label", "")).strip()
-                item_status = str(item.get("status", "")).strip()
-                item_text = item_label or item_status
-                if item_text:
-                    self.console.print(f"{indent}  - {item_text}")
-        precondition_guidance = usage.get("precondition_guidance", [])
-        if isinstance(precondition_guidance, list) and precondition_guidance:
-            self.console.print(f"{indent}前置条件说明:")
-            for item in precondition_guidance:
-                self.console.print(f"{indent}  - {item}")
-        if usage.get("certification_reason"):
-            self.console.print(f"{indent}认证说明: {usage['certification_reason']}")
-        official_project = usage.get("official_project_surfaces", [])
-        if isinstance(official_project, list) and official_project:
-            self.console.print(f"{indent}官方项目级接入面:")
-            for item in official_project:
-                self.console.print(f"{indent}  - {item}")
-        official_user = usage.get("official_user_surfaces", [])
-        if isinstance(official_user, list) and official_user:
-            self.console.print(f"{indent}官方用户级接入面:")
-            for item in official_user:
-                self.console.print(f"{indent}  - {item}")
-        observed_surfaces = usage.get("observed_compatibility_surfaces", [])
-        if isinstance(observed_surfaces, list) and observed_surfaces:
-            self.console.print(f"{indent}兼容增强路径:")
-            for item in observed_surfaces:
-                self.console.print(f"{indent}  - {item}")
-        steps = usage.get("post_onboard_steps", [])
-        if isinstance(steps, list) and steps:
-            self.console.print(f"{indent}接入后步骤:")
-            for step in steps:
-                self.console.print(f"{indent}  - {step}")
-        notes = usage.get("usage_notes", [])
-        if isinstance(notes, list) and notes:
-            self.console.print(f"{indent}使用提示:")
-            for note in notes:
-                self.console.print(f"{indent}  - {note}")
-        smoke_prompt = usage.get("smoke_test_prompt", "")
-        if isinstance(smoke_prompt, str) and smoke_prompt:
-            self.console.print(f"{indent}Smoke 验收语句: {smoke_prompt}")
-        smoke_steps = usage.get("smoke_test_steps", [])
-        if isinstance(smoke_steps, list) and smoke_steps:
-            self.console.print(f"{indent}Smoke 验收步骤:")
-            for step in smoke_steps:
-                self.console.print(f"{indent}  - {step}")
-        smoke_signal = usage.get("smoke_success_signal", "")
-        if isinstance(smoke_signal, str) and smoke_signal:
-            self.console.print(f"{indent}Smoke 通过标准: {smoke_signal}")
-
-    def _host_certification_rank(self, level: str) -> int:
-        order = {"certified": 0, "compatible": 1, "experimental": 2}
-        return order.get(level, 3)
-
-    def _select_best_start_host(self, *, integration_manager, targets: list[str]) -> str:
-        scored: list[tuple[int, int, int, str]] = []
-        for target in targets:
-            profile = integration_manager.get_adapter_profile(target)
-            scored.append(
-                (
-                    self._host_certification_rank(profile.certification_level),
-                    0 if integration_manager.supports_slash(target) else 1,
-                    0 if profile.category == "cli" else 1,
-                    target,
-                )
-            )
-        scored.sort()
-        return scored[0][3]
-
-    def _recommended_start_hosts(self, *, integration_manager) -> list[dict[str, str]]:
-        from .integrations import IntegrationManager
-
-        items: list[dict[str, str]] = []
-        for target in sorted(IntegrationManager.TARGETS):
-            profile = integration_manager.get_adapter_profile(target)
-            if profile.certification_level != "certified":
-                continue
-            items.append(
-                {
-                    "id": target,
-                    "name": IntegrationManager.TARGETS[target].description,
-                    "certification_label": profile.certification_label,
-                }
-            )
-        return items
-
-    def _build_host_trigger_example(self, *, target: str, idea: str | None) -> str:
-        from .integrations import IntegrationManager
-
-        if not idea:
-            return ""
-        escaped = idea.replace('"', '\\"')
-        if target == "codex-cli":
-            return f"{IntegrationManager.TEXT_TRIGGER_PREFIX} {idea}"
-        if target == "trae":
-            return f"{IntegrationManager.TEXT_TRIGGER_PREFIX} {idea}"
-        if IntegrationManager.supports_slash(target):
-            return f'/super-dev "{escaped}"'
-        return f"{IntegrationManager.TEXT_TRIGGER_PREFIX} {idea}"
-
-    def _build_onboard_next_steps(self, *, targets: list[str]) -> list[str]:
-        from .integrations import IntegrationManager
-
-        project_dir = Path.cwd()
-        integration_manager = IntegrationManager(project_dir)
-        lines: list[str] = []
-        for target in targets:
-            profile = integration_manager.get_adapter_profile(target)
-            trigger = str(profile.trigger_command).replace("<需求描述>", "你的需求")
-            line = f"{target}: 打开宿主后输入 {trigger}"
-            if profile.requires_restart_after_onboard:
-                line += "（先重启宿主）"
-            lines.append(line)
-        return lines
-
-    def _build_host_quick_start_text(
-        self,
-        *,
-        host_profile: dict[str, Any],
-        host_id: str,
-        host_name: str,
-        idea: str | None,
-    ) -> str:
-        lines = [
-            f"{host_name} 起步步骤",
-            "",
-            f"1. 认证等级：{host_profile.get('certification_label', '-')}"
-            f" ({host_profile.get('certification_level', '-')})",
-            f"2. 主入口：{host_profile.get('primary_entry', '-')}",
-            f"3. 使用模式：{host_profile.get('usage_mode', '-')}",
-            f"4. 触发上下文：{host_profile.get('trigger_context', '-')}",
-            f"5. 接入后重启：{host_profile.get('restart_required_label', '-')}",
-        ]
-        reason = host_profile.get("certification_reason", "")
-        if isinstance(reason, str) and reason.strip():
-            lines.extend(["", "认证说明", reason])
-        steps = host_profile.get("post_onboard_steps", [])
-        if isinstance(steps, list) and steps:
-            lines.extend(["", "接入后步骤"])
-            for index, step in enumerate(steps, start=1):
-                lines.append(f"{index}. {step}")
-        if idea:
-            lines.extend([
-                "",
-                "把这句放进宿主会话",
-                self._build_host_trigger_example(target=host_id, idea=idea),
-            ])
-        lines.extend([
-            "",
-            "如果要重新接入或修复",
-            f"super-dev setup --host {host_id} --force --yes",
-            f"super-dev doctor --host {host_id} --repair --force",
-        ])
-        return "\n".join(lines)
-
-    def _build_host_usage_profile(
-        self,
-        *,
-        integration_manager,
-        target: str,
-    ) -> dict[str, Any]:
-        profile = integration_manager.get_adapter_profile(target)
-        final_trigger = str(profile.trigger_command).replace("<需求描述>", "你的需求")
-        return {
-            "host": profile.host,
-            "category": profile.category,
-            "certification_level": profile.certification_level,
-            "certification_label": profile.certification_label,
-            "certification_reason": profile.certification_reason,
-            "certification_evidence": list(profile.certification_evidence),
-            "host_protocol_mode": profile.host_protocol_mode,
-            "host_protocol_summary": profile.host_protocol_summary,
-            "capability_labels": dict(profile.capability_labels),
-            "official_project_surfaces": list(profile.official_project_surfaces),
-            "official_user_surfaces": list(profile.official_user_surfaces),
-            "observed_compatibility_surfaces": list(profile.observed_compatibility_surfaces),
-            "official_docs_url": profile.official_docs_url,
-            "official_docs_references": list(profile.official_docs_references),
-            "docs_check_status": profile.docs_check_status,
-            "docs_check_summary": profile.docs_check_summary,
-            "usage_mode": profile.usage_mode,
-            "primary_entry": profile.primary_entry,
-            "trigger_command": profile.trigger_command,
-            "final_trigger": final_trigger,
-            "trigger_context": profile.trigger_context,
-            "usage_location": profile.usage_location,
-            "requires_restart_after_onboard": profile.requires_restart_after_onboard,
-            "restart_required_label": "是" if profile.requires_restart_after_onboard else "否",
-            "post_onboard_steps": list(profile.post_onboard_steps),
-            "usage_notes": list(profile.usage_notes),
-            "smoke_test_prompt": profile.smoke_test_prompt,
-            "smoke_test_steps": list(profile.smoke_test_steps),
-            "smoke_success_signal": profile.smoke_success_signal,
-            "precondition_status": profile.precondition_status,
-            "precondition_label": profile.precondition_label,
-            "precondition_guidance": list(profile.precondition_guidance),
-            "precondition_signals": dict(profile.precondition_signals),
-            "precondition_items": list(profile.precondition_items),
-            "notes": profile.notes,
-        }
-
-    def _load_host_runtime_validation_state(self, *, project_dir: Path) -> dict[str, Any]:
-        payload = load_host_runtime_validation(project_dir) or {}
-        if not isinstance(payload, dict):
-            return {"hosts": {}, "updated_at": ""}
-        hosts = payload.get("hosts", {})
-        if not isinstance(hosts, dict):
-            hosts = {}
-        return {
-            "hosts": hosts,
-            "updated_at": str(payload.get("updated_at", "")).strip(),
-        }
-
-    def _host_runtime_status_label(self, status: str) -> str:
-        mapping = {
-            "pending": "待真人验收",
-            "passed": "已真人通过",
-            "failed": "真人验收失败",
-        }
-        return mapping.get(status, "待真人验收")
-
-    def _update_host_runtime_validation_state(
-        self,
-        *,
-        project_dir: Path,
-        target: str,
-        status: str,
-        comment: str,
-        actor: str,
-    ) -> tuple[dict[str, Any], Path]:
-        payload = self._load_host_runtime_validation_state(project_dir=project_dir)
-        hosts = dict(payload.get("hosts", {}))
-        current = hosts.get(target, {})
-        if not isinstance(current, dict):
-            current = {}
-        hosts[target] = {
-            "status": status,
-            "comment": comment.strip(),
-            "actor": actor.strip() or "user",
-            "updated_at": current.get("updated_at", ""),
-        }
-        file_path = save_host_runtime_validation(
-            project_dir,
-            {
-                "hosts": hosts,
-            },
-        )
-        updated = self._load_host_runtime_validation_state(project_dir=project_dir)
-        return updated, file_path
-
-    def _resolve_report_project_name(self, project_dir: Path) -> str:
-        try:
-            config = ConfigManager(project_dir).load()
-            raw = config.name or project_dir.name
-        except Exception:
-            raw = project_dir.name
-        return self._sanitize_project_name(raw)
-
-    def _render_host_compatibility_markdown(self, payload: dict[str, Any]) -> str:
-        compatibility = payload.get("compatibility", {})
-        report = payload.get("report", {})
-        selected_targets = payload.get("selected_targets", [])
-        detected_hosts = payload.get("detected_hosts", [])
-        if not isinstance(compatibility, dict):
-            compatibility = {}
-        if not isinstance(report, dict):
-            report = {}
-        if not isinstance(selected_targets, list):
-            selected_targets = []
-        if not isinstance(detected_hosts, list):
-            detected_hosts = []
-
-        lines = [
-            "# Host Compatibility Report",
-            "",
-            f"- Generated At (UTC): {datetime.now(timezone.utc).isoformat()}",
-            f"- Project Dir: {payload.get('project_dir', '')}",
-            f"- Detected Hosts: {', '.join(str(item) for item in detected_hosts) if detected_hosts else '(none)'}",
-            f"- Selected Targets: {', '.join(str(item) for item in selected_targets) if selected_targets else '(none)'}",
-            "",
-            "## Summary",
-            f"- Overall Score: {compatibility.get('overall_score', 0)}/100",
-            f"- Ready Hosts: {compatibility.get('ready_hosts', 0)}/{compatibility.get('total_hosts', 0)}",
-            f"- Enabled Checks: {', '.join(str(item) for item in compatibility.get('enabled_checks', []))}",
-            "",
-            "## Per-Host Scores",
-            "",
-            "| Host | Certification | Score | Ready | Passed/Total |",
-            "|---|---|---:|---|---:|",
-        ]
-
-        host_scores = compatibility.get("hosts", {})
-        if isinstance(host_scores, dict):
-            for target in selected_targets:
-                info = host_scores.get(target, {}) if isinstance(target, str) else {}
-                if not isinstance(info, dict):
-                    info = {}
-                usage_profiles = payload.get("usage_profiles", {})
-                certification = "-"
-                if isinstance(usage_profiles, dict):
-                    usage = usage_profiles.get(target, {})
-                    if isinstance(usage, dict):
-                        certification = str(usage.get("certification_label", "-"))
-                score = info.get("score", 0)
-                ready = "yes" if bool(info.get("ready", False)) else "no"
-                passed = int(info.get("passed", 0))
-                possible = int(info.get("possible", 0))
-                lines.append(f"| {target} | {certification} | {score} | {ready} | {passed}/{possible} |")
-
-        lines.extend(["", "## Usage Guidance", ""])
-        usage_profiles = payload.get("usage_profiles", {})
-        if isinstance(usage_profiles, dict):
-            for target in selected_targets:
-                usage = usage_profiles.get(target, {}) if isinstance(target, str) else {}
-                if not isinstance(usage, dict):
-                    usage = {}
-                lines.append(f"### {target}")
-                lines.append(
-                    f"- Certification: {usage.get('certification_label', '-')} ({usage.get('certification_level', '-')})"
-                )
-                reason = usage.get("certification_reason", "")
-                if isinstance(reason, str) and reason.strip():
-                    lines.append(f"- Certification Reason: {reason}")
-                evidence = usage.get("certification_evidence", [])
-                if isinstance(evidence, list) and evidence:
-                    lines.append("- Certification Evidence:")
-                    for item in evidence:
-                        lines.append(f"  - {item}")
-                lines.append(f"- Primary Entry: {usage.get('primary_entry', '-')}")
-                lines.append(f"- Usage Mode: {usage.get('usage_mode', '-')}")
-                lines.append(f"- Trigger Command: {usage.get('trigger_command', '-')}")
-                lines.append(f"- Trigger Context: {usage.get('trigger_context', '-')}")
-                lines.append(f"- Restart Required: {usage.get('restart_required_label', '-')}")
-                precondition_label = usage.get("precondition_label", "")
-                if isinstance(precondition_label, str) and precondition_label.strip():
-                    lines.append(f"- Host Preconditions: {precondition_label}")
-                precondition_items = usage.get("precondition_items", [])
-                if isinstance(precondition_items, list) and precondition_items:
-                    lines.append("- Host Precondition Items:")
-                    for item in precondition_items:
-                        if not isinstance(item, dict):
-                            continue
-                        item_label = str(item.get("label", "")).strip()
-                        item_status = str(item.get("status", "")).strip()
-                        item_text = item_label or item_status
-                        if item_text:
-                            lines.append(f"  - {item_text}")
-                precondition_guidance = usage.get("precondition_guidance", [])
-                if isinstance(precondition_guidance, list) and precondition_guidance:
-                    lines.append("- Host Precondition Guidance:")
-                    for item in precondition_guidance:
-                        lines.append(f"  - {item}")
-                steps = usage.get("post_onboard_steps", [])
-                if isinstance(steps, list) and steps:
-                    lines.append("- Post Onboard Steps:")
-                    for step in steps:
-                        lines.append(f"  - {step}")
-                note = usage.get("notes", "")
-                if isinstance(note, str) and note.strip():
-                    lines.append(f"- Notes: {note}")
-                lines.append("")
-
-        lines.extend(["## Missing Items", ""])
-        hosts = report.get("hosts", {})
-        if isinstance(hosts, dict):
-            for target in selected_targets:
-                host = hosts.get(target, {}) if isinstance(target, str) else {}
-                if not isinstance(host, dict):
-                    continue
-                missing = host.get("missing", [])
-                if not isinstance(missing, list) or not missing:
-                    continue
-                lines.append(f"### {target}")
-                lines.append(f"- Missing: {', '.join(str(item) for item in missing)}")
-                suggestions = host.get("suggestions", [])
-                if isinstance(suggestions, list):
-                    for suggestion in suggestions:
-                        lines.append(f"- Suggestion: `{suggestion}`")
-                lines.append("")
-
-        return "\n".join(lines).rstrip() + "\n"
-
-    def _render_host_surface_audit_markdown(self, payload: dict[str, Any]) -> str:
-        report = payload.get("report", {})
-        compatibility = payload.get("compatibility", {})
-        selected_targets = payload.get("selected_targets", [])
-        detected_hosts = payload.get("detected_hosts", [])
-        usage_profiles = payload.get("usage_profiles", {})
-        repair_actions = payload.get("repair_actions", {})
-        if not isinstance(report, dict):
-            report = {}
-        if not isinstance(compatibility, dict):
-            compatibility = {}
-        if not isinstance(selected_targets, list):
-            selected_targets = []
-        if not isinstance(detected_hosts, list):
-            detected_hosts = []
-        if not isinstance(usage_profiles, dict):
-            usage_profiles = {}
-        if not isinstance(repair_actions, dict):
-            repair_actions = {}
-
-        lines = [
-            "# Host Surface Audit Report",
-            "",
-            f"- Generated At (UTC): {datetime.now(timezone.utc).isoformat()}",
-            f"- Project Dir: {payload.get('project_dir', '')}",
-            f"- Detected Hosts: {', '.join(str(item) for item in detected_hosts) if detected_hosts else '(none)'}",
-            f"- Selected Targets: {', '.join(str(item) for item in selected_targets) if selected_targets else '(none)'}",
-            f"- Overall Score: {compatibility.get('overall_score', 0)}/100",
-            "",
-        ]
-        if repair_actions:
-            lines.extend(["## Repair Actions", ""])
-            for target, actions in repair_actions.items():
-                if isinstance(actions, dict):
-                    action_text = ", ".join(f"{key}={value}" for key, value in actions.items())
-                    lines.append(f"- {target}: {action_text}")
-            lines.append("")
-
-        hosts = report.get("hosts", {})
-        if not isinstance(hosts, dict):
-            hosts = {}
-
-        for target in selected_targets:
-            host = hosts.get(target, {}) if isinstance(target, str) else {}
-            usage = usage_profiles.get(target, {}) if isinstance(target, str) else {}
-            if not isinstance(host, dict):
-                host = {}
-            if not isinstance(usage, dict):
-                usage = {}
-            checks = host.get("checks", {})
-            contract = checks.get("contract", {}) if isinstance(checks, dict) else {}
-            surfaces = contract.get("surfaces", {}) if isinstance(contract, dict) else {}
-            invalid_surfaces = contract.get("invalid_surfaces", {}) if isinstance(contract, dict) else {}
-            lines.extend(
-                [
-                    f"## {target}",
-                    "",
-                    f"- Ready: {'yes' if bool(host.get('ready', False)) else 'no'}",
-                    f"- Trigger: {usage.get('final_trigger', '-')}",
-                    f"- Protocol: {usage.get('host_protocol_summary', '-')}",
-                    "",
-                    "| Surface | Exists | Missing Markers | Path |",
-                    "|---|---|---|---|",
-                ]
-            )
-            if isinstance(surfaces, dict):
-                for surface_key, surface_info in surfaces.items():
-                    if not isinstance(surface_info, dict):
-                        continue
-                    exists = "yes" if bool(surface_info.get("exists", False)) else "no"
-                    missing = surface_info.get("missing_markers", [])
-                    missing_text = ", ".join(str(item) for item in missing) if isinstance(missing, list) and missing else "-"
-                    lines.append(
-                        f"| {surface_key} | {exists} | {missing_text} | {surface_info.get('path', '-')} |"
-                    )
-            suggestions = host.get("suggestions", [])
-            if isinstance(invalid_surfaces, dict) and invalid_surfaces:
-                lines.extend(["", "### Fix Guidance", ""])
-                for surface_key, surface_info in invalid_surfaces.items():
-                    if not isinstance(surface_info, dict):
-                        continue
-                    missing = surface_info.get("missing_markers", [])
-                    missing_text = ", ".join(str(item) for item in missing) if isinstance(missing, list) and missing else "-"
-                    lines.append(f"- `{surface_key}` -> {missing_text}")
-            if isinstance(suggestions, list) and suggestions:
-                lines.extend(["", "### Suggested Commands", ""])
-                for suggestion in suggestions:
-                    lines.append(f"- `{suggestion}`")
-            lines.append("")
-
-        return "\n".join(lines).rstrip() + "\n"
-
-    def _build_host_runtime_validation_payload(
-        self,
-        *,
-        project_dir: Path,
-        targets: list[str],
-        detected_meta: dict[str, list[str]],
-        report: dict[str, Any],
-        usage_profiles: dict[str, dict[str, Any]],
-    ) -> dict[str, Any]:
-        runtime_state = self._load_host_runtime_validation_state(project_dir=project_dir)
-        runtime_hosts = runtime_state.get("hosts", {})
-        if not isinstance(runtime_hosts, dict):
-            runtime_hosts = {}
-        hosts = report.get("hosts", {})
-        if not isinstance(hosts, dict):
-            hosts = {}
-        entries: list[dict[str, Any]] = []
-        blockers: list[dict[str, Any]] = []
-        next_actions: list[str] = []
-        for target in targets:
-            host = hosts.get(target, {}) if isinstance(target, str) else {}
-            usage = usage_profiles.get(target, {}) if isinstance(target, str) else {}
-            runtime_entry = runtime_hosts.get(target, {}) if isinstance(target, str) else {}
-            if not isinstance(host, dict):
-                host = {}
-            if not isinstance(usage, dict):
-                usage = {}
-            if not isinstance(runtime_entry, dict):
-                runtime_entry = {}
-            runtime_status = str(runtime_entry.get("status", "")).strip() or "pending"
-            surface_ready = bool(host.get("ready", False))
-            precondition_label = usage.get("precondition_label", "-")
-            precondition_guidance = usage.get("precondition_guidance", [])
-            precondition_items = usage.get("precondition_items", [])
-            blocking_reason = ""
-            recommended_action = ""
-            blocker_type = ""
-            if not surface_ready:
-                blocking_reason = "宿主接入面仍存在 contract 缺口"
-                recommended_action = f"super-dev integrate audit --target {target} --repair --force"
-                blocker_type = "surface"
-            elif runtime_status == "failed":
-                blocking_reason = "宿主真人运行时验收失败"
-                recommended_action = f"super-dev integrate audit --target {target} --repair --force"
-                blocker_type = "runtime"
-            elif runtime_status != "passed":
-                blocking_reason = "宿主尚未完成真人运行时验收"
-                recommended_action = (
-                    f"super-dev integrate validate --target {target} --status passed --comment \"首轮先进入 research，三文档已真实落盘\""
-                )
-                blocker_type = "validation"
-
-            if not surface_ready or runtime_status != "passed":
-                blocker_entry = {
-                    "host": target,
-                    "type": blocker_type or "runtime",
-                    "summary": blocking_reason,
-                    "next_action": recommended_action,
-                }
-                blockers.append(blocker_entry)
-                if recommended_action and recommended_action not in next_actions:
-                    next_actions.append(recommended_action)
-
-            if isinstance(precondition_guidance, list):
-                for item in precondition_guidance[:2]:
-                    if isinstance(item, str) and item.strip() and item not in next_actions and runtime_status != "passed":
-                        next_actions.append(item.strip())
-
-            entries.append(
-                {
-                    "host": target,
-                    "surface_ready": surface_ready,
-                    "ready_for_delivery": surface_ready and runtime_status == "passed",
-                    "blocking_reason": blocking_reason,
-                    "recommended_action": recommended_action,
-                    "manual_runtime_status": runtime_status,
-                    "manual_runtime_status_label": self._host_runtime_status_label(runtime_status),
-                    "manual_runtime_comment": str(runtime_entry.get("comment", "")).strip(),
-                    "manual_runtime_actor": str(runtime_entry.get("actor", "")).strip(),
-                    "manual_runtime_updated_at": str(runtime_entry.get("updated_at", "")).strip(),
-                    "final_trigger": usage.get("final_trigger", "-"),
-                    "host_protocol_mode": usage.get("host_protocol_mode", "-"),
-                    "host_protocol_summary": usage.get("host_protocol_summary", "-"),
-                    "certification_label": usage.get("certification_label", "-"),
-                    "precondition_label": precondition_label,
-                    "precondition_guidance": precondition_guidance,
-                    "precondition_items": precondition_items if isinstance(precondition_items, list) else [],
-                    "smoke_test_prompt": usage.get("smoke_test_prompt", ""),
-                    "smoke_success_signal": usage.get("smoke_success_signal", ""),
-                    "runtime_checklist": [
-                        "在宿主中使用最终触发命令进入 Super Dev 流水线。",
-                        "确认首轮响应明确进入 research，而不是直接开始编码。",
-                        "确认真实写入 output/*-research.md、output/*-prd.md、output/*-architecture.md、output/*-uiux.md。",
-                        "确认三文档完成后暂停等待用户确认，而不是直接继续实现。",
-                        "确认文档确认后能继续进入 Spec、前端运行验证、后端与交付阶段。",
-                    ],
-                    "pass_criteria": [
-                        "首轮响应符合 Super Dev 首轮契约。",
-                        "关键文档真实落盘到项目目录。",
-                        "确认门真实生效。",
-                        "后续恢复路径可用。",
-                    ],
-                }
-            )
-
-        total_hosts = len(entries)
-        surface_ready_count = sum(1 for item in entries if bool(item.get("surface_ready", False)))
-        runtime_passed_count = sum(1 for item in entries if item.get("manual_runtime_status") == "passed")
-        runtime_failed_count = sum(1 for item in entries if item.get("manual_runtime_status") == "failed")
-        runtime_pending_count = sum(1 for item in entries if item.get("manual_runtime_status") == "pending")
-        fully_ready_count = sum(1 for item in entries if bool(item.get("ready_for_delivery", False)))
-
-        return {
-            "project_dir": str(project_dir),
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "runtime_state_file": str(host_runtime_validation_file(project_dir)),
-            "runtime_state_updated_at": runtime_state.get("updated_at", ""),
-            "detected_hosts": list(detected_meta.keys()),
-            "detection_details": detected_meta,
-            "selected_targets": targets,
-            "summary": {
-                "overall_status": "ready" if total_hosts > 0 and fully_ready_count == total_hosts else "attention",
-                "total_hosts": total_hosts,
-                "surface_ready_count": surface_ready_count,
-                "runtime_passed_count": runtime_passed_count,
-                "runtime_failed_count": runtime_failed_count,
-                "runtime_pending_count": runtime_pending_count,
-                "fully_ready_count": fully_ready_count,
-                "blocking_count": len(blockers),
-                "next_actions": next_actions,
-            },
-            "blockers": blockers,
-            "hosts": entries,
-        }
-
-    def _render_host_runtime_validation_markdown(self, payload: dict[str, Any]) -> str:
-        hosts = payload.get("hosts", [])
-        if not isinstance(hosts, list):
-            hosts = []
-        lines = [
-            "# Host Runtime Validation Matrix",
-            "",
-            f"- Generated At (UTC): {payload.get('generated_at', '')}",
-            f"- Project Dir: {payload.get('project_dir', '')}",
-            f"- Detected Hosts: {', '.join(str(item) for item in payload.get('detected_hosts', [])) or '(none)'}",
-            "",
-        ]
-        summary = payload.get("summary", {})
-        if isinstance(summary, dict):
-            lines.extend(
-                [
-                    "## Summary",
-                    "",
-                    f"- Overall Status: {summary.get('overall_status', '-')}",
-                    f"- Fully Ready: {summary.get('fully_ready_count', 0)}/{summary.get('total_hosts', 0)}",
-                    f"- Surface Ready: {summary.get('surface_ready_count', 0)}/{summary.get('total_hosts', 0)}",
-                    f"- Runtime Passed: {summary.get('runtime_passed_count', 0)}",
-                    f"- Runtime Failed: {summary.get('runtime_failed_count', 0)}",
-                    f"- Runtime Pending: {summary.get('runtime_pending_count', 0)}",
-                    "",
-                ]
-            )
-        blockers = payload.get("blockers", [])
-        if isinstance(blockers, list):
-            lines.extend(["## Current Blockers", ""])
-            if blockers:
-                for item in blockers:
-                    if not isinstance(item, dict):
-                        continue
-                    lines.append(
-                        f"- **{item.get('host', '-')}** ({item.get('type', '-')}) {item.get('summary', '-')}"
-                    )
-            else:
-                lines.append("- 当前没有阻塞项。")
-            lines.extend(["", "## Recommended Next Actions", ""])
-            next_actions = summary.get("next_actions", []) if isinstance(summary, dict) else []
-            if isinstance(next_actions, list) and next_actions:
-                for item in next_actions:
-                    lines.append(f"- {item}")
-            else:
-                lines.append("- 当前宿主验收中心没有额外动作。")
-            lines.append("")
-        lines.extend(
-            [
-            "| Host | Surface Ready | Trigger | Protocol | Manual Runtime Status |",
-            "|---|---|---|---|---|",
-            ]
-        )
-        for host in hosts:
-            if not isinstance(host, dict):
-                continue
-            lines.append(
-                f"| {host.get('host', '-')} | {'yes' if bool(host.get('surface_ready', False)) else 'no'} | "
-                f"{host.get('final_trigger', '-')} | {host.get('host_protocol_summary', '-')} | {host.get('manual_runtime_status_label', '-')} |"
-            )
-
-        for host in hosts:
-            if not isinstance(host, dict):
-                continue
-            lines.extend(
-                [
-                    "",
-                    f"## {host.get('host', '-')}",
-                    "",
-                    f"- Trigger: {host.get('final_trigger', '-')}",
-                    f"- Protocol: {host.get('host_protocol_summary', '-')}",
-                    f"- Surface Ready: {'yes' if bool(host.get('surface_ready', False)) else 'no'}",
-                    f"- Manual Runtime Status: {host.get('manual_runtime_status_label', '-')}",
-                    f"- Host Preconditions: {host.get('precondition_label', '-')}",
-                    f"- Smoke Prompt: {host.get('smoke_test_prompt', '-')}",
-                    f"- Smoke Success Signal: {host.get('smoke_success_signal', '-')}",
-                    "",
-                    "### Runtime Checklist",
-                    "",
-                ]
-            )
-            comment = host.get("manual_runtime_comment", "")
-            if isinstance(comment, str) and comment.strip():
-                lines.extend(["### Runtime Validation Note", "", f"- {comment.strip()}", ""])
-            preconditions = host.get("precondition_guidance", [])
-            if isinstance(preconditions, list) and preconditions:
-                lines.extend(["", "### Host Precondition Guidance", ""])
-                for item in preconditions:
-                    lines.append(f"- {item}")
-            checklist = host.get("runtime_checklist", [])
-            if isinstance(checklist, list):
-                for item in checklist:
-                    lines.append(f"- {item}")
-            lines.extend(["", "### Pass Criteria", ""])
-            criteria = host.get("pass_criteria", [])
-            if isinstance(criteria, list):
-                for item in criteria:
-                    lines.append(f"- {item}")
-        return "\n".join(lines).rstrip() + "\n"
-
-    def _write_host_surface_audit_report(
-        self,
-        *,
-        project_dir: Path,
-        payload: dict[str, Any],
-    ) -> dict[str, Path]:
-        project_name = self._resolve_report_project_name(project_dir)
-        output_dir = project_dir / "output"
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        json_file = output_dir / f"{project_name}-host-surface-audit.json"
-        md_file = output_dir / f"{project_name}-host-surface-audit.md"
-        json_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        md_file.write_text(self._render_host_surface_audit_markdown(payload), encoding="utf-8")
-
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        history_dir = output_dir / "host-surface-audit-history"
-        history_dir.mkdir(parents=True, exist_ok=True)
-        history_json = history_dir / f"{project_name}-host-surface-audit-{stamp}.json"
-        history_md = history_dir / f"{project_name}-host-surface-audit-{stamp}.md"
-        history_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        history_md.write_text(self._render_host_surface_audit_markdown(payload), encoding="utf-8")
-
-        return {
-            "json": json_file,
-            "markdown": md_file,
-            "history_json": history_json,
-            "history_markdown": history_md,
-        }
-
-    def _render_host_hardening_markdown(self, payload: dict[str, Any]) -> str:
-        compatibility = payload.get("compatibility", {})
-        selected_targets = payload.get("selected_targets", [])
-        hardening_results = payload.get("hardening_results", {})
-        if not isinstance(compatibility, dict):
-            compatibility = {}
-        if not isinstance(selected_targets, list):
-            selected_targets = []
-        if not isinstance(hardening_results, dict):
-            hardening_results = {}
-        lines = [
-            "# Host System Hardening Report",
-            "",
-            f"- Generated At (UTC): {datetime.now(timezone.utc).isoformat()}",
-            f"- Project Dir: {payload.get('project_dir', '')}",
-            f"- Selected Targets: {', '.join(str(item) for item in selected_targets) if selected_targets else '(none)'}",
-            f"- Compatibility Score: {compatibility.get('overall_score', 0)}/100",
-            f"- Flow Consistency: {compatibility.get('flow_consistency_score', 0)}/100",
-            f"- Official Doc Alignment: {((payload.get('official_compare_summary', {}) or {}).get('score', 0))}/100",
-            f"- Host Parity: {((payload.get('host_parity_summary', {}) or {}).get('score', 0))}/100",
-            f"- Host Gate Parity: {((payload.get('host_gate_summary', {}) or {}).get('score', 0))}/100",
-            f"- Host Runtime Script Parity: {((payload.get('host_runtime_script_summary', {}) or {}).get('score', 0))}/100",
-            f"- Host Recovery Parity: {((payload.get('host_recovery_summary', {}) or {}).get('score', 0))}/100",
-            "",
-        ]
-        for target in selected_targets:
-            item = hardening_results.get(target, {}) if isinstance(target, str) else {}
-            if not isinstance(item, dict):
-                item = {}
-            plan = item.get("plan", {})
-            contract = item.get("contract", {})
-            official_compare = item.get("official_compare", {})
-            gate_hosts = (payload.get("host_gate_summary", {}) or {}).get("hosts", {})
-            gate_info = gate_hosts.get(target, {}) if isinstance(gate_hosts, dict) else {}
-            runtime_script_hosts = (payload.get("host_runtime_script_summary", {}) or {}).get("hosts", {})
-            runtime_script_info = runtime_script_hosts.get(target, {}) if isinstance(runtime_script_hosts, dict) else {}
-            recovery_hosts = (payload.get("host_recovery_summary", {}) or {}).get("hosts", {})
-            recovery_info = recovery_hosts.get(target, {}) if isinstance(recovery_hosts, dict) else {}
-            lines.extend([f"## {target}", ""])
-            lines.append(f"- Trigger: {plan.get('final_trigger', '-')}")
-            lines.append(f"- Trigger Mode: {plan.get('trigger_mode', '-')}")
-            lines.append(f"- Contract OK: {'yes' if bool((contract or {}).get('ok', False)) else 'no'}")
-            if isinstance(gate_info, dict) and gate_info:
-                lines.append(f"- Gate Parity: {'yes' if bool(gate_info.get('passed', False)) else 'no'}")
-            if isinstance(runtime_script_info, dict) and runtime_script_info:
-                lines.append(
-                    f"- Runtime Script Parity: {'yes' if bool(runtime_script_info.get('passed', False)) else 'no'}"
-                )
-            if isinstance(recovery_info, dict) and recovery_info:
-                lines.append(f"- Recovery Parity: {'yes' if bool(recovery_info.get('passed', False)) else 'no'}")
-                commands = recovery_info.get("recommended_commands", [])
-                if isinstance(commands, list) and commands:
-                    lines.append("- Recovery Commands:")
-                    for cmd in commands:
-                        lines.append(f"  - {cmd}")
-            if isinstance(official_compare, dict) and official_compare:
-                lines.append(
-                    f"- Official Compare: {official_compare.get('status', 'unknown')} "
-                    f"({official_compare.get('reachable_urls', 0)}/{official_compare.get('checked_urls', 0)})"
-                )
-            written_files = item.get("written_files", [])
-            if isinstance(written_files, list) and written_files:
-                lines.append("- Updated Files:")
-                for path in written_files:
-                    lines.append(f"  - {path}")
-            required_steps = plan.get("required_steps", [])
-            if isinstance(required_steps, list) and required_steps:
-                lines.append("- Required Steps:")
-                for step in required_steps:
-                    lines.append(f"  - {step}")
-            skill_install = item.get("skill_install", {})
-            if isinstance(skill_install, dict) and bool(skill_install.get("required", False)):
-                lines.append(
-                    f"- Skill Install: {'ok' if bool(skill_install.get('installed', False)) else 'failed'}"
-                )
-                if skill_install.get("path"):
-                    lines.append(f"  - Path: {skill_install.get('path')}")
-                if skill_install.get("error"):
-                    lines.append(f"  - Error: {skill_install.get('error')}")
-            invalid = (contract or {}).get("invalid_surfaces", {})
-            if isinstance(invalid, dict) and invalid:
-                lines.append("- Invalid Surfaces:")
-                for surface_key in invalid.keys():
-                    lines.append(f"  - {surface_key}")
-            lines.append("")
-        return "\n".join(lines).rstrip() + "\n"
-
-    def _render_host_parity_onepage_markdown(self, payload: dict[str, Any]) -> str:
-        selected_targets = payload.get("selected_targets", [])
-        if not isinstance(selected_targets, list):
-            selected_targets = []
-        hardening_results = payload.get("hardening_results", {})
-        if not isinstance(hardening_results, dict):
-            hardening_results = {}
-        parity_index = payload.get("host_parity_index", {})
-        if not isinstance(parity_index, dict):
-            parity_index = {}
-        lines = [
-            "# Host Parity Onepage",
-            "",
-            f"- Generated At (UTC): {datetime.now(timezone.utc).isoformat()}",
-            f"- Project Dir: {payload.get('project_dir', '')}",
-            f"- Host Parity Index: {parity_index.get('score', 0)}/100 "
-            f"(threshold {parity_index.get('threshold', 95.0)}, "
-            f"{'pass' if bool(parity_index.get('passed', False)) else 'fail'})",
-            "",
-            "| Host | Status | Failed Dimension | Next Command |",
-            "|---|---|---|---|",
-        ]
-        official_hosts = (payload.get("official_compare_summary", {}) or {}).get("hosts", {})
-        parity_hosts = (payload.get("host_parity_summary", {}) or {}).get("hosts", {})
-        gate_hosts = (payload.get("host_gate_summary", {}) or {}).get("hosts", {})
-        runtime_hosts = (payload.get("host_runtime_script_summary", {}) or {}).get("hosts", {})
-        recovery_hosts = (payload.get("host_recovery_summary", {}) or {}).get("hosts", {})
-        flow_hosts = (payload.get("compatibility", {}) or {}).get("hosts", {})
-        for target in selected_targets:
-            item = hardening_results.get(target, {}) if isinstance(target, str) else {}
-            contract = item.get("contract", {}) if isinstance(item, dict) else {}
-            recovery = recovery_hosts.get(target, {}) if isinstance(recovery_hosts, dict) else {}
-            recovery_commands = recovery.get("recommended_commands", []) if isinstance(recovery, dict) else []
-            dimensions: list[tuple[str, bool]] = []
-            dimensions.append(("official_compare", str((official_hosts or {}).get(target, "unknown")) == "passed"))
-            dimensions.append(("host_parity", bool(((parity_hosts or {}).get(target, {}) or {}).get("passed", False))))
-            dimensions.append(("host_gate", bool(((gate_hosts or {}).get(target, {}) or {}).get("passed", False))))
-            dimensions.append(("runtime_script", bool(((runtime_hosts or {}).get(target, {}) or {}).get("passed", False))))
-            dimensions.append(("host_recovery", bool(((recovery_hosts or {}).get(target, {}) or {}).get("passed", False))))
-            dimensions.append(("flow_consistency", bool(((flow_hosts or {}).get(target, {}) or {}).get("flow_consistent", False))))
-            contract_ok = bool((contract or {}).get("ok", False))
-            status = "PASS" if contract_ok and all(ok for _, ok in dimensions) else "FAIL"
-            failed = [name for name, ok in dimensions if not ok]
-            failed_text = ", ".join(failed) if failed else "-"
-            next_command = recovery_commands[0] if isinstance(recovery_commands, list) and recovery_commands else "-"
-            lines.append(f"| {target} | {status} | {failed_text} | `{next_command}` |")
-        return "\n".join(lines).rstrip() + "\n"
-
-    def _write_host_hardening_report(
-        self,
-        *,
-        project_dir: Path,
-        payload: dict[str, Any],
-    ) -> dict[str, Path]:
-        project_name = self._resolve_report_project_name(project_dir)
-        output_dir = project_dir / "output"
-        output_dir.mkdir(parents=True, exist_ok=True)
-        json_file = output_dir / f"{project_name}-host-hardening.json"
-        md_file = output_dir / f"{project_name}-host-hardening.md"
-        onepage_file = output_dir / f"{project_name}-host-parity-onepage.md"
-        json_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        md_file.write_text(self._render_host_hardening_markdown(payload), encoding="utf-8")
-        onepage_file.write_text(self._render_host_parity_onepage_markdown(payload), encoding="utf-8")
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        history_dir = output_dir / "host-hardening-history"
-        history_dir.mkdir(parents=True, exist_ok=True)
-        history_json = history_dir / f"{project_name}-host-hardening-{stamp}.json"
-        history_md = history_dir / f"{project_name}-host-hardening-{stamp}.md"
-        history_onepage = history_dir / f"{project_name}-host-parity-onepage-{stamp}.md"
-        history_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        history_md.write_text(self._render_host_hardening_markdown(payload), encoding="utf-8")
-        history_onepage.write_text(self._render_host_parity_onepage_markdown(payload), encoding="utf-8")
-        return {
-            "json": json_file,
-            "markdown": md_file,
-            "onepage_markdown": onepage_file,
-            "history_json": history_json,
-            "history_markdown": history_md,
-            "history_onepage_markdown": history_onepage,
-        }
-
-    def _write_host_runtime_validation_report(
-        self,
-        *,
-        project_dir: Path,
-        payload: dict[str, Any],
-    ) -> dict[str, Path]:
-        project_name = self._resolve_report_project_name(project_dir)
-        output_dir = project_dir / "output"
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        json_file = output_dir / f"{project_name}-host-runtime-validation.json"
-        md_file = output_dir / f"{project_name}-host-runtime-validation.md"
-        json_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        md_file.write_text(self._render_host_runtime_validation_markdown(payload), encoding="utf-8")
-
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        history_dir = output_dir / "host-runtime-validation-history"
-        history_dir.mkdir(parents=True, exist_ok=True)
-        history_json = history_dir / f"{project_name}-host-runtime-validation-{stamp}.json"
-        history_md = history_dir / f"{project_name}-host-runtime-validation-{stamp}.md"
-        history_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        history_md.write_text(self._render_host_runtime_validation_markdown(payload), encoding="utf-8")
-
-        return {
-            "json": json_file,
-            "markdown": md_file,
-            "history_json": history_json,
-            "history_markdown": history_md,
-        }
-
-    def _write_host_compatibility_report(
-        self,
-        *,
-        project_dir: Path,
-        payload: dict[str, Any],
-    ) -> dict[str, Path]:
-        project_name = self._resolve_report_project_name(project_dir)
-        output_dir = project_dir / "output"
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        json_file = output_dir / f"{project_name}-host-compatibility.json"
-        md_file = output_dir / f"{project_name}-host-compatibility.md"
-        json_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        md_file.write_text(self._render_host_compatibility_markdown(payload), encoding="utf-8")
-
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        history_dir = output_dir / "host-compatibility-history"
-        history_dir.mkdir(parents=True, exist_ok=True)
-        history_json = history_dir / f"{project_name}-host-compatibility-{stamp}.json"
-        history_md = history_dir / f"{project_name}-host-compatibility-{stamp}.md"
-        history_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        history_md.write_text(self._render_host_compatibility_markdown(payload), encoding="utf-8")
-
-        return {
-            "json": json_file,
-            "markdown": md_file,
-            "history_json": history_json,
-            "history_markdown": history_md,
-        }
-
-    def _cmd_spec(self, args) -> int:
-        """Spec-Driven Development 命令"""
-        from .specs import ChangeManager, SpecGenerator, SpecManager
-        from .specs.models import ChangeStatus
-
-        project_dir = Path.cwd()
-
-        if args.spec_action == "init":
-            # 初始化 SDD 目录结构
-            generator = SpecGenerator(project_dir)
-            agents_path, project_path = generator.init_sdd()
-            config = get_config_manager(project_dir).config
-            workflow_file, summary_file = self._bootstrap_project_contract(
-                project_dir=project_dir,
-                config=config,
-            )
-
-            self.console.print("[green]✓[/green] SDD 目录结构已初始化")
-            self.console.print("  [dim].super-dev/specs/[/dim] - 当前规范")
-            self.console.print("  [dim].super-dev/changes/[/dim] - 变更提案")
-            self.console.print("  [dim].super-dev/archive/[/dim] - 已归档变更")
-            self.console.print(f"  [dim]{workflow_file}[/dim] - 工作流契约")
-            self.console.print(f"  [dim]{summary_file}[/dim] - Bootstrap 摘要")
-            self.console.print("")
-            self.console.print("[cyan]下一步:[/cyan]")
-            self.console.print("  1. 编辑 .super-dev/project.md 填写项目上下文")
-            self.console.print("  2. 查看 output/*-bootstrap.md 确认初始化结果")
-            self.console.print("  3. 运行 'super-dev spec propose <id>' 创建变更提案")
-
-        elif args.spec_action == "list":
-            # 列出所有变更
-            manager = ChangeManager(project_dir)
-            status_filter = None
-            if args.status:
-                status_filter = ChangeStatus(args.status)
-
-            changes = manager.list_changes(status=status_filter)
-
-            if not changes:
-                self.console.print("[dim]没有找到变更[/dim]")
-                return 0
-
-            self.console.print("[cyan]变更列表:[/cyan]")
-            for change in changes:
-                status_color = {
-                    ChangeStatus.DRAFT: "dim",
-                    ChangeStatus.PROPOSED: "yellow",
-                    ChangeStatus.APPROVED: "blue",
-                    ChangeStatus.IN_PROGRESS: "cyan",
-                    ChangeStatus.COMPLETED: "green",
-                    ChangeStatus.ARCHIVED: "dim",
-                }.get(change.status, "white")
-
-                self.console.print(
-                    f"  [{status_color}]{change.id}[/] - {change.title} "
-                    f"({change.status.value})"
-                )
-                if change.tasks:
-                    rate = change.completion_rate
-                    self.console.print(f"    [dim]进度: {rate:.0f}% ({sum(1 for t in change.tasks if t.status.value == 'completed')}/{len(change.tasks)} 任务)[/dim]")
-
-        elif args.spec_action == "show":
-            # 显示变更详情
-            manager = ChangeManager(project_dir)
-            loaded_change = manager.load_change(args.change_id)
-
-            if not loaded_change:
-                self.console.print(f"[red]变更不存在: {args.change_id}[/red]")
-                return 1
-
-            self.console.print(f"[cyan]变更详情: {loaded_change.id}[/cyan]")
-            self.console.print(f"  标题: {loaded_change.title}")
-            self.console.print(f"  状态: {loaded_change.status.value}")
-
-            if loaded_change.proposal:
-                self.console.print("")
-                self.console.print("[cyan]提案:[/cyan]")
-                if loaded_change.proposal.description:
-                    self.console.print(f"  {loaded_change.proposal.description}")
-                if loaded_change.proposal.motivation:
-                    self.console.print(f"[dim]动机: {loaded_change.proposal.motivation}[/dim]")
-
-            if loaded_change.tasks:
-                self.console.print("")
-                self.console.print("[cyan]任务:[/cyan]")
-                for task in loaded_change.tasks:
-                    checkbox = "[x]" if task.status.value == "completed" else "[ ]"
-                    self.console.print(f"  {checkbox} {task.id}: {task.title}")
-
-            if loaded_change.spec_deltas:
-                self.console.print("")
-                self.console.print("[cyan]规范变更:[/cyan]")
-                for delta in loaded_change.spec_deltas:
-                    self.console.print(f"  - {delta.spec_name} ({delta.delta_type.value})")
-
-        elif args.spec_action == "propose":
-            if not self._ensure_execution_gates(project_dir, action_label="创建 Spec 变更"):
-                return 1
-            # 创建变更提案
-            generator = SpecGenerator(project_dir)
-            change = generator.create_change(
-                change_id=args.change_id,
-                title=args.title,
-                description=args.description,
-                motivation=args.motivation or "",
-                impact=args.impact or ""
-            )
-            scaffolded_files: dict[str, Path] = {}
-            if not bool(getattr(args, "no_scaffold", False)):
-                scaffolded_files = generator.scaffold_change_artifacts(change.id, force=False)
-
-            self.console.print(f"[green]✓[/green] 变更提案已创建: {change.id}")
-            self.console.print(f"  [dim].super-dev/changes/{change.id}/[/dim]")
-            if scaffolded_files:
-                self.console.print("  [dim]已生成 spec/plan/tasks/checklist 四件套[/dim]")
-            self.console.print("")
-            self.console.print("[cyan]下一步:[/cyan]")
-            self.console.print(f"  1. 运行 'super-dev spec add-req {change.id} <spec> <req> <desc>' 添加需求")
-            self.console.print(f"  2. 运行 'super-dev spec validate {change.id} -v' 先做规格校验")
-            self.console.print(f"  3. 或 'super-dev spec show {change.id}' 查看详情")
-
-        elif args.spec_action == "add-req":
-            # 向变更添加需求
-            generator = SpecGenerator(project_dir)
-            delta = generator.add_requirement_to_change(
-                change_id=args.change_id,
-                spec_name=args.spec_name,
-                requirement_name=args.req_name,
-                description=args.description
-            )
-
-            self.console.print("[green]✓[/green] 需求已添加到变更")
-            self.console.print(f"  规范: {delta.spec_name}")
-            self.console.print(f"  需求: {args.req_name}")
-
-        elif args.spec_action == "scaffold":
-            generator = SpecGenerator(project_dir)
-            try:
-                generated = generator.scaffold_change_artifacts(
-                    args.change_id,
-                    force=bool(getattr(args, "force", False)),
-                )
-            except FileNotFoundError as e:
-                self.console.print(f"[red]{e}[/red]")
-                return 1
-            self.console.print(f"[green]✓[/green] 已生成模板: {args.change_id}")
-            for _, file_path in sorted(generated.items(), key=lambda item: str(item[1])):
-                self.console.print(f"  [dim]{file_path.relative_to(project_dir)}[/dim]")
-
-        elif args.spec_action == "archive":
-            # 归档变更
-            if not args.yes:
-                self.console.print(f"[yellow]即将归档变更: {args.change_id}[/yellow]")
-                self.console.print("[dim]这将把规范增量合并到主规范中[/dim]")
-                response = input("确认? (y/N): ")
-                if response.lower() != "y":
-                    self.console.print("[dim]已取消[/dim]")
-                    return 0
-
-            change_manager = ChangeManager(project_dir)
-            spec_manager = SpecManager(project_dir)
-
-            try:
-                change = change_manager.archive_change(args.change_id, spec_manager)
-                self.console.print(f"[green]✓[/green] 变更已归档: {change.id}")
-                self.console.print(f"  [dim].super-dev/archive/{change.id}/[/dim]")
-            except FileNotFoundError as e:
-                self.console.print(f"[red]{e}[/red]")
-                return 1
-            except Exception as e:
-                self.console.print(f"[red]归档失败: {e}[/red]")
-                return 1
-
-        elif args.spec_action == "validate":
-            # 验证规格格式
-            from .specs import SpecValidator
-
-            validator = SpecValidator(project_dir)
-
-            if args.change_id:
-                # 验证单个变更
-                result = validator.validate_change(args.change_id)
-                self.console.print(f"[cyan]验证变更: {args.change_id}[/cyan]")
-            else:
-                # 验证所有变更
-                result = validator.validate_all()
-                self.console.print("[cyan]验证所有变更[/cyan]")
-
-            self.console.print(result.to_summary())
-
-            if args.verbose or (not result.is_valid):
-                # 显示详细信息
-                for error in result.errors:
-                    self.console.print(
-                        f"  [red]错误[/red]: {error.message}"
-                    )
-                    if error.line > 0:
-                        self.console.print(
-                            f"    [dim]{error.file}:{error.line}[/dim]"
-                        )
-
-                for warning in result.warnings:
-                    self.console.print(
-                        f"  [yellow]警告[/yellow]: {warning.message}"
-                    )
-                    if warning.line > 0:
-                        self.console.print(
-                            f"    [dim]{warning.file}:{warning.line}[/dim]"
-                        )
-
-            return 0 if result.is_valid else 1
-
-        elif args.spec_action == "quality":
-            from rich.table import Table
-
-            from .specs import SpecValidator
-
-            validator = SpecValidator(project_dir)
-            report = validator.assess_change_quality(args.change_id)
-            if getattr(args, "json", False):
-                sys.stdout.write(json.dumps(report.to_dict(), ensure_ascii=False, indent=2) + "\n")
-                return 0 if report.score >= 75 else 1
-
-            score_color = "green" if report.score >= 90 else ("yellow" if report.score >= 75 else "red")
-            self.console.print(
-                f"[cyan]Spec 质量评估: {report.change_id}[/cyan] "
-                f"[{score_color}]{report.score:.1f}[/] ({report.level})"
-            )
-
-            table = Table(show_header=True, header_style="bold magenta")
-            table.add_column("维度", style="cyan", width=16)
-            table.add_column("结果", style="white", width=10)
-            table.add_column("说明", style="dim", width=44)
-            for key, item in report.checks.items():
-                passed = bool(item.get("passed", False))
-                reason = str(item.get("reason", "")).strip() or "-"
-                table.add_row(key, "[green]pass[/green]" if passed else "[red]fail[/red]", reason)
-            self.console.print(table)
-
-            if report.blockers:
-                self.console.print("[yellow]缺口:[/yellow]")
-                for blocker in report.blockers:
-                    self.console.print(f"  - {blocker}")
-
-            if report.suggestions:
-                self.console.print("[cyan]建议动作:[/cyan]")
-                for suggestion in report.suggestions:
-                    self.console.print(f"  - {suggestion}")
-
-            if report.action_plan:
-                self.console.print("[cyan]执行计划:[/cyan]")
-                for item in report.action_plan:
-                    priority = str(item.get("priority", "")).strip()
-                    step = str(item.get("step", "")).strip()
-                    command = str(item.get("command", "")).strip()
-                    prefix = f"[{priority}] " if priority else ""
-                    self.console.print(f"  - {prefix}{step}")
-                    if command:
-                        self.console.print(f"    [dim]{command}[/dim]")
-
-            return 0 if report.score >= 75 else 1
-
-        elif args.spec_action == "view":
-            # 交互式仪表板
-            from rich.panel import Panel
-            from rich.table import Table
-            from rich.text import Text
-
-            console = create_console()
-            change_manager = ChangeManager(project_dir)
-            spec_manager = SpecManager(project_dir)
-
-            # 获取所有变更和规范
-            changes = change_manager.list_changes()
-            specs = spec_manager.list_specs()
-
-            # 标题
-            title = Text.assemble(
-                ("Super Dev ", "bold cyan"),
-                ("Spec Dashboard", "bold white"),
-            )
-            console.print(Panel(title, padding=(0, 1)))
-
-            # 变更统计
-            if changes:
-                table = Table(title="活跃变更", show_header=True, header_style="bold magenta")
-                table.add_column("ID", style="cyan", width=20)
-                table.add_column("标题", style="white", width=30)
-                table.add_column("状态", style="yellow", width=12)
-                table.add_column("进度", style="green", width=10)
-                table.add_column("任务", style="blue", width=8)
-
-                for change in changes:
-                    progress = f"{change.completion_rate:.0f}%"
-                    tasks = f"{sum(1 for t in change.tasks if t.status.value == 'completed')}/{len(change.tasks)}"
-                    table.add_row(
-                        change.id,
-                        change.title or "(无标题)",
-                        change.status.value,
-                        progress,
-                        tasks
-                    )
-
-                console.print(table)
-            else:
-                console.print("[dim]没有活跃变更[/dim]")
-
-            # 规范列表
-            if specs:
-                console.print("")
-                specs_table = Table(title="当前规范", show_header=True, header_style="bold green")
-                specs_table.add_column("规范名称", style="cyan", width=30)
-                specs_table.add_column("文件路径", style="dim", width=50)
-
-                for spec_name in specs:
-                    spec_path = spec_manager.get_spec_path(spec_name)
-                    specs_table.add_row(spec_name, str(spec_path.relative_to(project_dir)))
-
-                console.print(specs_table)
-
-            # 统计信息
-            console.print("")
-            stats_table = Table(show_header=False, box=None)
-            stats_table.add_column("指标", style="bold white")
-            stats_table.add_column("数量", style="cyan")
-
-            stats_table.add_row("活跃变更", str(len(changes)))
-            stats_table.add_row("规范文件", str(len(specs)))
-            stats_table.add_row("待处理任务", str(sum(1 for c in changes for t in c.tasks if t.status.value == "pending")))
-
-            console.print(stats_table)
-
-            return 0
-
-        else:
-            self.console.print("[yellow]请指定 SDD 命令[/yellow]")
-            return 1
-
-        return 0
-
-    # ==================== 辅助方法 ====================
-
     def _is_direct_requirement_input(self, argv: list[str]) -> bool:
         """判断是否为直达需求输入（非子命令模式）"""
         if not argv:
@@ -10683,8 +3902,8 @@ super-dev start --idea "你的需求"
             "init", "analyze", "workflow", "studio", "expert", "quality", "metrics", "preview",
             "deploy", "create", "wizard", "design", "spec", "task", "pipeline", "run", "config", "skill", "integrate",
             "onboard", "doctor", "setup", "install", "start", "bootstrap", "detect", "policy", "update", "review", "release",
-            "fix", "repo-map", "feature-checklist", "impact", "regression-guard", "dependency-graph",
-            "status", "jump", "confirm", "clean",
+            "fix", "repo-map", "feature-checklist", "product-audit", "impact", "regression-guard", "dependency-graph",
+            "status", "next", "continue", "resume", "jump", "confirm", "clean",
         }
         return first not in known_commands
 
@@ -10752,8 +3971,10 @@ super-dev start --idea "你的需求"
 
     def _review_status_label(self, status: str, *, review_type: str = "docs") -> str:
         if status == "confirmed":
-            return "已通过" if review_type in {"ui", "architecture", "quality"} else "已确认"
+            return "已通过" if review_type in {"preview", "ui", "architecture", "quality"} else "已确认"
         if status == "revision_requested":
+            if review_type == "preview":
+                return "需继续修改"
             if review_type == "ui":
                 return "需改版"
             if review_type == "architecture":
@@ -10795,6 +4016,21 @@ super-dev start --idea "你的需求"
 
     def _ui_revision_is_clear(self, project_dir: Path) -> bool:
         return self._get_ui_revision_state(project_dir)["status"] != "revision_requested"
+
+    def _get_preview_confirmation_state(self, project_dir: Path) -> dict[str, Any]:
+        payload = load_preview_confirmation(project_dir) or {}
+        return {
+            "status": str(payload.get("status", "")).strip() or "pending_review",
+            "comment": str(payload.get("comment", "")).strip(),
+            "actor": str(payload.get("actor", "")).strip(),
+            "run_id": str(payload.get("run_id", "")).strip(),
+            "updated_at": str(payload.get("updated_at", "")).strip(),
+            "exists": bool(payload),
+            "file_path": str(preview_confirmation_file(project_dir)),
+        }
+
+    def _preview_confirmation_is_confirmed(self, project_dir: Path) -> bool:
+        return self._get_preview_confirmation_state(project_dir)["status"] == "confirmed"
 
     def _get_architecture_revision_state(self, project_dir: Path) -> dict[str, Any]:
         payload = load_architecture_revision(project_dir) or {}
@@ -10864,6 +4100,23 @@ super-dev start --idea "你的需求"
         self.console.print('[dim]完成后执行: super-dev review ui --status confirmed --comment "UI 改版已通过"[/dim]')
         return False
 
+    def _ensure_preview_confirmation_for_execution(self, project_dir: Path, *, action_label: str) -> bool:
+        output_dir = project_dir / "output"
+        frontend_ready = any(output_dir.glob("*-frontend-runtime.json"))
+        if not frontend_ready:
+            return True
+        if self._preview_confirmation_is_confirmed(project_dir):
+            return True
+
+        current = self._get_preview_confirmation_state(project_dir)
+        self.console.print(f"[red]{action_label}前，必须先完成前端预览确认[/red]")
+        self.console.print(f"[dim]当前状态: {self._review_status_label(current['status'], review_type='preview')}[/dim]")
+        if current["comment"]:
+            self.console.print(f"[dim]备注: {current['comment']}[/dim]")
+        self.console.print("[dim]先评审当前前端预览；若需要继续修改，完成前端返工并重跑 frontend runtime 后再确认[/dim]")
+        self.console.print('[dim]完成后执行: super-dev review preview --status confirmed --comment "前端预览已确认"[/dim]')
+        return False
+
     def _ensure_architecture_revision_clear_for_execution(self, project_dir: Path, *, action_label: str) -> bool:
         current = self._get_architecture_revision_state(project_dir)
         if current["status"] != "revision_requested":
@@ -10892,6 +4145,8 @@ super-dev start --idea "你的需求"
 
     def _ensure_execution_gates(self, project_dir: Path, *, action_label: str) -> bool:
         return self._ensure_docs_confirmation_for_execution(
+            project_dir, action_label=action_label
+        ) and self._ensure_preview_confirmation_for_execution(
             project_dir, action_label=action_label
         ) and self._ensure_ui_revision_clear_for_execution(
             project_dir, action_label=action_label
@@ -11088,7 +4343,7 @@ super-dev start --idea "你的需求"
             return "failed"
         if normalized in {"cancelled"}:
             return "cancelled"
-        if normalized in {"running", "cancelling", "waiting_confirmation", "waiting_ui_revision", "waiting_architecture_revision", "waiting_quality_revision"}:
+        if normalized in {"running", "cancelling", "waiting_confirmation", "waiting_preview_confirmation", "waiting_ui_revision", "waiting_architecture_revision", "waiting_quality_revision"}:
             return "running"
         if normalized in {"queued"}:
             return "queued"
@@ -11119,6 +4374,11 @@ super-dev start --idea "你的需求"
             if fcntl is not None:
                 fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
             lock_handle.close()
+        try:
+            if self._project_has_super_dev_context(project_dir):
+                self._write_session_brief(project_dir=project_dir, payload=self._build_next_step_payload(project_dir))
+        except Exception:
+            pass
 
     def _read_pipeline_run_state(self, project_dir: Path) -> dict[str, Any] | None:
         state_file = self._pipeline_run_state_path(project_dir)
@@ -11748,6 +5008,9 @@ super-dev start --idea "你的需求"
     def _print_banner(self) -> None:
         """打印欢迎横幅"""
         if self.console:
+            from rich.panel import Panel
+            from rich.text import Text
+
             banner = Text()
             banner.append("Super Dev ", style="bold cyan")
             banner.append(f"v{__version__}\n", style="dim")

@@ -2,6 +2,7 @@
 实现骨架生成器测试
 """
 
+import json
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,17 @@ from super_dev.creators.implementation_builder import ImplementationScaffoldBuil
 
 class TestImplementationScaffoldBuilder:
     def test_generate_react_node_scaffold(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-ui-contract.json").write_text(
+            json.dumps(
+                {
+                    "typography_preset": {"heading": "IBM Plex Sans", "body": "Public Sans"},
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
         builder = ImplementationScaffoldBuilder(
             project_dir=temp_project_dir,
             name="demo",
@@ -35,6 +47,9 @@ class TestImplementationScaffoldBuilder:
         assert (temp_project_dir / "backend" / "tests" / "auth.service.test.js").exists()
         assert (temp_project_dir / "backend" / "migrations" / "001_create_auth.sql").exists()
         assert (temp_project_dir / "backend" / "API_CONTRACT.md").exists()
+        app_tsx = (temp_project_dir / "frontend" / "src" / "App.tsx").read_text(encoding="utf-8")
+        assert "IBM Plex Sans" in app_tsx
+        assert "Public Sans" in app_tsx
 
     def test_generate_python_backend_scaffold(self, temp_project_dir: Path):
         builder = ImplementationScaffoldBuilder(

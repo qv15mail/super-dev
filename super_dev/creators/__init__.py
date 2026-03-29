@@ -7,20 +7,26 @@ Super Dev 项目创建器
 创建时间：2025-12-30
 """
 
+from .adr_generator import ADRGenerator, ArchitectureDecisionRecord
 from .creator import ProjectCreator
 from .document_generator import DocumentGenerator
 from .frontend_builder import FrontendScaffoldBuilder
 from .implementation_builder import ImplementationScaffoldBuilder
 from .prompt_generator import AIPromptGenerator
+from .prompt_templates import PromptTemplate, PromptTemplateManager
 from .requirement_parser import RequirementParser
 from .spec_builder import SpecBuilder
 from .task_executor import SpecTaskExecutor
 
 __all__ = [
+    "ADRGenerator",
+    "ArchitectureDecisionRecord",
     "ProjectCreator",
     "DocumentGenerator",
     "FrontendScaffoldBuilder",
     "ImplementationScaffoldBuilder",
+    "PromptTemplate",
+    "PromptTemplateManager",
     "SpecBuilder",
     "SpecTaskExecutor",
     "AIPromptGenerator",

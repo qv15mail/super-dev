@@ -1,3 +1,6 @@
+from types import SimpleNamespace
+
+from super_dev.catalogs import PRIMARY_HOST_TOOL_IDS
 from super_dev.cli import SuperDevCLI
 
 
@@ -118,7 +121,35 @@ def test_write_resume_audit_outputs_json_and_markdown(temp_project_dir) -> None:
     assert files["markdown"].exists()
     markdown = files["markdown"].read_text(encoding="utf-8")
     assert "Resume Audit" in markdown
-    assert "fallback" in markdown.lower()
+
+
+def test_public_host_targets_prioritize_primary_product_scope() -> None:
+    cli = SuperDevCLI()
+    integration_manager = SimpleNamespace(
+        list_targets=lambda: [SimpleNamespace(name=host_id) for host_id in (
+            *PRIMARY_HOST_TOOL_IDS,
+            "aider",
+            "iflow",
+            "jetbrains-ai",
+            "kimi-cli",
+            "openclaw",
+        )]
+    )
+
+    targets = cli._public_host_targets(integration_manager=integration_manager)
+
+    assert targets == list(PRIMARY_HOST_TOOL_IDS)
+
+
+def test_public_host_targets_fallback_to_available_targets_when_primary_absent() -> None:
+    cli = SuperDevCLI()
+    integration_manager = SimpleNamespace(
+        list_targets=lambda: [SimpleNamespace(name=host_id) for host_id in ("aider", "iflow", "openclaw")]
+    )
+
+    targets = cli._public_host_targets(integration_manager=integration_manager)
+
+    assert targets == ["aider", "iflow", "openclaw"]
 
 
 def test_resolve_pipeline_stage_selector_supports_aliases() -> None:

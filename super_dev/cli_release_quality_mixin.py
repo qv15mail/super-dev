@@ -1,0 +1,426 @@
+"""CLI release/quality/metrics mixin helpers."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from .config import ConfigManager
+from .proof_pack import ProofPackBuilder
+from .release_readiness import ReleaseReadinessEvaluator
+
+
+class CliReleaseQualityMixin:
+    def _cmd_release(self, args) -> int:
+        """发布就绪度检查"""
+        if args.release_command == "proof-pack":
+            project_dir = Path.cwd()
+            builder = ProofPackBuilder(project_dir)
+            report = builder.build(verify_tests=bool(args.verify_tests))
+            files = builder.write(report)
+            payload = report.to_dict()
+            payload["report_file"] = str(files["markdown"])
+            payload["json_file"] = str(files["json"])
+            payload["summary_file"] = str(files["summary"])
+
+            if args.json:
+                self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
+                return 0 if report.status == "ready" else 1
+
+            status = "[green]ready[/green]" if report.status == "ready" else "[yellow]incomplete[/yellow]"
+            self.console.print(f"[cyan]Proof Pack[/cyan] {status} 证据就绪: {report.ready_count}/{report.total_count}")
+            self.console.print(f"  [green]✓[/green] Markdown: {files['markdown']}")
+            self.console.print(f"  [green]✓[/green] JSON: {files['json']}")
+            self.console.print(f"  [green]✓[/green] Summary: {files['summary']}")
+            self.console.print(f"  [dim]{report.executive_summary}[/dim]")
+            if report.blockers:
+                self.console.print("  [yellow]待补齐项:[/yellow]")
+                for artifact in report.blockers[:8]:
+                    self.console.print(f"    - {artifact.name}: {artifact.summary}")
+                self.console.print("  [cyan]推荐动作:[/cyan]")
+                for action in report.next_actions[:5]:
+                    self.console.print(f"    - {action}")
+            else:
+                self.console.print("  [green]所有关键交付证据均已就绪。[/green]")
+            return 0 if report.status == "ready" else 1
+
+        if args.release_command != "readiness":
+            self.console.print("[yellow]请指定 release 子命令，例如 `super-dev release readiness` 或 `super-dev release proof-pack`[/yellow]")
+            return 1
+
+        project_dir = Path.cwd()
+        evaluator = ReleaseReadinessEvaluator(project_dir)
+        report = evaluator.evaluate(verify_tests=bool(args.verify_tests))
+        files = evaluator.write(report)
+        payload = report.to_dict()
+        payload["report_file"] = str(files["markdown"])
+        payload["json_file"] = str(files["json"])
+
+        if args.json:
+            self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return 0 if report.passed else 1
+
+        status = "[green]通过[/green]" if report.passed else "[yellow]未完成[/yellow]"
+        self.console.print(f"[cyan]发布就绪度[/cyan] {status} 分数: {report.score}/100")
+        self.console.print(f"  [green]✓[/green] Markdown: {files['markdown']}")
+        self.console.print(f"  [green]✓[/green] JSON: {files['json']}")
+
+        if report.failed_checks:
+            self.console.print("  [yellow]待收尾项:[/yellow]")
+            for check in report.failed_checks[:8]:
+                recommendation = f" | 建议: {check.recommendation}" if check.recommendation else ""
+                self.console.print(f"    - {check.name}: {check.detail}{recommendation}")
+        else:
+            self.console.print("  [green]所有关键发布项均已满足。[/green]")
+
+        return 0 if report.passed else 1
+
+    def _cmd_studio(self, args) -> int:
+        """启动交互工作台 API"""
+        try:
+            import uvicorn
+        except ImportError:
+            self.console.print("[red]缺少依赖: uvicorn[/red]")
+            self.console.print("[dim]请安装: pip install fastapi uvicorn[/dim]")
+            return 1
+
+        self.console.print(f"[cyan]启动 Super Dev Studio: http://{args.host}:{args.port}[/cyan]")
+        uvicorn.run(
+            "super_dev.web.api:app",
+            host=args.host,
+            port=args.port,
+            reload=args.reload,
+            log_level="info",
+        )
+        return 0
+
+    def _cmd_expert(self, args) -> int:
+        """调用专家"""
+        from .experts import (
+            has_expert,
+            has_expert_team,
+            list_expert_teams,
+            list_experts,
+            save_expert_advice,
+            save_team_advice,
+        )
+
+        # 处理 --list 选项
+        if args.list:
+            self.console.print("[cyan]可用专家列表:[/cyan]")
+            for expert in list_experts():
+                self.console.print(f"  [green]{expert['id']:<10}[/green] {expert['name']} - {expert['description']}")
+            return 0
+
+        if args.list_teams:
+            self.console.print("[cyan]可用专家团队:[/cyan]")
+            for team in list_expert_teams():
+                self.console.print(f"  [green]{team['id']:<16}[/green] {team['name']} - {team['description']}")
+            return 0
+
+        prompt = " ".join(args.prompt) if args.prompt else ""
+        if args.team:
+            self.console.print(f"[cyan]调用专家团队: {args.expert_name}[/cyan]")
+            self.console.print(f"[dim]提示词: {prompt or '(无)'}[/dim]")
+            if not args.expert_name or not has_expert_team(args.expert_name):
+                self.console.print(f"[red]未知专家团队: {args.expert_name or '(未提供)'}[/red]")
+                return 1
+            report_file, _ = save_team_advice(
+                project_dir=Path.cwd(),
+                team_id=args.expert_name,
+                prompt=prompt,
+            )
+            self.console.print(f"[green]✓[/green] 团队审查报告已生成: {report_file}")
+            return 0
+
+        # 如果没有提供专家名称，显示帮助
+        if not args.expert_name:
+            self.console.print("[yellow]请提供专家名称，或使用 --list / --list-teams 查看可用专家[/yellow]")
+            return 1
+
+        self.console.print(f"[cyan]调用专家: {args.expert_name}[/cyan]")
+        self.console.print(f"[dim]提示词: {prompt or '(无)'}[/dim]")
+        if not has_expert(args.expert_name):
+            self.console.print(f"[red]未知专家: {args.expert_name}[/red]")
+            return 1
+
+        report_file, _ = save_expert_advice(
+            project_dir=Path.cwd(),
+            expert_id=args.expert_name,
+            prompt=prompt,
+        )
+        self.console.print(f"[green]✓[/green] 专家建议已生成: {report_file}")
+        return 0
+
+    def _cmd_quality(self, args) -> int:
+        """质量检查"""
+        from .reviewers import QualityGateChecker, UIReviewReviewer
+        from .reviewers.redteam import load_persisted_redteam_report
+
+        project_dir = Path.cwd()
+        output_dir = project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        config_manager = ConfigManager(project_dir)
+        config = config_manager.load()
+
+        project_name = self._sanitize_project_name(config.name or project_dir.name)
+        tech_stack = {
+            "platform": config.platform,
+            "frontend": self._normalize_pipeline_frontend(config.frontend),
+            "backend": config.backend,
+            "domain": config.domain,
+        }
+
+        self.console.print(f"[cyan]运行质量检查: {args.type}[/cyan]")
+
+        if args.type == "ui-review":
+            reviewer = UIReviewReviewer(
+                project_dir=project_dir,
+                name=project_name,
+                tech_stack=tech_stack,
+            )
+            report = reviewer.review()
+            review_file = output_dir / f"{project_name}-ui-review.md"
+            review_json_file = output_dir / f"{project_name}-ui-review.json"
+            alignment_file = output_dir / f"{project_name}-ui-contract-alignment.md"
+            alignment_json_file = output_dir / f"{project_name}-ui-contract-alignment.json"
+            review_file.write_text(report.to_markdown(), encoding="utf-8")
+            review_json_file.write_text(
+                json.dumps(report.to_dict(), ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            alignment_file.write_text(report.alignment_markdown(), encoding="utf-8")
+            alignment_json_file.write_text(
+                json.dumps(report.alignment_summary, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            status = "[green]通过[/green]" if report.passed else "[yellow]需修正[/yellow]"
+            self.console.print(f"  {status} 总分: {report.score}/100")
+            self.console.print(f"  [green]✓[/green] 报告: {review_file}")
+            self.console.print(f"  [green]✓[/green] JSON: {review_json_file}")
+            self.console.print(f"  [green]✓[/green] UI 契约对齐: {alignment_file}")
+            self.console.print(f"  [green]✓[/green] UI 契约对齐 JSON: {alignment_json_file}")
+            if report.findings:
+                self.console.print("[yellow]主要问题:[/yellow]")
+                for finding in report.findings[:5]:
+                    self.console.print(f"  - [{finding.level}] {finding.title}")
+            return 0 if report.passed else 1
+
+        if args.type == "redteam":
+            from .reviewers import RedTeamReviewer
+
+            reviewer = RedTeamReviewer(
+                project_dir=project_dir,
+                name=project_name,
+                tech_stack=tech_stack,
+            )
+            report = reviewer.review()
+            report_file = output_dir / f"{project_name}-redteam.md"
+            report_json_file = output_dir / f"{project_name}-redteam.json"
+            report_file.write_text(report.to_markdown(), encoding="utf-8")
+            report_json_file.write_text(
+                json.dumps(report.to_dict(), ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            status = "[green]通过[/green]" if report.passed else "[yellow]需修正[/yellow]"
+            self.console.print(f"  {status} 总分: {report.total_score}/100")
+            self.console.print(f"  [green]✓[/green] 报告: {report_file}")
+            self.console.print(f"  [green]✓[/green] JSON: {report_json_file}")
+            if report.blocking_reasons:
+                self.console.print("[yellow]阻断原因:[/yellow]")
+                for reason in report.blocking_reasons:
+                    self.console.print(f"  - {reason}")
+            return 0 if report.passed else 1
+
+        # 轻量文档检查
+        if args.type in {"prd", "architecture", "ui", "ux"}:
+            pattern_map = {
+                "prd": "*-prd.md",
+                "architecture": "*-architecture.md",
+                "ui": "*-uiux.md",
+                "ux": "*-uiux.md",
+            }
+            expected_pattern = pattern_map[args.type]
+            matched = sorted(output_dir.glob(expected_pattern))
+            if matched:
+                self.console.print(f"[green]✓[/green] 检测到 {len(matched)} 个文档: {expected_pattern}")
+                for file_path in matched[:5]:
+                    self.console.print(f"  - {file_path}")
+                return 0
+
+            self.console.print(f"[red]未找到文档: output/{expected_pattern}[/red]")
+            return 1
+
+        # 代码或全量检查走质量门禁评估
+        gate_checker = QualityGateChecker(
+            project_dir=project_dir,
+            name=project_name,
+            tech_stack=tech_stack,
+            host_compatibility_min_score_override=config.host_compatibility_min_score,
+            host_compatibility_min_ready_hosts_override=config.host_compatibility_min_ready_hosts,
+        )
+        persisted_redteam = load_persisted_redteam_report(project_dir, project_name)
+        gate_result = gate_checker.check(redteam_report=persisted_redteam[1] if persisted_redteam else None)
+
+        gate_file = output_dir / f"{project_name}-quality-gate.md"
+        gate_file.write_text(gate_result.to_markdown(), encoding="utf-8")
+        if gate_checker.latest_ui_review_report is not None:
+            ui_review_file = output_dir / f"{project_name}-ui-review.md"
+            ui_review_json_file = output_dir / f"{project_name}-ui-review.json"
+            alignment_file = output_dir / f"{project_name}-ui-contract-alignment.md"
+            alignment_json_file = output_dir / f"{project_name}-ui-contract-alignment.json"
+            ui_review_file.write_text(
+                gate_checker.latest_ui_review_report.to_markdown(),
+                encoding="utf-8",
+            )
+            ui_review_json_file.write_text(
+                json.dumps(
+                    gate_checker.latest_ui_review_report.to_dict(),
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            alignment_file.write_text(
+                gate_checker.latest_ui_review_report.alignment_markdown(),
+                encoding="utf-8",
+            )
+            alignment_json_file.write_text(
+                json.dumps(
+                    gate_checker.latest_ui_review_report.alignment_summary,
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            if (output_dir / "frontend" / "index.html").exists():
+                self._write_frontend_runtime_validation(
+                    project_dir=project_dir,
+                    output_dir=output_dir,
+                    project_name=project_name,
+                )
+
+        scenario_label = "0-1 新建项目" if gate_result.scenario == "0-1" else "1-N+1 增量开发"
+        status = "[green]通过[/green]" if gate_result.passed else "[red]未通过[/red]"
+
+        self.console.print(f"  [dim]场景: {scenario_label}[/dim]")
+        self.console.print(f"  {status} 总分: {gate_result.total_score}/100")
+        self.console.print(f"  [green]✓[/green] 报告: {gate_file}")
+        if gate_checker.latest_ui_review_report is not None:
+            self.console.print(
+                f"  [green]✓[/green] UI 审查: {output_dir / f'{project_name}-ui-review.md'}"
+            )
+            self.console.print(
+                f"  [green]✓[/green] UI 审查 JSON: {output_dir / f'{project_name}-ui-review.json'}"
+            )
+            self.console.print(
+                f"  [green]✓[/green] UI 契约对齐: {output_dir / f'{project_name}-ui-contract-alignment.md'}"
+            )
+
+        if not gate_result.passed and gate_result.critical_failures:
+            self.console.print("[yellow]关键失败项:[/yellow]")
+            for failure in gate_result.critical_failures:
+                self.console.print(f"  - {failure}")
+
+        return 0 if gate_result.passed else 1
+
+    def _cmd_metrics(self, args) -> int:
+        """查看最近一次流水线指标"""
+        output_dir = Path.cwd() / "output"
+        if not output_dir.exists():
+            self.console.print("[yellow]未找到 output 目录，请先执行流水线[/yellow]")
+            return 1
+
+        if args.history:
+            limit = max(1, int(args.limit))
+            history_dir = output_dir / "metrics-history"
+            candidates: list[Path] = []
+            if history_dir.exists():
+                candidates.extend(history_dir.glob("*-pipeline-metrics-*.json"))
+            if not candidates:
+                candidates.extend(output_dir.glob("*-pipeline-metrics.json"))
+            if args.project:
+                prefix = f"{self._sanitize_project_name(args.project)}-pipeline-metrics"
+                candidates = [item for item in candidates if item.name.startswith(prefix)]
+            candidates = sorted(candidates, key=lambda path: path.stat().st_mtime, reverse=True)[:limit]
+            if not candidates:
+                self.console.print("[yellow]未找到 pipeline 历史指标文件[/yellow]")
+                return 1
+
+            items: list[dict[str, Any]] = []
+            for file_path in candidates:
+                try:
+                    payload = json.loads(file_path.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                items.append(
+                    {
+                        "file": file_path.name,
+                        "project": payload.get("project_name", ""),
+                        "success": bool(payload.get("success", False)),
+                        "success_rate": float(payload.get("success_rate", 0)),
+                        "duration": float(payload.get("total_duration_seconds", 0)),
+                        "started_at": str(payload.get("started_at", "")),
+                    }
+                )
+
+            if not items:
+                self.console.print("[yellow]指标文件存在但无法解析[/yellow]")
+                return 1
+
+            run_count = len(items)
+            success_count = sum(1 for item in items if item["success"])
+            avg_duration = sum(item["duration"] for item in items) / run_count
+            avg_success_rate = sum(item["success_rate"] for item in items) / run_count
+            self.console.print("[cyan]Pipeline 历史趋势[/cyan]")
+            self.console.print(f"  记录数: {run_count}")
+            self.console.print(f"  成功次数: {success_count}/{run_count}")
+            self.console.print(f"  平均成功率: {avg_success_rate:.1f}%")
+            self.console.print(f"  平均耗时: {avg_duration:.2f}s")
+            self.console.print("  最近记录:")
+            for item in items:
+                marker = "✓" if item["success"] else "✗"
+                started_at = item["started_at"] or "-"
+                self.console.print(
+                    f"    {marker} {item['file']} | {item['project']} | "
+                    f"success_rate={item['success_rate']:.1f}% | duration={item['duration']:.2f}s | start={started_at}"
+                )
+            return 0
+
+        if args.project:
+            metrics_file = output_dir / f"{self._sanitize_project_name(args.project)}-pipeline-metrics.json"
+            if not metrics_file.exists():
+                self.console.print(f"[red]未找到指标文件: {metrics_file.name}[/red]")
+                return 1
+        else:
+            candidates = sorted(
+                output_dir.glob("*-pipeline-metrics.json"),
+                key=lambda path: path.stat().st_mtime,
+                reverse=True,
+            )
+            if not candidates:
+                self.console.print("[yellow]未找到 pipeline 指标文件，请先运行 super-dev \"需求\"[/yellow]")
+                return 1
+            metrics_file = candidates[0]
+
+        try:
+            payload = json.loads(metrics_file.read_text(encoding="utf-8"))
+        except Exception:
+            self.console.print(f"[red]指标文件解析失败: {metrics_file.name}[/red]")
+            return 1
+        self.console.print(f"[cyan]Pipeline 指标: {metrics_file.name}[/cyan]")
+        self.console.print(f"  项目: {payload.get('project_name', '')}")
+        self.console.print(f"  成功: {payload.get('success', False)}")
+        self.console.print(f"  成功率: {payload.get('success_rate', 0)}%")
+        self.console.print(f"  总耗时: {payload.get('total_duration_seconds', 0)}s")
+        if payload.get("started_at"):
+            self.console.print(f"  开始时间(UTC): {payload.get('started_at')}")
+        if payload.get("finished_at"):
+            self.console.print(f"  结束时间(UTC): {payload.get('finished_at')}")
+        self.console.print(f"  阶段数: {len(payload.get('stages', []))}")
+        if payload.get("failure_reason"):
+            self.console.print(f"  失败原因: {payload['failure_reason']}")
+        self.console.print(f"  文件: {metrics_file}")
+        return 0

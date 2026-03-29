@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 from pathlib import Path
 
@@ -135,7 +136,7 @@ HOST_TOOL_CATALOG: list[dict[str, str]] = [
     {"id": "cline", "name": "Cline"},
     {"id": "codebuddy-cli", "name": "CodeBuddy CLI"},
     {"id": "codebuddy", "name": "CodeBuddy"},
-    {"id": "codex-cli", "name": "Codex CLI"},
+    {"id": "codex-cli", "name": "Codex"},
     {"id": "copilot-cli", "name": "Copilot CLI"},
     {"id": "cursor-cli", "name": "Cursor CLI"},
     {"id": "windsurf", "name": "Windsurf"},
@@ -145,7 +146,7 @@ HOST_TOOL_CATALOG: list[dict[str, str]] = [
     {"id": "kilo-code", "name": "Kilo Code"},
     {"id": "kimi-cli", "name": "Kimi CLI"},
     {"id": "kiro-cli", "name": "Kiro CLI"},
-    {"id": "opencode", "name": "OpenCode CLI"},
+    {"id": "opencode", "name": "OpenCode"},
     {"id": "qoder-cli", "name": "Qoder CLI"},
     {"id": "roo-code", "name": "Roo Code"},
     {"id": "vscode-copilot", "name": "GitHub Copilot"},
@@ -157,6 +158,18 @@ HOST_TOOL_CATALOG: list[dict[str, str]] = [
 ]
 
 HOST_TOOL_IDS: tuple[str, ...] = tuple(item["id"] for item in HOST_TOOL_CATALOG)
+HOST_TOOL_NAME_MAP: dict[str, str] = {item["id"]: item["name"] for item in HOST_TOOL_CATALOG}
+HOST_TOOL_ALIASES: dict[str, list[str]] = {
+    "claude-code": ["claude", "claudecode"],
+    "codex-cli": ["codex"],
+    "copilot-cli": ["copilot"],
+    "cursor-cli": ["cursor-agent"],
+    "gemini-cli": ["gemini"],
+    "iflow": ["iflow-cli"],
+    "kimi-cli": ["kimi"],
+    "opencode": ["open-code"],
+    "vscode-copilot": ["copilot-chat", "vscode"],
+}
 
 PRIMARY_CLI_HOST_TOOL_IDS: tuple[str, ...] = (
     "claude-code",
@@ -185,6 +198,8 @@ PRIMARY_IDE_HOST_TOOL_IDS: tuple[str, ...] = (
 )
 
 PRIMARY_HOST_TOOL_IDS: tuple[str, ...] = PRIMARY_CLI_HOST_TOOL_IDS + PRIMARY_IDE_HOST_TOOL_IDS
+SPECIAL_INSTALL_HOST_TOOL_IDS: tuple[str, ...] = ("openclaw",)
+PRODUCT_HOST_TOOL_IDS: tuple[str, ...] = PRIMARY_HOST_TOOL_IDS + SPECIAL_INSTALL_HOST_TOOL_IDS
 
 CLI_HOST_TOOL_IDS: tuple[str, ...] = (
     "aider",
@@ -206,6 +221,273 @@ HOST_TOOL_CATEGORY_MAP: dict[str, str] = {
     host_id: ("cli" if host_id in CLI_HOST_TOOL_IDS else "ide")
     for host_id in HOST_TOOL_IDS
 }
+
+HOST_RUNTIME_VALIDATION_OVERRIDES: dict[str, dict[str, list[str]]] = {
+    "antigravity": {
+        "runtime_checklist": [
+            "确认当前 Antigravity Prompt / Agent Chat 绑定的是目标项目，而不是其他工作区。",
+            "确认 `GEMINI.md`、`.agent/workflows/super-dev.md` 与 `.gemini/commands/super-dev.md` 已在新会话里一起生效。",
+            "确认触发后直接进入 Super Dev 流水线，而不是退回普通 Gemini 对话。",
+        ],
+        "pass_criteria": [
+            "Antigravity 在新聊天里真实读取了 GEMINI 上下文、workflow 与命令面。",
+        ],
+        "resume_checklist": [
+            "Antigravity 恢复时要确认重新打开的 Prompt / Agent Chat 已重新加载 GEMINI 上下文与 workflow。",
+        ],
+    },
+    "claude-code": {
+        "runtime_checklist": [
+            "确认当前 Claude Code 会话就在目标项目目录中，不是在其他工作区触发。",
+            "确认 `/super-dev` 直接进入 Super Dev，而不是普通聊天或旁路子代理。",
+            "确认改文档、补充、继续修改等自然语言仍留在当前 Super Dev 流程内。",
+        ],
+        "pass_criteria": [
+            "Claude Code 在文档修改和确认门阶段没有静默退出 Super Dev 模式。",
+        ],
+        "resume_checklist": [
+            "Claude Code 恢复时不能绕过当前确认门或返工门。",
+        ],
+    },
+    "cline": {
+        "runtime_checklist": [
+            "确认当前 Cline 聊天面板绑定的是目标工作区，而不是其他 VS Code 工作区。",
+            "确认 `.clinerules/` 与项目级 `.cline/skills/` 已在当前工作区重新加载。",
+            "确认使用 `super-dev:` 继续补充或返工时，Cline 不会退回普通对话。",
+        ],
+        "pass_criteria": [
+            "Cline 在目标工作区真实读取了 `.clinerules/` 与 `.cline/skills/`。",
+        ],
+        "resume_checklist": [
+            "Cline 恢复时要确认聊天仍绑定目标工作区，并重新读取 `.clinerules/`。",
+        ],
+    },
+    "codebuddy-cli": {
+        "runtime_checklist": [
+            "确认当前 CodeBuddy CLI 会话就在目标项目目录中，再触发 `/super-dev`。",
+            "确认项目级 `.codebuddy/commands/`、`.codebuddy/skills/` 与兼容 `AGENTS.md` 都被当前会话加载。",
+            "确认文档返工与确认门阶段仍然保持在 Super Dev 流程内。",
+        ],
+        "pass_criteria": [
+            "CodeBuddy CLI 真实读取了项目级 commands、skills 与兼容规则面。",
+        ],
+        "resume_checklist": [
+            "CodeBuddy CLI 恢复时要确认仍在目标项目目录，并重新加载 `.codebuddy/commands/` 与 skills。",
+        ],
+    },
+    "codebuddy": {
+        "runtime_checklist": [
+            "确认当前 CodeBuddy IDE Agent Chat 绑定的是目标项目，而不是其他工作区。",
+            "确认 `.codebuddy/commands/`、`.codebuddy/agents/` 与 `.codebuddy/skills/` 已在当前会话真实生效。",
+            "确认用户继续说“改一下 / 补充 / 继续改”时，CodeBuddy 仍然停留在当前确认门内。",
+        ],
+        "pass_criteria": [
+            "CodeBuddy IDE 在目标工作区真实读取了 commands、agents 与 skills。",
+        ],
+        "resume_checklist": [
+            "CodeBuddy IDE 恢复时要确认 Agent Chat 仍在目标项目，并继续当前确认门而不是重新开题。",
+        ],
+    },
+    "codex-cli": {
+        "runtime_checklist": [
+            "确认接入完成后已经彻底重开 codex，新会话会重新加载 AGENTS.md 与官方 Skills。",
+            "确认当前终端就在目标项目目录里，再输入 `super-dev:` 触发。",
+            "确认会话没有先解释 skill 或退回普通聊天，而是直接进入 Super Dev 流程。",
+        ],
+        "pass_criteria": [
+            "重开 codex 后的新会话确实加载了项目 AGENTS.md 与官方 Skills。",
+        ],
+        "resume_checklist": [
+            "Codex 必须在新会话里恢复，不能复用接入前的旧会话。",
+        ],
+    },
+    "copilot-cli": {
+        "runtime_checklist": [
+            "确认当前 Copilot CLI 会话就在目标项目目录，并已读取 `.github/copilot-instructions.md`。",
+            "确认项目级 `.github/skills/` 与用户级 `~/.copilot/skills/` 已一起生效。",
+            "确认使用 `super-dev:` 继续返工或确认时，Copilot CLI 不会退回普通聊天。",
+        ],
+        "pass_criteria": [
+            "Copilot CLI 真实读取了 copilot-instructions 与 skills，并保持当前流程连续。",
+        ],
+        "resume_checklist": [
+            "Copilot CLI 恢复时要确认新会话再次读取 `.github/copilot-instructions.md`。",
+        ],
+    },
+    "cursor-cli": {
+        "runtime_checklist": [
+            "确认当前 Cursor CLI 终端就在目标项目目录，再触发 `/super-dev`。",
+            "如果命令列表未刷新，先重开一次 Cursor CLI 会话再验收。",
+            "确认规则来自当前项目而不是其他工作区残留上下文。",
+        ],
+        "pass_criteria": [
+            "Cursor CLI 使用的是当前项目规则，而不是错误目录或旧会话上下文。",
+        ],
+        "resume_checklist": [
+            "Cursor CLI 恢复时要确认当前终端目录仍是目标项目。",
+        ],
+    },
+    "cursor": {
+        "runtime_checklist": [
+            "确认在正确项目工作区的 Agent Chat 中触发，而不是错误工作区。",
+            "确认 `/super-dev` 后读取的是当前工作区规则，而不是旧会话上下文。",
+            "确认用户持续修改 UI / 文档时仍然留在 Super Dev 流程中。",
+        ],
+        "pass_criteria": [
+            "Cursor Agent Chat 绑定到正确工作区，并在返工阶段保持流程连续性。",
+        ],
+        "resume_checklist": [
+            "Cursor Agent Chat 恢复时要确认仍在正确工作区。",
+        ],
+    },
+    "gemini-cli": {
+        "runtime_checklist": [
+            "确认当前 Gemini CLI 会话就在目标项目目录，并已读取 `GEMINI.md`。",
+            "确认 `/super-dev` 后先做 research，而不是直接编码。",
+            "确认重开会话后仍能根据当前仓库上下文继续现有 Super Dev 流程。",
+        ],
+        "pass_criteria": [
+            "Gemini CLI 真实读取了 `GEMINI.md`，并按 slash 流程执行而非普通聊天。",
+        ],
+        "resume_checklist": [
+            "Gemini CLI 恢复时要确认新会话再次读取了 `GEMINI.md`。",
+        ],
+    },
+    "kiro-cli": {
+        "runtime_checklist": [
+            "确认当前 Kiro CLI 会话就在目标项目目录，并已重新加载 `.kiro/steering/` 与 `.kiro/skills/`。",
+            "确认使用 `super-dev:` 触发时，Kiro CLI 按 steering 流程执行而不是普通聊天。",
+            "确认文档返工、确认门与继续修改都还能留在当前流程内。",
+        ],
+        "pass_criteria": [
+            "Kiro CLI 在新会话里真实读取了 steering 与 skills，并保持流程连续。",
+        ],
+        "resume_checklist": [
+            "Kiro CLI 恢复时要确认新会话再次加载 `.kiro/steering/` 与 skills。",
+        ],
+    },
+    "kiro": {
+        "runtime_checklist": [
+            "确认当前 Kiro IDE Agent Chat 打开的就是目标项目，而不是其他工作区。",
+            "确认 `.kiro/steering/` 与 `.kiro/skills/` 已在新的 Agent Chat 里生效。",
+            "确认用户在确认门里补充和修改时，Kiro IDE 仍然留在 Super Dev 流程内。",
+        ],
+        "pass_criteria": [
+            "Kiro IDE 在目标工作区真实读取了 steering 与 skills。",
+        ],
+        "resume_checklist": [
+            "Kiro IDE 恢复时要确认重新打开的 Agent Chat 仍加载当前项目的 steering 与 skills。",
+        ],
+    },
+    "kilo-code": {
+        "runtime_checklist": [
+            "确认当前 Kilo Code 聊天面板绑定的是目标工作区，并已重新加载 `.kilocode/rules/`。",
+            "确认使用 `super-dev:` 继续返工或确认时，Kilo Code 不会退回普通对话。",
+            "确认当前工作区里的规则比旧聊天残留上下文优先。",
+        ],
+        "pass_criteria": [
+            "Kilo Code 在目标工作区真实读取了 `.kilocode/rules/` 并保持流程连续。",
+        ],
+        "resume_checklist": [
+            "Kilo Code 恢复时要确认聊天仍在目标工作区，并重新读取 `.kilocode/rules/`。",
+        ],
+    },
+    "opencode": {
+        "runtime_checklist": [
+            "确认当前 OpenCode 会话就是目标项目目录，并使用 `/super-dev` 进入。",
+            "如果命令列表没刷新，重开一次当前 OpenCode 会话后再验收。",
+            "确认项目级 AGENTS.md、commands、skills 都被当前会话真实加载。",
+        ],
+        "pass_criteria": [
+            "项目级 AGENTS.md、commands、skills 被当前 OpenCode 会话真实读取。",
+        ],
+        "resume_checklist": [
+            "OpenCode 必须在当前项目会话里恢复，不允许切到普通聊天上下文。",
+        ],
+    },
+    "qoder-cli": {
+        "runtime_checklist": [
+            "确认当前 Qoder CLI 会话就在目标项目目录，并且 `/super-dev` 命令已经刷新可见。",
+            "确认 `.qoder/rules/`、`.qoder/commands/` 与 `.qoder/skills/` 都被当前会话加载。",
+            "确认文档返工和确认门阶段不会退回普通聊天。",
+        ],
+        "pass_criteria": [
+            "Qoder CLI 真实读取了 rules、commands 与 skills，并保持流程连续。",
+        ],
+        "resume_checklist": [
+            "Qoder CLI 恢复时要确认新会话再次加载 `.qoder/rules/`、commands 与 skills。",
+        ],
+    },
+    "qoder": {
+        "runtime_checklist": [
+            "确认当前 Qoder IDE Agent Chat 绑定的是目标项目，而不是其他工作区。",
+            "确认 `.qoder/rules/`、`.qoder/commands/` 与 `.qoder/skills/` 在当前 IDE 会话里真实生效。",
+            "确认用户持续修改文档或 UI 时，Qoder IDE 仍然留在当前 Super Dev 流程内。",
+        ],
+        "pass_criteria": [
+            "Qoder IDE 在目标工作区真实读取了 rules、commands 与 skills。",
+        ],
+        "resume_checklist": [
+            "Qoder IDE 恢复时要确认 Agent Chat 仍在目标项目，并继续当前确认门。",
+        ],
+    },
+    "roo-code": {
+        "runtime_checklist": [
+            "确认当前 Roo Code 聊天位于目标项目工作区，并且 `/super-dev` 命令已刷新可用。",
+            "确认 `.roo/rules/` 与 `.roo/commands/` 已在当前聊天真实加载。",
+            "确认返工与确认阶段继续使用 Roo Code 当前工作区规则，而不是普通聊天。",
+        ],
+        "pass_criteria": [
+            "Roo Code 在目标工作区真实读取了 `.roo/rules/` 与 `.roo/commands/`。",
+        ],
+        "resume_checklist": [
+            "Roo Code 恢复时要确认聊天仍位于目标工作区，并重新加载 `.roo/` 规则与命令。",
+        ],
+    },
+    "trae": {
+        "runtime_checklist": [
+            "确认当前 Trae Agent Chat 绑定的是目标项目工作区，而不是其他项目。",
+            "确认 `.trae/project_rules.md` 或兼容 `.trae/rules.md` 已在当前聊天里真实加载。",
+            "确认使用 `super-dev:` 继续补充、返工或确认时，Trae 不会退回普通对话。",
+        ],
+        "pass_criteria": [
+            "Trae 在目标工作区真实读取了项目规则，并在返工阶段保持流程连续。",
+        ],
+        "resume_checklist": [
+            "Trae 恢复时要确认新聊天仍绑定目标项目，并重新读取 `.trae/project_rules.md`。",
+        ],
+    },
+    "vscode-copilot": {
+        "runtime_checklist": [
+            "确认当前 VS Code Copilot Chat 绑定的是目标项目工作区，而不是其他工作区。",
+            "确认 `.github/copilot-instructions.md` 已被当前聊天真实加载。",
+            "确认继续说“改一下 / 补充 / 确认”时，Copilot Chat 仍然留在当前 Super Dev 流程内。",
+        ],
+        "pass_criteria": [
+            "VS Code Copilot 在目标工作区真实读取了 copilot-instructions，并保持流程连续。",
+        ],
+        "resume_checklist": [
+            "VS Code Copilot 恢复时要确认聊天仍在目标工作区，并重新读取 `.github/copilot-instructions.md`。",
+        ],
+    },
+    "windsurf": {
+        "runtime_checklist": [
+            "确认当前 Windsurf Agent Chat / Workflow 入口绑定的是目标项目工作区。",
+            "确认 `.windsurf/rules/`、`.windsurf/workflows/` 与 `.windsurf/skills/` 已在当前会话真实加载。",
+            "确认通过 workflow 或 `/super-dev` 返工时，Windsurf 仍然留在当前流程内。",
+        ],
+        "pass_criteria": [
+            "Windsurf 在目标工作区真实读取了 rules、workflows 与 skills。",
+        ],
+        "resume_checklist": [
+            "Windsurf 恢复时要确认 Agent Chat / Workflow 已重新加载当前项目的 rules、workflow 与 skills。",
+        ],
+    },
+}
+
+
+def host_runtime_validation_overrides(target: str) -> dict[str, list[str]]:
+    return HOST_RUNTIME_VALIDATION_OVERRIDES.get(target, {})
 
 HOST_COMMAND_CANDIDATES: dict[str, list[str]] = {
     "antigravity": ["antigravity"],
@@ -340,3 +622,181 @@ def host_path_candidates(host_id: str) -> list[str]:
         seen.add(expanded)
         candidates.append(expanded)
     return candidates
+
+
+def _host_path_override_env_keys(host_id: str) -> list[str]:
+    normalized = host_id.upper().replace("-", "_")
+    return [
+        f"SUPER_DEV_HOST_PATH_{normalized}",
+        f"SUPER_DEV_HOST_LOCATION_{normalized}",
+    ]
+
+
+def _split_override_paths(raw: str) -> list[str]:
+    if not raw.strip():
+        return []
+    normalized = raw.replace("\r\n", "\n").replace("\r", "\n")
+    chunks: list[str] = []
+    for line in normalized.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        if os.pathsep in line:
+            chunks.extend(item.strip() for item in line.split(os.pathsep) if item.strip())
+        else:
+            chunks.append(line)
+    return chunks
+
+
+def host_override_path_candidates(host_id: str) -> list[str]:
+    seen: set[str] = set()
+    candidates: list[str] = []
+    for key in _host_path_override_env_keys(host_id):
+        for item in _split_override_paths(os.environ.get(key, "")):
+            expanded = _expand_host_pattern(item)
+            if not expanded or expanded in seen:
+                continue
+            seen.add(expanded)
+            candidates.append(expanded)
+    return candidates
+
+
+def _host_windows_probe_names(host_id: str) -> list[str]:
+    names: set[str] = set()
+    for command in HOST_COMMAND_CANDIDATES.get(host_id, []):
+        cmd = command.strip()
+        if not cmd:
+            continue
+        names.add(cmd)
+        names.add(f"{cmd}.exe")
+        names.add(f"{cmd}.cmd")
+    for pattern in HOST_PATH_PATTERNS.get(host_id, []):
+        base = Path(_expand_host_pattern(pattern)).name.strip()
+        if base:
+            names.add(base)
+    return sorted(item for item in names if item)
+
+
+def _normalize_windows_launch_target(value: str) -> str:
+    cleaned = str(value).strip().strip('"')
+    if not cleaned:
+        return ""
+    lowered = cleaned.lower()
+    for suffix in (".exe", ".cmd", ".bat", ".ps1", ".app"):
+        index = lowered.find(suffix)
+        if index != -1:
+            return cleaned[: index + len(suffix)]
+    return cleaned.split(" ", 1)[0]
+
+
+def _windows_registry_path_candidates(host_id: str) -> list[str]:
+    with contextlib.suppress(ImportError):
+        import winreg  # type: ignore
+
+        seen: set[str] = set()
+        candidates: list[str] = []
+        for probe_name in _host_windows_probe_names(host_id):
+            subkey = rf"Software\Microsoft\Windows\CurrentVersion\App Paths\{probe_name}"
+            for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+                with contextlib.suppress(FileNotFoundError, OSError):
+                    key = winreg.OpenKey(hive, subkey)
+                    try:
+                        for value_name in (None, ""):
+                            with contextlib.suppress(FileNotFoundError, OSError, TypeError):
+                                raw_value, _ = winreg.QueryValueEx(key, value_name)
+                                candidate = _normalize_windows_launch_target(raw_value)
+                                if candidate and candidate not in seen:
+                                    seen.add(candidate)
+                                    candidates.append(candidate)
+                        with contextlib.suppress(FileNotFoundError, OSError):
+                            raw_path, _ = winreg.QueryValueEx(key, "Path")
+                            folder = _normalize_windows_launch_target(raw_path)
+                            if folder:
+                                joined = str(Path(folder) / probe_name)
+                                if joined not in seen:
+                                    seen.add(joined)
+                                    candidates.append(joined)
+                    finally:
+                        winreg.CloseKey(key)
+        return candidates
+    return []
+
+
+def _windows_package_manager_candidates(host_id: str) -> list[str]:
+    base_patterns = [
+        "%LOCALAPPDATA%/Microsoft/WinGet/Links",
+        "%LOCALAPPDATA%/Microsoft/WindowsApps",
+        "%USERPROFILE%/scoop/shims",
+        "%PROGRAMDATA%/chocolatey/bin",
+        "%APPDATA%/npm",
+    ]
+    seen: set[str] = set()
+    candidates: list[str] = []
+    for base_pattern in base_patterns:
+        base = _expand_host_pattern(base_pattern)
+        if not base:
+            continue
+        for probe_name in _host_windows_probe_names(host_id):
+            candidate = str(Path(base) / probe_name)
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            candidates.append(candidate)
+    return candidates
+
+
+def host_detection_path_candidates(host_id: str) -> list[tuple[str, str]]:
+    probes: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def _append(kind: str, values: list[str]) -> None:
+        for value in values:
+            item = (kind, value)
+            if not value or item in seen:
+                continue
+            seen.add(item)
+            probes.append(item)
+
+    _append("env", host_override_path_candidates(host_id))
+    _append("path", host_path_candidates(host_id))
+    _append("registry", _windows_registry_path_candidates(host_id))
+    _append("shim", _windows_package_manager_candidates(host_id))
+    return probes
+
+
+def host_path_override_guide(host_id: str) -> dict[str, object]:
+    env_keys = _host_path_override_env_keys(host_id)
+    primary_key = env_keys[0] if env_keys else ""
+    probe_names = _host_windows_probe_names(host_id)
+    probe_name = probe_names[0] if probe_names else host_id
+    unix_example = f"/path/to/{probe_name}"
+    windows_example = f"C:\\path\\to\\{probe_name}"
+    return {
+        "env_key": primary_key,
+        "legacy_env_keys": env_keys[1:],
+        "unix_example": unix_example,
+        "windows_example": windows_example,
+        "unix_export": f"export {primary_key}={unix_example}" if primary_key else "",
+        "powershell_export": f"$env:{primary_key}='{windows_example}'" if primary_key else "",
+        "hint": f"如果装在自定义目录，先设置 `{primary_key}=<安装路径>` 再重试。" if primary_key else "",
+        "supported_detection_sources": ["命令命中", "默认安装路径", "自定义路径覆盖", "Windows 注册信息", "Windows shim / 包管理器目录"],
+    }
+
+
+def host_display_name(host_id: str) -> str:
+    return HOST_TOOL_NAME_MAP.get(host_id, host_id)
+
+
+def normalize_host_tool_id(value: str) -> str:
+    normalized = str(value).strip().lower().replace("_", "-").replace(" ", "-")
+    if normalized in HOST_TOOL_IDS:
+        return normalized
+    for host_id, aliases in HOST_TOOL_ALIASES.items():
+        if normalized in aliases:
+            return host_id
+    for host_id, host_name in HOST_TOOL_NAME_MAP.items():
+        simplified_name = host_name.lower().replace("_", "-").replace(" ", "-")
+        simplified_without_cli = simplified_name.removesuffix("-cli")
+        if normalized in {simplified_name, simplified_without_cli}:
+            return host_id
+    return normalized

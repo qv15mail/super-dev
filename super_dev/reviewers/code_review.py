@@ -22,6 +22,17 @@ class CodeReviewGenerator:
         self.backend = tech_stack.get("backend", "node")
         self.domain = tech_stack.get("domain", "")
 
+        # 加载专家工具箱以注入治理检查清单
+        try:
+            from ..experts.toolkit import load_expert_toolkits
+
+            toolkits = load_expert_toolkits()
+            self._code_toolkit = toolkits.get("CODE")
+            self._security_toolkit = toolkits.get("SECURITY")
+        except Exception:
+            self._code_toolkit = None
+            self._security_toolkit = None
+
     def generate(self) -> str:
         """生成代码审查指南"""
         review_guide = f"""# {self.name} - 代码审查指南
@@ -185,6 +196,10 @@ npm test  # 或 pytest
 - [ ] 所有测试通过
 - [ ] 新增代码有测试
 - [ ] 文档已更新
+- [ ] 本轮新增函数/方法/字段/模块都已接入真实调用链，未接入的已删除
+- [ ] 本轮修改没有引入新的编译错误、构建失败或新增 warning
+- [ ] 新增日志/埋点/告警/恢复逻辑已经挂到真实入口，不是只定义未调用
+- [ ] 已按本次 diff 做过最小自审，确认不存在死代码、无效分支或遗留临时补丁
 
 **Reviewers 检查:**
 - [ ] 代码逻辑正确
@@ -220,6 +235,12 @@ npm test  # 或 pytest
 - [ ] 状态更新正确
 - [ ] 副作用隔离
 - [ ] 状态持久化合理
+
+### 5. 实现闭环
+- [ ] 新增 helper、配置项、日志函数、埋点函数都存在明确调用点
+- [ ] 新增兜底逻辑在真实异常路径上可达，不是形式化补丁
+- [ ] 构建日志中的新 warning 已逐项处理，而不是默认忽略
+- [ ] 代码审查结论覆盖“为什么加、在哪里用、如果不用是否该删”
 
 ---
 
@@ -319,6 +340,22 @@ jobs:
 4. **讨论复杂问题**: 面对面或视频会议讨论
 5. **持续学习**: 分享审查中学到的经验
 """
+
+        # 注入技术栈差异化审查清单
+        review_guide += self._generate_stack_specific_checklist()
+
+        # 注入代码复杂度分析
+        review_guide += self._generate_complexity_analysis()
+
+        # 注入命名规范检查
+        review_guide += self._generate_naming_convention_checks()
+
+        # 注入专家 Playbook 具体检查项
+        review_guide += self._generate_expert_playbook_checks()
+
+        # 注入专家工具箱治理检查清单
+        review_guide += self._inject_expert_checklists()
+
         return review_guide  # nosec B608
 
     def _generate_frontend_review(self) -> str:
@@ -469,3 +506,459 @@ jobs:
 - [ ] 事务处理合理
 - [ ] 幂等性保证
 """
+
+    # ------------------------------------------------------------------
+    # 技术栈差异化审查清单
+    # ------------------------------------------------------------------
+
+    def _generate_stack_specific_checklist(self) -> str:
+        """根据技术栈生成差异化的深度审查清单。"""
+        sections: list[str] = [
+            "\n---\n",
+            "## 技术栈深度审查清单（自动生成）\n",
+        ]
+
+        backend_lower = self.backend.lower() if self.backend else ""
+        frontend_lower = self.frontend.lower() if self.frontend else ""
+
+        if backend_lower in ("python", "fastapi", "django", "flask"):
+            sections.extend(self._python_deep_checklist())
+        if backend_lower in ("node", "express", "nestjs", "koa"):
+            sections.extend(self._javascript_deep_checklist())
+        if backend_lower in ("go", "golang", "gin", "echo"):
+            sections.extend(self._go_deep_checklist())
+        if backend_lower in ("rust", "actix", "axum", "rocket"):
+            sections.extend(self._rust_deep_checklist())
+
+        # 前端也可能需要 JS/TS 检查
+        if frontend_lower in ("react", "vue", "angular", "svelte", "next", "nuxt"):
+            sections.extend(self._frontend_typescript_checklist())
+
+        return "\n".join(sections)
+
+    def _python_deep_checklist(self) -> list[str]:
+        return [
+            "### Python 深度审查\n",
+            "**类型安全:**",
+            "- [ ] 所有公共函数签名有完整 type hints（参数 + 返回值）",
+            "- [ ] 使用 `from __future__ import annotations` 延迟求值",
+            "- [ ] 避免 `Any` 类型逃逸，必要时用 `TypeVar` 或 `Protocol`",
+            "- [ ] dataclass/Pydantic model 字段类型明确",
+            "- [ ] Optional 类型显式标注而非隐式 None",
+            "",
+            "**并发安全:**",
+            "- [ ] asyncio 代码中无阻塞 I/O 调用（file/socket/requests）",
+            "- [ ] 线程共享数据使用 Lock/RLock/Queue 保护",
+            "- [ ] 避免在 async 函数中调用 `time.sleep()`（使用 `asyncio.sleep`）",
+            "- [ ] 数据库连接池配置合理，避免连接泄漏",
+            "",
+            "**资源管理:**",
+            "- [ ] 文件/网络/数据库连接使用 `with` 语句或 `contextmanager`",
+            "- [ ] 临时文件使用 `tempfile` 模块并确保清理",
+            "- [ ] 大数据集处理使用 generator/iterator 而非一次性加载",
+            "",
+            "**Python 特有陷阱:**",
+            "- [ ] 默认参数不使用可变对象（`def f(x=[])`）",
+            "- [ ] 字符串格式化优先使用 f-string 而非 `%` 或 `.format()`",
+            "- [ ] 比较 None 使用 `is None` 而非 `== None`",
+            "- [ ] 循环中不重复创建正则编译（使用 `re.compile` 缓存）",
+            "- [ ] 避免裸 `except:` 或 `except Exception:`，捕获具体异常",
+            "- [ ] `__init__` 中不执行耗时 I/O 操作",
+            "",
+        ]
+
+    def _javascript_deep_checklist(self) -> list[str]:
+        return [
+            "### JavaScript/TypeScript 深度审查\n",
+            "**类型安全 (TypeScript):**",
+            "- [ ] 严格模式启用（`strict: true` in tsconfig）",
+            "- [ ] 避免 `any` 类型，使用 `unknown` + type guard",
+            "- [ ] 接口定义优于 type alias（用于对象结构）",
+            "- [ ] 泛型约束明确（`T extends Base` 而非裸 `T`）",
+            "- [ ] enum 使用 `const enum` 或字面量联合类型",
+            "",
+            "**异步处理:**",
+            "- [ ] Promise 链有 `.catch()` 或外层 try-catch",
+            "- [ ] 避免 Promise 构造函数反模式（`new Promise` 包裹 async）",
+            "- [ ] 并发请求使用 `Promise.all` / `Promise.allSettled`",
+            "- [ ] 避免 `async void` 函数（除事件处理器）",
+            "- [ ] EventEmitter 监听器在组件卸载时移除",
+            "",
+            "**安全特有:**",
+            "- [ ] 用户输入不直接拼接 HTML（防 XSS）",
+            "- [ ] `dangerouslySetInnerHTML` 内容经过 DOMPurify 清洗",
+            "- [ ] Cookie 设置 `httpOnly`, `secure`, `sameSite` 属性",
+            "- [ ] `JSON.parse` 外层有 try-catch",
+            "- [ ] URL 参数经过 `encodeURIComponent` 编码",
+            "",
+            "**Node.js 特有:**",
+            "- [ ] 不在事件循环中执行 CPU 密集任务（使用 worker_threads）",
+            "- [ ] Stream 处理有 `error` 事件监听",
+            "- [ ] 进程退出处理 `SIGTERM`/`SIGINT` 优雅关闭",
+            "- [ ] 环境变量通过 schema 验证（如 `envalid`）",
+            "",
+        ]
+
+    def _go_deep_checklist(self) -> list[str]:
+        return [
+            "### Go 深度审查\n",
+            "**错误处理:**",
+            "- [ ] 所有 error 返回值被检查，不使用 `_` 忽略",
+            "- [ ] 自定义错误类型实现 `error` 接口",
+            "- [ ] 使用 `errors.Is` / `errors.As` 进行错误匹配",
+            "- [ ] 错误信息小写开头，不以标点结尾",
+            "- [ ] 使用 `fmt.Errorf(\"%w\", err)` 进行错误包装",
+            "",
+            "**并发安全:**",
+            "- [ ] goroutine 有退出机制（context/done channel）",
+            "- [ ] 共享数据使用 `sync.Mutex` 或 channel 保护",
+            "- [ ] `sync.WaitGroup` 计数器正确 Add/Done/Wait",
+            "- [ ] 避免 goroutine 泄漏（检查 `runtime.NumGoroutine`）",
+            "- [ ] channel 有明确的关闭责任方",
+            "",
+            "**性能:**",
+            "- [ ] 大量字符串拼接使用 `strings.Builder`",
+            "- [ ] 已知容量的 slice 预分配（`make([]T, 0, n)`）",
+            "- [ ] 避免在热路径中使用 `reflect`",
+            "- [ ] 大结构体传指针而非值拷贝",
+            "",
+            "**Go 特有陷阱:**",
+            "- [ ] 循环变量捕获问题（Go <1.22 中 for 循环变量复用）",
+            "- [ ] `defer` 在循环中的资源释放时机",
+            "- [ ] nil interface vs nil pointer 比较",
+            "- [ ] map 不安全并发读写（使用 `sync.Map` 或加锁）",
+            "",
+        ]
+
+    def _rust_deep_checklist(self) -> list[str]:
+        return [
+            "### Rust 深度审查\n",
+            "**所有权与借用:**",
+            "- [ ] 避免不必要的 `.clone()` 调用",
+            "- [ ] 优先使用引用（`&T`/`&mut T`）而非所有权转移",
+            "- [ ] 生命周期标注最小化且正确",
+            "- [ ] `Arc<Mutex<T>>` 仅在真正需要共享可变状态时使用",
+            "",
+            "**错误处理:**",
+            "- [ ] 使用 `thiserror` / `anyhow` 进行错误定义和传播",
+            "- [ ] 避免 `.unwrap()` / `.expect()` 出现在生产路径",
+            "- [ ] `?` 操作符正确传播错误",
+            "- [ ] `panic!` 仅用于不可恢复的编程错误",
+            "",
+            "**unsafe 使用:**",
+            "- [ ] `unsafe` 块有安全性注释说明不变量",
+            "- [ ] `unsafe` 范围最小化",
+            "- [ ] FFI 边界有正确的 null 检查和生命周期管理",
+            "",
+            "**性能:**",
+            "- [ ] 热路径避免不必要的堆分配",
+            "- [ ] 使用 `&str` 而非 `String` 传递只读字符串",
+            "- [ ] 迭代器链优于手动循环（编译器可优化）",
+            "- [ ] `#[inline]` 仅用于确认有益的小函数",
+            "",
+        ]
+
+    def _frontend_typescript_checklist(self) -> list[str]:
+        return [
+            "### 前端 TypeScript 审查\n",
+            "**组件设计:**",
+            "- [ ] 组件 Props 接口完整定义，必需 vs 可选明确",
+            "- [ ] 事件回调类型使用 React.XXXEventHandler",
+            "- [ ] children 类型使用 `React.ReactNode`",
+            "- [ ] Ref 类型正确（`React.RefObject<HTMLXXXElement>`）",
+            "",
+            "**状态管理:**",
+            "- [ ] 服务端状态与客户端状态分离",
+            "- [ ] 表单状态使用受控组件或专用库（react-hook-form）",
+            "- [ ] 全局状态不包含可从 URL 派生的数据",
+            "- [ ] useEffect 依赖数组完整且无遗漏",
+            "",
+            "**可访问性 (a11y):**",
+            "- [ ] 交互元素有 `aria-label` 或关联的 `<label>`",
+            "- [ ] 图片有 `alt` 属性",
+            "- [ ] 表单错误信息关联到对应字段",
+            "- [ ] 键盘导航可用（Tab/Enter/Escape）",
+            "",
+        ]
+
+    # ------------------------------------------------------------------
+    # 代码复杂度分析
+    # ------------------------------------------------------------------
+
+    def _generate_complexity_analysis(self) -> str:
+        """生成代码复杂度分析指南和检测逻辑说明。"""
+        return """
+---
+
+## 代码复杂度分析（自动生成）
+
+### 函数长度检查
+
+| 等级 | 行数 | 处理方式 |
+|:---|:---|:---|
+| 优秀 | <= 20 行 | 无需处理 |
+| 良好 | 21-50 行 | 可接受 |
+| 警告 | 51-100 行 | 建议拆分 |
+| 危险 | > 100 行 | 必须拆分 |
+
+**检测方法:**
+```python
+# Python: 统计 def/async def 到下一个同级 def 之间的行数
+# JavaScript: 统计 function/=> 到匹配闭合括号之间的行数
+# 工具: radon (Python), escomplex (JS), gocyclo (Go)
+```
+
+### 圈复杂度 (Cyclomatic Complexity)
+
+| 等级 | 复杂度值 | 处理方式 |
+|:---|:---|:---|
+| 简单 | 1-5 | 无风险 |
+| 中等 | 6-10 | 需要充分测试 |
+| 复杂 | 11-20 | 建议重构 |
+| 不可维护 | > 20 | 必须重构 |
+
+**圈复杂度计算:**
+每个判断分支 (+1): `if`, `elif`, `else`, `for`, `while`, `case`, `catch`, `&&`, `||`, `?:`
+
+**检测工具:**
+- Python: `radon cc -a -nc` 或 `mccabe`
+- JavaScript: `eslint --rule 'complexity: [error, 10]'`
+- Go: `gocyclo -over 10 .`
+- Rust: `cargo clippy -- -W clippy::cognitive_complexity`
+
+### 嵌套深度检查
+
+- [ ] 函数内最大嵌套深度不超过 4 层
+- [ ] if-else 链超过 3 层时使用 guard clause（提前返回）
+- [ ] 回调嵌套超过 2 层时使用 async/await 或 Promise 链
+- [ ] 循环内嵌套条件使用 extract method 重构
+
+**嵌套深度简化策略:**
+1. **Guard Clause**: 将异常条件提前 return
+2. **Extract Method**: 将嵌套逻辑抽取为独立函数
+3. **Strategy Pattern**: 将 switch/if-else 链替换为策略映射
+4. **Pipeline**: 将嵌套循环替换为 map/filter/reduce 链
+
+### 参数数量检查
+
+- [ ] 函数参数不超过 5 个
+- [ ] 超过 3 个参数考虑使用配置对象/dataclass
+- [ ] 布尔参数考虑拆分为两个函数或使用枚举
+"""
+
+    # ------------------------------------------------------------------
+    # 命名规范检查
+    # ------------------------------------------------------------------
+
+    def _generate_naming_convention_checks(self) -> str:
+        """生成命名规范检查的具体检测规则。"""
+        return """
+---
+
+## 命名规范检查（自动生成）
+
+### 通用命名规则
+
+| 元素 | 规范 | 正则检测 | 示例 |
+|:---|:---|:---|:---|
+| 类名 | PascalCase | `^[A-Z][a-zA-Z0-9]+$` | `UserService`, `OrderManager` |
+| 函数名 (Python/Go) | snake_case | `^[a-z_][a-z0-9_]*$` | `get_user`, `calculate_total` |
+| 函数名 (JS/TS) | camelCase | `^[a-z][a-zA-Z0-9]*$` | `getUser`, `calculateTotal` |
+| 常量 | SCREAMING_SNAKE | `^[A-Z][A-Z0-9_]*$` | `MAX_RETRY`, `API_BASE_URL` |
+| 布尔变量 | is/has/should 前缀 | `^(is|has|should|can|will|did)[A-Z]` | `isActive`, `hasPermission` |
+| 私有成员 (Python) | 单下划线前缀 | `^_[a-z]` | `_cache`, `_validate` |
+| 接口 (TS) | I 前缀或无前缀 | 团队约定统一 | `IUserService` 或 `UserService` |
+| 枚举成员 | PascalCase 或 SCREAMING | 团队约定统一 | `Status.Active` 或 `STATUS_ACTIVE` |
+
+### 反面命名模式检测
+
+以下命名模式在代码审查中应被标记：
+
+- [ ] **单字母变量** (除循环变量 i/j/k 外): `^[a-z]$`
+- [ ] **过于通用的名称**: `data`, `info`, `temp`, `result`, `obj`, `val`, `item` (作为非局部变量)
+- [ ] **类型后缀冗余**: `userList` (应为 `users`), `nameString` (应为 `name`)
+- [ ] **否定命名**: `isNotValid` (应为 `isInvalid`), `noCache` (应为 `skipCache`)
+- [ ] **缩写不一致**: 同项目中 `usr`/`user`, `btn`/`button`, `msg`/`message` 混用
+- [ ] **数字后缀**: `handler2`, `processV2` (应使用更具描述性的名称)
+- [ ] **匈牙利命名残留**: `strName`, `intCount`, `boolIsActive`
+
+### 文件命名一致性
+
+- [ ] Python 模块: `snake_case.py`
+- [ ] JS/TS 组件: `PascalCase.tsx` 或 `kebab-case.tsx`（项目内统一）
+- [ ] CSS 模块: `ComponentName.module.css`
+- [ ] 测试文件: `test_xxx.py` / `xxx.test.ts` / `xxx_test.go`
+- [ ] 配置文件: `kebab-case.yaml` / `.xxxrc`
+"""
+
+    # ------------------------------------------------------------------
+    # 专家 Playbook 具体检查项
+    # ------------------------------------------------------------------
+
+    def _generate_expert_playbook_checks(self) -> str:
+        """生成专家 Playbook 的具体检测逻辑（超越文字描述）。"""
+        sections: list[str] = [
+            "\n---\n",
+            "## 专家 Playbook 检测规则（自动生成）\n",
+            "> 以下规则包含具体的检测逻辑和正则模式，可集成到 CI 管道中。\n",
+        ]
+
+        # SQL 注入检测规则
+        sections.extend([
+            "### SQL 注入检测\n",
+            "**检测模式:**",
+            "```regex",
+            r"# Python f-string SQL",
+            r'f["\'].*?(SELECT|INSERT|UPDATE|DELETE|DROP)\s.*?\{',
+            r"# JS template literal SQL",
+            r'`.*?(SELECT|INSERT|UPDATE|DELETE|DROP)\s.*?\$\{',
+            r"# 字符串拼接 SQL",
+            r"(SELECT|INSERT|UPDATE|DELETE|DROP)\s.*?\+\s*(req\.|request\.|params\.|query\.)",
+            "```",
+            "",
+            "**修复模式:**",
+            "- Python: 使用 SQLAlchemy ORM 或 `cursor.execute(sql, params)`",
+            "- Node.js: 使用 Prisma/Knex 参数化或 `pg` 的 `$1` 占位符",
+            "- Go: 使用 `db.Query(sql, args...)` 参数化查询",
+            "",
+        ])
+
+        # XSS 检测规则
+        sections.extend([
+            "### XSS 检测\n",
+            "**检测模式:**",
+            "```regex",
+            r"# React dangerouslySetInnerHTML",
+            r"dangerouslySetInnerHTML\s*=\s*\{\s*\{.*__html\s*:",
+            r"# 直接 innerHTML 赋值",
+            r"\.innerHTML\s*=",
+            r"# document.write",
+            r"document\.write\s*\(",
+            r"# v-html (Vue)",
+            r'v-html\s*=\s*"',
+            "```",
+            "",
+            "**修复模式:**",
+            "- 使用 `DOMPurify.sanitize()` 清洗 HTML",
+            "- React: 优先使用 JSX 文本节点而非 dangerouslySetInnerHTML",
+            "- 服务端渲染: 使用模板引擎的自动转义功能",
+            "",
+        ])
+
+        # 认证检测规则
+        sections.extend([
+            "### 认证/授权检测\n",
+            "**检测模式:**",
+            "```regex",
+            r"# 路由缺少认证中间件",
+            r"(app|router)\.(get|post|put|delete|patch)\s*\(\s*['\"].*['\"],\s*(async\s+)?\(?",
+            r"# 权限硬编码",
+            r'role\s*===?\s*["\']admin["\']',
+            r"# JWT 无过期设置",
+            r"jwt\.sign\s*\([^)]*(?!expiresIn)[^)]*\)",
+            "```",
+            "",
+            "**检查清单:**",
+            "- [ ] 所有非公开路由有认证中间件",
+            "- [ ] 权限检查使用 RBAC/ABAC 而非硬编码角色",
+            "- [ ] JWT 有过期时间（建议 15 分钟 access + 7 天 refresh）",
+            "- [ ] 敏感操作有二次认证或 CSRF token",
+            "",
+        ])
+
+        # 日志安全检测
+        sections.extend([
+            "### 日志安全检测\n",
+            "**检测模式:**",
+            "```regex",
+            r"# 密码/密钥记录到日志",
+            r"(log|logger|console)\.(info|debug|warn|error|log)\s*\(.*?(password|secret|token|key|credential)",
+            r"# 信用卡号记录",
+            r"(log|logger|console)\.\w+\(.*?\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}",
+            "```",
+            "",
+            "**修复模式:**",
+            "- 实施日志脱敏中间件，自动掩码敏感字段",
+            "- 使用结构化日志，敏感字段标记为 `[REDACTED]`",
+            "- 生产环境禁用 debug 级别日志",
+            "",
+        ])
+
+        # 错误处理检测
+        sections.extend([
+            "### 错误处理检测\n",
+            "**检测模式:**",
+            "```regex",
+            r"# Python 裸 except",
+            r"except\s*:",
+            r"# JS 空 catch",
+            r"catch\s*\(\w*\)\s*\{\s*\}",
+            r"# Go 忽略 error",
+            r"\w+,\s*_\s*:?=\s*\w+\(",
+            r"# 错误信息暴露内部细节",
+            r'(res|response)\.(json|send)\s*\(\s*\{.*?(stack|trace|internal)',
+            "```",
+            "",
+            "**检查清单:**",
+            "- [ ] 不吞掉异常（空 catch 块）",
+            "- [ ] 生产环境不返回堆栈跟踪",
+            "- [ ] 错误边界（React ErrorBoundary）覆盖关键路由",
+            "- [ ] 500 错误有通用错误响应格式",
+            "",
+        ])
+
+        return "\n".join(sections)
+
+    def _inject_expert_checklists(self) -> str:
+        """从专家工具箱注入治理检查清单到代码审查指南。"""
+        sections: list[str] = []
+
+        # 代码专家检查清单
+        if self._code_toolkit:
+            items = self._code_toolkit.get_review_checklist("quality")
+            if items:
+                sections.append("\n---\n")
+                sections.append("## 代码专家检查清单（自动注入）\n")
+                sections.append("> 以下检查项由代码专家工具箱自动注入，基于治理规则和质量维度。\n")
+                for item in items:
+                    sections.append(f"- [ ] {item}")
+                sections.append("")
+
+            # 注入代码专家的验证规则 ID 供追溯
+            if self._code_toolkit.rules.validation_rule_ids:
+                sections.append(f"**关联验证规则**: {', '.join(self._code_toolkit.rules.validation_rule_ids)}\n")
+
+            # 注入代码专家的 Playbook
+            if self._code_toolkit.playbook:
+                sections.append("**代码专家方法论:**\n")
+                for idx, step in enumerate(self._code_toolkit.playbook, 1):
+                    sections.append(f"{idx}. {step}")
+                sections.append("")
+
+        # 安全专家交叉审查
+        if self._security_toolkit:
+            sec_items = self._security_toolkit.get_review_checklist("quality")
+            if sec_items:
+                sections.append("\n---\n")
+                sections.append("## 安全专家交叉审查（自动注入）\n")
+                sections.append("> 以下检查项由安全专家工具箱交叉注入，确保代码审查覆盖安全维度。\n")
+                for item in sec_items:
+                    sections.append(f"- [ ] {item}")
+                sections.append("")
+
+            # 注入安全专家的验证规则 ID 供追溯
+            if self._security_toolkit.rules.validation_rule_ids:
+                sections.append(f"**关联安全规则**: {', '.join(self._security_toolkit.rules.validation_rule_ids)}\n")
+
+            # 注入安全专家的交叉审查维度
+            for dim in self._security_toolkit.protocol.review_dimensions:
+                dim_name = dim.get("dimension", "")
+                checklist = dim.get("checklist", [])
+                if dim_name and checklist:
+                    sections.append(f"**{dim_name}:**\n")
+                    for check_item in checklist:
+                        if isinstance(check_item, str):
+                            sections.append(f"- [ ] {check_item}")
+                    sections.append("")
+
+        return "\n".join(sections)

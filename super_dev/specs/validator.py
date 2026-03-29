@@ -15,16 +15,18 @@ from pathlib import Path
 @dataclass
 class ValidationError:
     """验证错误"""
-    file: str                  # 文件路径
-    line: int = 0              # 行号
-    column: int = 0            # 列号
-    message: str = ""          # 错误消息
-    severity: str = "error"    # 严重程度: error, warning, info
+
+    file: str  # 文件路径
+    line: int = 0  # 行号
+    column: int = 0  # 列号
+    message: str = ""  # 错误消息
+    severity: str = "error"  # 严重程度: error, warning, info
 
 
 @dataclass
 class ValidationResult:
     """验证结果"""
+
     is_valid: bool
     errors: list[ValidationError] = field(default_factory=list)
     warnings: list[ValidationError] = field(default_factory=list)
@@ -61,9 +63,12 @@ class SpecQualityReport:
 
     @property
     def passed(self) -> bool:
-        return self.score >= 75 and bool(self.checks.get("spec", {}).get("passed", False)) and bool(
-            self.checks.get("validation", {}).get("passed", False)
-        ) and bool(self.checks.get("placeholder_free", {}).get("passed", False))
+        return (
+            self.score >= 75
+            and bool(self.checks.get("spec", {}).get("passed", False))
+            and bool(self.checks.get("validation", {}).get("passed", False))
+            and bool(self.checks.get("placeholder_free", {}).get("passed", False))
+        )
 
     def to_dict(self) -> dict:
         return {
@@ -105,10 +110,9 @@ class SpecValidator:
 
         change_dir = self.changes_dir / change_id
         if not change_dir.exists():
-            errors.append(ValidationError(
-                file=str(change_dir),
-                message=f"变更目录不存在: {change_id}"
-            ))
+            errors.append(
+                ValidationError(file=str(change_dir), message=f"变更目录不存在: {change_id}")
+            )
             return ValidationResult(is_valid=False, errors=errors)
 
         # 验证 proposal.md
@@ -119,10 +123,7 @@ class SpecValidator:
             warnings.extend(result.warnings)
             info.extend(result.info)
         else:
-            warnings.append(ValidationError(
-                file=str(proposal_file),
-                message="缺少 proposal.md"
-            ))
+            warnings.append(ValidationError(file=str(proposal_file), message="缺少 proposal.md"))
 
         # 验证 tasks.md
         tasks_file = change_dir / "tasks.md"
@@ -132,10 +133,7 @@ class SpecValidator:
             warnings.extend(result.warnings)
             info.extend(result.info)
         else:
-            warnings.append(ValidationError(
-                file=str(tasks_file),
-                message="缺少 tasks.md"
-            ))
+            warnings.append(ValidationError(file=str(tasks_file), message="缺少 tasks.md"))
 
         plan_file = change_dir / "plan.md"
         if plan_file.exists():
@@ -143,11 +141,9 @@ class SpecValidator:
             errors.extend(result.errors)
             warnings.extend(result.warnings)
         else:
-            warnings.append(ValidationError(
-                file=str(plan_file),
-                severity="warning",
-                message="缺少 plan.md"
-            ))
+            warnings.append(
+                ValidationError(file=str(plan_file), severity="warning", message="缺少 plan.md")
+            )
 
         checklist_file = change_dir / "checklist.md"
         if checklist_file.exists():
@@ -155,11 +151,11 @@ class SpecValidator:
             errors.extend(result.errors)
             warnings.extend(result.warnings)
         else:
-            warnings.append(ValidationError(
-                file=str(checklist_file),
-                severity="warning",
-                message="缺少 checklist.md"
-            ))
+            warnings.append(
+                ValidationError(
+                    file=str(checklist_file), severity="warning", message="缺少 checklist.md"
+                )
+            )
 
         # 验证 design.md (可选)
         design_file = change_dir / "design.md"
@@ -177,16 +173,10 @@ class SpecValidator:
                 warnings.extend(result.warnings)
                 info.extend(result.info)
         else:
-            warnings.append(ValidationError(
-                file=str(specs_dir),
-                message="缺少 specs/ 目录"
-            ))
+            warnings.append(ValidationError(file=str(specs_dir), message="缺少 specs/ 目录"))
 
         return ValidationResult(
-            is_valid=len(errors) == 0,
-            errors=errors,
-            warnings=warnings,
-            info=info
+            is_valid=len(errors) == 0, errors=errors, warnings=warnings, info=info
         )
 
     def assess_change_quality(self, change_id: str) -> SpecQualityReport:
@@ -202,7 +192,7 @@ class SpecValidator:
                 action_plan=[
                     {
                         "step": "创建变更提案",
-                        "command": f"super-dev spec propose {change_id} --title \"<标题>\" --description \"<描述>\"",
+                        "command": f'super-dev spec propose {change_id} --title "<标题>" --description "<描述>"',
                         "priority": "P0",
                     }
                 ],
@@ -214,8 +204,14 @@ class SpecValidator:
         action_plan: list[dict[str, str]] = []
 
         proposal_file = change_dir / "proposal.md"
-        proposal_ok = proposal_file.exists() and proposal_file.read_text(encoding="utf-8").strip() != ""
-        checks["proposal"] = {"passed": proposal_ok, "weight": 10, "reason": "" if proposal_ok else "缺少或空内容"}
+        proposal_ok = (
+            proposal_file.exists() and proposal_file.read_text(encoding="utf-8").strip() != ""
+        )
+        checks["proposal"] = {
+            "passed": proposal_ok,
+            "weight": 10,
+            "reason": "" if proposal_ok else "缺少或空内容",
+        }
 
         specs_dir = change_dir / "specs"
         spec_files = list(specs_dir.rglob("spec.md")) if specs_dir.exists() else []
@@ -223,7 +219,9 @@ class SpecValidator:
         total_scenarios = 0
         for spec_file in spec_files:
             content = spec_file.read_text(encoding="utf-8")
-            total_requirements += len(re.findall(r"^###\s+Requirement:", content, flags=re.MULTILINE))
+            total_requirements += len(
+                re.findall(r"^###\s+Requirement:", content, flags=re.MULTILINE)
+            )
             total_scenarios += len(re.findall(r"^####\s+Scenario", content, flags=re.MULTILINE))
         spec_ok = len(spec_files) > 0 and total_requirements > 0
         checks["spec"] = {
@@ -237,7 +235,11 @@ class SpecValidator:
 
         plan_file = change_dir / "plan.md"
         plan_ok = plan_file.exists() and ("## " in plan_file.read_text(encoding="utf-8"))
-        checks["plan"] = {"passed": plan_ok, "weight": 15, "reason": "" if plan_ok else "缺少 plan.md 或结构过弱"}
+        checks["plan"] = {
+            "passed": plan_ok,
+            "weight": 15,
+            "reason": "" if plan_ok else "缺少 plan.md 或结构过弱",
+        }
 
         tasks_file = change_dir / "tasks.md"
         completed_tasks = 0
@@ -292,8 +294,45 @@ class SpecValidator:
             "warnings": len(quality_validation.warnings),
         }
 
+        # 需求追溯覆盖率检查
+        from .traceability import RequirementTracer
+
+        tracer = RequirementTracer(self.project_dir)
+        traced_reqs = tracer.extract_requirements(change_id)
+        if traced_reqs:
+            traced_reqs = tracer.trace_to_code(traced_reqs)
+            traced_reqs = tracer.trace_to_tests(traced_reqs)
+            shall_reqs = [r for r in traced_reqs if r.priority in ("SHALL", "MUST")]
+            covered_shall = sum(
+                1 for r in shall_reqs if len(r.implementations) > 0 and len(r.tests) > 0
+            )
+            shall_rate = (covered_shall / len(shall_reqs) * 100) if shall_reqs else 100.0
+            traceability_ok = shall_rate >= 50.0
+            checks["traceability"] = {
+                "passed": traceability_ok,
+                "weight": 0,
+                "reason": (
+                    "" if traceability_ok else f"SHALL/MUST 需求追溯覆盖率 {shall_rate:.0f}% < 50%"
+                ),
+                "total_requirements": len(traced_reqs),
+                "shall_must_count": len(shall_reqs),
+                "shall_covered": covered_shall,
+                "shall_coverage_rate": round(shall_rate, 1),
+            }
+        else:
+            checks["traceability"] = {
+                "passed": True,
+                "weight": 0,
+                "reason": "未提取到 SHALL/MUST/SHOULD/MAY 需求",
+                "total_requirements": 0,
+            }
+
         total_weight = sum(int(str(item.get("weight", 0))) for item in checks.values())
-        earned = sum(int(str(item.get("weight", 0))) for item in checks.values() if bool(item.get("passed", False)))
+        earned = sum(
+            int(str(item.get("weight", 0)))
+            for item in checks.values()
+            if bool(item.get("passed", False))
+        )
         score = (earned / total_weight * 100) if total_weight > 0 else 0.0
 
         if score >= 90:
@@ -312,52 +351,68 @@ class SpecValidator:
 
         if not spec_ok:
             suggestions.append("先补齐至少一个 spec.md，且每个 spec 至少包含 1 个 Requirement。")
-            action_plan.append({
-                "step": "补齐规范主体",
-                "command": f"super-dev spec scaffold {change_id}",
-                "priority": "P0",
-            })
+            action_plan.append(
+                {
+                    "step": "补齐规范主体",
+                    "command": f"super-dev spec scaffold {change_id}",
+                    "priority": "P0",
+                }
+            )
         if total_scenarios <= 0:
             suggestions.append("为关键 Requirement 补充 Scenario，保证可验收。")
-            action_plan.append({
-                "step": "补充关键场景",
-                "command": f"super-dev spec add-req {change_id} <spec> <req> \"<包含场景的描述>\"",
-                "priority": "P1",
-            })
+            action_plan.append(
+                {
+                    "step": "补充关键场景",
+                    "command": f'super-dev spec add-req {change_id} <spec> <req> "<包含场景的描述>"',
+                    "priority": "P1",
+                }
+            )
         if not tasks_ok:
             suggestions.append("补齐 tasks.md 并拆分可执行任务项。")
-            action_plan.append({
-                "step": "补齐任务分解",
-                "command": f"super-dev spec scaffold {change_id} --force",
-                "priority": "P0",
-            })
+            action_plan.append(
+                {
+                    "step": "补齐任务分解",
+                    "command": f"super-dev spec scaffold {change_id} --force",
+                    "priority": "P0",
+                }
+            )
         if checklist_total <= 0:
             suggestions.append("补齐 checklist.md 并设置发布前检查项。")
-            action_plan.append({
-                "step": "补齐交付清单",
-                "command": f"super-dev spec scaffold {change_id} --force",
-                "priority": "P1",
-            })
+            action_plan.append(
+                {
+                    "step": "补齐交付清单",
+                    "command": f"super-dev spec scaffold {change_id} --force",
+                    "priority": "P1",
+                }
+            )
         if validation_ok is False:
             suggestions.append("执行 super-dev spec validate <change_id> -v 并修复结构错误。")
-            action_plan.append({
-                "step": "修复结构错误",
-                "command": f"super-dev spec validate {change_id} -v",
-                "priority": "P0",
-            })
+            action_plan.append(
+                {
+                    "step": "修复结构错误",
+                    "command": f"super-dev spec validate {change_id} -v",
+                    "priority": "P0",
+                }
+            )
         if not placeholder_free:
-            suggestions.append("移除 proposal/spec/plan/tasks/checklist 中的占位符内容，补齐真实需求与场景。")
-            action_plan.append({
-                "step": "补齐占位内容",
-                "command": f"super-dev spec quality {change_id}",
-                "priority": "P0",
-            })
+            suggestions.append(
+                "移除 proposal/spec/plan/tasks/checklist 中的占位符内容，补齐真实需求与场景。"
+            )
+            action_plan.append(
+                {
+                    "step": "补齐占位内容",
+                    "command": f"super-dev spec quality {change_id}",
+                    "priority": "P0",
+                }
+            )
         if not action_plan and score >= 90:
-            action_plan.append({
-                "step": "进入实现闭环",
-                "command": f"super-dev task run {change_id}",
-                "priority": "P2",
-            })
+            action_plan.append(
+                {
+                    "step": "进入实现闭环",
+                    "command": f"super-dev task run {change_id}",
+                    "priority": "P2",
+                }
+            )
 
         return SpecQualityReport(
             change_id=change_id,
@@ -375,7 +430,11 @@ class SpecValidator:
             return None
         candidates: list[tuple[float, str]] = []
         for change_dir in self.changes_dir.iterdir():
-            if not change_dir.is_dir() or change_dir.name.startswith(".") or change_dir.name in exclude_ids:
+            if (
+                not change_dir.is_dir()
+                or change_dir.name.startswith(".")
+                or change_dir.name in exclude_ids
+            ):
                 continue
             try:
                 timestamp = change_dir.stat().st_mtime
@@ -387,7 +446,9 @@ class SpecValidator:
         candidates.sort(key=lambda item: item[0], reverse=True)
         return candidates[0][1]
 
-    def assess_latest_change_quality(self, *, exclude_ids: set[str] | None = None) -> SpecQualityReport | None:
+    def assess_latest_change_quality(
+        self, *, exclude_ids: set[str] | None = None
+    ) -> SpecQualityReport | None:
         latest_change_id = self.latest_change_id(exclude_ids=exclude_ids)
         if not latest_change_id:
             return None
@@ -429,10 +490,9 @@ class SpecValidator:
 
         spec_file = self.specs_dir / spec_name / "spec.md"
         if not spec_file.exists():
-            errors.append(ValidationError(
-                file=str(spec_file),
-                message=f"规范文件不存在: {spec_name}"
-            ))
+            errors.append(
+                ValidationError(file=str(spec_file), message=f"规范文件不存在: {spec_name}")
+            )
             return ValidationResult(is_valid=False, errors=errors)
 
         content = spec_file.read_text(encoding="utf-8")
@@ -449,11 +509,9 @@ class SpecValidator:
             if line.startswith("# ") and not has_title:
                 has_title = True
                 if not line[2:].strip():
-                    errors.append(ValidationError(
-                        file=str(spec_file),
-                        line=i,
-                        message="标题不能为空"
-                    ))
+                    errors.append(
+                        ValidationError(file=str(spec_file), line=i, message="标题不能为空")
+                    )
 
             # 检查 Purpose 部分
             if line.startswith("## Purpose"):
@@ -467,11 +525,9 @@ class SpecValidator:
             if line.startswith("### Requirement:"):
                 has_req_keyword = True
                 if not line[16:].strip():
-                    errors.append(ValidationError(
-                        file=str(spec_file),
-                        line=i,
-                        message="需求名称不能为空"
-                    ))
+                    errors.append(
+                        ValidationError(file=str(spec_file), line=i, message="需求名称不能为空")
+                    )
 
             # 检查需求关键词
             if any(kw in line for kw in self.REQUIREMENT_KEYWORDS):
@@ -480,46 +536,40 @@ class SpecValidator:
             # 检查场景格式
             if line.startswith("#### Scenario:"):
                 if not line[14:].strip():
-                    warnings.append(ValidationError(
-                        file=str(spec_file),
-                        line=i,
-                        severity="warning",
-                        message="场景描述为空"
-                    ))
+                    warnings.append(
+                        ValidationError(
+                            file=str(spec_file), line=i, severity="warning", message="场景描述为空"
+                        )
+                    )
 
         # 验证结果
         if not has_title:
-            errors.append(ValidationError(
-                file=str(spec_file),
-                message="缺少一级标题"
-            ))
+            errors.append(ValidationError(file=str(spec_file), message="缺少一级标题"))
 
         if not has_purpose:
-            warnings.append(ValidationError(
-                file=str(spec_file),
-                severity="warning",
-                message="缺少 Purpose 部分"
-            ))
+            warnings.append(
+                ValidationError(
+                    file=str(spec_file), severity="warning", message="缺少 Purpose 部分"
+                )
+            )
 
         if not has_requirements:
-            warnings.append(ValidationError(
-                file=str(spec_file),
-                severity="warning",
-                message="缺少 Requirements 部分"
-            ))
+            warnings.append(
+                ValidationError(
+                    file=str(spec_file), severity="warning", message="缺少 Requirements 部分"
+                )
+            )
 
         if not has_req_keyword:
-            warnings.append(ValidationError(
-                file=str(spec_file),
-                severity="info",
-                message="建议使用 SHALL/MUST/SHOULD/MAY 关键词"
-            ))
+            warnings.append(
+                ValidationError(
+                    file=str(spec_file),
+                    severity="info",
+                    message="建议使用 SHALL/MUST/SHOULD/MAY 关键词",
+                )
+            )
 
-        return ValidationResult(
-            is_valid=len(errors) == 0,
-            errors=errors,
-            warnings=warnings
-        )
+        return ValidationResult(is_valid=len(errors) == 0, errors=errors, warnings=warnings)
 
     def _validate_proposal(self, proposal_file: Path) -> ValidationResult:
         """验证提案文件"""
@@ -542,24 +592,16 @@ class SpecValidator:
                     has_title = True
 
         if not has_title:
-            warnings.append(ValidationError(
-                file=str(proposal_file),
-                severity="warning",
-                message="提案缺少标题"
-            ))
+            warnings.append(
+                ValidationError(file=str(proposal_file), severity="warning", message="提案缺少标题")
+            )
 
         if not has_description:
-            warnings.append(ValidationError(
-                file=str(proposal_file),
-                severity="warning",
-                message="提案缺少描述"
-            ))
+            warnings.append(
+                ValidationError(file=str(proposal_file), severity="warning", message="提案缺少描述")
+            )
 
-        return ValidationResult(
-            is_valid=True,
-            errors=errors,
-            warnings=warnings
-        )
+        return ValidationResult(is_valid=True, errors=errors, warnings=warnings)
 
     def _validate_tasks(self, tasks_file: Path) -> ValidationResult:
         """验证任务文件"""
@@ -583,33 +625,29 @@ class SpecValidator:
 
                 # 检查任务标题
                 if not title.strip():
-                    errors.append(ValidationError(
-                        file=str(tasks_file),
-                        line=i,
-                        message="任务标题不能为空"
-                    ))
+                    errors.append(
+                        ValidationError(file=str(tasks_file), line=i, message="任务标题不能为空")
+                    )
 
         # 检查任务ID格式
         for task_id in task_ids:
             if not re.match(r"^\d+\.\d+$", task_id):
-                warnings.append(ValidationError(
-                    file=str(tasks_file),
-                    severity="warning",
-                    message=f"任务ID格式建议为 '数字.数字' 格式: {task_id}"
-                ))
+                warnings.append(
+                    ValidationError(
+                        file=str(tasks_file),
+                        severity="warning",
+                        message=f"任务ID格式建议为 '数字.数字' 格式: {task_id}",
+                    )
+                )
 
         if not task_ids:
-            warnings.append(ValidationError(
-                file=str(tasks_file),
-                severity="warning",
-                message="没有找到任何任务"
-            ))
+            warnings.append(
+                ValidationError(
+                    file=str(tasks_file), severity="warning", message="没有找到任何任务"
+                )
+            )
 
-        return ValidationResult(
-            is_valid=len(errors) == 0,
-            errors=errors,
-            warnings=warnings
-        )
+        return ValidationResult(is_valid=len(errors) == 0, errors=errors, warnings=warnings)
 
     def _validate_plan(self, plan_file: Path) -> ValidationResult:
         errors: list[ValidationError] = []
@@ -617,11 +655,13 @@ class SpecValidator:
         content = plan_file.read_text(encoding="utf-8")
         lowered = content.lower()
         if "# plan" not in lowered and "## context" not in lowered:
-            warnings.append(ValidationError(
-                file=str(plan_file),
-                severity="warning",
-                message="plan.md 建议包含 Plan/Context 章节"
-            ))
+            warnings.append(
+                ValidationError(
+                    file=str(plan_file),
+                    severity="warning",
+                    message="plan.md 建议包含 Plan/Context 章节",
+                )
+            )
         return ValidationResult(is_valid=len(errors) == 0, errors=errors, warnings=warnings)
 
     def _validate_checklist(self, checklist_file: Path) -> ValidationResult:
@@ -629,11 +669,13 @@ class SpecValidator:
         warnings: list[ValidationError] = []
         content = checklist_file.read_text(encoding="utf-8")
         if "- [ ]" not in content and "- [x]" not in content and "- [X]" not in content:
-            warnings.append(ValidationError(
-                file=str(checklist_file),
-                severity="warning",
-                message="checklist.md 建议包含可勾选项"
-            ))
+            warnings.append(
+                ValidationError(
+                    file=str(checklist_file),
+                    severity="warning",
+                    message="checklist.md 建议包含可勾选项",
+                )
+            )
         return ValidationResult(is_valid=len(errors) == 0, errors=errors, warnings=warnings)
 
     def _validate_design(self, design_file: Path) -> ValidationResult:
@@ -643,10 +685,7 @@ class SpecValidator:
         if len(content) < 10:
             return ValidationResult(
                 is_valid=False,
-                errors=[ValidationError(
-                    file=str(design_file),
-                    message="设计文件内容过少"
-                )]
+                errors=[ValidationError(file=str(design_file), message="设计文件内容过少")],
             )
         return ValidationResult(is_valid=True)
 
@@ -674,39 +713,34 @@ class SpecValidator:
             # 检查需求格式
             if line.startswith("### Requirement:"):
                 if not current_delta_type:
-                    errors.append(ValidationError(
-                        file=str(spec_file),
-                        line=i,
-                        message="需求必须在 Delta 类型 (ADDED/MODIFIED/REMOVED) 下"
-                    ))
+                    errors.append(
+                        ValidationError(
+                            file=str(spec_file),
+                            line=i,
+                            message="需求必须在 Delta 类型 (ADDED/MODIFIED/REMOVED) 下",
+                        )
+                    )
 
                 has_requirements = True
 
                 if not line[16:].strip():
-                    errors.append(ValidationError(
-                        file=str(spec_file),
-                        line=i,
-                        message="需求名称不能为空"
-                    ))
+                    errors.append(
+                        ValidationError(file=str(spec_file), line=i, message="需求名称不能为空")
+                    )
 
         if not has_delta_header:
-            errors.append(ValidationError(
-                file=str(spec_file),
-                message="缺少 Delta 类型标题 (ADDED/MODIFIED/REMOVED)"
-            ))
+            errors.append(
+                ValidationError(
+                    file=str(spec_file), message="缺少 Delta 类型标题 (ADDED/MODIFIED/REMOVED)"
+                )
+            )
 
         if not has_requirements:
-            warnings.append(ValidationError(
-                file=str(spec_file),
-                severity="warning",
-                message="没有找到任何需求"
-            ))
+            warnings.append(
+                ValidationError(file=str(spec_file), severity="warning", message="没有找到任何需求")
+            )
 
-        return ValidationResult(
-            is_valid=len(errors) == 0,
-            errors=errors,
-            warnings=warnings
-        )
+        return ValidationResult(is_valid=len(errors) == 0, errors=errors, warnings=warnings)
 
     def validate_all(self) -> ValidationResult:
         """验证所有变更"""
@@ -716,10 +750,12 @@ class SpecValidator:
         if not self.changes_dir.exists():
             return ValidationResult(
                 is_valid=False,
-                errors=[ValidationError(
-                    file=str(self.changes_dir),
-                    message="changes 目录不存在，请先运行 'super-dev spec init'"
-                )]
+                errors=[
+                    ValidationError(
+                        file=str(self.changes_dir),
+                        message="changes 目录不存在，请先运行 'super-dev spec init'",
+                    )
+                ],
             )
 
         for change_dir in self.changes_dir.iterdir():
@@ -729,7 +765,5 @@ class SpecValidator:
                 all_warnings.extend(result.warnings)
 
         return ValidationResult(
-            is_valid=len(all_errors) == 0,
-            errors=all_errors,
-            warnings=all_warnings
+            is_valid=len(all_errors) == 0, errors=all_errors, warnings=all_warnings
         )

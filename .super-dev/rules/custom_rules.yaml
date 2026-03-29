@@ -1,0 +1,35 @@
+# 项目级自定义验证规则
+# 此文件中的规则将与内置默认规则合并
+# 同 ID 的规则会覆盖默认规则；新 ID 的规则会追加
+
+rules:
+  # 示例：覆盖默认的测试覆盖率门禁（将阈值从 80% 调整为 70%）
+  # - id: TEST-001
+  #   name: 测试覆盖率门禁（项目自定义）
+  #   category: testing
+  #   severity: high
+  #   phase: quality
+  #   description: 测试覆盖率不低于 70%
+  #   check_type: metric_threshold
+  #   check_config:
+  #     metric: test_coverage_percent
+  #     min_value: 70
+
+  # 示例：添加项目专属规则
+  # - id: PROJ-001
+  #   name: 禁止使用 print 调试
+  #   category: code_quality
+  #   severity: low
+  #   phase: all
+  #   description: 生产代码应使用 logging 而非 print
+  #   check_type: content_not_contains
+  #   check_config:
+  #     file_pattern: "super_dev/**/*.py"
+  #     patterns:
+  #       - "\\bprint\\s*\\("
+  #   tags:
+  #     - debugging
+
+  # 示例：禁用某条默认规则
+  # - id: CQ-001
+  #   enabled: false

@@ -27,15 +27,19 @@ class SkillManager:
     # Official user-level skill paths confirmed by vendor docs.
     OFFICIAL_TARGET_PATHS = {
         "antigravity": "~/.gemini/skills",
+        "cline": "~/.cline/skills",
         "codebuddy-cli": "~/.codebuddy/skills",
         "codebuddy": "~/.codebuddy/skills",
-        "codex-cli": "~/.codex/skills",
+        "copilot-cli": "~/.copilot/skills",
+        "codex-cli": "~/.agents/skills",
         "iflow": "~/.iflow/skills",
         "jetbrains-ai": "~/.junie/skills",
+        "kiro-cli": "~/.kiro/skills",
+        "kiro": "~/.kiro/skills",
         "openclaw": "~/.openclaw/skills",
         "opencode": "~/.config/opencode/skills",
         "qoder-cli": "~/.qoder/skills",
-        "qoder": "~/.qoderwork/skills",
+        "qoder": "~/.qoder/skills",
         "roo-code": "~/.roo/skills",
         "windsurf": "~/.codeium/windsurf/skills",
     }
@@ -45,15 +49,11 @@ class SkillManager:
     OBSERVED_TARGET_PATHS = {
         "aider": "~/.aider/skills",
         "claude-code": "~/.claude/skills",
-        "cline": "~/.cline/skills",
-        "copilot-cli": "~/.copilot/skills",
         "cursor-cli": "~/.cursor/skills",
         "cursor": "~/.cursor/skills",
         "gemini-cli": "~/.gemini/skills",
         "kilo-code": "~/.kilocode/skills",
         "kimi-cli": "~/.kimi/skills",
-        "kiro-cli": "~/.kiro/skills",
-        "kiro": "~/.kiro/skills",
         "trae": "~/.trae/skills",
         "vscode-copilot": "~/.copilot/skills",
     }
@@ -61,6 +61,10 @@ class SkillManager:
     TARGET_PATHS = {
         **OBSERVED_TARGET_PATHS,
         **OFFICIAL_TARGET_PATHS,
+    }
+
+    COMPATIBILITY_MIRROR_PATHS = {
+        "codex-cli": ["~/.codex/skills"],
     }
 
     def __init__(self, project_dir: Path):
@@ -96,12 +100,14 @@ class SkillManager:
         return False
 
     def list_installed(self, target: str) -> list[str]:
-        base = self._target_dir(target)
-        if not base.exists():
-            return []
-        return sorted(
-            d.name for d in base.iterdir() if d.is_dir() and (d / "SKILL.md").exists()
-        )
+        names: set[str] = set()
+        for base in self._all_target_dirs(target):
+            if not base.exists():
+                continue
+            names.update(
+                d.name for d in base.iterdir() if d.is_dir() and (d / "SKILL.md").exists()
+            )
+        return sorted(names)
 
     def install(
         self,
@@ -132,6 +138,12 @@ class SkillManager:
             target_dir = base / skill_name
             self._prepare_target_dir(target_dir, force=force)
             self._write_builtin_skill(target_dir, skill_name, target)
+            self._mirror_skill_install(
+                target=target,
+                skill_name=skill_name,
+                force=force,
+                writer=lambda mirror_dir: self._write_builtin_skill(mirror_dir, skill_name, target),
+            )
             return SkillInstallResult(
                 name=skill_name,
                 target=target,
@@ -146,8 +158,20 @@ class SkillManager:
     def uninstall(self, name: str, target: str) -> Path:
         target_dir = self._target_dir(target) / name
         if not target_dir.exists():
-            raise FileNotFoundError(f"Skill not found: {name} ({target})")
+            compatibility_found = False
+            for mirror_base in self._compatibility_target_dirs(target):
+                mirror_dir = mirror_base / name
+                if mirror_dir.exists():
+                    shutil.rmtree(mirror_dir)
+                    compatibility_found = True
+            if not compatibility_found:
+                raise FileNotFoundError(f"Skill not found: {name} ({target})")
+            return target_dir
         shutil.rmtree(target_dir)
+        for mirror_base in self._compatibility_target_dirs(target):
+            mirror_dir = mirror_base / name
+            if mirror_dir.exists():
+                shutil.rmtree(mirror_dir)
         return target_dir
 
     def _target_dir(self, target: str) -> Path:
@@ -158,6 +182,30 @@ class SkillManager:
         if raw_path.is_absolute():
             return raw_path
         return self.project_dir / relative
+
+    def _compatibility_target_dirs(self, target: str) -> list[Path]:
+        paths = self.COMPATIBILITY_MIRROR_PATHS.get(target, [])
+        resolved: list[Path] = []
+        for item in paths:
+            raw_path = Path(item).expanduser()
+            resolved.append(raw_path if raw_path.is_absolute() else self.project_dir / raw_path)
+        return resolved
+
+    def _all_target_dirs(self, target: str) -> list[Path]:
+        return [self._target_dir(target), *self._compatibility_target_dirs(target)]
+
+    def _mirror_skill_install(
+        self,
+        *,
+        target: str,
+        skill_name: str,
+        force: bool,
+        writer,
+    ) -> None:
+        for mirror_base in self._compatibility_target_dirs(target):
+            mirror_dir = mirror_base / skill_name
+            self._prepare_target_dir(mirror_dir, force=force)
+            writer(mirror_dir)
 
     def _is_git_source(self, source: str) -> bool:
         return source.startswith("http://") or source.startswith("https://") or source.endswith(".git")
@@ -220,6 +268,12 @@ class SkillManager:
         target_dir = self._target_dir(target) / skill_name
         self._prepare_target_dir(target_dir, force=force)
         shutil.copytree(source_dir, target_dir)
+        self._mirror_skill_install(
+            target=target,
+            skill_name=skill_name,
+            force=force,
+            writer=lambda mirror_dir: shutil.copytree(source_dir, mirror_dir),
+        )
         return SkillInstallResult(
             name=skill_name,
             target=target,
@@ -259,6 +313,13 @@ description: Activate the Super Dev pipeline inside Codex CLI.
 ---
 # {skill_name} for Codex CLI
 
+## Direct Activation Rule（强制）
+
+- If this skill is invoked, Super Dev pipeline mode is already active.
+- Do not spend a turn saying you will read the skill first, explain the skill, or decide whether to enter the workflow.
+- Do not answer with variants of “我先读取 skill 再判断流程”.
+- If this file is loaded from `~/.codex/skills`, treat it as the compatibility mirror of the same Super Dev contract.
+
 ## 触发方式（强制）
 
 - Treat `super-dev: <需求描述>` and `super-dev：<需求描述>` as the Super Dev entry point.
@@ -287,6 +348,20 @@ description: Activate the Super Dev pipeline inside Codex CLI.
 
 - 先读取 `knowledge/`。
 - 如果存在 `output/knowledge-cache/*-knowledge-bundle.json`，必须先读取并继承其中约束。
+
+## 会话连续性契约（强制）
+
+- 若存在 `.super-dev/SESSION_BRIEF.md`，每次继续前必须先读取，并把它视为当前流程状态真源。
+- 当前流程停在确认门或返工门时，用户说“改一下”“补充”“继续改”“确认”“通过”“继续”等，都属于当前流程内动作，不得退回普通聊天。
+- 每次按用户意见修改后，必须留在当前门里，重新总结变化，并再次等待明确确认。
+- 只有用户明确说取消当前流程、重新开始、或切回普通聊天时，才允许离开当前 Super Dev 流程。
+
+## Implementation Closure Contract（强制）
+
+- 完成每轮代码修改后，必须先做一次最小 diff review，再汇报“已完成”。
+- 必须运行项目原生 build / compile / type-check / test / runtime smoke；没有对应命令时要说明原因。
+- 本轮新增函数、方法、字段、模块、日志埋点必须接入真实调用链；未接入则删除。
+- 不允许留下新增 unused code、只定义不调用的 helper、无效日志或无效兜底分支。
 
 ## Required behavior
 
@@ -327,13 +402,13 @@ description: Super Dev pipeline governance for research-first, commercial-grade 
 ---
 # {skill_name} - Super Dev AI Coding Skill
 
-> 版本: 2.1.1 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
+> 版本: 2.2.0 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
 
 ---
 
 ## Skill 角色定义
 
-你是“**超级开发战队**”的一员，由 10 位专家协同完成流水线式 AI Coding 交付。当用户调用 Super Dev 时，你需要根据任务类型自动切换专家角色：
+你是“**超级开发战队**”的一员，由 11 位专家协同完成流水线式 AI Coding 交付。当用户调用 Super Dev 时，你需要根据任务类型自动切换专家角色：
 
 ## 定位边界（强制）
 
@@ -383,10 +458,22 @@ description: Super Dev pipeline governance for research-first, commercial-grade 
 - 这些约束必须被继承到 PRD、架构、UIUX、Spec、任务拆解和实现阶段。
 - 未经用户明确确认，禁止创建 `.super-dev/changes/*`，禁止开始编码。
 - research、PRD、架构、UIUX、Spec、质量报告等要求中的产物，必须真实写入项目文件，不能只在聊天里口头描述。
+- 若存在 `.super-dev/SESSION_BRIEF.md`，每次继续前必须先读取，并把它视为当前流程状态真源。
+- 当前流程停在确认门或返工门时，用户说“改一下”“补充”“继续改”“确认”“通过”“继续”等，都属于当前流程内动作，不得退回普通聊天。
+- 每次按用户意见修改后，必须留在当前门里，重新总结变化，并再次等待明确确认。
+- 只有用户明确说取消当前流程、重新开始、或切回普通聊天时，才允许离开当前 Super Dev 流程。
 - 当用户明确表示 UI 不满意、要求改版、重做视觉、页面太 AI 味时，必须先更新 `output/*-uiux.md`，再重做前端，并重新执行 frontend runtime 与 UI review。
 - 当用户明确表示架构不合理、模块边界错误、技术方案需要重构时，必须先更新 `output/*-architecture.md`，再同步调整 Spec / tasks 与实现方案。
 - 当用户明确表示质量不达标、安全问题未解决或交付证据不完整时，必须先修复问题，重新执行 quality gate 与 `super-dev release proof-pack`，再继续后续动作。
 - 若当前项目启用了 policy / 强治理策略，不得默认建议关闭红队、降低质量阈值或跳过门禁；只有在用户明确要求降级治理强度时，才可说明风险后调整 policy。
+
+## 实现闭环契约（强制）
+
+- 完成每轮代码修改后，必须先做一次最小 diff review，再汇报“已完成”。
+- 必须运行项目原生 build / compile / type-check / test / runtime smoke；如果项目缺少某一项，要说明原因。
+- 本轮新增函数、方法、字段、模块、日志埋点必须接入真实调用链；未接入则删除，不允许只为“以后可能会用”而保留。
+- 不允许留下新增 unused code、未引用文件、只定义不调用的 helper、无效日志或无效兜底分支。
+- 如果新增日志、恢复逻辑、告警、埋点，必须验证它们会在真实路径触发，而不是只把方法写进去。
 
 ## Super Dev System Flow Contract
 

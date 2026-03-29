@@ -27,6 +27,29 @@ class SecurityIssue:
     file_path: str | None = None
     line: int | None = None
 
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "severity": self.severity,
+            "category": self.category,
+            "description": self.description,
+            "recommendation": self.recommendation,
+            "cwe": self.cwe,
+            "file_path": self.file_path,
+            "line": self.line,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> "SecurityIssue":
+        return cls(
+            severity=str(payload.get("severity", "")),
+            category=str(payload.get("category", "")),
+            description=str(payload.get("description", "")),
+            recommendation=str(payload.get("recommendation", "")),
+            cwe=str(payload.get("cwe")) if payload.get("cwe") is not None else None,
+            file_path=str(payload.get("file_path")) if payload.get("file_path") is not None else None,
+            line=int(payload.get("line")) if payload.get("line") is not None else None,
+        )
+
 
 @dataclass
 class PerformanceIssue:
@@ -38,6 +61,29 @@ class PerformanceIssue:
     impact: str = ""
     file_path: str | None = None
     line: int | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "severity": self.severity,
+            "category": self.category,
+            "description": self.description,
+            "recommendation": self.recommendation,
+            "impact": self.impact,
+            "file_path": self.file_path,
+            "line": self.line,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> "PerformanceIssue":
+        return cls(
+            severity=str(payload.get("severity", "")),
+            category=str(payload.get("category", "")),
+            description=str(payload.get("description", "")),
+            recommendation=str(payload.get("recommendation", "")),
+            impact=str(payload.get("impact", "")),
+            file_path=str(payload.get("file_path")) if payload.get("file_path") is not None else None,
+            line=int(payload.get("line")) if payload.get("line") is not None else None,
+        )
 
 
 @dataclass
@@ -51,6 +97,29 @@ class ArchitectureIssue:
     file_path: str | None = None
     line: int | None = None
 
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "severity": self.severity,
+            "category": self.category,
+            "description": self.description,
+            "recommendation": self.recommendation,
+            "adr_needed": self.adr_needed,
+            "file_path": self.file_path,
+            "line": self.line,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> "ArchitectureIssue":
+        return cls(
+            severity=str(payload.get("severity", "")),
+            category=str(payload.get("category", "")),
+            description=str(payload.get("description", "")),
+            recommendation=str(payload.get("recommendation", "")),
+            adr_needed=bool(payload.get("adr_needed", False)),
+            file_path=str(payload.get("file_path")) if payload.get("file_path") is not None else None,
+            line=int(payload.get("line")) if payload.get("line") is not None else None,
+        )
+
 
 @dataclass
 class RedTeamReport:
@@ -60,6 +129,7 @@ class RedTeamReport:
     performance_issues: list[PerformanceIssue] = field(default_factory=list)
     architecture_issues: list[ArchitectureIssue] = field(default_factory=list)
     pass_threshold: int = 70
+    scanned_files_count: int = -1  # -1 表示未设置
 
     @property
     def critical_count(self) -> int:
@@ -90,6 +160,8 @@ class RedTeamReport:
                 base_score -= 10
             elif security_issue.severity == "medium":
                 base_score -= 5
+            elif security_issue.severity in {"advisory", "info"}:
+                base_score -= 0
             else:
                 base_score -= 2
 
@@ -100,6 +172,8 @@ class RedTeamReport:
                 base_score -= 8
             elif performance_issue.severity == "medium":
                 base_score -= 4
+            elif performance_issue.severity in {"advisory", "info"}:
+                base_score -= 0
             else:
                 base_score -= 1
 
@@ -110,6 +184,8 @@ class RedTeamReport:
                 base_score -= 8
             elif architecture_issue.severity == "medium":
                 base_score -= 4
+            elif architecture_issue.severity in {"advisory", "info"}:
+                base_score -= 0
             else:
                 base_score -= 1
 
@@ -148,7 +224,9 @@ class RedTeamReport:
             "",
         ]
 
-        if not self.passed:
+        if self.scanned_files_count == 0:
+            lines.append("**状态**: 待代码实现后重新审查 - 当前项目没有源码文件可扫描，红队审查基于架构配置和文档进行基线评估。")
+        elif not self.passed:
             lines.append("**状态**: 未通过质量门禁 - 需要修复关键问题后重新审查")
         elif self.total_score < 80:
             lines.append("**状态**: 有条件通过 - 建议修复 High 级别问题")
@@ -213,9 +291,41 @@ class RedTeamReport:
 
         lines.extend(["", "---", ""])
 
+        # 声明式规则检测结果
+        decl_issues: list[SecurityIssue | PerformanceIssue | ArchitectureIssue] = [
+            i for i in self.security_issues + self.performance_issues + self.architecture_issues
+            if i.description.startswith("[RT-")
+        ]
+        lines.extend([
+            "## 4. 声明式规则检测结果",
+            "",
+        ])
+        if not decl_issues:
+            lines.append("未加载声明式规则或未检测到匹配项。")
+        else:
+            lines.append(f"共检测到 **{len(decl_issues)}** 条声明式规则命中：")
+            lines.append("")
+            lines.append("| 规则 ID | 严重性 | 描述 | 文件 | 建议 |")
+            lines.append("|:---|:---|:---|:---|:---|")
+            for issue in decl_issues:
+                # 从 description 中提取规则 ID，格式为 [RT-XXX-NNN]
+                rule_id_match = re.match(r"\[(RT-[A-Z]+-\d+)\]", issue.description)
+                rule_id = rule_id_match.group(1) if rule_id_match else "-"
+                file_ref = getattr(issue, "file_path", None) or "-"
+                if file_ref != "-":
+                    file_ref = Path(file_ref).name
+                    line_val = getattr(issue, "line", None)
+                    if line_val:
+                        file_ref = f"{file_ref}:{line_val}"
+                lines.append(
+                    f"| {rule_id} | {issue.severity} | {issue.description} | {file_ref} | {issue.recommendation} |"
+                )
+
+        lines.extend(["", "---", ""])
+
         # 改进建议
         lines.extend([
-            "## 4. 改进建议",
+            "## 5. 改进建议",
             "",
             "### 优先级 P0 (立即修复)",
             "",
@@ -256,6 +366,120 @@ class RedTeamReport:
 
         return "\n".join(lines)
 
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "project_name": self.project_name,
+            "pass_threshold": self.pass_threshold,
+            "critical_count": self.critical_count,
+            "high_count": self.high_count,
+            "total_score": self.total_score,
+            "passed": self.passed,
+            "scanned_files_count": self.scanned_files_count,
+            "blocking_reasons": list(self.blocking_reasons),
+            "security_issues": [item.to_dict() for item in self.security_issues],
+            "performance_issues": [item.to_dict() for item in self.performance_issues],
+            "architecture_issues": [item.to_dict() for item in self.architecture_issues],
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> "RedTeamReport":
+        return cls(
+            project_name=str(payload.get("project_name", "")),
+            pass_threshold=int(payload.get("pass_threshold", 70)),
+            scanned_files_count=int(payload.get("scanned_files_count", -1)),
+            security_issues=[
+                SecurityIssue.from_dict(item)
+                for item in payload.get("security_issues", [])
+                if isinstance(item, dict)
+            ],
+            performance_issues=[
+                PerformanceIssue.from_dict(item)
+                for item in payload.get("performance_issues", [])
+                if isinstance(item, dict)
+            ],
+            architecture_issues=[
+                ArchitectureIssue.from_dict(item)
+                for item in payload.get("architecture_issues", [])
+                if isinstance(item, dict)
+            ],
+        )
+
+
+@dataclass
+class RedTeamEvidence:
+    path: Path
+    passed: bool
+    total_score: int
+    pass_threshold: int
+    critical_count: int
+    blocking_reasons: list[str] = field(default_factory=list)
+    source_format: str = "json"
+
+
+def load_persisted_redteam_report(project_dir: Path, project_name: str | None = None) -> tuple[Path, RedTeamReport] | None:
+    project_dir = Path(project_dir).resolve()
+    output_dir = project_dir / "output"
+    pattern = f"{project_name}-redteam.json" if project_name else "*-redteam.json"
+    candidates = sorted(output_dir.glob(pattern))
+    if not candidates:
+        return None
+    file_path = max(candidates, key=lambda path: path.stat().st_mtime)
+    try:
+        payload = json.loads(file_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return file_path, RedTeamReport.from_dict(payload)
+
+
+def load_redteam_evidence(project_dir: Path, project_name: str | None = None) -> RedTeamEvidence | None:
+    persisted = load_persisted_redteam_report(project_dir, project_name)
+    if persisted is not None:
+        file_path, report = persisted
+        return RedTeamEvidence(
+            path=file_path,
+            passed=report.passed,
+            total_score=report.total_score,
+            pass_threshold=report.pass_threshold,
+            critical_count=report.critical_count,
+            blocking_reasons=list(report.blocking_reasons),
+            source_format="json",
+        )
+
+    project_dir = Path(project_dir).resolve()
+    output_dir = project_dir / "output"
+    pattern = f"{project_name}-redteam.md" if project_name else "*-redteam.md"
+    candidates = sorted(output_dir.glob(pattern))
+    if not candidates:
+        return None
+    file_path = max(candidates, key=lambda path: path.stat().st_mtime)
+    text = file_path.read_text(encoding="utf-8", errors="ignore")
+    critical_match = re.search(r"Critical 问题\*\*:\s*(\d+)", text)
+    score_match = re.search(r"总分\*\*:\s*(\d+)/100", text)
+    threshold_match = re.search(r"通过阈值\*\*:\s*(\d+)", text)
+    critical_count = int(critical_match.group(1)) if critical_match else 0
+    total_score = int(score_match.group(1)) if score_match else 0
+    pass_threshold = int(threshold_match.group(1)) if threshold_match else 70
+    status_passed = "未通过质量门禁" not in text and ("通过 - 质量良好" in text or "有条件通过" in text)
+    if not score_match and status_passed:
+        total_score = pass_threshold
+    passed = "未通过质量门禁" not in text and critical_count == 0 and total_score >= pass_threshold
+    blocking_reasons: list[str] = []
+    if critical_count > 0:
+        blocking_reasons.append(f"存在 {critical_count} 个 critical 问题")
+    if total_score < pass_threshold:
+        blocking_reasons.append(f"红队评分 {total_score} 低于阈值 {pass_threshold}")
+    return RedTeamEvidence(
+        path=file_path,
+        passed=passed,
+        total_score=total_score,
+        pass_threshold=pass_threshold,
+        critical_count=critical_count,
+        blocking_reasons=blocking_reasons,
+        source_format="markdown",
+    )
+
 
 class RedTeamReviewer:
     """红队审查器"""
@@ -264,7 +488,7 @@ class RedTeamReviewer:
     _SKIP_DIRS = {
         ".git", ".idea", ".vscode", "node_modules", "__pycache__", ".pytest_cache",
         ".mypy_cache", ".ruff_cache", "dist", "build", "output", ".super-dev", "logs",
-        ".venv", "venv", ".tox", ".cache", "coverage", "htmlcov", ".next", ".nuxt",
+        ".venv", "venv", ".tox", ".cache", "coverage", "htmlcov", ".next", ".nuxt", "out",
     }
     _PREFERRED_SCAN_DIRS = (
         "backend", "frontend", "src", "app", "server", "api", "services", "lib", "super_dev"
@@ -286,10 +510,174 @@ class RedTeamReviewer:
             "false",
             "no",
         }
+        self._redteam_rules = self._load_redteam_rules()
+        self._expert_rules = self._load_expert_rules()
+
+    def _load_redteam_rules(self) -> list[dict]:
+        """从 YAML 加载声明式红队规则"""
+        rules_path = Path(__file__).parent / "rules" / "redteam_rules.yaml"
+        if rules_path.exists():
+            try:
+                import yaml
+
+                with open(rules_path, encoding="utf-8") as f:
+                    data = yaml.safe_load(f)
+                    if isinstance(data, dict):
+                        return data.get("redteam_rules", [])
+            except Exception:
+                pass
+        return []
+
+    def _load_expert_rules(self) -> list[str] | None:
+        """尝试加载安全专家工具箱中的红队规则 ID 列表"""
+        try:
+            from ..experts.toolkit import load_expert_toolkits
+
+            toolkits = load_expert_toolkits()
+            security_toolkit = toolkits.get("SECURITY")
+            if security_toolkit and hasattr(security_toolkit, "rules"):
+                return security_toolkit.rules.redteam_rule_ids or None
+        except Exception:
+            pass
+        return None
+
+    def _scan_declarative_rules(self) -> tuple[
+        list[SecurityIssue], list[PerformanceIssue], list[ArchitectureIssue]
+    ]:
+        """使用声明式规则扫描源码文件，返回按类别分类的问题列表"""
+        security_issues: list[SecurityIssue] = []
+        performance_issues: list[PerformanceIssue] = []
+        architecture_issues: list[ArchitectureIssue] = []
+
+        if not self._redteam_rules:
+            return security_issues, performance_issues, architecture_issues
+
+        # 如果有专家工具箱规则 ID，只扫描匹配的规则子集
+        active_rule_ids: set[str] | None = None
+        if self._expert_rules:
+            candidate_rule_ids = {
+                str(rule.get("id", "")).strip()
+                for rule in self._redteam_rules
+                if str(rule.get("id", "")).strip()
+            }
+            expert_rule_ids = {str(item).strip() for item in self._expert_rules if str(item).strip()}
+            # 自定义或测试注入规则时，如果和专家规则集完全不相交，不应把全部规则过滤掉。
+            if candidate_rule_ids & expert_rule_ids:
+                active_rule_ids = expert_rule_ids
+
+        # 预编译规则的正则模式
+        compiled_rules: list[tuple[dict, list[re.Pattern]]] = []
+        for rule in self._redteam_rules:
+            rule_id = rule.get("id", "")
+            if active_rule_ids is not None and rule_id not in active_rule_ids:
+                continue
+            patterns = rule.get("patterns", [])
+            compiled = []
+            for pat in patterns:
+                try:
+                    compiled.append(re.compile(pat))
+                except re.error:
+                    continue
+            if compiled or rule.get("check_type"):
+                compiled_rules.append((rule, compiled))
+
+        if not compiled_rules:
+            return security_issues, performance_issues, architecture_issues
+
+        issue_keys: set[tuple[str, str]] = set()
+
+        for file_path, content in self._iter_source_files_with_content():
+            if self._is_yaml_file(file_path):
+                continue
+
+            line_count = content.count("\n") + 1
+
+            for rule, patterns in compiled_rules:
+                rule_id = rule.get("id", "")
+                rule_name = rule.get("name", rule_id)
+                severity = rule.get("severity", "medium")
+                category = rule.get("category", "security")
+                description = rule.get("description", "")
+                recommendation = rule.get("recommendation", "")
+                cwe = rule.get("cwe")
+                check_type = rule.get("check_type")
+
+                # 文件行数检查（特殊规则类型）
+                if check_type == "file_line_count":
+                    max_lines = rule.get("check_config", {}).get("max_lines", 500)
+                    if line_count > max_lines:
+                        issue_key = (str(file_path), rule_id)
+                        if issue_key in issue_keys:
+                            continue
+                        issue_keys.add(issue_key)
+                        architecture_issues.append(ArchitectureIssue(
+                            severity=severity,
+                            category="可维护性",
+                            description=f"[{rule_id}] {rule_name}: {file_path.name} ({line_count} 行 > {max_lines})",
+                            recommendation=recommendation,
+                            adr_needed=True,
+                            file_path=str(file_path),
+                            line=1,
+                        ))
+                    continue
+
+                # 正则模式匹配
+                for pattern in patterns:
+                    match = pattern.search(content)
+                    if not match:
+                        continue
+                    issue_key = (str(file_path), rule_id)
+                    if issue_key in issue_keys:
+                        break
+                    issue_keys.add(issue_key)
+                    line_no = self._line_number_from_offset(content, match.start())
+
+                    if category == "security":
+                        security_issues.append(SecurityIssue(
+                            severity=severity,
+                            category=rule_name,
+                            description=f"[{rule_id}] {description}: {file_path.name}:{line_no}",
+                            recommendation=recommendation,
+                            cwe=cwe,
+                            file_path=str(file_path),
+                            line=line_no,
+                        ))
+                    elif category == "performance":
+                        performance_issues.append(PerformanceIssue(
+                            severity=severity,
+                            category=rule_name,
+                            description=f"[{rule_id}] {description}: {file_path.name}:{line_no}",
+                            recommendation=recommendation,
+                            impact="声明式规则检测",
+                            file_path=str(file_path),
+                            line=line_no,
+                        ))
+                    elif category == "architecture":
+                        architecture_issues.append(ArchitectureIssue(
+                            severity=severity,
+                            category=rule_name,
+                            description=f"[{rule_id}] {description}: {file_path.name}:{line_no}",
+                            recommendation=recommendation,
+                            adr_needed=severity in ("critical", "high"),
+                            file_path=str(file_path),
+                            line=line_no,
+                        ))
+                    break  # 每条规则每个文件只报一次
+
+        return security_issues, performance_issues, architecture_issues
 
     def review(self) -> RedTeamReport:
         """执行完整红队审查"""
         report = RedTeamReport(project_name=self.name)
+
+        # 记录扫描的源码文件数量
+        try:
+            source_files = self._iter_source_files_with_content()
+            report.scanned_files_count = sum(
+                1 for file_path, _content in source_files if not self._is_yaml_file(file_path)
+            )
+        except Exception:
+            report.scanned_files_count = 0
 
         # 安全审查
         report.security_issues = self._review_security()
@@ -299,6 +687,21 @@ class RedTeamReviewer:
 
         # 架构审查
         report.architecture_issues = self._review_architecture()
+
+        # 声明式规则增量扫描
+        decl_sec, decl_perf, decl_arch = self._scan_declarative_rules()
+        report.security_issues.extend(decl_sec)
+        report.performance_issues.extend(decl_perf)
+        report.architecture_issues.extend(decl_arch)
+
+        # 依赖安全扫描
+        report.security_issues.extend(self._review_dependency_security())
+
+        # API 安全扫描
+        report.security_issues.extend(self._review_api_security())
+
+        # 密钥泄漏深度扫描
+        report.security_issues.extend(self._review_secrets_deep())
 
         return report
 
@@ -318,7 +721,7 @@ class RedTeamReviewer:
              "避免 eval/exec，使用安全解析器或受限表达式引擎"),
             ("动态命令", re.compile(r"child_process\.exec\s*\("), "CWE-78",
              "改用 execFile/spawn 并限定允许命令集合"),
-            ("SQL 注入", re.compile(r'(?i)(select|insert|update|delete)[^\n]{0,120}\+'), "CWE-89",
+            ("SQL 注入", re.compile(r'(?i)(select\s+.+\s+from|insert\s+into|update\s+\w+\s+set|delete\s+from)[^\n]{0,160}\+'), "CWE-89",
              "避免字符串拼接 SQL，统一使用参数化查询/ORM"),
         ]
 
@@ -370,14 +773,14 @@ class RedTeamReviewer:
         # 2. 框架级最低安全基线（中低风险建议）
         if self.backend != "none":
             issues.append(SecurityIssue(
-                severity="medium",
+                severity="advisory",
                 category="认证",
                 description="建议统一鉴权中间件并对关键接口做细粒度权限控制",
                 recommendation="采用 JWT/Session + RBAC/ABAC，补充关键操作审计日志",
                 cwe="CWE-287",
             ))
             issues.append(SecurityIssue(
-                severity="medium",
+                severity="advisory",
                 category="速率限制",
                 description="建议对登录、注册、重置密码等敏感接口启用限流",
                 recommendation="采用令牌桶/滑动窗口算法并记录触发日志",
@@ -448,7 +851,7 @@ class RedTeamReviewer:
                 issue_keys.add((str(file_path), "数据库"))
                 line_no = self._line_number_from_offset(content, n_plus_one_match.start())
                 issues.append(PerformanceIssue(
-                    severity="medium",
+                    severity="low",
                     category="数据库",
                     description=f"疑似 N+1 查询模式: {file_path.name}:{line_no}",
                     recommendation="批量查询或预加载关联数据，减少循环内 DB 调用",
@@ -459,7 +862,7 @@ class RedTeamReviewer:
 
             if line_count > 1200:
                 issues.append(PerformanceIssue(
-                    severity="medium",
+                    severity="low",
                     category="代码结构",
                     description=f"超大文件可能影响维护与性能优化: {file_path.name} ({line_count} 行)",
                     recommendation="拆分模块并隔离热点路径，便于单点性能调优",
@@ -469,7 +872,7 @@ class RedTeamReviewer:
         # 基线建议
         if self.backend != "none":
             issues.append(PerformanceIssue(
-                severity="medium",
+                severity="low",
                 category="数据库",
                 description="建议关键查询路径补齐索引与慢查询观测",
                 recommendation="建立慢查询阈值与索引基线，持续回归",
@@ -477,7 +880,7 @@ class RedTeamReviewer:
             ))
         if self.frontend != "none":
             issues.append(PerformanceIssue(
-                severity="medium",
+                severity="low",
                 category="前端",
                 description="建议实施代码分割与静态资源缓存策略",
                 recommendation="按路由拆包并配置长期缓存 + 指纹文件名",
@@ -524,7 +927,7 @@ class RedTeamReviewer:
         ]
         if not any(p.exists() for p in ci_files):
             issues.append(ArchitectureIssue(
-                severity="medium",
+                severity="low",
                 category="工程化",
                 description="未检测到 CI/CD 主流程配置",
                 recommendation="补齐至少一套 CI 流水线并将质量门禁前置",
@@ -540,7 +943,7 @@ class RedTeamReviewer:
                 largest_lines = line_count
         if largest_file and largest_lines > 2000:
             issues.append(ArchitectureIssue(
-                severity="high",
+                severity="medium",
                 category="可维护性",
                 description=f"检测到超大单体文件: {largest_file.name} ({largest_lines} 行)",
                 recommendation="按业务边界拆分模块并定义明确接口契约",
@@ -654,11 +1057,21 @@ class RedTeamReviewer:
     def _looks_like_placeholder(self, value: str) -> bool:
         lowered = value.lower()
         placeholder_markers = (
-            "your-", "example", "placeholder", "changeme", "<value>", "*****", "dummy"
+            "your-",
+            "your_",
+            "your api",
+            "example",
+            "placeholder",
+            "changeme",
+            "change_me",
+            "todo",
+            "<value>",
+            "*****",
+            "dummy",
         )
         if any(marker in lowered for marker in placeholder_markers):
             return True
-        if lowered in {"password", "secret", "token", "api_key"}:
+        if lowered in {"password", "secret", "token", "api_key", "your_api_key_here"}:
             return True
         return False
 
@@ -905,3 +1318,655 @@ class RedTeamReviewer:
                 "stderr": str(e),
                 "timed_out": False,
             }
+
+    # ------------------------------------------------------------------
+    # 依赖安全扫描
+    # ------------------------------------------------------------------
+
+    # 历史投毒/恶意包黑名单（npm 生态）
+    _KNOWN_MALICIOUS_NPM_PACKAGES: set[str] = {
+        "event-stream", "ua-parser-js", "coa", "rc", "colors",
+        "faker", "flatmap-stream", "left-pad", "crossenv",
+        "mongose", "babelcli", "d3.js", "gruntcli", "http-proxy.js",
+        "jquery.js", "mariadb", "mysqljs", "node-hierarchicalsettings",
+        "node-opencv", "node-opensl", "node-openssl", "nodecaffe",
+        "nodefabric", "nodeffmpeg", "nodemailer-js", "noderequest",
+        "nodesass", "nodesqlite", "shadowsock", "smb", "sqliter",
+        "sqlserver", "tkinter",
+    }
+
+    # PyPI 已知恶意包（供应链攻击案例）
+    _KNOWN_MALICIOUS_PYPI_PACKAGES: set[str] = {
+        "python3-dateutil", "jeIlyfish", "python-sqlite",
+        "libpeshka", "libari", "colourfull", "coloramma",
+        "reqeusts", "beautifulsup4", "crytpography",
+        "nmap-python", "opencv-python4", "openvc-python",
+        "python-mongo", "setuptool",
+    }
+
+    def _review_dependency_security(self) -> list[SecurityIssue]:
+        """依赖安全深度扫描：投毒检测、版本锁定、lockfile 验证。"""
+        issues: list[SecurityIssue] = []
+
+        # --- npm 生态检查 ---
+        for pkg_json_path in self._find_package_json_files():
+            try:
+                pkg_data = json.loads(pkg_json_path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+
+            all_deps: dict[str, str] = {}
+            for dep_key in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies"):
+                dep_section = pkg_data.get(dep_key, {})
+                if isinstance(dep_section, dict):
+                    all_deps.update(dep_section)
+
+            # 检查是否引用了已知恶意包
+            for pkg_name in all_deps:
+                lowered_name = pkg_name.lower().strip()
+                if lowered_name in self._KNOWN_MALICIOUS_NPM_PACKAGES:
+                    issues.append(SecurityIssue(
+                        severity="critical",
+                        category="供应链投毒",
+                        description=(
+                            f"依赖 '{pkg_name}' 属于已知恶意/投毒包: "
+                            f"{pkg_json_path.name}"
+                        ),
+                        recommendation=(
+                            f"立即移除 '{pkg_name}'，检查 lockfile 历史和 postinstall 脚本，"
+                            "确认无远程载荷执行"
+                        ),
+                        cwe="CWE-1357",
+                        file_path=str(pkg_json_path),
+                    ))
+
+            # 检查版本是否过于宽松（>=、>、*、latest）
+            loose_deps: list[str] = []
+            for pkg_name, version_spec in all_deps.items():
+                if not isinstance(version_spec, str):
+                    continue
+                version_spec_stripped = version_spec.strip()
+                if version_spec_stripped in ("*", "latest", ""):
+                    loose_deps.append(f"{pkg_name}@{version_spec_stripped or '(empty)'}")
+                elif version_spec_stripped.startswith(">=") or version_spec_stripped.startswith(">"):
+                    loose_deps.append(f"{pkg_name}@{version_spec_stripped}")
+
+            if loose_deps:
+                sample = loose_deps[:5]
+                remaining = len(loose_deps) - len(sample)
+                desc_extra = f" (及其他 {remaining} 个)" if remaining > 0 else ""
+                issues.append(SecurityIssue(
+                    severity="medium",
+                    category="版本锁定",
+                    description=(
+                        f"检测到 {len(loose_deps)} 个宽松版本范围依赖: "
+                        f"{', '.join(sample)}{desc_extra} ({pkg_json_path.name})"
+                    ),
+                    recommendation="使用精确版本号（^x.y.z 或 =x.y.z）并保持 lockfile 同步",
+                    cwe="CWE-1104",
+                    file_path=str(pkg_json_path),
+                ))
+
+            # 检查 lockfile 是否存在
+            pkg_dir = pkg_json_path.parent
+            has_lockfile = any(
+                (pkg_dir / lockname).exists()
+                for lockname in ("package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb")
+            )
+            if not has_lockfile:
+                issues.append(SecurityIssue(
+                    severity="medium",
+                    category="Lockfile 缺失",
+                    description=(
+                        f"未检测到 lockfile (package-lock.json/yarn.lock/pnpm-lock.yaml): "
+                        f"{pkg_json_path.parent.name}/"
+                    ),
+                    recommendation=(
+                        "生成并提交 lockfile 以确保依赖版本可复现，"
+                        "防止中间人替换"
+                    ),
+                    cwe="CWE-1104",
+                    file_path=str(pkg_json_path),
+                ))
+
+        # --- Python 生态检查 ---
+        pypi_deps = self._collect_python_dependencies()
+        for dep_name, dep_info in pypi_deps.items():
+            lowered_name = dep_name.lower().strip()
+            if lowered_name in self._KNOWN_MALICIOUS_PYPI_PACKAGES:
+                issues.append(SecurityIssue(
+                    severity="critical",
+                    category="供应链投毒",
+                    description=(
+                        f"Python 依赖 '{dep_name}' 属于已知恶意/投毒包 "
+                        f"({dep_info.get('source', 'unknown')})"
+                    ),
+                    recommendation=(
+                        f"立即移除 '{dep_name}'，检查安装后脚本和环境变量泄露，"
+                        "核实包名拼写是否正确"
+                    ),
+                    cwe="CWE-1357",
+                    file_path=dep_info.get("file"),
+                ))
+
+            # 检查 Python 依赖版本是否过于宽松
+            version_spec = dep_info.get("version", "")
+            if version_spec and (">=" in version_spec and "," not in version_spec):
+                issues.append(SecurityIssue(
+                    severity="low",
+                    category="版本锁定",
+                    description=(
+                        f"Python 依赖 '{dep_name}' 版本范围过于宽松: {version_spec} "
+                        f"({dep_info.get('source', 'unknown')})"
+                    ),
+                    recommendation="使用上限约束（如 >=1.0,<2.0）或 pin 精确版本",
+                    cwe="CWE-1104",
+                    file_path=dep_info.get("file"),
+                ))
+
+        # 检查 Python lockfile
+        python_lock_files = ("uv.lock", "poetry.lock", "Pipfile.lock", "requirements.txt")
+        has_python_lock = any(
+            (self.project_dir / lockname).exists()
+            for lockname in python_lock_files
+        )
+        pyproject_exists = (self.project_dir / "pyproject.toml").exists()
+        if pyproject_exists and not has_python_lock:
+            issues.append(SecurityIssue(
+                severity="medium",
+                category="Lockfile 缺失",
+                description="Python 项目未检测到依赖锁定文件 (uv.lock/poetry.lock/Pipfile.lock)",
+                recommendation="使用 uv lock / poetry lock / pip-compile 生成锁定文件并提交版本控制",
+                cwe="CWE-1104",
+                file_path=str(self.project_dir / "pyproject.toml"),
+            ))
+
+        # --- 依赖安全评分 ---
+        dep_score = 100
+        for issue in issues:
+            if issue.severity == "critical":
+                dep_score -= 25
+            elif issue.severity == "high":
+                dep_score -= 15
+            elif issue.severity == "medium":
+                dep_score -= 8
+            else:
+                dep_score -= 3
+        dep_score = max(0, dep_score)
+
+        # 如果扫描发现了问题且评分低于 60，补充一条汇总
+        if issues and dep_score < 60:
+            issues.append(SecurityIssue(
+                severity="high",
+                category="依赖安全汇总",
+                description=f"依赖安全评分: {dep_score}/100，存在 {len(issues)} 个供应链风险项",
+                recommendation="优先修复 critical/high 级别的供应链问题后重新扫描",
+                cwe="CWE-1104",
+            ))
+
+        return issues
+
+    def _find_package_json_files(self) -> list[Path]:
+        """在项目中查找 package.json 文件（排除 node_modules）。"""
+        results: list[Path] = []
+        for dirpath, dirnames, filenames in os.walk(self.project_dir):
+            dirnames[:] = [d for d in dirnames if d not in {"node_modules", ".git", "dist", "build", ".next"}]
+            if "package.json" in filenames:
+                results.append(Path(dirpath) / "package.json")
+            if len(results) >= 20:
+                break
+        return results
+
+    def _collect_python_dependencies(self) -> dict[str, dict[str, str | None]]:
+        """收集 Python 项目的依赖信息（从 pyproject.toml 和 requirements*.txt）。"""
+        deps: dict[str, dict[str, str | None]] = {}
+
+        # 从 pyproject.toml 解析
+        pyproject_path = self.project_dir / "pyproject.toml"
+        if pyproject_path.exists():
+            try:
+                content = pyproject_path.read_text(encoding="utf-8")
+                # 简化解析：匹配 dependencies 列表中的包名
+                dep_pattern = re.compile(r'"([a-zA-Z0-9_-]+)\s*([><=!~]+[^"]*)?(?:\[.*?\])?"')
+                in_deps = False
+                for line in content.splitlines():
+                    stripped = line.strip()
+                    if stripped.startswith("dependencies") and "=" in stripped:
+                        in_deps = True
+                        continue
+                    if in_deps:
+                        if stripped == "]":
+                            in_deps = False
+                            continue
+                        match = dep_pattern.search(stripped)
+                        if match:
+                            pkg_name = match.group(1)
+                            version_spec = match.group(2) or ""
+                            deps[pkg_name] = {
+                                "version": version_spec,
+                                "source": "pyproject.toml",
+                                "file": str(pyproject_path),
+                            }
+            except Exception:
+                pass
+
+        # 从 requirements*.txt 解析
+        for req_file in self.project_dir.glob("requirements*.txt"):
+            try:
+                for line in req_file.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if not line or line.startswith("#") or line.startswith("-"):
+                        continue
+                    match = re.match(r"^([a-zA-Z0-9_-]+)\s*([><=!~]+.*)?$", line)
+                    if match:
+                        pkg_name = match.group(1)
+                        version_spec = match.group(2) or ""
+                        if pkg_name not in deps:
+                            deps[pkg_name] = {
+                                "version": version_spec,
+                                "source": req_file.name,
+                                "file": str(req_file),
+                            }
+            except Exception:
+                continue
+
+        return deps
+
+    # ------------------------------------------------------------------
+    # API 安全扫描
+    # ------------------------------------------------------------------
+
+    # 常见未认证端点路径模式（通常不应公开的接口）
+    _SENSITIVE_UNAUTH_PATTERNS: list[tuple[str, str]] = [
+        (r"(?:@app\.|@router\.)(get|post|put|delete|patch)\s*\(\s*['\"]/(admin|internal|debug|metrics|graphql)", "敏感路径可能缺少认证"),
+        (r"router\.(get|post|put|delete|patch)\s*\(\s*['\"]/(admin|internal|debug)", "Express 敏感路由可能缺少认证中间件"),
+    ]
+
+    # CORS 宽松配置模式
+    _CORS_WILDCARD_PATTERNS: list[re.Pattern] = [
+        re.compile(r"""allow_origins\s*=\s*\[\s*["']\*["']\s*\]"""),
+        re.compile(r"""cors\s*\(\s*\{\s*origin\s*:\s*["']\*["']"""),
+        re.compile(r"""Access-Control-Allow-Origin['"]\s*[,:]\s*["']\*["']"""),
+        re.compile(r"""CORS_ORIGIN_ALLOW_ALL\s*=\s*True"""),
+        re.compile(r"""CORS_ALLOWED_ORIGINS\s*=\s*\[\s*["']\*["']\s*\]"""),
+    ]
+
+    def _review_api_security(self) -> list[SecurityIssue]:
+        """API 安全深度扫描：认证覆盖、速率限制、CORS、版本控制。"""
+        issues: list[SecurityIssue] = []
+        issue_keys: set[str] = set()
+
+        has_rate_limit = False
+        has_api_versioning = False
+        has_cors_config = False
+        unauth_endpoints: list[dict[str, str]] = []
+
+        rate_limit_patterns = [
+            re.compile(r"rate[_-]?limit", re.IGNORECASE),
+            re.compile(r"throttl", re.IGNORECASE),
+            re.compile(r"express-rate-limit"),
+            re.compile(r"slowapi|Limiter|RateLimitMiddleware", re.IGNORECASE),
+            re.compile(r"@rate_limit|@throttle", re.IGNORECASE),
+        ]
+
+        api_version_patterns = [
+            re.compile(r"""['"]/api/v\d+"""),
+            re.compile(r"""prefix\s*=\s*['"]/?v\d+"""),
+            re.compile(r"""API_VERSION|api[_-]version""", re.IGNORECASE),
+            re.compile(r"""versioning_class\s*="""),
+        ]
+
+        # 认证中间件检测
+        auth_middleware_patterns = [
+            re.compile(r"auth[_-]?middleware|authenticate|isAuthenticated|requireAuth|verify[_-]?token|jwt[_-]?required|login[_-]?required", re.IGNORECASE),
+            re.compile(r"@requires_auth|@auth_required|@jwt_required|@permission_required", re.IGNORECASE),
+            re.compile(r"passport\.authenticate|guards?\s*:\s*\[", re.IGNORECASE),
+            re.compile(r"Depends\s*\(\s*get_current_user", re.IGNORECASE),
+        ]
+
+        for file_path, content in self._iter_source_files_with_content():
+            if self._is_yaml_file(file_path):
+                continue
+
+            # 速率限制检测
+            if not has_rate_limit:
+                for pattern in rate_limit_patterns:
+                    if pattern.search(content):
+                        has_rate_limit = True
+                        break
+
+            # API 版本控制检测
+            if not has_api_versioning:
+                for pattern in api_version_patterns:
+                    if pattern.search(content):
+                        has_api_versioning = True
+                        break
+
+            # CORS 配置检测
+            if re.search(r"cors|CORS|Access-Control", content):
+                has_cors_config = True
+                for pattern in self._CORS_WILDCARD_PATTERNS:
+                    if pattern.search(content):
+                        key = f"cors-wildcard:{file_path}"
+                        if key not in issue_keys:
+                            issue_keys.add(key)
+                            line_no = 0
+                            match = pattern.search(content)
+                            if match:
+                                line_no = self._line_number_from_offset(content, match.start())
+                            issues.append(SecurityIssue(
+                                severity="high",
+                                category="CORS 配置",
+                                description=f"检测到 CORS 通配符配置 (allow_origins=*): {file_path.name}:{line_no}",
+                                recommendation="限制 CORS 允许域名为实际前端域名列表，生产环境禁止使用通配符",
+                                cwe="CWE-942",
+                                file_path=str(file_path),
+                                line=line_no,
+                            ))
+                        break
+
+            # 未认证敏感端点检测
+            for pattern_str, desc in self._SENSITIVE_UNAUTH_PATTERNS:
+                pattern = re.compile(pattern_str)
+                for match in pattern.finditer(content):
+                    # 检查同行或前几行是否有认证中间件引用
+                    match_start = match.start()
+                    context_start = max(0, match_start - 500)
+                    context = content[context_start:match_start + len(match.group(0)) + 200]
+                    has_auth_in_context = any(
+                        auth_pat.search(context) for auth_pat in auth_middleware_patterns
+                    )
+                    if not has_auth_in_context:
+                        line_no = self._line_number_from_offset(content, match_start)
+                        endpoint_key = f"unauth:{file_path}:{match.group(0)[:60]}"
+                        if endpoint_key not in issue_keys:
+                            issue_keys.add(endpoint_key)
+                            unauth_endpoints.append({
+                                "file": str(file_path),
+                                "line": str(line_no),
+                                "endpoint": match.group(0)[:80],
+                            })
+
+        # 汇总未认证端点
+        if unauth_endpoints:
+            sample = unauth_endpoints[:5]
+            details = "; ".join(
+                f"{Path(ep['file']).name}:{ep['line']}" for ep in sample
+            )
+            remaining = len(unauth_endpoints) - len(sample)
+            if remaining > 0:
+                details += f" (及其他 {remaining} 个)"
+            issues.append(SecurityIssue(
+                severity="high",
+                category="未认证端点",
+                description=f"检测到 {len(unauth_endpoints)} 个可能缺少认证的敏感端点: {details}",
+                recommendation="为所有 /admin, /internal, /debug 路径添加认证中间件，或移至内网专用端口",
+                cwe="CWE-306",
+            ))
+
+        # 速率限制缺失
+        if not has_rate_limit and self.backend != "none":
+            issues.append(SecurityIssue(
+                severity="medium",
+                category="速率限制",
+                description="未检测到 API 速率限制配置",
+                recommendation=(
+                    "为公开 API 添加速率限制中间件（express-rate-limit / slowapi / "
+                    "Nginx limit_req），防止暴力破解和 DDoS"
+                ),
+                cwe="CWE-770",
+            ))
+
+        # CORS 未配置
+        if not has_cors_config and self.backend != "none":
+            issues.append(SecurityIssue(
+                severity="medium",
+                category="CORS 配置",
+                description="未检测到显式 CORS 配置，浏览器默认同源策略可能导致合法跨域请求被拒绝",
+                recommendation="显式配置 CORS 白名单，明确允许的 origin/method/header",
+                cwe="CWE-942",
+            ))
+
+        # API 版本控制缺失
+        if not has_api_versioning and self.backend != "none":
+            issues.append(SecurityIssue(
+                severity="low",
+                category="API 版本控制",
+                description="未检测到 API 版本控制策略（如 /api/v1/）",
+                recommendation="采用 URL 路径版本（/api/v1/）或 Header 版本控制，确保向后兼容",
+                cwe=None,
+            ))
+
+        return issues
+
+    # ------------------------------------------------------------------
+    # 密钥泄漏深度扫描
+    # ------------------------------------------------------------------
+
+    # 云厂商密钥正则（高信号模式）
+    _CLOUD_KEY_PATTERNS: list[tuple[str, re.Pattern, str]] = [
+        ("AWS Access Key", re.compile(r"AKIA[0-9A-Z]{16}"), "CWE-798"),
+        ("AWS Secret Key", re.compile(r"""(?i)aws[_-]?secret[_-]?access[_-]?key\s*[:=]\s*['"]?([A-Za-z0-9/+=]{40})"""), "CWE-798"),
+        ("GCP Service Account Key", re.compile(r'"type"\s*:\s*"service_account"'), "CWE-798"),
+        ("GCP API Key", re.compile(r"AIza[0-9A-Za-z_-]{35}"), "CWE-798"),
+        ("Azure Storage Key", re.compile(r"""(?i)(AccountKey|azure[_-]?storage[_-]?key)\s*[:=]\s*['"]?([A-Za-z0-9+/=]{44,88})"""), "CWE-798"),
+        ("Azure Client Secret", re.compile(r"""(?i)AZURE[_-]?CLIENT[_-]?SECRET\s*[:=]\s*['"]?([A-Za-z0-9~._-]{34,})"""), "CWE-798"),
+        ("GitHub Token", re.compile(r"gh[pousr]_[A-Za-z0-9_]{36,}"), "CWE-798"),
+        ("Slack Token", re.compile(r"xox[bporas]-[0-9]{10,13}-[0-9]{10,13}-[A-Za-z0-9]{24,}"), "CWE-798"),
+        ("Stripe Secret Key", re.compile(r"sk_live_[0-9a-zA-Z]{24,}"), "CWE-798"),
+        ("SendGrid API Key", re.compile(r"SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}"), "CWE-798"),
+        ("Twilio Auth Token", re.compile(r"""(?i)TWILIO[_-]?AUTH[_-]?TOKEN\s*[:=]\s*['"]?([a-f0-9]{32})"""), "CWE-798"),
+        ("Generic Private Key", re.compile(r"-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----"), "CWE-321"),
+    ]
+
+    # JWT 硬编码密钥模式
+    _JWT_SECRET_PATTERNS: list[re.Pattern] = [
+        re.compile(r"""(?i)jwt[_-]?secret\s*[:=]\s*['"]([^'"]{8,})['"]"""),
+        re.compile(r"""(?i)SECRET_KEY\s*[:=]\s*['"]([^'"]{8,})['"]"""),
+        re.compile(r"""(?i)TOKEN[_-]?SECRET\s*[:=]\s*['"]([^'"]{8,})['"]"""),
+    ]
+
+    def _review_secrets_deep(self) -> list[SecurityIssue]:
+        """密钥泄漏深度扫描：.env 追踪、云密钥、JWT 硬编码、私钥文件。"""
+        issues: list[SecurityIssue] = []
+        issue_keys: set[str] = set()
+
+        # 1. 检查 .env 文件是否被 Git 跟踪
+        issues.extend(self._check_env_git_tracking())
+
+        # 2. 检查 .gitignore 是否忽略了 .env
+        issues.extend(self._check_gitignore_env())
+
+        # 3. 扫描源码中的云厂商密钥
+        for file_path, content in self._iter_source_files_with_content():
+            if self._is_yaml_file(file_path):
+                continue
+            # 跳过明显的测试/示例/模板文件
+            name_lower = file_path.name.lower()
+            if any(token in name_lower for token in ("example", "template", "sample", "mock", "fixture")):
+                continue
+
+            for key_name, pattern, cwe in self._CLOUD_KEY_PATTERNS:
+                match = pattern.search(content)
+                if not match:
+                    continue
+                # 排除注释中的示例
+                match_line_start = content.rfind("\n", 0, match.start()) + 1
+                line_content = content[match_line_start:match.end() + 50]
+                if line_content.lstrip().startswith(("#", "//", "/*", "*", "<!--")):
+                    continue
+
+                issue_key = f"cloud-key:{file_path}:{key_name}"
+                if issue_key in issue_keys:
+                    continue
+                issue_keys.add(issue_key)
+
+                line_no = self._line_number_from_offset(content, match.start())
+                issues.append(SecurityIssue(
+                    severity="critical",
+                    category="密钥泄漏",
+                    description=f"检测到疑似 {key_name}: {file_path.name}:{line_no}",
+                    recommendation=(
+                        f"立即撤销该 {key_name}，将密钥迁移到环境变量或密钥管理服务 "
+                        "(AWS Secrets Manager / HashiCorp Vault / Azure Key Vault)，"
+                        "并检查 git 历史是否有泄漏"
+                    ),
+                    cwe=cwe,
+                    file_path=str(file_path),
+                    line=line_no,
+                ))
+
+            # 4. JWT secret 硬编码检测
+            for jwt_pattern in self._JWT_SECRET_PATTERNS:
+                match = jwt_pattern.search(content)
+                if not match:
+                    continue
+                secret_value = match.group(1)
+                if self._looks_like_placeholder(secret_value):
+                    continue
+
+                issue_key = f"jwt-secret:{file_path}"
+                if issue_key in issue_keys:
+                    continue
+                issue_keys.add(issue_key)
+
+                line_no = self._line_number_from_offset(content, match.start())
+                issues.append(SecurityIssue(
+                    severity="high",
+                    category="JWT 硬编码密钥",
+                    description=f"检测到 JWT/Token 密钥硬编码: {file_path.name}:{line_no}",
+                    recommendation=(
+                        "将 JWT secret 迁移到环境变量，使用 256 位以上随机字符串，"
+                        "并实施密钥轮换机制"
+                    ),
+                    cwe="CWE-798",
+                    file_path=str(file_path),
+                    line=line_no,
+                ))
+
+        # 5. 私钥文件扫描
+        issues.extend(self._scan_private_key_files())
+
+        return issues
+
+    def _check_env_git_tracking(self) -> list[SecurityIssue]:
+        """检查 .env 文件是否被 git 跟踪。"""
+        issues: list[SecurityIssue] = []
+        git_dir = self.project_dir / ".git"
+        if not git_dir.exists():
+            return issues
+
+        # 查找所有 .env 文件
+        env_files: list[Path] = []
+        for dirpath, dirnames, filenames in os.walk(self.project_dir):
+            dirnames[:] = [d for d in dirnames if d not in {".git", "node_modules", ".venv", "venv"}]
+            for filename in filenames:
+                if filename == ".env" or (filename.startswith(".env.") and "example" not in filename.lower()):
+                    env_files.append(Path(dirpath) / filename)
+            if len(env_files) >= 20:
+                break
+
+        for env_file in env_files:
+            try:
+                rel_path = env_file.relative_to(self.project_dir)
+            except ValueError:
+                continue
+            # 检查文件是否被 git 跟踪
+            result = self._run_command(
+                ["git", "ls-files", "--error-unmatch", str(rel_path)],
+                timeout=10,
+            )
+            if result["returncode"] == 0:
+                issues.append(SecurityIssue(
+                    severity="critical",
+                    category="密钥泄漏",
+                    description=f".env 文件被 Git 跟踪: {rel_path}",
+                    recommendation=(
+                        f"立即执行 'git rm --cached {rel_path}' 移除跟踪，"
+                        "在 .gitignore 中添加 .env*，并轮换所有已泄露的密钥"
+                    ),
+                    cwe="CWE-540",
+                    file_path=str(env_file),
+                ))
+
+        return issues
+
+    def _check_gitignore_env(self) -> list[SecurityIssue]:
+        """检查 .gitignore 是否忽略了 .env 文件。"""
+        issues: list[SecurityIssue] = []
+        gitignore_path = self.project_dir / ".gitignore"
+        if not gitignore_path.exists():
+            issues.append(SecurityIssue(
+                severity="low",
+                category="密钥泄漏防护",
+                description="项目缺少 .gitignore 文件",
+                recommendation="创建 .gitignore 并至少包含 .env*、node_modules/、__pycache__/ 等条目",
+                cwe="CWE-540",
+            ))
+            return issues
+
+        try:
+            content = gitignore_path.read_text(encoding="utf-8")
+        except Exception:
+            return issues
+
+        env_ignored = False
+        for line in content.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue
+            if stripped in (".env", ".env*", ".env.*", "*.env", ".env.local", ".env.production"):
+                env_ignored = True
+                break
+
+        if not env_ignored:
+            issues.append(SecurityIssue(
+                severity="medium",
+                category="密钥泄漏防护",
+                description=".gitignore 中未检测到 .env 忽略规则",
+                recommendation="在 .gitignore 中添加 '.env*' 规则以防止意外提交密钥文件",
+                cwe="CWE-540",
+                file_path=str(gitignore_path),
+            ))
+
+        return issues
+
+    def _scan_private_key_files(self) -> list[SecurityIssue]:
+        """扫描项目中是否包含私钥文件。"""
+        issues: list[SecurityIssue] = []
+        key_extensions = {".pem", ".key", ".p12", ".pfx", ".jks", ".keystore"}
+        key_filenames = {"id_rsa", "id_ed25519", "id_ecdsa", "id_dsa"}
+
+        for dirpath, dirnames, filenames in os.walk(self.project_dir):
+            dirnames[:] = [d for d in dirnames if d not in {".git", "node_modules", ".venv", "venv"}]
+            for filename in filenames:
+                file_path = Path(dirpath) / filename
+                is_key_file = False
+
+                if file_path.suffix.lower() in key_extensions:
+                    # 排除公钥和证书文件
+                    if "public" in filename.lower() or filename.endswith(".pub"):
+                        continue
+                    is_key_file = True
+
+                if filename.lower() in key_filenames:
+                    is_key_file = True
+
+                if is_key_file:
+                    try:
+                        rel_path = file_path.relative_to(self.project_dir)
+                    except ValueError:
+                        rel_path = file_path
+                    issues.append(SecurityIssue(
+                        severity="high",
+                        category="私钥文件",
+                        description=f"检测到私钥文件: {rel_path}",
+                        recommendation=(
+                            "私钥文件不应包含在代码仓库中，"
+                            "迁移到密钥管理服务或使用 CI/CD 密钥注入"
+                        ),
+                        cwe="CWE-321",
+                        file_path=str(file_path),
+                    ))
+
+        return issues

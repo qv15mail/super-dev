@@ -17,10 +17,15 @@ class TestSkillManager:
 
     def test_target_path_kind_distinguishes_official_and_observed(self):
         assert SkillManager.target_path_kind("antigravity") == "official-user-surface"
+        assert SkillManager.target_path_kind("cline") == "official-user-surface"
         assert SkillManager.target_path_kind("qoder-cli") == "official-user-surface"
         assert SkillManager.target_path_kind("trae") == "observed-compatibility-surface"
         assert SkillManager.TARGET_PATHS["antigravity"] == "~/.gemini/skills"
-        assert SkillManager.TARGET_PATHS["qoder"] == "~/.qoderwork/skills"
+        assert SkillManager.TARGET_PATHS["cline"] == "~/.cline/skills"
+        assert SkillManager.TARGET_PATHS["codex-cli"] == "~/.agents/skills"
+        assert SkillManager.COMPATIBILITY_MIRROR_PATHS["codex-cli"] == ["~/.codex/skills"]
+        assert SkillManager.TARGET_PATHS["qoder"] == "~/.qoder/skills"
+        assert SkillManager.TARGET_PATHS["kiro"] == "~/.kiro/skills"
         assert SkillManager.TARGET_PATHS["windsurf"] == "~/.codeium/windsurf/skills"
         assert SkillManager.TARGET_PATHS["opencode"] == "~/.config/opencode/skills"
 
@@ -70,7 +75,31 @@ class TestSkillManager:
         assert "output/knowledge-cache/*-knowledge-bundle.json" in skill_content
         assert "未经用户明确确认，禁止创建 `.super-dev/changes/*`" in skill_content
         assert "super-dev：" in skill_content
+        assert ".super-dev/SESSION_BRIEF.md" in skill_content
+        assert "当前流程停在确认门或返工门时" in skill_content
         assert "super-dev-core" in manager.list_installed(target)
 
         removed = manager.uninstall("super-dev-core", target)
         assert not removed.exists()
+
+    def test_codex_builtin_skill_is_mirrored_to_compatibility_surface(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+        manager = SkillManager(temp_project_dir)
+
+        result = manager.install(source="super-dev", target="codex-cli", name="super-dev-core")
+
+        primary_skill = result.path / "SKILL.md"
+        compatibility_skill = fake_home / ".codex" / "skills" / "super-dev-core" / "SKILL.md"
+        assert primary_skill.exists()
+        assert compatibility_skill.exists()
+        primary_content = primary_skill.read_text(encoding="utf-8")
+        compatibility_content = compatibility_skill.read_text(encoding="utf-8")
+        assert "Do not answer with variants of" in primary_content
+        assert primary_content == compatibility_content
+        assert "super-dev-core" in manager.list_installed("codex-cli")
+
+        manager.uninstall("super-dev-core", "codex-cli")
+        assert not primary_skill.exists()
+        assert not compatibility_skill.exists()

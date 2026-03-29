@@ -3,7 +3,7 @@
  * 功能：OpenClaw 插件入口
  * 作用：通过 definePluginEntry 注册 Super Dev Tool 到 OpenClaw Agent
  * 创建时间：2026-03-24
- * 最后修改：2026-03-25
+ * 最后修改：2026-03-28
  */
 
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
@@ -19,6 +19,7 @@ const ALLOWED_SUBCOMMANDS = new Set([
   "onboard", "doctor", "setup", "install", "start", "detect", "update",
   "review", "release", "create", "wizard", "design", "spec", "task",
   "pipeline", "fix", "run", "status", "jump", "confirm", "policy",
+  "governance", "product-audit",
 ]);
 
 export default definePluginEntry({
@@ -282,7 +283,153 @@ export default definePluginEntry({
       },
     });
 
-    // 13. super_dev_run - 通用透传（可选 tool，带子命令白名单）
+    // 13. super_dev_governance - 治理管理
+    // CLI: super-dev governance <action>
+    api.registerTool({
+      name: "super_dev_governance",
+      label: "Super Dev Governance",
+      description:
+        "Governance management: view status, list rules, validate rules, generate knowledge report, manage ADR, view metrics, manage templates.",
+      parameters: Type.Object({
+        action: Type.String({
+          description:
+            "Subcommand: status, rules-list, rules-validate, knowledge-report, adr-generate, adr-list, metrics-show, templates-list",
+        }),
+      }),
+      async execute(_id: string, params: Record<string, unknown>) {
+        const action = String(params.action || "status");
+        const actionMap: Record<string, string[]> = {
+          "status": ["governance", "status"],
+          "rules-list": ["governance", "rules", "list"],
+          "rules-validate": ["governance", "rules", "validate"],
+          "knowledge-report": ["governance", "knowledge-report"],
+          "adr-generate": ["governance", "adr", "generate"],
+          "adr-list": ["governance", "adr", "list"],
+          "metrics-show": ["governance", "metrics", "show"],
+          "templates-list": ["governance", "templates", "list"],
+        };
+        const args = actionMap[action] || ["governance", action];
+        return formatToolResult(
+          await invokeSuperDev(args, { cwd: cwd(), bin: bin(), timeout: timeout() }),
+        );
+      },
+    });
+
+    // 14. super_dev_task - 任务管理
+    // CLI: super-dev task <action> [change-id]
+    api.registerTool({
+      name: "super_dev_task",
+      label: "Super Dev Task",
+      description: "Manage spec tasks: list tasks, run task execution, check completion status.",
+      parameters: Type.Object({
+        action: Type.String({ description: "Subcommand: list, run, status" }),
+        changeId: Type.Optional(Type.String({ description: "Change ID" })),
+      }),
+      async execute(_id: string, params: Record<string, unknown>) {
+        const args = ["task", String(params.action || "list")];
+        if (params.changeId) args.push(String(params.changeId));
+        return formatToolResult(
+          await invokeSuperDev(args, { cwd: cwd(), bin: bin(), timeout: timeout() }),
+        );
+      },
+    });
+
+    // 15. super_dev_fix - 缺陷修复
+    // CLI: super-dev fix "<description>"
+    api.registerTool({
+      name: "super_dev_fix",
+      label: "Super Dev Fix",
+      description:
+        "Start a lightweight bugfix pipeline. Skips research/docs, goes straight to spec -> implement -> quality.",
+      parameters: Type.Object({
+        description: Type.String({ description: "Bug description" }),
+      }),
+      async execute(_id: string, params: Record<string, unknown>) {
+        return formatToolResult(
+          await invokeSuperDev(["fix", String(params.description)], {
+            cwd: cwd(),
+            bin: bin(),
+            timeout: timeout(),
+          }),
+        );
+      },
+    });
+
+    // 16. super_dev_confirm - 快捷门禁确认
+    // CLI: super-dev confirm <gate>
+    api.registerTool({
+      name: "super_dev_confirm",
+      label: "Super Dev Confirm",
+      description: "Quick confirm a gate: docs, ui, architecture, quality, preview.",
+      parameters: Type.Object({
+        gate: Type.String({ description: "Gate to confirm: docs, ui, architecture, quality, preview" }),
+      }),
+      async execute(_id: string, params: Record<string, unknown>) {
+        return formatToolResult(
+          await invokeSuperDev(["confirm", String(params.gate)], {
+            cwd: cwd(),
+            bin: bin(),
+            timeout: timeout(),
+          }),
+        );
+      },
+    });
+
+    // 17. super_dev_jump - 阶段跳转
+    // CLI: super-dev jump <stage>
+    api.registerTool({
+      name: "super_dev_jump",
+      label: "Super Dev Jump",
+      description:
+        "Jump to a specific pipeline stage: research, docs, spec, frontend, backend, quality, delivery.",
+      parameters: Type.Object({
+        stage: Type.String({ description: "Target stage name or number (1-9)" }),
+      }),
+      async execute(_id: string, params: Record<string, unknown>) {
+        return formatToolResult(
+          await invokeSuperDev(["jump", String(params.stage)], {
+            cwd: cwd(),
+            bin: bin(),
+            timeout: timeout(),
+          }),
+        );
+      },
+    });
+
+    // 18. super_dev_product_audit - 产品审查
+    // CLI: super-dev product-audit
+    api.registerTool({
+      name: "super_dev_product_audit",
+      label: "Super Dev Product Audit",
+      description:
+        "Run a comprehensive product audit: feature gaps, user journey completeness, delivery credibility.",
+      parameters: Type.Object({}),
+      async execute(_id: string, _params: Record<string, unknown>) {
+        return formatToolResult(
+          await invokeSuperDev(["product-audit"], { cwd: cwd(), bin: bin(), timeout: timeout() }),
+        );
+      },
+    });
+
+    // 19. super_dev_metrics - 度量查看
+    // CLI: super-dev metrics [--format FORMAT]
+    api.registerTool({
+      name: "super_dev_metrics",
+      label: "Super Dev Metrics",
+      description: "View pipeline metrics, quality trends, and DORA indicators.",
+      parameters: Type.Object({
+        format: Type.Optional(Type.String({ description: "Output format: text, json" })),
+      }),
+      async execute(_id: string, params: Record<string, unknown>) {
+        const args = ["metrics"];
+        if (params.format) args.push("--format", String(params.format));
+        return formatToolResult(
+          await invokeSuperDev(args, { cwd: cwd(), bin: bin(), timeout: timeout() }),
+        );
+      },
+    });
+
+    // 20. super_dev_run - 通用透传（可选 tool，带子命令白名单）
     api.registerTool(
       {
         name: "super_dev_run",

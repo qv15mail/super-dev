@@ -8,6 +8,7 @@ Super Dev Spec-Driven Development (SDD) 模块
 最后修改：2025-12-30
 """
 
+from .consistency_checker import ConsistencyIssue, ConsistencyReport, SpecConsistencyChecker
 from .generator import SpecGenerator
 from .manager import ChangeManager, SpecManager
 from .models import (
@@ -22,6 +23,7 @@ from .models import (
     Task,
     TaskStatus,
 )
+from .traceability import RequirementTracer, TraceabilityMatrix, TracedRequirement
 from .validator import SpecQualityReport, SpecValidator, ValidationError, ValidationResult
 
 __all__ = [
@@ -42,4 +44,10 @@ __all__ = [
     "SpecQualityReport",
     "ValidationResult",
     "ValidationError",
+    "RequirementTracer",
+    "TraceabilityMatrix",
+    "TracedRequirement",
+    "SpecConsistencyChecker",
+    "ConsistencyReport",
+    "ConsistencyIssue",
 ]

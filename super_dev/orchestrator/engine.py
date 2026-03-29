@@ -28,6 +28,18 @@ from ..exceptions import PhaseExecutionError, QualityGateError
 from ..terminal import create_console
 from ..utils import get_logger
 
+try:
+    from .knowledge_pusher import KnowledgePusher
+    KNOWLEDGE_PUSHER_AVAILABLE = True
+except ImportError:
+    KNOWLEDGE_PUSHER_AVAILABLE = False
+
+try:
+    from .governance import PipelineGovernance
+    GOVERNANCE_AVAILABLE = True
+except ImportError:
+    GOVERNANCE_AVAILABLE = False
+
 
 class Phase(Enum):
     """工作流阶段"""
@@ -86,6 +98,32 @@ class WorkflowEngine:
         # 注册默认阶段处理器
         self._register_default_handlers()
 
+        # 初始化治理层（可选，不影响 pipeline 正常运行）
+        self.governance = None
+        if GOVERNANCE_AVAILABLE:
+            try:
+                self.governance = PipelineGovernance(self.project_dir)
+            except Exception as e:
+                self.logger.warning(f"治理层初始化失败，pipeline 将在无治理模式下运行: {e}")
+
+        # 初始化知识推送引擎（可选，不影响 pipeline 正常运行）
+        self.knowledge_pusher = None
+        if KNOWLEDGE_PUSHER_AVAILABLE:
+            try:
+                knowledge_dir = self.project_dir / "knowledge"
+                tech_stack = {
+                    "frontend": self.config_manager.config.frontend or "",
+                    "backend": self.config_manager.config.backend or "",
+                    "database": self.config_manager.config.database or "",
+                }
+                self.knowledge_pusher = KnowledgePusher(
+                    knowledge_dir=knowledge_dir,
+                    tech_stack=tech_stack,
+                    project_description=self.config_manager.config.description or "",
+                )
+            except Exception as e:
+                self.logger.warning(f"知识推送引擎初始化失败，pipeline 将在无推送模式下运行: {e}")
+
         self.logger.info("工作流引擎初始化完成", extra={'project_dir': str(self.project_dir)})
 
     def _register_default_handlers(self) -> None:
@@ -139,6 +177,76 @@ class WorkflowEngine:
             for f in self._checkpoint_dir.glob("*.json"):
                 f.unlink(missing_ok=True)
 
+    def _restore_phase_outputs(self, phase: Phase, context: WorkflowContext) -> None:
+        """恢复已完成阶段的输出数据到 context，供后续阶段使用。
+
+        在 --resume 模式下，已完成的阶段会被跳过，但后续阶段可能依赖这些阶段
+        写入 context 的数据（如 knowledge_bundle、documents、quality_reports）。
+        此方法从 output/ 目录重新加载关键数据。
+        """
+        output_dir = context.project_dir / "output"
+        if not output_dir.exists():
+            return
+
+        config_obj = getattr(context, "config", None)
+        config_data = getattr(config_obj, "config", config_obj)
+        name = str(
+            context.user_input.get(
+                "name", getattr(config_data, "name", None) or context.project_dir.name
+            )
+        )
+
+        if phase == Phase.DISCOVERY:
+            # 恢复知识缓存 bundle
+            cache_dir = output_dir / "knowledge-cache"
+            if cache_dir.exists():
+                for bundle_file in cache_dir.glob("*-knowledge-bundle.json"):
+                    try:
+                        data = json.loads(bundle_file.read_text(encoding="utf-8"))
+                        context.research_data["knowledge_bundle"] = data
+                        # 恢复 enriched_description（discovery 阶段会写入此字段）
+                        enriched = data.get("enriched_requirement")
+                        if enriched:
+                            context.user_input["enriched_description"] = enriched
+                        # 恢复知识增强标记
+                        context.user_input["knowledge_enhanced"] = bool(
+                            data.get("local_knowledge") or data.get("local_items")
+                        )
+                        context.user_input["web_research"] = bool(
+                            data.get("web_knowledge") or data.get("web_items")
+                        )
+                        break
+                    except Exception:
+                        pass
+
+        elif phase == Phase.INTELLIGENCE:
+            # intelligence 阶段的数据是联网检索结果，无持久化文件
+            # 确保 research_data 中有 intelligence 键，避免后续访问出错
+            if "intelligence" not in context.research_data:
+                context.research_data["intelligence"] = {
+                    "trends": [],
+                    "competitors": [],
+                    "best_practices": [],
+                }
+
+        elif phase == Phase.DRAFTING:
+            # 恢复三大文档（PRD / architecture / UIUX）
+            for doc_type in ("prd", "architecture", "uiux"):
+                doc_path = output_dir / f"{name}-{doc_type}.md"
+                if doc_path.exists():
+                    context.documents[doc_type] = doc_path.read_text(encoding="utf-8")
+
+        elif phase == Phase.REDTEAM:
+            # 恢复红队报告元数据（QA 阶段依赖 context.quality_reports["redteam"]）
+            redteam_json_path = output_dir / f"{name}-redteam.json"
+            if redteam_json_path.exists():
+                try:
+                    context.quality_reports["redteam"] = json.loads(
+                        redteam_json_path.read_text(encoding="utf-8")
+                    )
+                except Exception:
+                    pass
+
     async def run(
         self,
         phases: list[Phase] | None = None,
@@ -156,6 +264,14 @@ class WorkflowEngine:
 
         if phases is None:
             phases = self._get_phases_from_config()
+
+        # 启动治理层
+        project_name = context.user_input.get("name", self.config_manager.config.name or "project")
+        if self.governance:
+            try:
+                self.governance.start_governance(project_name)
+            except Exception as e:
+                self.logger.warning(f"治理层启动失败，继续无治理模式: {e}")
 
         results = {}
         if not resume:
@@ -189,11 +305,37 @@ class WorkflowEngine:
                             f"[blue]↪[/blue] {phase.value}: "
                             f"已恢复 (跳过，上次耗时 {checkpoint.get('duration', 0):.1f}s)"
                         )
+                    # 恢复已完成阶段的输出数据到 context，供后续阶段使用
+                    try:
+                        self._restore_phase_outputs(phase, context)
+                    except Exception as e:
+                        self.logger.warning(f"恢复阶段 {phase.value} 输出数据失败: {e}")
                     continue
+
+            # 治理层：进入阶段
+            if self.governance:
+                try:
+                    self.governance.enter_phase(phase.value)
+                except Exception as e:
+                    self.logger.warning(f"治理层 enter_phase({phase.value}) 失败: {e}")
 
             try:
                 result = await self._run_phase(phase, context, phase_timeout=phase_timeout)
                 results[phase] = result
+
+                # 治理层：退出阶段
+                if self.governance:
+                    try:
+                        self.governance.exit_phase(phase.value, context={
+                            "success": result.success,
+                            "duration": result.duration,
+                            "quality_score": result.quality_score,
+                            "project_dir": str(self.project_dir),
+                            "name": context.user_input.get("name", self.project_dir.name),
+                            "output_dir": str(self.project_dir / "output"),
+                        })
+                    except Exception as e:
+                        self.logger.warning(f"治理层 exit_phase({phase.value}) 失败: {e}")
 
                 # 保存检查点
                 if result.success:
@@ -239,6 +381,29 @@ class WorkflowEngine:
                 break
 
             except PhaseExecutionError as e:
+                # 非关键阶段可以跳过，不中断整个流水线
+                skippable_phases = {Phase.INTELLIGENCE}
+                if phase in skippable_phases:
+                    self.logger.warning(
+                        f"阶段 {phase.value} 执行失败但可跳过: {e}",
+                        extra={'error': str(e), 'phase': phase.value}
+                    )
+                    results[phase] = PhaseResult(
+                        phase=phase,
+                        success=True,
+                        duration=0.0,
+                        errors=[str(e)],
+                        quality_score=0.0,
+                    )
+                    if self.console:
+                        try:
+                            self.console.print(
+                                f"[yellow]⚠[/yellow] {phase.value}: "
+                                f"执行失败但已跳过 ({e})"
+                            )
+                        except Exception:
+                            pass
+                    continue
                 self.logger.error(
                     f"工作流在阶段 {phase.value} 终止",
                     extra={'error': str(e), 'phase': phase.value}
@@ -253,6 +418,22 @@ class WorkflowEngine:
 
         self._print_workflow_complete(results)
         self._save_report(results)
+
+        # 治理层：生成治理报告
+        governance_report = None
+        if self.governance:
+            try:
+                governance_report = self.governance.finish_governance()
+                self.logger.info(
+                    "治理报告已生成",
+                    extra={
+                        "governance_passed": getattr(governance_report, "passed", None),
+                        "governance_score": getattr(governance_report, "quality_score", None),
+                    },
+                )
+            except Exception as e:
+                self.logger.warning(f"治理报告生成失败: {e}")
+
         return results
 
     def _get_phases_from_config(self) -> list[Phase]:
@@ -277,6 +458,49 @@ class WorkflowEngine:
         phase_name = phase.value.upper()
 
         self.logger.info(f"开始执行阶段: {phase_name}", extra={'phase': phase_name})
+
+        # 知识推送：每个阶段开始时推送与该阶段相关的知识约束
+        # 优先使用三层渐进式加载（push_layered），回退到传统 push
+        if self.knowledge_pusher:
+            try:
+                description = context.user_input.get(
+                    "enriched_description",
+                    context.user_input.get("description", ""),
+                )
+                # 三层渐进式加载：L1 索引 + L2 详情 + L3 引用
+                layered_push = self.knowledge_pusher.push_layered(
+                    phase.value,
+                    description=description,
+                    token_budget=4000,  # 每阶段最多 4K tokens 的知识
+                )
+                context.metadata[f"knowledge_push_layered_{phase.value}"] = (
+                    layered_push.to_dict()
+                )
+                if layered_push.l1_index:
+                    self.logger.info(
+                        f"分层知识推送 [{phase_name}]: "
+                        f"L1={len(layered_push.l1_index)} 索引, "
+                        f"L2={len(layered_push.l2_details)} 详情, "
+                        f"L3={len(layered_push.l3_references)} 引用, "
+                        f"tokens={layered_push.l1_tokens_used + layered_push.l2_tokens_used}"
+                        f"/{layered_push.total_token_budget}",
+                        extra={"phase": phase_name},
+                    )
+
+                # 同时保留传统 push 结果以确保向后兼容
+                knowledge_push = self.knowledge_pusher.push(
+                    phase.value, project_description=description
+                )
+                context.metadata[f"knowledge_push_{phase.value}"] = knowledge_push.to_dict()
+                if knowledge_push.files:
+                    self.logger.info(
+                        f"知识推送 [{phase_name}]: {len(knowledge_push.files)} 文件, "
+                        f"{len(knowledge_push.constraints)} 约束, "
+                        f"{len(knowledge_push.antipatterns)} 反模式",
+                        extra={"phase": phase_name},
+                    )
+            except Exception as e:
+                self.logger.warning(f"知识推送失败 [{phase_name}]: {e}")
 
         try:
             handler = self._phase_handlers.get(phase)
@@ -417,6 +641,7 @@ class WorkflowEngine:
         context.user_input["requirements"] = requirements
 
         # 2. 需求知识增强（本地知识库 + 联网检索）
+        augmenter = None
         try:
             augmenter = KnowledgeAugmenter(
                 project_dir=self.project_dir,
@@ -453,6 +678,22 @@ class WorkflowEngine:
             self.logger.warning(f"需求知识增强跳过: {e}")
             context.user_input["knowledge_enhanced"] = False
             context.user_input["web_research"] = False
+
+        # 断点修复3: 将 augmenter 的知识引用追踪同步到 governance 层
+        try:
+            if self.governance and augmenter is not None and hasattr(augmenter, '_tracker') and augmenter._tracker:
+                for ref in augmenter._tracker.references:
+                    try:
+                        self.governance.track_knowledge(
+                            ref.knowledge_file,
+                            usage_type=ref.usage_type,
+                            relevance=ref.relevance_score,
+                            excerpt=getattr(ref, 'excerpt', ''),
+                        )
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
         return {
             "status": "discovery_complete",
@@ -523,6 +764,49 @@ class WorkflowEngine:
         domain = user_input.get("domain", "")
         language_preferences = user_input.get("language_preferences", [])
 
+        # 断点修复1: 从 discovery 阶段的知识包提取知识摘要传给文档生成器
+        # 断点修复2: 将 intelligence 阶段的检索结果也纳入知识摘要
+        knowledge_summary: dict = {}
+        try:
+            knowledge_bundle = context.research_data.get("knowledge_bundle", {})
+            if knowledge_bundle:
+                knowledge_summary = knowledge_bundle.get("research_summary", {})
+                if not knowledge_summary:
+                    knowledge_summary = {
+                        "local_knowledge": knowledge_bundle.get("local_items", []),
+                        "web_knowledge": knowledge_bundle.get("web_items", []),
+                        "hard_constraints": knowledge_bundle.get("hard_constraints", []),
+                    }
+            intelligence_data = context.research_data.get("intelligence", {})
+            if intelligence_data:
+                knowledge_summary["web_intelligence"] = intelligence_data
+        except Exception:
+            pass
+
+        # 断点修复: 从 KnowledgePusher 推送的 context.metadata 读取知识约束
+        # 确保 _run_phase 中存入的 knowledge_push_* 数据被下游 DocumentGenerator 消费
+        for phase_key in [
+            "knowledge_push_drafting",
+            "knowledge_push_docs",
+            "knowledge_push_research",
+            "knowledge_push_intelligence",
+            "knowledge_push_discovery",
+        ]:
+            push_data = context.metadata.get(phase_key)
+            if push_data and isinstance(push_data, dict):
+                if "constraints" in push_data:
+                    knowledge_summary.setdefault("pushed_constraints", []).extend(
+                        push_data["constraints"]
+                    )
+                if "antipatterns" in push_data:
+                    knowledge_summary.setdefault("pushed_antipatterns", []).extend(
+                        push_data["antipatterns"]
+                    )
+                if "files" in push_data:
+                    knowledge_summary.setdefault("pushed_knowledge_files", []).extend(
+                        push_data["files"]
+                    )
+
         dispatcher = ExpertDispatcher(self.project_dir)
         result = dispatcher.dispatch_document_generation(
             name=name,
@@ -532,6 +816,7 @@ class WorkflowEngine:
             backend=backend,
             domain=domain,
             language_preferences=language_preferences,
+            knowledge_summary=knowledge_summary,
         )
 
         # 保存生成的文档到 output/ 目录
@@ -544,6 +829,19 @@ class WorkflowEngine:
             doc_path.write_text(expert_output.content, encoding="utf-8")
             saved_docs.append(str(doc_path))
             context.documents[expert_output.document_type] = expert_output.content
+
+        # 断点修复3: 调用 AIPromptGenerator 生成 ai-prompt.md（包含知识推送约束）
+        try:
+            from ..creators.prompt_generator import AIPromptGenerator
+
+            prompt_gen = AIPromptGenerator(self.project_dir, name)
+            prompt_content = prompt_gen.generate()
+            prompt_path = output_dir / f"{name}-ai-prompt.md"
+            prompt_path.write_text(prompt_content, encoding="utf-8")
+            saved_docs.append(str(prompt_path))
+            self.logger.info(f"AI 提示词已生成: {prompt_path}")
+        except Exception as e:
+            self.logger.warning(f"AI 提示词生成失败（非阻塞）: {e}")
 
         return {
             "status": "documents_generated",
@@ -658,8 +956,14 @@ class WorkflowEngine:
         if isinstance(ui_review_payload, dict):
             ui_review_md_path = output_dir / f"{name}-ui-review.md"
             ui_review_json_path = output_dir / f"{name}-ui-review.json"
+            ui_alignment_md_path = output_dir / f"{name}-ui-contract-alignment.md"
+            ui_alignment_json_path = output_dir / f"{name}-ui-contract-alignment.json"
             ui_review_json_path.write_text(
                 json.dumps(ui_review_payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            ui_alignment_json_path.write_text(
+                json.dumps(ui_review_payload.get("alignment_summary", {}), ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
             if not ui_review_md_path.exists():
@@ -671,6 +975,19 @@ class WorkflowEngine:
                     "",
                 ]
                 ui_review_md_path.write_text("\n".join(lines), encoding="utf-8")
+            if not ui_alignment_md_path.exists():
+                alignment = ui_review_payload.get("alignment_summary", {})
+                lines = [
+                    f"# {name} - UI 契约对齐报告",
+                    "",
+                ]
+                for key, value in alignment.items():
+                    if isinstance(value, dict):
+                        lines.append(
+                            f"- {value.get('label', key)}: {'ok' if value.get('passed') else 'gap'} | expected={value.get('expected', '-') or '-'} | observed={value.get('observed', '-') or '-'}"
+                        )
+                lines.append("")
+                ui_alignment_md_path.write_text("\n".join(lines), encoding="utf-8")
 
         passed = expert_output.metadata.get("passed", False)
         if not passed:
@@ -692,6 +1009,8 @@ class WorkflowEngine:
             "report_path": str(qg_path),
             "ui_review_path": str(output_dir / f"{name}-ui-review.md") if isinstance(ui_review_payload, dict) else "",
             "ui_review_json_path": str(output_dir / f"{name}-ui-review.json") if isinstance(ui_review_payload, dict) else "",
+            "ui_alignment_path": str(output_dir / f"{name}-ui-contract-alignment.md") if isinstance(ui_review_payload, dict) else "",
+            "ui_alignment_json_path": str(output_dir / f"{name}-ui-contract-alignment.json") if isinstance(ui_review_payload, dict) else "",
             "ui_review": ui_review_payload if isinstance(ui_review_payload, dict) else None,
         }
 
@@ -848,7 +1167,7 @@ class WorkflowEngine:
 
     async def _web_search(self, query: str, max_results: int = 5) -> list[dict]:
         """
-        联网检索（优先使用 DuckDuckGo，自动降级到离线模式）
+        联网检索（Tavily > DDGS 文本搜索 > Instant Answer API > 离线模式）
 
         中国大陆环境：DuckDuckGo API 通常可访问；
         如需国内可访问的备选，可配置 TAVILY_API_KEY。
@@ -870,15 +1189,42 @@ class WorkflowEngine:
             return []
 
     async def _search_duckduckgo(self, query: str, max_results: int = 5) -> list[dict]:
-        """使用 DuckDuckGo Instant Answer API 检索"""
+        """使用 DDGS 文本搜索 API 检索，回退到 Instant Answer API"""
+        loop = asyncio.get_running_loop()
+
+        # 优先使用 ddgs 库（真正的文本搜索，返回完整搜索结果）
+        try:
+            from ddgs import DDGS  # type: ignore[import-untyped]
+
+            def _ddgs_search() -> list[dict]:
+                ddgs = DDGS()
+                entries = ddgs.text(query, max_results=max_results)
+                items: list[dict] = []
+                for entry in entries:
+                    if not isinstance(entry, dict):
+                        continue
+                    items.append({
+                        "title": str(entry.get("title", "")).strip(),
+                        "snippet": str(entry.get("body", "")).strip()[:300],
+                        "url": str(entry.get("href", "")).strip(),
+                        "source": "DuckDuckGo",
+                    })
+                return items
+
+            results = await loop.run_in_executor(None, _ddgs_search)
+            if results:
+                return results[:max_results]
+        except ImportError:
+            self.logger.debug("ddgs 库未安装，降级到 Instant Answer API")
+        except Exception as e:
+            self.logger.debug(f"DDGS 文本搜索失败，降级到 Instant Answer API: {e}")
+
+        # 回退：DuckDuckGo Instant Answer API（百科摘要型，竞品搜索效果差）
         import urllib.parse
-        import urllib.request
 
         encoded_query = urllib.parse.quote(query)
         url = f"https://api.duckduckgo.com/?q={encoded_query}&format=json&no_html=1&skip_disambig=1"
 
-        # 在线程池中执行阻塞 IO
-        loop = asyncio.get_running_loop()
         response_text = await loop.run_in_executor(
             None,
             lambda: self._http_get(url, timeout=5)

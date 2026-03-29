@@ -27,7 +27,7 @@ class ProjectConfig:
 
     name: str
     description: str = ""
-    version: str = "2.1.1"
+    version: str = "2.2.0"
     author: str = ""
     license: str = "MIT"
 
@@ -81,7 +81,7 @@ class ConfigManager:
     DEFAULT_CONFIG: dict[str, Any] = {
         "name": "my-project",
         "description": "A Super Dev project",
-        "version": "2.1.1",
+        "version": "2.2.0",
         "platform": "web",
         "frontend": "next",  # 默认使用 Next.js
         "backend": "node",
@@ -360,6 +360,464 @@ class ConfigManager:
                 errors.append("knowledge_allowed_domains 包含非法项")
 
         return errors
+
+    # ------------------------------------------------------------------
+    # Configuration Schema Validation (Deep)
+    # ------------------------------------------------------------------
+
+    CONFIG_SCHEMA: dict[str, dict[str, Any]] = {
+        "name": {"type": "str", "required": True, "min_length": 1, "max_length": 128},
+        "description": {"type": "str", "required": False, "max_length": 1024},
+        "version": {"type": "str", "required": False, "pattern": r"^\d+\.\d+\.\d+"},
+        "platform": {"type": "str", "required": True, "allowed": list(PLATFORM_IDS)},
+        "frontend": {"type": "str", "required": True, "allowed": list(FULL_FRONTEND_TEMPLATE_IDS)},
+        "backend": {"type": "str", "required": True, "allowed": list(PIPELINE_BACKEND_IDS)},
+        "database": {"type": "str", "required": False, "allowed": ["postgresql", "mysql", "mongodb", "redis", "sqlite", ""]},
+        "quality_gate": {"type": "int", "required": False, "min": 0, "max": 100},
+        "host_compatibility_min_score": {"type": "int", "required": False, "min": 0, "max": 100},
+        "host_compatibility_min_ready_hosts": {"type": "int", "required": False, "min": 0},
+        "knowledge_cache_ttl_seconds": {"type": "int", "required": False, "min": 0},
+        "output_dir": {"type": "str", "required": False},
+    }
+
+    def validate_schema(self, data: dict[str, Any] | None = None) -> tuple[bool, list[dict[str, str]]]:
+        """
+        对配置进行深度 schema 校验。
+
+        Args:
+            data: 要校验的配置字典。若为 None 则使用当前已加载的配置。
+
+        Returns:
+            (是否通过, 问题列表)，每个问题包含 field/severity/message
+        """
+        import re
+
+        if data is None:
+            data = self.config.__dict__.copy()
+
+        issues: list[dict[str, str]] = []
+
+        for field_name, rules in self.CONFIG_SCHEMA.items():
+            value = data.get(field_name)
+            field_type = rules.get("type", "str")
+
+            # Required check
+            if rules.get("required") and (value is None or (isinstance(value, str) and not value.strip())):
+                issues.append({
+                    "field": field_name,
+                    "severity": "error",
+                    "message": f"必填字段 '{field_name}' 未设置或为空",
+                })
+                continue
+
+            if value is None:
+                continue
+
+            # Type check
+            if field_type == "str" and not isinstance(value, str):
+                issues.append({
+                    "field": field_name,
+                    "severity": "error",
+                    "message": f"'{field_name}' 应为字符串，实际为 {type(value).__name__}",
+                })
+                continue
+            if field_type == "int" and not isinstance(value, int):
+                issues.append({
+                    "field": field_name,
+                    "severity": "error",
+                    "message": f"'{field_name}' 应为整数，实际为 {type(value).__name__}",
+                })
+                continue
+
+            # String constraints
+            if isinstance(value, str):
+                min_len = rules.get("min_length")
+                max_len = rules.get("max_length")
+                if min_len is not None and len(value) < min_len:
+                    issues.append({
+                        "field": field_name,
+                        "severity": "error",
+                        "message": f"'{field_name}' 长度不能少于 {min_len} 个字符",
+                    })
+                if max_len is not None and len(value) > max_len:
+                    issues.append({
+                        "field": field_name,
+                        "severity": "warning",
+                        "message": f"'{field_name}' 长度超过推荐的 {max_len} 个字符",
+                    })
+                pattern = rules.get("pattern")
+                if pattern and not re.match(pattern, value):
+                    issues.append({
+                        "field": field_name,
+                        "severity": "error",
+                        "message": f"'{field_name}' 格式不符合要求（期望: {pattern}）",
+                    })
+                allowed = rules.get("allowed")
+                if allowed and value and value not in allowed:
+                    issues.append({
+                        "field": field_name,
+                        "severity": "error",
+                        "message": f"'{field_name}' 值 '{value}' 不在允许的列表中",
+                    })
+
+            # Integer constraints
+            if isinstance(value, int):
+                min_val = rules.get("min")
+                max_val = rules.get("max")
+                if min_val is not None and value < min_val:
+                    issues.append({
+                        "field": field_name,
+                        "severity": "error",
+                        "message": f"'{field_name}' 值 {value} 小于最小值 {min_val}",
+                    })
+                if max_val is not None and value > max_val:
+                    issues.append({
+                        "field": field_name,
+                        "severity": "error",
+                        "message": f"'{field_name}' 值 {value} 大于最大值 {max_val}",
+                    })
+
+        # Check for unknown fields
+        valid_fields = {f.name for f in dataclasses.fields(ProjectConfig)}
+        for key in data:
+            if key not in valid_fields and not key.startswith("_"):
+                issues.append({
+                    "field": key,
+                    "severity": "warning",
+                    "message": f"未知配置字段 '{key}'，可能已废弃或拼写错误",
+                })
+
+        has_errors = any(i["severity"] == "error" for i in issues)
+        return not has_errors, issues
+
+    # ------------------------------------------------------------------
+    # Configuration Migration
+    # ------------------------------------------------------------------
+
+    CONFIG_MIGRATIONS: list[dict[str, Any]] = [
+        {
+            "from_version": "1.0",
+            "to_version": "2.0",
+            "description": "从 v1.0 迁移到 v2.0：新增 host 兼容性配置",
+            "transforms": {
+                "host_compatibility_min_score": lambda data: data.get("host_compatibility_min_score", 80),
+                "host_compatibility_min_ready_hosts": lambda data: data.get("host_compatibility_min_ready_hosts", 1),
+                "host_profile_targets": lambda data: data.get("host_profile_targets", []),
+                "host_profile_enforce_selected": lambda data: data.get("host_profile_enforce_selected", False),
+            },
+            "removals": [],
+        },
+        {
+            "from_version": "2.0",
+            "to_version": "2.1",
+            "description": "从 v2.0 迁移到 v2.1：新增知识增强和前端扩展配置",
+            "transforms": {
+                "language_preferences": lambda data: data.get("language_preferences", []),
+                "knowledge_allowed_domains": lambda data: data.get("knowledge_allowed_domains", []),
+                "knowledge_cache_ttl_seconds": lambda data: data.get("knowledge_cache_ttl_seconds", 1800),
+                "ui_library": lambda data: data.get("ui_library"),
+                "style_solution": lambda data: data.get("style_solution"),
+                "state_management": lambda data: data.get("state_management", []),
+                "testing_frameworks": lambda data: data.get("testing_frameworks", []),
+            },
+            "removals": [],
+        },
+        {
+            "from_version": "2.1",
+            "to_version": "2.2",
+            "description": "从 v2.1 迁移到 v2.2：标准化版本号",
+            "transforms": {},
+            "removals": ["deprecated_field"],
+        },
+    ]
+
+    def migrate_config(self, target_version: str = "2.2.0") -> tuple[bool, list[str]]:
+        """
+        将配置文件从当前版本迁移到目标版本。
+
+        Args:
+            target_version: 目标版本号
+
+        Returns:
+            (是否需要迁移, 迁移日志)
+        """
+        if not self.exists():
+            return False, ["配置文件不存在，无需迁移"]
+
+        with open(self.config_path, encoding="utf-8") as f:
+            raw = yaml.safe_load(f) or {}
+
+        current_version = str(raw.get("version", "1.0.0"))
+        current_major_minor = ".".join(current_version.split(".")[:2])
+        target_major_minor = ".".join(target_version.split(".")[:2])
+
+        if current_major_minor == target_major_minor:
+            return False, [f"配置已是目标版本 {target_version}，无需迁移"]
+
+        logs: list[str] = []
+        migrated_data = dict(raw)
+        applied = False
+
+        for migration in self.CONFIG_MIGRATIONS:
+            from_v = migration["from_version"]
+            to_v = migration["to_version"]
+
+            if current_major_minor <= from_v and to_v <= target_major_minor:
+                logs.append(f"应用迁移: {migration['description']}")
+
+                # Apply transforms
+                for field_name, transform_fn in migration.get("transforms", {}).items():
+                    if field_name not in migrated_data:
+                        migrated_data[field_name] = transform_fn(migrated_data)
+                        logs.append(f"  + 添加字段 '{field_name}'")
+
+                # Apply removals
+                for removal in migration.get("removals", []):
+                    if removal in migrated_data:
+                        del migrated_data[removal]
+                        logs.append(f"  - 移除已废弃字段 '{removal}'")
+
+                applied = True
+
+        if applied:
+            migrated_data["version"] = target_version
+            logs.append(f"版本号更新为 {target_version}")
+
+            # Backup original
+            backup_path = self.config_path.with_suffix(".yaml.bak")
+            import shutil
+            shutil.copy2(self.config_path, backup_path)
+            logs.append(f"原配置已备份到 {backup_path}")
+
+            # Save migrated config
+            with open(self.config_path, "w", encoding="utf-8") as f:
+                yaml.dump(migrated_data, f, allow_unicode=True, default_flow_style=False)
+            logs.append("迁移完成并保存")
+
+            # Reload
+            self._config = None
+
+        return applied, logs
+
+    # ------------------------------------------------------------------
+    # Configuration Template Generation
+    # ------------------------------------------------------------------
+
+    PROJECT_TYPE_TEMPLATES: dict[str, dict[str, Any]] = {
+        "saas-web": {
+            "description": "SaaS Web 应用推荐配置",
+            "config": {
+                "platform": "web",
+                "frontend": "next",
+                "backend": "node",
+                "database": "postgresql",
+                "quality_gate": 85,
+                "domain": "saas",
+                "ui_library": "shadcn/ui",
+                "style_solution": "tailwindcss",
+                "state_management": ["zustand"],
+                "testing_frameworks": ["vitest", "playwright"],
+            },
+        },
+        "ecommerce": {
+            "description": "电商平台推荐配置",
+            "config": {
+                "platform": "web",
+                "frontend": "next",
+                "backend": "node",
+                "database": "postgresql",
+                "quality_gate": 90,
+                "domain": "ecommerce",
+                "ui_library": "shadcn/ui",
+                "style_solution": "tailwindcss",
+                "state_management": ["zustand", "tanstack-query"],
+                "testing_frameworks": ["vitest", "playwright", "cypress"],
+            },
+        },
+        "dashboard": {
+            "description": "后台管理系统推荐配置",
+            "config": {
+                "platform": "web",
+                "frontend": "react-vite",
+                "backend": "python",
+                "database": "postgresql",
+                "quality_gate": 80,
+                "domain": "dashboard",
+                "ui_library": "ant-design",
+                "style_solution": "css-modules",
+                "state_management": ["zustand"],
+                "testing_frameworks": ["vitest"],
+            },
+        },
+        "mobile-app": {
+            "description": "移动端 APP 推荐配置",
+            "config": {
+                "platform": "mobile",
+                "frontend": "react-vite",
+                "backend": "node",
+                "database": "postgresql",
+                "quality_gate": 85,
+                "domain": "mobile",
+                "testing_frameworks": ["jest"],
+            },
+        },
+        "miniapp-wechat": {
+            "description": "微信小程序推荐配置",
+            "config": {
+                "platform": "wechat",
+                "frontend": "react-vite",
+                "backend": "node",
+                "database": "mysql",
+                "quality_gate": 80,
+                "domain": "miniapp",
+            },
+        },
+        "api-service": {
+            "description": "纯后端 API 服务推荐配置",
+            "config": {
+                "platform": "web",
+                "frontend": "react-vite",
+                "backend": "python",
+                "database": "postgresql",
+                "quality_gate": 90,
+                "testing_frameworks": ["pytest"],
+            },
+        },
+    }
+
+    def generate_template(self, project_type: str, name: str = "") -> ProjectConfig:
+        """
+        根据项目类型生成推荐配置。
+
+        Args:
+            project_type: 项目类型（saas-web, ecommerce, dashboard, mobile-app 等）
+            name: 项目名称
+
+        Returns:
+            生成的 ProjectConfig 对象
+        """
+        template = self.PROJECT_TYPE_TEMPLATES.get(project_type)
+        if not template:
+            available = ", ".join(sorted(self.PROJECT_TYPE_TEMPLATES.keys()))
+            raise ValueError(f"未知的项目类型 '{project_type}'，可用类型: {available}")
+
+        config_data: dict[str, Any] = {**self.DEFAULT_CONFIG, **template["config"]}
+        if name:
+            config_data["name"] = name
+
+        valid_fields = {f.name for f in dataclasses.fields(ProjectConfig)}
+        config_data = {k: v for k, v in config_data.items() if k in valid_fields}
+
+        return ProjectConfig(**cast(dict[str, Any], config_data))
+
+    @classmethod
+    def list_templates(cls) -> list[dict[str, str]]:
+        """列出所有可用的项目类型模板"""
+        return [
+            {"type": key, "description": val["description"]}
+            for key, val in cls.PROJECT_TYPE_TEMPLATES.items()
+        ]
+
+    # ------------------------------------------------------------------
+    # Multi-Environment Configuration
+    # ------------------------------------------------------------------
+
+    ENVIRONMENT_OVERRIDES: dict[str, dict[str, Any]] = {
+        "development": {
+            "quality_gate": 70,
+            "description_suffix": " (Development)",
+        },
+        "staging": {
+            "quality_gate": 85,
+            "description_suffix": " (Staging)",
+        },
+        "production": {
+            "quality_gate": 95,
+            "description_suffix": " (Production)",
+        },
+    }
+
+    def load_environment_config(self, environment: str) -> ProjectConfig:
+        """
+        加载特定环境的配置（合并基础配置 + 环境覆盖文件）。
+
+        优先级: 环境文件 > 基础配置 > 默认值
+
+        Args:
+            environment: 环境名（development/staging/production）
+
+        Returns:
+            合并后的 ProjectConfig
+        """
+        base_config = self.load()
+
+        # Try to load environment-specific file
+        env_file = self.project_dir / f"super-dev.{environment}.yaml"
+        env_overrides: dict[str, Any] = {}
+        if env_file.exists():
+            with open(env_file, encoding="utf-8") as f:
+                loaded = yaml.safe_load(f)
+            env_overrides = loaded if isinstance(loaded, dict) else {}
+
+        # Apply built-in environment defaults
+        builtin = self.ENVIRONMENT_OVERRIDES.get(environment, {})
+        desc_suffix = builtin.pop("description_suffix", "")
+
+        # Merge: base -> builtin -> file overrides
+        merged: dict[str, Any] = {**base_config.__dict__}
+        for key, value in builtin.items():
+            if key not in env_overrides:
+                merged[key] = value
+        merged.update(env_overrides)
+
+        if desc_suffix and not merged.get("description", "").endswith(desc_suffix):
+            merged["description"] = merged.get("description", "") + desc_suffix
+
+        valid_fields = {f.name for f in dataclasses.fields(ProjectConfig)}
+        merged = {k: v for k, v in merged.items() if k in valid_fields}
+
+        return ProjectConfig(**cast(dict[str, Any], merged))
+
+    def save_environment_config(self, environment: str, overrides: dict[str, Any]) -> None:
+        """
+        保存环境特定的配置覆盖。
+
+        Args:
+            environment: 环境名
+            overrides: 要覆盖的配置键值对
+        """
+        env_file = self.project_dir / f"super-dev.{environment}.yaml"
+        existing: dict[str, Any] = {}
+        if env_file.exists():
+            with open(env_file, encoding="utf-8") as f:
+                loaded = yaml.safe_load(f)
+            existing = loaded if isinstance(loaded, dict) else {}
+
+        merged = {**existing, **overrides}
+        with open(env_file, "w", encoding="utf-8") as f:
+            yaml.dump(merged, f, allow_unicode=True, default_flow_style=False)
+
+    def list_environments(self) -> list[dict[str, str]]:
+        """列出所有已配置的环境"""
+        envs: list[dict[str, str]] = []
+        for env_name in ("development", "staging", "production"):
+            env_file = self.project_dir / f"super-dev.{env_name}.yaml"
+            status = "configured" if env_file.exists() else "default"
+            envs.append({
+                "name": env_name,
+                "status": status,
+                "file": str(env_file) if env_file.exists() else "",
+            })
+        # Check for custom environments
+        for f in self.project_dir.glob("super-dev.*.yaml"):
+            env_name = f.stem.replace("super-dev.", "")
+            if env_name not in ("development", "staging", "production"):
+                envs.append({
+                    "name": env_name,
+                    "status": "custom",
+                    "file": str(f),
+                })
+        return envs
 
 
 # 全局配置管理器缓存（按项目目录隔离）
