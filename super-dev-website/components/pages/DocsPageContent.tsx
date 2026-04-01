@@ -102,7 +102,7 @@ const zhContent: Content = {
     { label: '核心阶段', value: '9 段' },
   ],
   sections: [
-    { id: 'highlights', label: 'v2.2.0 新功能', icon: Zap },
+    { id: 'highlights', label: 'v2.3.0 新功能', icon: Zap },
     { id: 'governance', label: '产品定位', icon: BookOpen },
     { id: 'install', label: '安装方式', icon: Package },
     { id: 'surfaces', label: '接入面', icon: Boxes },
@@ -315,8 +315,8 @@ const zhContent: Content = {
     '先用 smoke 触发语句。',
     '如果宿主直接开始开发，优先判断当前会话没有重新加载规则。',
   ],
-  highlightsTitle: 'v2.2.0 新功能亮点',
-  highlightsBody: '2.2.0 是 Super Dev 的知识驱动与质量自治大版本，核心升级集中在知识推送、可编程规则、专家深度武装和跨系统集成四个方向。',
+  highlightsTitle: 'v2.3.0 新功能亮点',
+  highlightsBody: '2.3.0 是 Super Dev 的 Enforcement 治理大版本，核心升级集中在知识推送、可编程规则、专家深度武装和跨系统集成四个方向。',
   highlightsCards: [
     { title: '知识推送引擎', body: '每阶段自动推送相关知识约束，306文件索引，7阶段映射，L1/L2/L3渐进式加载。' },
     { title: '知识自演化', body: 'SQLite追踪使用效果，数据驱动权重优化，知识库扩展至270+文件/15万行，覆盖23个技术领域。' },
@@ -343,7 +343,7 @@ const enContent: Content = {
     { label: 'Core phases', value: '9' },
   ],
   sections: [
-    { id: 'highlights', label: 'v2.2.0 Highlights', icon: Zap },
+    { id: 'highlights', label: 'v2.3.0 Highlights', icon: Zap },
     { id: 'governance', label: 'Positioning', icon: BookOpen },
     { id: 'install', label: 'Installation', icon: Package },
     { id: 'surfaces', label: 'Integration Surfaces', icon: Boxes },
@@ -556,8 +556,8 @@ const enContent: Content = {
     'Use a smoke prompt before trying the real requirement.',
     'If the host starts coding immediately, assume the current session did not reload the rules.',
   ],
-  highlightsTitle: 'v2.2.0 Highlights',
-  highlightsBody: 'Version 2.2.0 is the knowledge-driven and quality-autonomous major release. Core upgrades focus on knowledge push, programmable rules, expert depth, and cross-system integration.',
+  highlightsTitle: 'v2.3.0 Highlights',
+  highlightsBody: 'Version 2.3.0 is the enforcement governance and quality-autonomous major release. Core upgrades focus on knowledge push, programmable rules, expert depth, and cross-system integration.',
   highlightsCards: [
     { title: 'Knowledge Push Engine', body: 'Auto-push relevant knowledge per pipeline phase. 306 files indexed, 7-phase mapping, L1/L2/L3 progressive loading.' },
     { title: 'Knowledge Evolution', body: 'SQLite-based usage tracking with data-driven weight optimization. Knowledge base expanded to 270+ files / 150K lines across 23 domains.' },
@@ -619,7 +619,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             <div className="max-w-[860px]">
               <div className="mb-5 flex flex-wrap items-center gap-2">
                 <Badge variant="version">{content.heroKicker}</Badge>
-                <Badge variant="certified">v2.2.0</Badge>
+                <Badge variant="certified">v2.3.0</Badge>
                 <Badge variant="compatible">{locale === 'en' ? 'Bilingual' : '中英双语'}</Badge>
               </div>
               <h1 className="max-w-[900px] text-4xl font-bold leading-[1.08] tracking-tight text-text-primary sm:text-5xl lg:text-[3.5rem]">
