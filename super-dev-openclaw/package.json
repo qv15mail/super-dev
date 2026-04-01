@@ -1,10 +1,11 @@
 {
   "name": "@super-dev/openclaw-plugin",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "Super Dev pipeline governance plugin for OpenClaw - research-first, commercial-grade AI coding delivery",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
+    "README.md",
     "src",
     "dist",
     "skills",
@@ -33,7 +34,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/super-dev/super-dev",
+    "url": "https://github.com/shangyankeji/super-dev",
     "directory": "super-dev-openclaw"
   },
   "dependencies": {
