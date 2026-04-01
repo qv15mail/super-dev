@@ -555,7 +555,7 @@ super-dev bootstrap --name my-project --platform web --frontend next --backend n
 - **Pipeline 状态文件**: 每阶段自动写入 `.super-dev/pipeline-state.json`，宿主可读取当前进度
 - **Pipeline 成本追踪**: 每阶段耗时/文件数记录到 `.super-dev/metrics/pipeline-cost.json`，异常中断也会保存
 - **状态变更事件系统**: phase_started / phase_completed / phase_failed / pipeline_completed 自动触发 SessionBrief 更新
-- **CLAUDE.md @include 知识引用**: 生成的 `.claude/CLAUDE.md` 自动包含 `@./knowledge/...` 引用，宿主原生加载技术栈知识
+- **CLAUDE.md 知识引用 知识引用**: 生成的 `.claude/CLAUDE.md` 自动包含 `@./knowledge/...` 引用，宿主原生加载技术栈知识
 - **条件规则系统**: `.super-dev/rules/*.md` 条件规则，支持 frontmatter `paths` 过滤和排除模式
 - **项目模板**: `super-dev init --template ecommerce/saas/dashboard/mobile/api/blog/miniapp`
 - **首次使用引导**: 3 步快速开始面板，最多显示 4 次后自动隐藏

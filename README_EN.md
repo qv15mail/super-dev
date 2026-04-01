@@ -31,10 +31,10 @@ Current version: `2.3.0`
 - **Pipeline cost tracking**: Per-phase duration and file counts recorded to `.super-dev/metrics/pipeline-cost.json`, with finally-protection for crash safety.
 - **State change events**: phase_started / phase_completed / phase_failed / pipeline_completed auto-trigger SessionBrief updates and memory extraction.
 
-### CLAUDE.md @include Knowledge References
+### CLAUDE.md include directive Knowledge References
 
 - Generated `.claude/CLAUDE.md` now includes `@./knowledge/...` references automatically.
-- Host natively processes @include to load technology-stack knowledge files.
+- Host natively processes include directive to load technology-stack knowledge files.
 - Frontend support: Next.js / React / Vue / Nuxt / Angular / Svelte.
 - Backend support: FastAPI / Django / NestJS / Express / Spring Boot.
 - Database support: PostgreSQL / MySQL / MongoDB / Redis.
