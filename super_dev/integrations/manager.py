@@ -81,16 +81,13 @@ class IntegrationManager(IntegrationManagerContentMixin):
     OPENCODE_AGENTS_BEGIN = "<!-- BEGIN SUPER DEV OPENCODE -->"
     OPENCODE_AGENTS_END = "<!-- END SUPER DEV OPENCODE -->"
     NO_SKILL_TARGETS: set[str] = {
-        "aider",
         "claude-code",
         "cline",
-        "jetbrains-ai",
         "kilo-code",
         "vscode-copilot",
     }
     HOST_USAGE_LOCATIONS: dict[str, str] = {
         "antigravity": "打开 Antigravity 的 Agent Chat / Prompt 面板，并确保当前工作区就是目标项目。",
-        "aider": "在项目目录启动 aider 会话后触发。",
         "claude-code": "在项目目录启动 Claude Code 当前会话后，直接在同一会话里触发。",
         "cline": "在 VS Code 的 Cline 面板中，绑定当前项目后触发。",
         "codebuddy-cli": "在项目目录启动 CodeBuddy CLI 会话后触发。",
@@ -101,9 +98,6 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "cursor": "打开 Cursor 的 Agent Chat，并确保当前工作区就是目标项目。",
         "windsurf": "打开 Windsurf 的 Agent Chat 或 Workflow 入口，在项目上下文内触发。",
         "gemini-cli": "在项目目录启动 Gemini CLI 会话后触发。",
-        "iflow": "在项目目录启动 iFlow CLI 会话后触发。",
-        "jetbrains-ai": "在 JetBrains IDE 的 Junie/AI Agent 会话中触发。",
-        "kimi-cli": "在项目目录启动 Kimi CLI 会话后触发。",
         "kiro-cli": "在项目目录启动 Kiro CLI 会话后触发。",
         "opencode": "在项目目录启动 OpenCode 会话后触发。",
         "qoder-cli": "在项目目录启动 Qoder CLI 会话后触发。",
@@ -121,10 +115,6 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "项目内会写入 `GEMINI.md`、`.gemini/commands/super-dev.md` 与 `.agent/workflows/super-dev.md`。",
             "用户级会补充 `~/.gemini/GEMINI.md`、`~/.gemini/commands/super-dev.md` 与 `~/.gemini/skills/super-dev-core/SKILL.md`。",
             "接入后建议新开一个 Antigravity Chat，使 GEMINI 上下文、slash 与 Skill 一起生效。",
-        ],
-        "aider": [
-            "Aider 是终端宿主，建议配合 `.aider.conf.yml` 与 `--read` 只读上下文文件。",
-            "当前按文本触发 `super-dev: <需求描述>` 适配，不走 slash。",
         ],
         "claude-code": [
             "推荐作为首选 CLI 宿主。",
@@ -148,8 +138,9 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "官方文档已公开 `.codebuddy/commands/`、`.codebuddy/agents/`、`.codebuddy/skills/` 与 `~/.codebuddy/agents/`、`~/.codebuddy/skills/`。",
         ],
         "codex-cli": [
-            "不要输入 /super-dev，Codex 当前不走自定义 slash。",
-            "实际依赖项目根 AGENTS.md 和 ~/.agents/skills/super-dev-core/SKILL.md。",
+            "Codex 官方不走自定义项目 slash；桌面端若在 `/` 列表中看到 `super-dev`，那是启用 Skill 的展示入口。",
+            "实际依赖项目根 AGENTS.md、项目级 .agents/skills/super-dev/SKILL.md、全局 CODEX_HOME/AGENTS.md（默认 ~/.codex/AGENTS.md），以及官方用户级技能目录 ~/.agents/skills/super-dev/SKILL.md。",
+            "保留 super-dev-core 作为兼容别名，避免旧安装和旧文档失效。",
             "如果旧会话没加载新 Skill，重启 codex 再试。",
         ],
         "copilot-cli": [
@@ -177,20 +168,6 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "优先在同一会话中完成 research -> 三文档 -> 用户确认 -> Spec -> 前端运行验证 -> 后端/交付。",
             "若宿主支持联网，先让它完成同类产品研究。",
             "Gemini CLI 官方文档明确 `GEMINI.md` 与 `.gemini/commands/` 的项目级上下文与命令目录，用户级 `~/.gemini/commands/` 也会一并写入。",
-        ],
-        "jetbrains-ai": [
-            "JetBrains Junie 推荐使用 `.junie/AGENTS.md` 统一项目级上下文。",
-            "当前按文本触发 `super-dev: <需求描述>` 适配，不依赖自定义 slash。",
-        ],
-        "iflow": [
-            "当前按 slash 宿主适配。",
-            "如果 slash 未出现，先检查项目级命令文件是否已写入。",
-            "官方文档已公开 .iflow/skills 与 ~/.iflow/skills。",
-            "如果宿主报 `Invalid API key provided`，先在 iFlow 会话内执行 `/auth`，或更新 IFLOW_API_KEY / settings.json 后重启宿主。",
-        ],
-        "kimi-cli": [
-            "Kimi CLI 当前优先按 AGENTS.md + 宿主级 Skill / 自然语言触发，不走 `/super-dev`。",
-            "建议先用 super-dev doctor --host kimi-cli 做一次确认。",
         ],
         "kiro-cli": [
             "Kiro CLI 当前优先按 `.kiro/steering/super-dev.md` + `.kiro/skills/` / `~/.kiro/skills/` 适配，不依赖自定义 slash。",
@@ -245,11 +222,6 @@ class IntegrationManager(IntegrationManagerContentMixin):
         ],
     }
     HOST_PRECONDITION_GUIDANCE: dict[str, list[str]] = {
-        "iflow": [
-            "iFlow 的模型鉴权由宿主自身管理，不由 Super Dev 接管。",
-            "若宿主返回 `Invalid API key provided`，先在 iFlow 会话内执行 `/auth` 重新登录。",
-            "若使用 API key 模式，更新 `IFLOW_API_KEY`，或写入 `~/.iflow/settings.json` / `./.iflow/settings.json` 后重启 iFlow 会话。",
-        ],
         "codex-cli": [
             "Codex 接入后必须重启 `codex`，旧会话不会自动重新加载 AGENTS.md 与宿主级 Skill。",
             "触发前确认当前终端已经进入目标项目目录，并重新打开新的 Codex 会话。",
@@ -270,9 +242,6 @@ class IntegrationManager(IntegrationManagerContentMixin):
         ],
         "gemini-cli": [
             "Gemini CLI 触发前确认当前终端已进入目标项目目录，并让新的会话读取 `GEMINI.md`。",
-        ],
-        "kimi-cli": [
-            "Kimi CLI 触发前确认当前终端已进入目标项目目录，并让新的会话读取 `.kimi/AGENTS.md`。",
         ],
         "kiro": [
             "Kiro IDE 接入后建议重新打开 Agent Chat，让 steering / skills 在新会话里生效。",
@@ -305,17 +274,11 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "claude-code": [
             "Claude Code 触发前确认当前会话就是目标项目目录下的当前会话。",
         ],
-        "aider": [
-            "Aider 触发前确认当前终端已进入目标项目目录，并在同一会话中加载项目上下文。",
-        ],
         "cline": [
             "Cline 触发前确认当前聊天绑定的是目标工作区，并让 `.clinerules/` 已被重新加载。",
         ],
         "kilo-code": [
             "Kilo Code 触发前确认当前聊天绑定的是目标工作区，并让 `.kilocode/rules/` 已被重新加载。",
-        ],
-        "jetbrains-ai": [
-            "JetBrains AI / Junie 触发前确认当前 IDE 已打开目标项目，并在新的 Agent 会话中加载 `.junie/AGENTS.md`。",
         ],
         "roo-code": [
             "Roo Code 触发前确认当前聊天位于目标项目工作区，并重新加载 `.roo/` 规则与命令。",
@@ -333,11 +296,6 @@ class IntegrationManager(IntegrationManagerContentMixin):
             name="antigravity",
             description="Antigravity IDE 工作流 + Gemini 上下文注入",
             files=["GEMINI.md", ".agent/workflows/super-dev.md"],
-        ),
-        "aider": IntegrationTarget(
-            name="aider",
-            description="Aider CLI 约束文件注入",
-            files=["AGENTS.md"],
         ),
         "claude-code": IntegrationTarget(
             name="claude-code",
@@ -366,7 +324,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "codex-cli": IntegrationTarget(
             name="codex-cli",
             description="Codex 项目上下文注入",
-            files=["AGENTS.md"],
+            files=["AGENTS.md", ".agents/skills/super-dev/SKILL.md"],
         ),
         "copilot-cli": IntegrationTarget(
             name="copilot-cli",
@@ -388,25 +346,10 @@ class IntegrationManager(IntegrationManagerContentMixin):
             description="Gemini CLI 项目规则注入",
             files=["GEMINI.md"],
         ),
-        "iflow": IntegrationTarget(
-            name="iflow",
-            description="iFlow CLI 项目规则注入",
-            files=[".iflow/AGENTS.md"],
-        ),
-        "jetbrains-ai": IntegrationTarget(
-            name="jetbrains-ai",
-            description="JetBrains Junie 项目规则注入",
-            files=[".junie/AGENTS.md"],
-        ),
         "kilo-code": IntegrationTarget(
             name="kilo-code",
             description="Kilo Code 规则注入",
             files=[".kilocode/rules/super-dev.md"],
-        ),
-        "kimi-cli": IntegrationTarget(
-            name="kimi-cli",
-            description="Kimi CLI 项目规则注入",
-            files=[".kimi/AGENTS.md"],
         ),
         "kiro-cli": IntegrationTarget(
             name="kiro-cli",
@@ -467,7 +410,6 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "cursor-cli": ".cursor/commands/super-dev.md",
         "windsurf": ".windsurf/workflows/super-dev.md",
         "gemini-cli": ".gemini/commands/super-dev.md",
-        "iflow": ".iflow/commands/super-dev.toml",
         "opencode": ".opencode/commands/super-dev.md",
         "qoder-cli": ".qoder/commands/super-dev.md",
         "qoder": ".qoder/commands/super-dev.md",
@@ -480,34 +422,22 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "opencode": ".config/opencode/commands/super-dev.md",
     }
     NO_SLASH_TARGETS: set[str] = {
-        "aider",
         "cline",
         "codex-cli",
         "copilot-cli",
-        "jetbrains-ai",
         "kilo-code",
-        "kimi-cli",
         "kiro-cli",
         "kiro",
         "trae",
         "vscode-copilot",
     }
     OFFICIAL_DOCS_INDEX: dict[str, tuple[str, ...]] = {
-        "antigravity": (
-            "https://antigravity.im/documentation",
-        ),
-        "aider": (
-            "https://aider.chat/docs/",
-            "https://aider.chat/docs/config/aider_conf.html",
-            "https://aider.chat/docs/usage/conventions.html",
-        ),
+        "antigravity": ("https://antigravity.im/documentation",),
         "claude-code": (
             "https://docs.anthropic.com/en/docs/claude-code/slash-commands",
             "https://docs.anthropic.com/en/docs/claude-code/sub-agents",
         ),
-        "cline": (
-            "https://docs.cline.bot/customization/cline-rules",
-        ),
+        "cline": ("https://docs.cline.bot/customization/cline-rules",),
         "codebuddy-cli": (
             "https://www.codebuddy.ai/docs/cli/slash-commands",
             "https://www.codebuddy.ai/docs/cli/skills",
@@ -521,6 +451,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "https://developers.openai.com/codex/cli",
             "https://developers.openai.com/codex/guides/agents-md",
             "https://developers.openai.com/codex/skills",
+            "https://developers.openai.com/codex/app/commands",
         ),
         "copilot-cli": (
             "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-custom-instructions",
@@ -542,21 +473,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "https://google-gemini.github.io/gemini-cli/docs/cli/configuration.html",
             "https://google-gemini.github.io/gemini-cli/docs/cli/commands.html",
         ),
-        "iflow": (
-            "https://platform.iflow.cn/en/cli/examples/slash-commands",
-            "https://platform.iflow.cn/en/cli/examples/skill",
-        ),
-        "jetbrains-ai": (
-            "https://junie.jetbrains.com/docs/agent-skills.html",
-            "https://www.jetbrains.com/help/junie/customize-guidelines.html",
-        ),
-        "kilo-code": (
-            "https://kilocode.ai/docs/features/rules",
-        ),
-        "kimi-cli": (
-            "https://www.kimi.com/code/docs/en/kimi-cli/guides/interaction.html",
-            "https://www.kimi.com/code/docs/en/kimi-cli/guides/agents.html",
-        ),
+        "kilo-code": ("https://kilocode.ai/docs/features/rules",),
         "kiro-cli": (
             "https://kiro.dev/docs/cli/",
             "https://kiro.dev/docs/cli/skills/",
@@ -596,17 +513,14 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "https://docs.qoder.com/user-guide/commands",
             "https://docs.qoder.com/user-guide/skills",
         ),
-        "trae": (
-            "https://docs.trae.ai/docs/what-is-trae-rules",
-        ),
+        "trae": ("https://docs.trae.ai/docs/what-is-trae-rules",),
         "openclaw": (
             "https://docs.openclaw.ai/plugins/building-plugins",
             "https://docs.openclaw.ai/tools/skills",
         ),
     }
     OFFICIAL_DOCS: dict[str, str] = {
-        key: (values[0] if values else "")
-        for key, values in OFFICIAL_DOCS_INDEX.items()
+        key: (values[0] if values else "") for key, values in OFFICIAL_DOCS_INDEX.items()
     }
     DOCS_VERIFIED_TARGETS: set[str] = {
         key for key, values in OFFICIAL_DOCS_INDEX.items() if bool(values)
@@ -721,23 +635,6 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "evidence": [
                 "官方文档公开 workflows 与 custom skills",
                 "Super Dev 已写入 `.windsurf/rules/`、`.windsurf/workflows/` 与 skills",
-            ],
-        },
-        "iflow": {
-            "level": "experimental",
-            "reason": "slash 适配已实现，但真实宿主行为与项目级命令注入仍需更多验证。",
-            "evidence": [
-                "官方文档公开 slash command 示例",
-                "Super Dev 已写入规则、Skill 与 TOML 命令文件",
-            ],
-        },
-        "kimi-cli": {
-            "level": "experimental",
-            "reason": "Kimi CLI 可稳定接入，但当前更适合 AGENTS.md / 自然语言触发，尚未确认项目级自定义 slash。",
-            "evidence": [
-                "官方文档公开了内置 slash 与自然语言交互方式",
-                "官方文档公开了 /init 生成 AGENTS.md 的路径",
-                "Super Dev 当前按 AGENTS.md + 文本触发方式接入",
             ],
         },
         "opencode": {
@@ -930,7 +827,9 @@ class IntegrationManager(IntegrationManagerContentMixin):
         docs_references = self._official_docs_references(target)
         docs_url = docs_references[0] if docs_references else ""
         docs_verified = bool(docs_references)
-        adapter_mode = self._adapter_mode(target=target, category=category, integration_files=integration_files)
+        adapter_mode = self._adapter_mode(
+            target=target, category=category, integration_files=integration_files
+        )
         usage = self._usage_profile(target=target, category=category)
         certification = self._certification_profile(target)
         smoke = self._smoke_profile(target=target, category=category)
@@ -982,7 +881,9 @@ class IntegrationManager(IntegrationManagerContentMixin):
             official_docs_references=docs_references,
             docs_check_status="declared" if docs_references else "missing",
             docs_check_summary=(
-                f"declared {len(docs_references)} refs" if docs_references else "no official docs references"
+                f"declared {len(docs_references)} refs"
+                if docs_references
+                else "no official docs references"
             ),
             capability_labels=capability_labels,
         )
@@ -994,9 +895,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
             level = "experimental"
         evidence = raw.get("evidence", [])
         normalized_evidence = [
-            item.strip()
-            for item in evidence
-            if isinstance(item, str) and item.strip()
+            item.strip() for item in evidence if isinstance(item, str) and item.strip()
         ]
         return {
             "level": level,
@@ -1041,6 +940,8 @@ class IntegrationManager(IntegrationManagerContentMixin):
 
     def _capability_labels(self, *, target: str) -> dict[str, str]:
         slash_label = "native" if self.supports_slash(target) else "none"
+        if target == "codex-cli":
+            slash_label = "skill-list"
         protocol = self._protocol_profile(target=target)
         mode = str(protocol.get("mode", "")).strip().lower()
         if mode in {"official-context", "official-steering"}:
@@ -1050,7 +951,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
         else:
             rules_label = "compat"
         if self.requires_skill(target):
-            compatibility_skill_targets = {"cursor-cli", "cursor", "gemini-cli", "kimi-cli", "trae"}
+            compatibility_skill_targets = {"cursor-cli", "cursor", "gemini-cli", "trae"}
             skill_label = "compat" if target in compatibility_skill_targets else "official"
         else:
             skill_label = "none"
@@ -1062,7 +963,9 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "trigger": trigger_label,
         }
 
-    def verify_official_docs(self, target: str, *, timeout_seconds: float = 5.0) -> dict[str, object]:
+    def verify_official_docs(
+        self, target: str, *, timeout_seconds: float = 5.0
+    ) -> dict[str, object]:
         references = self._official_docs_references(target)
         if not references:
             return {
@@ -1212,7 +1115,9 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "tls_mode": "strict",
             }
 
-    def compare_official_capabilities(self, target: str, *, timeout_seconds: float = 5.0) -> dict[str, object]:
+    def compare_official_capabilities(
+        self, target: str, *, timeout_seconds: float = 5.0
+    ) -> dict[str, object]:
         references = self._official_docs_references(target)
         expected = self._capability_labels(target=target)
         if not references:
@@ -1259,7 +1164,11 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "expected": label,
                 "ok": ok,
                 "matched_keywords": matched,
-                "reason": "matched" if ok else ("no-reachable-docs" if not reachable else "keyword-mismatch"),
+                "reason": (
+                    "matched"
+                    if ok
+                    else ("no-reachable-docs" if not reachable else "keyword-mismatch")
+                ),
             }
         if not reachable:
             status = "unknown"
@@ -1290,10 +1199,18 @@ class IntegrationManager(IntegrationManagerContentMixin):
         }
 
     @classmethod
+    def _codex_home_dir(cls) -> Path:
+        raw = os.getenv("CODEX_HOME", "").strip()
+        if raw:
+            return Path(raw).expanduser()
+        return Path.home() / ".codex"
+
+    @classmethod
     def resolve_global_protocol_path(cls, target: str) -> Path | None:
         mapping = {
             "claude-code": Path.home() / ".claude" / "agents" / "super-dev-core.md",
             "codebuddy": Path.home() / ".codebuddy" / "agents" / "super-dev-core.md",
+            "codex-cli": cls._codex_home_dir() / "AGENTS.md",
             "kiro": Path.home() / ".kiro" / "steering" / "AGENTS.md",
             "gemini-cli": Path.home() / ".gemini" / "GEMINI.md",
             "antigravity": Path.home() / ".gemini" / "GEMINI.md",
@@ -1321,9 +1238,16 @@ class IntegrationManager(IntegrationManagerContentMixin):
             return []
         if target not in SkillManager.TARGET_PATHS:
             return []
-        paths = [Path(SkillManager.TARGET_PATHS[target]).expanduser() / skill_name / "SKILL.md"]
-        for mirror in SkillManager.COMPATIBILITY_MIRROR_PATHS.get(target, []):
-            paths.append(Path(mirror).expanduser() / skill_name / "SKILL.md")
+        paths: list[Path] = []
+        for name in SkillManager.compatibility_skill_names(target, skill_name):
+            paths.append(Path(SkillManager.TARGET_PATHS[target]).expanduser() / name / "SKILL.md")
+            for mirror in SkillManager.COMPATIBILITY_MIRROR_PATHS.get(target, []):
+                mirror_root = (
+                    cls._codex_home_dir() / "skills"
+                    if target == "codex-cli"
+                    else Path(mirror).expanduser()
+                )
+                paths.append(mirror_root / name / "SKILL.md")
         deduped: list[Path] = []
         seen: set[str] = set()
         for item in paths:
@@ -1336,7 +1260,9 @@ class IntegrationManager(IntegrationManagerContentMixin):
 
     @classmethod
     def contract_validation_groups(cls, target: str) -> list[tuple[str, tuple[str, ...]]]:
-        trigger_group = cls.CONTRACT_TRIGGER_GROUPS["slash" if cls.supports_slash(target) else "text"]
+        trigger_group = cls.CONTRACT_TRIGGER_GROUPS[
+            "slash" if cls.supports_slash(target) else "text"
+        ]
         return [
             ("trigger", trigger_group),
             ("documents", cls.CONTRACT_DOC_GROUP),
@@ -1391,10 +1317,16 @@ class IntegrationManager(IntegrationManagerContentMixin):
         if normalized.endswith("GEMINI.md"):
             return [trigger_group, documents_group, confirmation_group, flow_group]
 
-        if normalized.endswith("/steering/AGENTS.md") or normalized.endswith("/steering/super-dev.md"):
+        if normalized.endswith("/steering/AGENTS.md") or normalized.endswith(
+            "/steering/super-dev.md"
+        ):
             return [trigger_group, documents_group, confirmation_group, flow_group]
 
-        if normalized.endswith("/rules.md") or normalized.endswith("/project_rules.md") or normalized.endswith("/rules/super-dev.md"):
+        if (
+            normalized.endswith("/rules.md")
+            or normalized.endswith("/project_rules.md")
+            or normalized.endswith("/rules/super-dev.md")
+        ):
             return [trigger_group, documents_group, confirmation_group, flow_group]
 
         return [documents_group, confirmation_group, flow_group]
@@ -1409,12 +1341,16 @@ class IntegrationManager(IntegrationManagerContentMixin):
     ) -> list[str]:
         normalized = content or ""
         missing: list[str] = []
-        for label, options in cls.contract_validation_groups_for_surface(target, surface_key, surface_path):
+        for label, options in cls.contract_validation_groups_for_surface(
+            target, surface_key, surface_path
+        ):
             if not any(option in normalized for option in options):
                 missing.append(label)
         return missing
 
-    def collect_managed_surface_paths(self, target: str, skill_name: str = "super-dev-core") -> dict[str, Path]:
+    def collect_managed_surface_paths(
+        self, target: str, skill_name: str = "super-dev-core"
+    ) -> dict[str, Path]:
         if target not in self.TARGETS:
             raise ValueError(f"Unsupported target: {target}")
 
@@ -1428,10 +1364,14 @@ class IntegrationManager(IntegrationManagerContentMixin):
 
         compatibility_protocol_path = self.resolve_compatibility_protocol_path(target)
         if compatibility_protocol_path is not None:
-            surfaces[f"compatibility-protocol:{compatibility_protocol_path}"] = compatibility_protocol_path
+            surfaces[f"compatibility-protocol:{compatibility_protocol_path}"] = (
+                compatibility_protocol_path
+            )
 
         if self.supports_slash(target):
-            project_slash = self.resolve_slash_command_path(target=target, scope="project", project_dir=self.project_dir)
+            project_slash = self.resolve_slash_command_path(
+                target=target, scope="project", project_dir=self.project_dir
+            )
             if project_slash is not None:
                 surfaces[f"project-slash:{project_slash}"] = project_slash
             global_slash = self.resolve_slash_command_path(target=target, scope="global")
@@ -1451,8 +1391,16 @@ class IntegrationManager(IntegrationManagerContentMixin):
             if path.exists():
                 try:
                     if path.name == "AGENTS.md" and target in {"codex-cli", "opencode"}:
-                        begin = self.CODEX_AGENTS_BEGIN if target == "codex-cli" else self.OPENCODE_AGENTS_BEGIN
-                        end = self.CODEX_AGENTS_END if target == "codex-cli" else self.OPENCODE_AGENTS_END
+                        begin = (
+                            self.CODEX_AGENTS_BEGIN
+                            if target == "codex-cli"
+                            else self.OPENCODE_AGENTS_BEGIN
+                        )
+                        end = (
+                            self.CODEX_AGENTS_END
+                            if target == "codex-cli"
+                            else self.OPENCODE_AGENTS_END
+                        )
                         if self._remove_managed_block(file_path=path, begin=begin, end=end):
                             removed.append(path)
                             continue
@@ -1474,8 +1422,6 @@ class IntegrationManager(IntegrationManagerContentMixin):
             return "compat-layer-via-project-skill"
         if target == "vscode-copilot":
             return "native-copilot-instruction-file"
-        if target == "jetbrains-ai":
-            return "native-jetbrains-ai-prompt-config"
         return "native-ide-rule-file"
 
     def _usage_profile(self, *, target: str, category: str) -> dict[str, object]:
@@ -1484,17 +1430,19 @@ class IntegrationManager(IntegrationManagerContentMixin):
         if target == "codex-cli":
             return {
                 "usage_mode": "agents-and-skill",
-                "primary_entry": '在 Codex 会话输入 `super-dev: <需求描述>`（由项目根 AGENTS.md + ~/.agents/skills/super-dev-core/SKILL.md 生效）',
+                "primary_entry": "在 Codex 会话输入 `super-dev: <需求描述>`，或显式提及 `$super-dev`；Codex 桌面端若在 `/` 列表中看到 `super-dev`，那是启用 Skill 的官方入口（由项目根 AGENTS.md + 项目级 .agents/skills/super-dev + ~/.codex/AGENTS.md + ~/.agents/skills/super-dev/SKILL.md 生效）",
                 "trigger_command": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
                 "trigger_context": "Codex 当前会话",
                 "usage_location": usage_location,
                 "requires_restart_after_onboard": True,
                 "post_onboard_steps": [
-                    "完成接入后重启 codex，使项目根 AGENTS.md 与 ~/.agents/skills/super-dev-core/SKILL.md 生效。",
-                    "不要输入 /super-dev，在 Codex 会话里输入 `super-dev: <需求描述>`。",
+                    "完成接入后重启 codex，使项目根 AGENTS.md、项目级 .agents/skills/super-dev、全局 CODEX_HOME/AGENTS.md（默认 ~/.codex/AGENTS.md）与 ~/.agents/skills/super-dev/SKILL.md 生效。",
+                    "最稳妥的触发方式仍是 `super-dev: <需求描述>`。",
+                    "如果你想显式调 Skill，可输入 `$super-dev`。",
+                    "如果 Codex 桌面端的 `/` 列表里出现 `super-dev`，可以直接选它；那是 Skill 列表入口，不是自定义项目 slash 文件。",
                 ],
                 "usage_notes": usage_notes,
-                "notes": "该 CLI 宿主当前不走自定义 slash，使用项目根 AGENTS.md 作为核心约束，并通过官方 skills 目录 .agents/skills / ~/.agents/skills 安装 super-dev-core。",
+                "notes": "Codex 官方最佳接入面是项目根 AGENTS.md + 项目级 .agents/skills + 全局 CODEX_HOME/AGENTS.md（默认 ~/.codex/AGENTS.md）+ 官方用户 skills 目录 ~/.agents/skills。桌面端的 / 能展示已启用 Skill，但这不等于支持任意自定义项目 slash 命令文件。",
             }
         if target == "antigravity":
             return {
@@ -1516,7 +1464,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
         if target == "trae":
             return {
                 "usage_mode": "rules-and-skill",
-                "primary_entry": '在 Trae Agent Chat 输入 `super-dev: <需求描述>`（由 .trae/project_rules.md + ~/.trae/user_rules.md + .trae/rules.md / ~/.trae/rules.md〔兼容规则面〕 + 兼容 Skill〔若检测到〕生效）',
+                "primary_entry": "在 Trae Agent Chat 输入 `super-dev: <需求描述>`（由 .trae/project_rules.md + ~/.trae/user_rules.md + .trae/rules.md / ~/.trae/rules.md〔兼容规则面〕 + 兼容 Skill〔若检测到〕生效）",
                 "trigger_command": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
                 "trigger_context": "Trae Agent Chat",
                 "usage_location": usage_location,
@@ -1531,26 +1479,10 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "usage_notes": usage_notes,
                 "notes": "该宿主当前以项目级 `.trae/project_rules.md` 与用户级 `~/.trae/user_rules.md` 为官方核心接入面；同时会兼容写入 `.trae/rules.md` 与 `~/.trae/rules.md`，若检测到 ~/.trae/skills，则会增强安装 super-dev-core。",
             }
-        if target == "kimi-cli":
-            return {
-                "usage_mode": "agents-and-skill",
-                "primary_entry": '在 Kimi CLI 会话输入 `super-dev: <需求描述>`（由 .kimi/AGENTS.md 生效；若检测到兼容 Skill 会额外增强）',
-                "trigger_command": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
-                "trigger_context": "Kimi CLI 当前会话",
-                "usage_location": usage_location,
-                "requires_restart_after_onboard": False,
-                "post_onboard_steps": [
-                    "打开 Kimi CLI，并确保当前目录就是已接入 Super Dev 的项目。",
-                    "输入 `super-dev: <需求描述>` 触发完整流程。",
-                    "按 output/* 与 .super-dev/changes/*/tasks.md 执行开发。",
-                ],
-                "usage_notes": usage_notes,
-                "notes": "该宿主当前以项目级 .kimi/AGENTS.md 为核心上下文；若检测到 ~/.kimi/skills，则会增强安装 super-dev-core，但不再把 Skill 当成官方默认前提。",
-            }
         if target == "kiro":
             return {
                 "usage_mode": "rules-and-skill",
-                "primary_entry": '在 Kiro IDE Agent Chat 输入 `super-dev: <需求描述>`（由 `.kiro/steering/super-dev.md` + `.kiro/skills/` / `~/.kiro/skills/` 生效）',
+                "primary_entry": "在 Kiro IDE Agent Chat 输入 `super-dev: <需求描述>`（由 `.kiro/steering/super-dev.md` + `.kiro/skills/` / `~/.kiro/skills/` 生效）",
                 "trigger_command": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
                 "trigger_context": "Kiro IDE Agent Chat",
                 "usage_location": usage_location,
@@ -1567,10 +1499,11 @@ class IntegrationManager(IntegrationManagerContentMixin):
         if target == "kiro-cli":
             return {
                 "usage_mode": "rules-and-skill",
-                "primary_entry": '在 Kiro CLI 会话输入 `super-dev: <需求描述>`（由 `.kiro/steering/super-dev.md` + `.kiro/skills/` / `~/.kiro/skills/` 生效）',
+                "primary_entry": "在 Kiro CLI 会话输入 `super-dev: <需求描述>`（由 `.kiro/steering/super-dev.md` + `.kiro/skills/` / `~/.kiro/skills/` 生效）",
                 "trigger_command": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
                 "trigger_context": "Kiro CLI 当前会话",
-                "usage_location": usage_location or "进入目标项目目录后，重开 Kiro CLI 会话再触发。",
+                "usage_location": usage_location
+                or "进入目标项目目录后，重开 Kiro CLI 会话再触发。",
                 "requires_restart_after_onboard": True,
                 "post_onboard_steps": [
                     "完成接入后重开 Kiro CLI，使 `.kiro/steering/` 与 skills 在新会话里生效。",
@@ -1588,13 +1521,15 @@ class IntegrationManager(IntegrationManagerContentMixin):
                     "primary_entry": '/super-dev "<需求描述>"（在该 CLI 宿主会话内）',
                     "trigger_command": '/super-dev "<需求描述>"',
                     "trigger_context": "当前 CLI 宿主会话",
-                    "usage_location": usage_location or "在项目目录启动宿主当前 CLI 会话后，直接在同一会话里触发。",
+                    "usage_location": usage_location
+                    or "在项目目录启动宿主当前 CLI 会话后，直接在同一会话里触发。",
                     "requires_restart_after_onboard": False,
                     "post_onboard_steps": [
                         "保持在宿主当前会话中执行 /super-dev。",
                         "让宿主先完成同类产品研究，再继续文档与编码阶段。",
                     ],
-                    "usage_notes": usage_notes or [
+                    "usage_notes": usage_notes
+                    or [
                         "建议在同一会话里连续完成 research、文档、Spec 与编码。",
                         "接入时还会安装宿主级 super-dev-core Skill，让宿主理解完整流水线契约。",
                     ],
@@ -1605,13 +1540,15 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "primary_entry": '/super-dev "<需求描述>"（在 IDE Agent Chat 内）',
                 "trigger_command": '/super-dev "<需求描述>"',
                 "trigger_context": "IDE Agent Chat",
-                "usage_location": usage_location or "打开宿主 IDE 的 Agent Chat，在当前项目上下文内触发。",
+                "usage_location": usage_location
+                or "打开宿主 IDE 的 Agent Chat，在当前项目上下文内触发。",
                 "requires_restart_after_onboard": False,
                 "post_onboard_steps": [
                     "在 IDE Agent Chat 中执行 /super-dev。",
                     "保持研究、文档、Spec 与编码在同一上下文中连续完成。",
                 ],
-                "usage_notes": usage_notes or [
+                "usage_notes": usage_notes
+                or [
                     "建议固定在项目级 Agent Chat 中完成整条流水线。",
                     "接入时还会安装宿主级 super-dev-core Skill，让宿主理解完整流水线契约。",
                 ],
@@ -1628,21 +1565,26 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "直接在宿主会话输入 `super-dev: <需求描述>`。",
                 "按 output/* 与 tasks.md 继续执行开发流程。",
             ],
-            "usage_notes": usage_notes or [
+            "usage_notes": usage_notes
+            or [
                 "该宿主当前通过规则文件约束执行流程。",
             ],
             "notes": "该宿主通过项目规则文件约束执行流程。",
         }
 
     def _smoke_profile(self, *, target: str, category: str) -> dict[str, object]:
-        trigger = self.TEXT_TRIGGER_PREFIX + " 请先不要开始编码，只回复 SMOKE_OK，并确认已读取当前项目中的 Super Dev 规则。"
+        trigger = (
+            self.TEXT_TRIGGER_PREFIX
+            + " 请先不要开始编码，只回复 SMOKE_OK，并确认已读取当前项目中的 Super Dev 规则。"
+        )
         if self.supports_slash(target):
             trigger = '/super-dev "请先不要开始编码，只回复 SMOKE_OK，并确认已读取当前项目中的 Super Dev 规则。"'
         if target == "codex-cli":
             steps = [
                 "完成接入后先重启 codex。",
                 "进入已接入 Super Dev 的项目目录。",
-                f"在 Codex 会话输入：{trigger}",
+                f"优先在 Codex 会话输入：{trigger}",
+                "如果你想显式调用官方 Skill，可输入 `$super-dev`；如果桌面端 `/` 列表里出现 `super-dev`，也可以直接选择它。",
             ]
         else:
             steps = [
@@ -1660,7 +1602,9 @@ class IntegrationManager(IntegrationManagerContentMixin):
     def _precondition_profile(self, *, target: str) -> dict[str, object]:
         guidance = list(self.HOST_PRECONDITION_GUIDANCE.get(target, []))
         items: list[dict[str, object]] = []
-        usage = self._usage_profile(target=target, category=HOST_TOOL_CATEGORY_MAP.get(target, "ide"))
+        usage = self._usage_profile(
+            target=target, category=HOST_TOOL_CATEGORY_MAP.get(target, "ide")
+        )
 
         context_item = {
             "status": "project-context-required",
@@ -1685,30 +1629,9 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 }
             )
 
-        if target == "iflow":
-            project_settings = self.project_dir / ".iflow" / "settings.json"
-            user_settings = Path.home() / ".iflow" / "settings.json"
-            env_key = bool(os.getenv("IFLOW_API_KEY", "").strip())
-            project_cfg = project_settings.exists()
-            user_cfg = user_settings.exists()
-            any_signal = env_key or project_cfg or user_cfg
-            items.insert(
-                0,
-                {
-                    "status": "host-auth-required",
-                    "label": "已检测到鉴权配置" if any_signal else "需宿主鉴权",
-                    "guidance": guidance,
-                    "signals": {
-                        "env_iflow_api_key": env_key,
-                        "project_settings_json": project_cfg,
-                        "user_settings_json": user_cfg,
-                    },
-                },
-            )
-        else:
-            extra = [item for item in guidance if isinstance(item, str) and item.strip()]
-            if extra and items:
-                items[0]["guidance"] = list(dict.fromkeys([*items[0]["guidance"], *extra]))
+        extra = [item for item in guidance if isinstance(item, str) and item.strip()]
+        if extra and items:
+            items[0]["guidance"] = list(dict.fromkeys([*items[0]["guidance"], *extra]))
 
         if not items:
             return {
@@ -1732,7 +1655,11 @@ class IntegrationManager(IntegrationManagerContentMixin):
         combined_signals: dict[str, bool] = {}
         for item in items:
             for guidance_item in item.get("guidance", []):
-                if isinstance(guidance_item, str) and guidance_item.strip() and guidance_item not in combined_guidance:
+                if (
+                    isinstance(guidance_item, str)
+                    and guidance_item.strip()
+                    and guidance_item not in combined_guidance
+                ):
                     combined_guidance.append(guidance_item.strip())
             item_signals = item.get("signals", {})
             if isinstance(item_signals, dict):
@@ -1769,10 +1696,6 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "mode": "official-context",
                 "summary": "官方 copilot-instructions + AGENTS.md compatibility",
             },
-            "jetbrains-ai": {
-                "mode": "official-context",
-                "summary": "官方 .junie/AGENTS + agent skills",
-            },
             "cline": {
                 "mode": "official-context",
                 "summary": "官方 .clinerules + skills + AGENTS.md compatibility",
@@ -1780,10 +1703,6 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "roo-code": {
                 "mode": "official-skill",
                 "summary": "官方 commands + rules",
-            },
-            "aider": {
-                "mode": "official-context",
-                "summary": "官方 .aider.conf + conventions/read-only context",
             },
             "qoder-cli": {
                 "mode": "official-skill",
@@ -1800,10 +1719,6 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "opencode": {
                 "mode": "official-skill",
                 "summary": "官方 AGENTS.md + commands + skills",
-            },
-            "iflow": {
-                "mode": "official-skill",
-                "summary": "官方 commands + skills",
             },
             "kilo-code": {
                 "mode": "official-rules",
@@ -1832,10 +1747,6 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "gemini-cli": {
                 "mode": "official-context",
                 "summary": "官方 commands + GEMINI.md",
-            },
-            "kimi-cli": {
-                "mode": "official-context",
-                "summary": "官方 AGENTS.md + 文本触发",
             },
             "kiro-cli": {
                 "mode": "official-steering",
@@ -1908,14 +1819,6 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "official_user_surfaces": [],
                 "observed_compatibility_surfaces": ["AGENTS.md"],
             },
-            "jetbrains-ai": {
-                "official_project_surfaces": [
-                    ".junie/AGENTS.md",
-                    ".junie/skills/super-dev-core/SKILL.md",
-                ],
-                "official_user_surfaces": ["~/.junie/skills/super-dev-core/SKILL.md"],
-                "observed_compatibility_surfaces": [],
-            },
             "cline": {
                 "official_project_surfaces": [
                     ".clinerules/super-dev.md",
@@ -1937,18 +1840,23 @@ class IntegrationManager(IntegrationManagerContentMixin):
                     ".roo/rules/super-dev.md",
                     ".roo/commands/super-dev.md",
                 ],
-                "official_user_surfaces": ["~/.roo/rules/super-dev.md", "~/.roo/commands/super-dev.md"],
-                "observed_compatibility_surfaces": [],
-            },
-            "aider": {
-                "official_project_surfaces": ["AGENTS.md", ".aider.conf.yml"],
-                "official_user_surfaces": ["~/.aider.conf.yml"],
+                "official_user_surfaces": [
+                    "~/.roo/rules/super-dev.md",
+                    "~/.roo/commands/super-dev.md",
+                ],
                 "observed_compatibility_surfaces": [],
             },
             "codex-cli": {
-                "official_project_surfaces": ["AGENTS.md"],
-                "official_user_surfaces": ["~/.agents/skills/super-dev-core/SKILL.md"],
-                "observed_compatibility_surfaces": ["~/.codex/skills/super-dev-core/SKILL.md"],
+                "official_project_surfaces": ["AGENTS.md", ".agents/skills/super-dev/SKILL.md"],
+                "official_user_surfaces": [
+                    "~/.codex/AGENTS.md",
+                    "~/.agents/skills/super-dev/SKILL.md",
+                ],
+                "observed_compatibility_surfaces": [
+                    "~/.agents/skills/super-dev-core/SKILL.md",
+                    "~/.codex/skills/super-dev/SKILL.md",
+                    "~/.codex/skills/super-dev-core/SKILL.md",
+                ],
             },
             "copilot-cli": {
                 "official_project_surfaces": [
@@ -1959,14 +1867,26 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "observed_compatibility_surfaces": ["AGENTS.md"],
             },
             "cursor-cli": {
-                "official_project_surfaces": [".cursor/rules/super-dev.mdc", ".cursor/commands/super-dev.md"],
+                "official_project_surfaces": [
+                    ".cursor/rules/super-dev.mdc",
+                    ".cursor/commands/super-dev.md",
+                ],
                 "official_user_surfaces": ["~/.cursor/commands/super-dev.md"],
-                "observed_compatibility_surfaces": ["AGENTS.md", "~/.cursor/skills/super-dev-core/SKILL.md"],
+                "observed_compatibility_surfaces": [
+                    "AGENTS.md",
+                    "~/.cursor/skills/super-dev-core/SKILL.md",
+                ],
             },
             "cursor": {
-                "official_project_surfaces": [".cursor/rules/super-dev.mdc", ".cursor/commands/super-dev.md"],
+                "official_project_surfaces": [
+                    ".cursor/rules/super-dev.mdc",
+                    ".cursor/commands/super-dev.md",
+                ],
                 "official_user_surfaces": ["~/.cursor/commands/super-dev.md"],
-                "observed_compatibility_surfaces": ["AGENTS.md", "~/.cursor/skills/super-dev-core/SKILL.md"],
+                "observed_compatibility_surfaces": [
+                    "AGENTS.md",
+                    "~/.cursor/skills/super-dev-core/SKILL.md",
+                ],
             },
             "windsurf": {
                 "official_project_surfaces": [
@@ -1979,22 +1899,11 @@ class IntegrationManager(IntegrationManagerContentMixin):
             },
             "gemini-cli": {
                 "official_project_surfaces": ["GEMINI.md", ".gemini/commands/super-dev.md"],
-                "official_user_surfaces": ["~/.gemini/GEMINI.md", "~/.gemini/commands/super-dev.md"],
-                "observed_compatibility_surfaces": ["~/.gemini/skills/super-dev-core/SKILL.md"],
-            },
-            "iflow": {
-                "official_project_surfaces": [
-                    ".iflow/AGENTS.md",
-                    ".iflow/commands/super-dev.toml",
-                    ".iflow/skills/super-dev-core/SKILL.md",
+                "official_user_surfaces": [
+                    "~/.gemini/GEMINI.md",
+                    "~/.gemini/commands/super-dev.md",
                 ],
-                "official_user_surfaces": ["~/.iflow/skills/super-dev-core/SKILL.md"],
-                "observed_compatibility_surfaces": [],
-            },
-            "kimi-cli": {
-                "official_project_surfaces": [".kimi/AGENTS.md"],
-                "official_user_surfaces": [],
-                "observed_compatibility_surfaces": ["~/.kimi/skills/super-dev-core/SKILL.md"],
+                "observed_compatibility_surfaces": ["~/.gemini/skills/super-dev-core/SKILL.md"],
             },
             "kiro-cli": {
                 "official_project_surfaces": [
@@ -2090,7 +1999,9 @@ class IntegrationManager(IntegrationManagerContentMixin):
         for relative in integration.files:
             file_path = self.project_dir / relative
             if target in {"codex-cli", "opencode"} and relative == "AGENTS.md":
-                begin = self.CODEX_AGENTS_BEGIN if target == "codex-cli" else self.OPENCODE_AGENTS_BEGIN
+                begin = (
+                    self.CODEX_AGENTS_BEGIN if target == "codex-cli" else self.OPENCODE_AGENTS_BEGIN
+                )
                 end = self.CODEX_AGENTS_END if target == "codex-cli" else self.OPENCODE_AGENTS_END
                 block_content = self._append_flow_contract(
                     content=self._build_file_content(target=target, relative=relative),
@@ -2115,10 +2026,33 @@ class IntegrationManager(IntegrationManagerContentMixin):
             file_path.write_text(content, encoding="utf-8")
             written_files.append(file_path)
 
+        # Auto-install enforcement hooks for supported hosts
+        if target == "claude-code":
+            try:
+                from .._enforcement_bridge import auto_install_enforcement
+
+                enforcement_files = auto_install_enforcement(self.project_dir)
+                written_files.extend(enforcement_files)
+            except Exception:
+                pass  # Graceful degradation — enforcement is optional
+
         return written_files
 
     def setup_global_protocol(self, target: str, force: bool = False) -> Path | None:
         protocol_file = self.resolve_global_protocol_path(target)
+
+        if target == "codex-cli" and protocol_file is not None:
+            block_content = self._append_flow_contract(
+                content=self._build_codex_agents_content(),
+                relative=protocol_file.as_posix(),
+            )
+            updated = self._upsert_managed_block(
+                file_path=protocol_file,
+                begin=self.CODEX_AGENTS_BEGIN,
+                end=self.CODEX_AGENTS_END,
+                block_content=block_content,
+            )
+            return protocol_file if updated or protocol_file.exists() else None
 
         if target == "claude-code" and protocol_file is not None:
             if protocol_file.exists() and not force:

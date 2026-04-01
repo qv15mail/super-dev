@@ -151,8 +151,6 @@ class ReleaseReadinessEvaluator:
         "/.codebuddy/",
         "/.cursor/",
         "/.gemini/",
-        "/.iflow/",
-        "/.kimi/",
         "/.kiro/",
         "/.opencode/",
         "/.qoder/",
@@ -499,6 +497,11 @@ class ReleaseReadinessEvaluator:
                         if isinstance(ui_contract_payload.get("component_stack"), dict)
                         else {}
                     )
+                    emoji_policy = (
+                        ui_contract_payload.get("emoji_policy")
+                        if isinstance(ui_contract_payload.get("emoji_policy"), dict)
+                        else {}
+                    )
                     icon_system = (
                         ui_contract_payload.get("icon_system")
                         or component_stack.get("icon")
@@ -514,6 +517,12 @@ class ReleaseReadinessEvaluator:
                             )
                         ),
                         bool(icon_system),
+                        (
+                            bool(emoji_policy)
+                            and emoji_policy.get("allowed_in_ui") is False
+                            and emoji_policy.get("allowed_as_icon") is False
+                            and emoji_policy.get("allowed_during_development") is False
+                        ),
                         isinstance(ui_contract_payload.get("ui_library_preference"), dict)
                         and bool(ui_contract_payload.get("ui_library_preference")),
                         isinstance(ui_contract_payload.get("design_tokens"), dict)

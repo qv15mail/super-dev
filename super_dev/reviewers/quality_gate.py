@@ -23,6 +23,13 @@ from ..config import ConfigManager
 from .redteam import RedTeamReport
 from .validation_rules import ValidationRuleEngine
 
+try:
+    from .review_agents import build_parallel_review_prompt
+
+    REVIEW_AGENTS_AVAILABLE = True
+except ImportError:
+    REVIEW_AGENTS_AVAILABLE = False
+
 
 class CheckStatus(Enum):
     """检查状态"""
@@ -428,6 +435,18 @@ class QualityGateChecker:
         except Exception:
             pass
 
+    def _build_review_agent_prompts(self, context: dict) -> dict[str, str] | None:
+        """Build parallel review agent prompts for the quality gate."""
+        if not REVIEW_AGENTS_AVAILABLE:
+            return None
+        try:
+            return build_parallel_review_prompt(
+                change_description=context.get("description", ""),
+                files_changed=context.get("files_changed", []),
+            )
+        except Exception:
+            return None
+
     def _coerce_host_compat_score(self, value: object) -> int:
         score = self._coerce_int(value, default=self.HOST_COMPAT_MIN_SCORE)
         return max(0, min(100, score))
@@ -581,17 +600,11 @@ class QualityGateChecker:
 
             toolkits = load_expert_toolkits()
             for expert_id, toolkit in toolkits.items():
-                if hasattr(toolkit, "rules") and hasattr(
-                    toolkit.rules, "validation_rule_ids"
-                ):
+                if hasattr(toolkit, "rules") and hasattr(toolkit.rules, "validation_rule_ids"):
                     for rule_id in toolkit.rules.validation_rule_ids:
                         # 检查该规则是否已在 rule_engine 中注册
                         if self._rule_engine:
-                            matching = [
-                                r
-                                for r in self._rule_engine.rules
-                                if r.id == rule_id
-                            ]
+                            matching = [r for r in self._rule_engine.rules if r.id == rule_id]
                             if not matching:
                                 checks.append(
                                     QualityCheck(
@@ -868,9 +881,9 @@ class QualityGateChecker:
             detail_parts.extend(depth_issues)
 
             status = (
-                CheckStatus.PASSED if score >= 80
-                else CheckStatus.WARNING if score >= 60
-                else CheckStatus.FAILED
+                CheckStatus.PASSED
+                if score >= 80
+                else CheckStatus.WARNING if score >= 60 else CheckStatus.FAILED
             )
 
             checks.append(
@@ -920,9 +933,9 @@ class QualityGateChecker:
             detail_parts.extend(depth_issues)
 
             status = (
-                CheckStatus.PASSED if score >= 80
-                else CheckStatus.WARNING if score >= 60
-                else CheckStatus.FAILED
+                CheckStatus.PASSED
+                if score >= 80
+                else CheckStatus.WARNING if score >= 60 else CheckStatus.FAILED
             )
 
             checks.append(
@@ -965,9 +978,9 @@ class QualityGateChecker:
             detail_parts.extend(depth_issues)
 
             status = (
-                CheckStatus.PASSED if depth_score >= 80
-                else CheckStatus.WARNING if depth_score >= 60
-                else CheckStatus.FAILED
+                CheckStatus.PASSED
+                if depth_score >= 80
+                else CheckStatus.WARNING if depth_score >= 60 else CheckStatus.FAILED
             )
 
             checks.append(
@@ -1373,6 +1386,9 @@ class QualityGateChecker:
             if isinstance(payload.get("component_stack"), dict)
             else {}
         )
+        emoji_policy = (
+            payload.get("emoji_policy") if isinstance(payload.get("emoji_policy"), dict) else {}
+        )
         icon_system = (
             payload.get("icon_system")
             or component_stack.get("icon")
@@ -1389,6 +1405,12 @@ class QualityGateChecker:
                 )
             ),
             "icon_system": bool(icon_system),
+            "emoji_policy": (
+                bool(emoji_policy)
+                and emoji_policy.get("allowed_in_ui") is False
+                and emoji_policy.get("allowed_as_icon") is False
+                and emoji_policy.get("allowed_during_development") is False
+            ),
             "ui_library_preference": isinstance(payload.get("ui_library_preference"), dict)
             and bool(payload.get("ui_library_preference")),
             "design_tokens": isinstance(payload.get("design_tokens"), dict)
@@ -1491,7 +1513,11 @@ class QualityGateChecker:
             status=CheckStatus.PASSED,
             score=100,
             weight=self.CHECKS_CONFIG["ui_quality"]["weight"],
-            details=f"UI 契约已冻结并接入 runtime；library={library}; icon={icon_system or '-'}",
+            details=(
+                "UI 契约已冻结并接入 runtime；"
+                f"library={library}; icon={icon_system or '-'}; "
+                "emoji_policy=forbidden"
+            ),
         )
 
     def _check_ui_review(self) -> QualityCheck:

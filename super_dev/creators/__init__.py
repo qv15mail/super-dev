@@ -8,11 +8,13 @@ Super Dev 项目创建器
 """
 
 from .adr_generator import ADRGenerator, ArchitectureDecisionRecord
+from .compact_template import COMPACT_SUMMARY_TEMPLATE
 from .creator import ProjectCreator
 from .document_generator import DocumentGenerator
 from .frontend_builder import FrontendScaffoldBuilder
 from .implementation_builder import ImplementationScaffoldBuilder
 from .prompt_generator import AIPromptGenerator
+from .prompt_sections import PromptBuilder, PromptSection
 from .prompt_templates import PromptTemplate, PromptTemplateManager
 from .requirement_parser import RequirementParser
 from .spec_builder import SpecBuilder
@@ -30,5 +32,8 @@ __all__ = [
     "SpecBuilder",
     "SpecTaskExecutor",
     "AIPromptGenerator",
+    "COMPACT_SUMMARY_TEMPLATE",
+    "PromptBuilder",
+    "PromptSection",
     "RequirementParser",
 ]

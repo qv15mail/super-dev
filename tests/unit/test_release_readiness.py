@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from super_dev import __version__
@@ -124,6 +125,7 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
             '  "style_direction": "Editorial workspace",\n'
             '  "typography": {"heading": "Space Grotesk", "body": "Inter"},\n'
             '  "icon_system": "lucide-react",\n'
+            '  "emoji_policy": {"allowed_in_ui": false, "allowed_as_icon": false, "allowed_during_development": false},\n'
             '  "ui_library_preference": {\n'
             '    "preferred": "shadcn/ui + Radix + Tailwind",\n'
             '    "strict": false,\n'
@@ -294,6 +296,21 @@ def test_release_readiness_fails_when_frontend_runtime_structural_ui_checks_fail
     closure_check = next(check for check in report.checks if check.name == "Delivery Closure")
     assert closure_check.passed is False
     assert "frontend runtime ui contract alignment missing" in closure_check.detail
+
+
+def test_release_readiness_fails_when_ui_contract_missing_emoji_policy(temp_project_dir: Path) -> None:
+    _prepare_release_ready_project(temp_project_dir)
+    contract_file = temp_project_dir / "output" / f"{temp_project_dir.name}-ui-contract.json"
+    payload = json.loads(contract_file.read_text(encoding="utf-8"))
+    payload.pop("emoji_policy", None)
+    contract_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    evaluator = ReleaseReadinessEvaluator(temp_project_dir)
+    report = evaluator.evaluate(verify_tests=False)
+
+    closure_check = next(check for check in report.checks if check.name == "Delivery Closure")
+    assert closure_check.passed is False
+    assert "ui contract incomplete" in closure_check.detail
 
 
 def test_release_readiness_fails_when_latest_spec_contains_tbd_placeholders(temp_project_dir: Path) -> None:

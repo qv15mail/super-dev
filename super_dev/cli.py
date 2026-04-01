@@ -49,12 +49,12 @@ from .catalogs import (
 from .cli_analysis_mixin import CliAnalysisMixin
 from .cli_deploy_runtime_mixin import CliDeployRuntimeMixin
 from .cli_experience_mixin import CliExperienceMixin
+from .cli_governance_mixin import CliGovernanceMixin
 from .cli_host_ops_mixin import CliHostOpsMixin
 from .cli_parser_mixin import CliParserMixin
 from .cli_release_quality_mixin import CliReleaseQualityMixin
 from .cli_spec_mixin import CliSpecMixin
 from .config import ConfigManager, ProjectConfig, get_config_manager
-from .exceptions import SuperDevError
 from .review_state import (
     architecture_revision_file,
     docs_confirmation_file,
@@ -77,6 +77,7 @@ from .review_state import (
 from .terminal import (
     create_console,
 )
+from .error_handler import handle_cli_error
 from .utils import get_logger
 from .workflow_state import (
     detect_pipeline_summary,
@@ -102,17 +103,28 @@ PRIMARY_SUPPORTED_HOST_TOOLS = list(PRIMARY_HOST_TOOL_IDS)
 SPECIAL_INSTALL_HOST_TOOLS = list(SPECIAL_INSTALL_HOST_TOOL_IDS)
 
 
-class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliDeployRuntimeMixin, CliExperienceMixin, CliHostOpsMixin, CliSpecMixin):
+class SuperDevCLI(
+    CliParserMixin,
+    CliAnalysisMixin,
+    CliReleaseQualityMixin,
+    CliDeployRuntimeMixin,
+    CliExperienceMixin,
+    CliHostOpsMixin,
+    CliSpecMixin,
+    CliGovernanceMixin,
+):
     """Super Dev 命令行接口"""
 
     def __init__(self):
         self.console = create_console()
         self.parser = self._create_parser()
-        self.logger = get_logger('cli', level='WARNING')  # CLI只记录WARNING及以上级别
+        self.logger = get_logger("cli", level="WARNING")  # CLI只记录WARNING及以上级别
 
     def _public_host_targets(self, *, integration_manager) -> list[str]:
         available_targets = [item.name for item in integration_manager.list_targets()]
-        public_targets = [target for target in PRIMARY_SUPPORTED_HOST_TOOLS if target in available_targets]
+        public_targets = [
+            target for target in PRIMARY_SUPPORTED_HOST_TOOLS if target in available_targets
+        ]
         return public_targets or available_targets
 
     def run(self, args: list | None = None) -> int:
@@ -127,6 +139,17 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         """
         argv = list(args) if args is not None else sys.argv[1:]
 
+        # P1-8: 启动版本检查（非阻塞，缓存 24h，仅在有子命令时检查）
+        if argv and not argv[0].startswith("-"):
+            try:
+                from .version_check import check_for_update
+
+                hint = check_for_update()
+                if hint:
+                    self.console.print(f"[dim]{hint}[/dim]")
+            except Exception:
+                pass
+
         # 兼容 `super-dev help` / `super-dev version` 这类用户习惯输入
         if len(argv) == 1 and argv[0] == "help":
             self._print_banner()
@@ -135,6 +158,15 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         if len(argv) == 1 and argv[0] == "version":
             self.console.print(f"super-dev {__version__}")
             return 0
+
+        # 未知单词命令 → 显示错误和建议
+        if self._is_unknown_command(argv):
+            unknown = argv[0]
+            suggestions = self._suggest_commands(unknown)
+            self.console.print(f"[red]未知命令: '{unknown}'[/red]")
+            self.console.print(f"你是否想输入: {', '.join(suggestions)}?")
+            self.console.print("运行 'super-dev --help' 查看所有命令。")
+            return 2
 
         # 直达入口：`super-dev <需求描述>`
         if self._is_direct_requirement_input(argv):
@@ -148,8 +180,22 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         parsed_args = self.parser.parse_args(argv)
 
         if parsed_args.command is None:
-            if self._project_has_super_dev_context(Path.cwd()):
-                return self._cmd_resume(argparse.Namespace(json=False))
+            # 终端无参数：始终显示安装引导或状态面板
+            # resume 由宿主通过 SKILL.md 触发，不在终端 CLI 做
+            pass
+
+            # Onboarding: show first-run guide if applicable
+            try:
+                from .onboarding import OnboardingGuide
+
+                guide = OnboardingGuide()
+                project_dir = Path.cwd()
+                if guide.should_show(project_dir):
+                    guide.show(self.console)
+                    guide.mark_seen(project_dir)
+            except Exception:
+                pass
+
             install_args = argparse.Namespace(
                 host=None,
                 all=False,
@@ -175,37 +221,15 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             handler = cast(Callable[[Any], int], command_handler)
             return int(handler(parsed_args))
 
-        except SuperDevError as e:
-            # 已知异常 - 显示友好错误信息
-            self.console.print(f"[red]错误: {e.message}[/red]")
-            if e.details:
-                self.logger.warning(f"命令执行失败: {e.code}", extra={'details': e.details})
-            return 1
-
-        except KeyboardInterrupt:
-            # 用户中断
-            self.console.print("\n[yellow]操作已取消[/yellow]")
-            return 130
-
         except Exception as e:
-            # 未知异常 - 显示详细错误信息
-            self.console.print(f"[red]未预期的错误: {str(e)}[/red]")
+            # 统一错误处理 — 不向终端用户暴露 traceback
+            cmd_name = str(getattr(parsed_args, "command", ""))
 
-            # 记录完整错误栈
-            self.logger.error(
-                f"CLI命令异常: {parsed_args.command}",
-                extra={
-                    'error_type': type(e).__name__,
-                    'error_message': str(e),
-                    'traceback': traceback.format_exc()
-                }
-            )
-
-            # 在调试模式下显示traceback
-            if '--debug' in sys.argv or '-d' in sys.argv:
+            # 调试模式下仍然打印 traceback
+            if "--debug" in sys.argv or "-d" in sys.argv:
                 self.console.print(traceback.format_exc())
 
-            return 1
+            return handle_cli_error(e, command=cmd_name)
 
     # ==================== 命令处理器 ====================
 
@@ -275,7 +299,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
             else:
                 self.console.print(f"[cyan]{title}[/cyan]")
-                self.console.print(f"  状态: {self._review_status_label(payload['status'], review_type=review_type)}")
+                self.console.print(
+                    f"  状态: {self._review_status_label(payload['status'], review_type=review_type)}"
+                )
                 self.console.print(f"  备注: {payload['comment'] or '-'}")
                 self.console.print(f"  操作者: {payload['actor'] or '-'}")
                 self.console.print(f"  关联 Run: {payload['run_id'] or '-'}")
@@ -295,34 +321,86 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             },
         )
         payload = load_fn(project_dir) or {}
-        self._write_session_brief(project_dir=project_dir, payload=self._build_next_step_payload(project_dir))
+        self._write_session_brief(
+            project_dir=project_dir, payload=self._build_next_step_payload(project_dir)
+        )
         if args.json:
             self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             if review_type == "ui":
-                action = "已确认 UI 改版通过" if args.status == "confirmed" else ("已记录 UI 改版请求" if args.status == "revision_requested" else "已重置为待确认")
+                action = (
+                    "已确认 UI 改版通过"
+                    if args.status == "confirmed"
+                    else (
+                        "已记录 UI 改版请求"
+                        if args.status == "revision_requested"
+                        else "已重置为待确认"
+                    )
+                )
             elif review_type == "preview":
-                action = "已确认前端预览通过" if args.status == "confirmed" else ("已记录预览返工请求" if args.status == "revision_requested" else "已重置为待确认")
+                action = (
+                    "已确认前端预览通过"
+                    if args.status == "confirmed"
+                    else (
+                        "已记录预览返工请求"
+                        if args.status == "revision_requested"
+                        else "已重置为待确认"
+                    )
+                )
             elif review_type == "architecture":
-                action = "已确认架构返工通过" if args.status == "confirmed" else ("已记录架构返工请求" if args.status == "revision_requested" else "已重置为待确认")
+                action = (
+                    "已确认架构返工通过"
+                    if args.status == "confirmed"
+                    else (
+                        "已记录架构返工请求"
+                        if args.status == "revision_requested"
+                        else "已重置为待确认"
+                    )
+                )
             elif review_type == "quality":
-                action = "已确认质量返工通过" if args.status == "confirmed" else ("已记录质量返工请求" if args.status == "revision_requested" else "已重置为待确认")
+                action = (
+                    "已确认质量返工通过"
+                    if args.status == "confirmed"
+                    else (
+                        "已记录质量返工请求"
+                        if args.status == "revision_requested"
+                        else "已重置为待确认"
+                    )
+                )
             else:
-                action = "已确认三文档" if args.status == "confirmed" else ("已记录文档修改要求" if args.status == "revision_requested" else "已重置为待确认")
+                action = (
+                    "已确认三文档"
+                    if args.status == "confirmed"
+                    else (
+                        "已记录文档修改要求"
+                        if args.status == "revision_requested"
+                        else "已重置为待确认"
+                    )
+                )
             self.console.print(f"[green]✓[/green] {action}")
-            self.console.print(f"  状态: {self._review_status_label(args.status, review_type=review_type)}")
+            self.console.print(
+                f"  状态: {self._review_status_label(args.status, review_type=review_type)}"
+            )
             self.console.print(f"  备注: {payload.get('comment', '') or '-'}")
             self.console.print(f"  操作者: {payload.get('actor', '') or '-'}")
             self.console.print(f"  关联 Run: {payload.get('run_id', '') or '-'}")
             self.console.print(f"  文件: {file_path}")
             if review_type == "ui" and args.status == "revision_requested":
-                self.console.print("[dim]下一步: 先更新 output/*-uiux.md，再重做前端，并重新执行 frontend runtime 与 UI review[/dim]")
+                self.console.print(
+                    "[dim]下一步: 先更新 output/*-uiux.md，再重做前端，并重新执行 frontend runtime 与 UI review[/dim]"
+                )
             elif review_type == "preview" and args.status == "revision_requested":
-                self.console.print("[dim]下一步: 继续修改前端预览，重新生成 frontend runtime 与预览页，再次提交预览确认[/dim]")
+                self.console.print(
+                    "[dim]下一步: 继续修改前端预览，重新生成 frontend runtime 与预览页，再次提交预览确认[/dim]"
+                )
             elif review_type == "architecture" and args.status == "revision_requested":
-                self.console.print("[dim]下一步: 先更新 output/*-architecture.md，再调整技术方案与实现，并重新通过相关质量门禁[/dim]")
+                self.console.print(
+                    "[dim]下一步: 先更新 output/*-architecture.md，再调整技术方案与实现，并重新通过相关质量门禁[/dim]"
+                )
             elif review_type == "quality" and args.status == "revision_requested":
-                self.console.print("[dim]下一步: 先修复质量/安全问题，重新执行 quality gate 与 release proof-pack，再继续后续动作[/dim]")
+                self.console.print(
+                    "[dim]下一步: 先修复质量/安全问题，重新执行 quality gate 与 release proof-pack，再继续后续动作[/dim]"
+                )
         return 0
 
         return 0
@@ -354,15 +432,51 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
 
     # 每个环节对应的专家角色和职责
     STAGE_EXPERTS: dict[str, dict[str, str]] = {
-        "research": {"role": "PM + ARCHITECT", "title": "产品经理 + 架构师", "duty": "需求解析、知识库增强、同类产品研究"},
-        "prd": {"role": "PM", "title": "产品经理", "duty": "需求分析、PRD 编写、用户故事、验收标准"},
-        "architecture": {"role": "ARCHITECT", "title": "架构师", "duty": "系统设计、技术选型、API 设计、数据库建模"},
-        "uiux": {"role": "UI + UX", "title": "UI/UX 设计师", "duty": "视觉设计、设计系统、组件规范、交互设计"},
-        "spec": {"role": "PM + CODE", "title": "产品经理 + 代码专家", "duty": "需求拆解、任务分解、优先级排序"},
-        "frontend": {"role": "CODE + UI", "title": "代码专家 + UI 设计师", "duty": "前端实现、组件开发、页面搭建"},
-        "backend": {"role": "CODE + DBA", "title": "代码专家 + 数据库专家", "duty": "后端实现、API 开发、数据库迁移"},
-        "quality": {"role": "QA + SECURITY", "title": "QA 专家 + 安全专家", "duty": "质量门禁、红队审查、测试验证"},
-        "delivery": {"role": "DEVOPS + QA", "title": "DevOps + QA 专家", "duty": "CI/CD 配置、发布演练、交付打包"},
+        "research": {
+            "role": "PM + ARCHITECT",
+            "title": "产品经理 + 架构师",
+            "duty": "需求解析、知识库增强、同类产品研究",
+        },
+        "prd": {
+            "role": "PM",
+            "title": "产品经理",
+            "duty": "需求分析、PRD 编写、用户故事、验收标准",
+        },
+        "architecture": {
+            "role": "ARCHITECT",
+            "title": "架构师",
+            "duty": "系统设计、技术选型、API 设计、数据库建模",
+        },
+        "uiux": {
+            "role": "UI + UX",
+            "title": "UI/UX 设计师",
+            "duty": "视觉设计、设计系统、组件规范、交互设计",
+        },
+        "spec": {
+            "role": "PM + CODE",
+            "title": "产品经理 + 代码专家",
+            "duty": "需求拆解、任务分解、优先级排序",
+        },
+        "frontend": {
+            "role": "CODE + UI",
+            "title": "代码专家 + UI 设计师",
+            "duty": "前端实现、组件开发、页面搭建",
+        },
+        "backend": {
+            "role": "CODE + DBA",
+            "title": "代码专家 + 数据库专家",
+            "duty": "后端实现、API 开发、数据库迁移",
+        },
+        "quality": {
+            "role": "QA + SECURITY",
+            "title": "QA 专家 + 安全专家",
+            "duty": "质量门禁、红队审查、测试验证",
+        },
+        "delivery": {
+            "role": "DEVOPS + QA",
+            "title": "DevOps + QA 专家",
+            "duty": "CI/CD 配置、发布演练、交付打包",
+        },
     }
 
     def _cmd_run(self, args) -> int:
@@ -414,16 +528,21 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             self.console.print("")
             if RICH_AVAILABLE:
                 from rich.panel import Panel
-                self.console.print(Panel(
-                    f"[bold cyan]Super Dev Run[/bold cyan]\n\n"
-                    f"  [dim]环节[/dim]    {normalized} ({label})\n"
-                    f"  [dim]专家[/dim]    [bold]{expert_role}[/bold] - {expert_title}",
-                    border_style="cyan",
-                    expand=True,
-                    padding=(1, 2),
-            ))
+
+                self.console.print(
+                    Panel(
+                        f"[bold cyan]Super Dev Run[/bold cyan]\n\n"
+                        f"  [dim]环节[/dim]    {normalized} ({label})\n"
+                        f"  [dim]专家[/dim]    [bold]{expert_role}[/bold] - {expert_title}",
+                        border_style="cyan",
+                        expand=True,
+                        padding=(1, 2),
+                    )
+                )
             else:
-                self.console.print(f"Super Dev Run: {normalized} ({label}) | {expert_role} - {expert_title}")
+                self.console.print(
+                    f"Super Dev Run: {normalized} ({label}) | {expert_role} - {expert_title}"
+                )
             self.console.print("")
 
             if normalized in {"research", "prd", "architecture", "uiux"}:
@@ -433,6 +552,7 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         # 没有指定阶段，显示环节菜单
         from rich.panel import Panel
         from rich.table import Table
+
         self.console.print("")
         table = Table(title="可用环节", expand=True, border_style="dim", title_style="bold cyan")
         table.add_column("编号", style="bold cyan", min_width=4, max_width=6, justify="center")
@@ -508,22 +628,36 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         return 0
 
     def _render_next_step_payload(self, payload: dict[str, Any], *, title: str) -> None:
-        action_card = payload.get("action_card") if isinstance(payload.get("action_card"), dict) else {}
+        action_card = (
+            payload.get("action_card") if isinstance(payload.get("action_card"), dict) else {}
+        )
         self.console.print(f"[cyan]{title}[/cyan]")
         workflow_mode = str(payload.get("workflow_mode", "")).strip()
         if workflow_mode:
             self.console.print(f"  动作类型: {self._workflow_mode_label(workflow_mode)}")
-        self.console.print(f"  当前步骤: {payload.get('current_step_label', payload.get('status', '-'))}")
-        self.console.print(f"  用户下一步: {payload.get('user_next_action', payload.get('recommended_command', '-'))}")
-        user_action_shortcuts = payload.get("user_action_shortcuts") if isinstance(payload.get("user_action_shortcuts"), list) else []
+        self.console.print(
+            f"  当前步骤: {payload.get('current_step_label', payload.get('status', '-'))}"
+        )
+        self.console.print(
+            f"  用户下一步: {payload.get('user_next_action', payload.get('recommended_command', '-'))}"
+        )
+        user_action_shortcuts = (
+            payload.get("user_action_shortcuts")
+            if isinstance(payload.get("user_action_shortcuts"), list)
+            else []
+        )
         if user_action_shortcuts:
-            self.console.print(f"  你现在可以直接说: {' / '.join(str(item) for item in user_action_shortcuts[:4])}")
+            self.console.print(
+                f"  你现在可以直接说: {' / '.join(str(item) for item in user_action_shortcuts[:4])}"
+            )
         preferred_host_name = str(payload.get("preferred_host_name", "")).strip()
         host_continue_prompt = str(payload.get("host_continue_prompt", "")).strip()
         if preferred_host_name and host_continue_prompt:
             self.console.print(f"  宿主第一句 ({preferred_host_name}): {host_continue_prompt}")
         self.console.print(f"  机器侧动作: {payload.get('recommended_command', '-')}")
-        examples = action_card.get("examples") if isinstance(action_card.get("examples"), list) else []
+        examples = (
+            action_card.get("examples") if isinstance(action_card.get("examples"), list) else []
+        )
         if examples:
             self.console.print(f"  自然语言示例: {', '.join(str(item) for item in examples[:3])}")
         self.console.print(f"  当前状态: {payload.get('status', '-')}")
@@ -536,7 +670,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
     def _workflow_mode_label(self, workflow_mode: str) -> str:
         return workflow_mode_label(workflow_mode)
 
-    def _workflow_mode_shortcuts(self, workflow_mode: str, *, action_card: dict[str, Any] | None = None) -> list[str]:
+    def _workflow_mode_shortcuts(
+        self, workflow_mode: str, *, action_card: dict[str, Any] | None = None
+    ) -> list[str]:
         if isinstance(action_card, dict):
             raw_shortcuts = action_card.get("shortcuts")
             if isinstance(raw_shortcuts, list):
@@ -580,7 +716,7 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         run_state = self._read_pipeline_run_state(project_dir)
         if not run_state:
             self.console.print("[red]未找到最近一次 pipeline 运行记录[/red]")
-            self.console.print("[dim]请先执行 super-dev \"需求\" 或 super-dev pipeline \"需求\"[/dim]")
+            self.console.print('[dim]请先执行 super-dev "需求" 或 super-dev pipeline "需求"[/dim]')
             return 1
 
         status = str(run_state.get("status", "")).strip().lower()
@@ -589,44 +725,82 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             return 1
         if status == "waiting_confirmation":
             if not self._docs_confirmation_is_confirmed(project_dir):
-                self.console.print("[yellow]最近一次 pipeline 已停在文档确认门，请先确认三文档后再恢复[/yellow]")
-                self.console.print("[dim]可执行: super-dev review docs --status confirmed --comment \"三文档已确认\"[/dim]")
+                self.console.print(
+                    "[yellow]最近一次 pipeline 已停在文档确认门，请先确认三文档后再恢复[/yellow]"
+                )
+                self.console.print(
+                    '[dim]可执行: super-dev review docs --status confirmed --comment "三文档已确认"[/dim]'
+                )
                 return 1
-            if any((project_dir / "output").glob("*-frontend-runtime.json")) and not self._preview_confirmation_is_confirmed(project_dir):
-                self.console.print("[yellow]最近一次 pipeline 还缺前端预览确认，请先确认预览后再恢复[/yellow]")
-                self.console.print("[dim]可执行: super-dev review preview --status confirmed --comment \"前端预览已确认\"[/dim]")
+            if any(
+                (project_dir / "output").glob("*-frontend-runtime.json")
+            ) and not self._preview_confirmation_is_confirmed(project_dir):
+                self.console.print(
+                    "[yellow]最近一次 pipeline 还缺前端预览确认，请先确认预览后再恢复[/yellow]"
+                )
+                self.console.print(
+                    '[dim]可执行: super-dev review preview --status confirmed --comment "前端预览已确认"[/dim]'
+                )
                 return 1
             if not self._ui_revision_is_clear(project_dir):
-                self.console.print("[yellow]最近一次 pipeline 存在待处理 UI 改版请求，请先完成 UI 返工再恢复[/yellow]")
-                self.console.print("[dim]可执行: super-dev review ui --status confirmed --comment \"UI 改版已通过\"[/dim]")
+                self.console.print(
+                    "[yellow]最近一次 pipeline 存在待处理 UI 改版请求，请先完成 UI 返工再恢复[/yellow]"
+                )
+                self.console.print(
+                    '[dim]可执行: super-dev review ui --status confirmed --comment "UI 改版已通过"[/dim]'
+                )
                 return 1
             if not self._architecture_revision_is_clear(project_dir):
-                self.console.print("[yellow]最近一次 pipeline 存在待处理架构返工请求，请先完成架构修订再恢复[/yellow]")
-                self.console.print("[dim]可执行: super-dev review architecture --status confirmed --comment \"架构返工已通过\"[/dim]")
+                self.console.print(
+                    "[yellow]最近一次 pipeline 存在待处理架构返工请求，请先完成架构修订再恢复[/yellow]"
+                )
+                self.console.print(
+                    '[dim]可执行: super-dev review architecture --status confirmed --comment "架构返工已通过"[/dim]'
+                )
                 return 1
             if not self._quality_revision_is_clear(project_dir):
-                self.console.print("[yellow]最近一次 pipeline 存在待处理质量返工请求，请先完成质量整改再恢复[/yellow]")
-                self.console.print("[dim]可执行: super-dev review quality --status confirmed --comment \"质量返工已通过\"[/dim]")
+                self.console.print(
+                    "[yellow]最近一次 pipeline 存在待处理质量返工请求，请先完成质量整改再恢复[/yellow]"
+                )
+                self.console.print(
+                    '[dim]可执行: super-dev review quality --status confirmed --comment "质量返工已通过"[/dim]'
+                )
                 return 1
         elif status == "waiting_preview_confirmation":
             if not self._preview_confirmation_is_confirmed(project_dir):
-                self.console.print("[yellow]最近一次 pipeline 已停在前端预览确认门，请先确认预览或继续完成前端返工[/yellow]")
-                self.console.print("[dim]可执行: super-dev review preview --status confirmed --comment \"前端预览已确认\"[/dim]")
+                self.console.print(
+                    "[yellow]最近一次 pipeline 已停在前端预览确认门，请先确认预览或继续完成前端返工[/yellow]"
+                )
+                self.console.print(
+                    '[dim]可执行: super-dev review preview --status confirmed --comment "前端预览已确认"[/dim]'
+                )
                 return 1
         elif status == "waiting_ui_revision":
             if not self._ui_revision_is_clear(project_dir):
-                self.console.print("[yellow]最近一次 pipeline 已停在 UI 改版门，请先完成 UIUX 更新、前端返工与 UI review[/yellow]")
-                self.console.print("[dim]可执行: super-dev review ui --status confirmed --comment \"UI 改版已通过\"[/dim]")
+                self.console.print(
+                    "[yellow]最近一次 pipeline 已停在 UI 改版门，请先完成 UIUX 更新、前端返工与 UI review[/yellow]"
+                )
+                self.console.print(
+                    '[dim]可执行: super-dev review ui --status confirmed --comment "UI 改版已通过"[/dim]'
+                )
                 return 1
         elif status == "waiting_architecture_revision":
             if not self._architecture_revision_is_clear(project_dir):
-                self.console.print("[yellow]最近一次 pipeline 已停在架构返工门，请先完成 output/*-architecture.md 修订和实现同步[/yellow]")
-                self.console.print("[dim]可执行: super-dev review architecture --status confirmed --comment \"架构返工已通过\"[/dim]")
+                self.console.print(
+                    "[yellow]最近一次 pipeline 已停在架构返工门，请先完成 output/*-architecture.md 修订和实现同步[/yellow]"
+                )
+                self.console.print(
+                    '[dim]可执行: super-dev review architecture --status confirmed --comment "架构返工已通过"[/dim]'
+                )
                 return 1
         elif status == "waiting_quality_revision":
             if not self._quality_revision_is_clear(project_dir):
-                self.console.print("[yellow]最近一次 pipeline 已停在质量返工门，请先完成质量整改并重新执行 quality gate[/yellow]")
-                self.console.print("[dim]可执行: super-dev review quality --status confirmed --comment \"质量返工已通过\"[/dim]")
+                self.console.print(
+                    "[yellow]最近一次 pipeline 已停在质量返工门，请先完成质量整改并重新执行 quality gate[/yellow]"
+                )
+                self.console.print(
+                    '[dim]可执行: super-dev review quality --status confirmed --comment "质量返工已通过"[/dim]'
+                )
                 return 1
         elif status not in {"failed", "running"}:
             self.console.print("[yellow]最近一次 pipeline 状态不支持恢复[/yellow]")
@@ -667,6 +841,37 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
     def _cmd_run_status(self, args) -> int:
         project_dir = Path.cwd()
         run_state = self._read_pipeline_run_state(project_dir) or {}
+        if not run_state and not self._project_has_super_dev_context(project_dir):
+            if getattr(args, "json", False):
+                payload = {"status": "not_initialized", "recommended_next": "super-dev init <项目名>"}
+                self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
+                return 0
+            self.console.print("[cyan]Super Dev 流程状态: 尚未开始[/cyan]")
+            self.console.print("  运行 'super-dev init <项目名>' 初始化项目")
+            return 0
+        # Initialized (super-dev.yaml exists) but no pipeline run yet
+        if not run_state:
+            try:
+                cfg = get_config_manager(project_dir).config
+                if getattr(args, "json", False):
+                    payload = {
+                        "status": "initialized_waiting",
+                        "project": cfg.name or project_dir.name,
+                        "frontend": cfg.frontend or "-",
+                        "backend": cfg.backend or "-",
+                        "recommended_next": "在宿主中输入 /super-dev <你的需求> 开始",
+                    }
+                    self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
+                    return 0
+                self.console.print("[cyan]Super Dev 流程状态: 已初始化，等待开始[/cyan]")
+                self.console.print(f"  项目: {cfg.name or project_dir.name}")
+                self.console.print(f"  前端: {cfg.frontend or '-'}")
+                self.console.print(f"  后端: {cfg.backend or '-'}")
+                self.console.print("")
+                self.console.print("  下一步: 在宿主中输入 /super-dev <你的需求> 开始")
+                return 0
+            except Exception:
+                pass
         docs_state = self._get_docs_confirmation_state(project_dir)
         preview_state = self._get_preview_confirmation_state(project_dir)
         ui_state = self._get_ui_revision_state(project_dir)
@@ -678,15 +883,20 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         payload = {
             "run_state_exists": bool(run_state),
             "status": str(run_state.get("status", "")).strip() or "unknown",
-            "description": str((run_state.get("pipeline_args") or {}).get("description", "")).strip(),
+            "description": str(
+                (run_state.get("pipeline_args") or {}).get("description", "")
+            ).strip(),
             "failed_stage": str(run_state.get("failed_stage", "")).strip(),
             "resume_from_stage": str(run_state.get("resume_from_stage", "")).strip(),
             "full_gate_passed": bool(run_state.get("full_gate_passed", False)),
             "skipped_gates": list(run_state.get("skipped_gates") or []),
-            "scope_coverage_status": str(run_state.get("scope_coverage_status", "")).strip() or "unknown",
+            "scope_coverage_status": str(run_state.get("scope_coverage_status", "")).strip()
+            or "unknown",
             "scope_coverage_rate": run_state.get("scope_coverage_rate"),
             "scope_gap_count": int(run_state.get("scope_gap_count", 0) or 0),
-            "scope_high_priority_gap_count": int(run_state.get("scope_high_priority_gap_count", 0) or 0),
+            "scope_high_priority_gap_count": int(
+                run_state.get("scope_high_priority_gap_count", 0) or 0
+            ),
             "docs_confirmation": docs_state,
             "preview_confirmation": preview_state,
             "ui_revision": ui_state,
@@ -716,13 +926,17 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             + (", ".join(payload["skipped_gates"]) if payload["skipped_gates"] else "-")
         )
         scope_rate = payload["scope_coverage_rate"]
-        scope_rate_text = f"{float(scope_rate):.1f}%" if isinstance(scope_rate, int | float) else "-"
+        scope_rate_text = (
+            f"{float(scope_rate):.1f}%" if isinstance(scope_rate, int | float) else "-"
+        )
         self.console.print(f"  范围覆盖状态: {payload['scope_coverage_status']}")
         self.console.print(f"  范围覆盖率: {scope_rate_text}")
         self.console.print(f"  范围缺口: {payload['scope_gap_count']}")
         self.console.print(f"  高优先级缺口: {payload['scope_high_priority_gap_count']}")
         self.console.print(f"  文档确认: {self._docs_confirmation_label(docs_state['status'])}")
-        self.console.print(f"  UI 改版: {self._review_status_label(ui_state['status'], review_type='ui')}")
+        self.console.print(
+            f"  UI 改版: {self._review_status_label(ui_state['status'], review_type='ui')}"
+        )
         self.console.print(
             f"  架构返工: {self._review_status_label(architecture_state['status'], review_type='architecture')}"
         )
@@ -751,7 +965,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                     "run_id": "",
                 },
             )
-            self._write_session_brief(project_dir=project_dir, payload=self._build_next_step_payload(project_dir))
+            self._write_session_brief(
+                project_dir=project_dir, payload=self._build_next_step_payload(project_dir)
+            )
             self.console.print(f"[green]✓[/green] 已确认 docs 阶段: {path}")
             return 0
         if normalized in {"ui", "frontend-ui"}:
@@ -764,7 +980,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                     "run_id": "",
                 },
             )
-            self._write_session_brief(project_dir=project_dir, payload=self._build_next_step_payload(project_dir))
+            self._write_session_brief(
+                project_dir=project_dir, payload=self._build_next_step_payload(project_dir)
+            )
             self.console.print(f"[green]✓[/green] 已确认 ui 阶段: {path}")
             return 0
         if normalized in {"architecture", "arch"}:
@@ -777,7 +995,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                     "run_id": "",
                 },
             )
-            self._write_session_brief(project_dir=project_dir, payload=self._build_next_step_payload(project_dir))
+            self._write_session_brief(
+                project_dir=project_dir, payload=self._build_next_step_payload(project_dir)
+            )
             self.console.print(f"[green]✓[/green] 已确认 architecture 阶段: {path}")
             return 0
         if normalized in {"quality", "qa"}:
@@ -790,7 +1010,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                     "run_id": "",
                 },
             )
-            self._write_session_brief(project_dir=project_dir, payload=self._build_next_step_payload(project_dir))
+            self._write_session_brief(
+                project_dir=project_dir, payload=self._build_next_step_payload(project_dir)
+            )
             self.console.print(f"[green]✓[/green] 已确认 quality 阶段: {path}")
             return 0
         run_state = self._read_pipeline_run_state(project_dir) or {}
@@ -806,7 +1028,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         run_state["phase_confirmations"] = phase_confirmations
         run_state["updated_at"] = datetime.now(timezone.utc).isoformat()
         self._write_pipeline_run_state(project_dir, run_state)
-        self._write_session_brief(project_dir=project_dir, payload=self._build_next_step_payload(project_dir))
+        self._write_session_brief(
+            project_dir=project_dir, payload=self._build_next_step_payload(project_dir)
+        )
         self.console.print(f"[green]✓[/green] 已确认阶段: {normalized}")
         return 0
 
@@ -826,16 +1050,24 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             or project_name
         )
         domain = str(pipeline_args.get("domain", "")).strip() or str(config.domain or "")
-        frontend = str(pipeline_args.get("frontend", "")).strip() or self._normalize_pipeline_frontend(config.frontend)
+        frontend = str(
+            pipeline_args.get("frontend", "")
+        ).strip() or self._normalize_pipeline_frontend(config.frontend)
         backend = str(pipeline_args.get("backend", "")).strip() or str(config.backend or "node")
-        request_mode = str((run_state.get("context") or {}).get("request_mode", "")).strip() or "feature"
+        request_mode = (
+            str((run_state.get("context") or {}).get("request_mode", "")).strip() or "feature"
+        )
 
         if target == "research":
             import os
 
             from .orchestrator.knowledge import KnowledgeAugmenter
 
-            disable_web = os.getenv("SUPER_DEV_DISABLE_WEB", "").strip().lower() in {"1", "true", "yes"}
+            disable_web = os.getenv("SUPER_DEV_DISABLE_WEB", "").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+            }
             augmenter = KnowledgeAugmenter(
                 project_dir=project_dir,
                 web_enabled=not disable_web,
@@ -917,7 +1149,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         run_state = self._read_pipeline_run_state(project_dir)
         if not run_state:
             self.console.print("[red]未找到可恢复运行记录，无法按阶段继续[/red]")
-            self.console.print("[dim]请先执行一次 super-dev \"需求\" 或 super-dev pipeline \"需求\"[/dim]")
+            self.console.print(
+                '[dim]请先执行一次 super-dev "需求" 或 super-dev pipeline "需求"[/dim]'
+            )
             return 1
         stage_number = self._resolve_pipeline_stage_selector(stage_selector)
         if stage_number is None:
@@ -928,7 +1162,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             return 1
         if show_impact:
             impact_lines = self._stage_jump_impact(stage_number)
-            self.console.print(f"[cyan]阶段回跳影响分析（目标: {stage_selector} / 第 {stage_number} 阶段）[/cyan]")
+            self.console.print(
+                f"[cyan]阶段回跳影响分析（目标: {stage_selector} / 第 {stage_number} 阶段）[/cyan]"
+            )
             for line in impact_lines:
                 self.console.print(f"  - {line}")
         run_state["status"] = "failed"
@@ -968,7 +1204,15 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             return "super-dev feature-checklist"
         if status == "success" and skipped_gates:
             return "按当前策略补跑被跳过的红队 / 质量 / 发布演练门禁"
-        if status in {"failed", "running", "waiting_confirmation", "waiting_preview_confirmation", "waiting_ui_revision", "waiting_architecture_revision", "waiting_quality_revision"}:
+        if status in {
+            "failed",
+            "running",
+            "waiting_confirmation",
+            "waiting_preview_confirmation",
+            "waiting_ui_revision",
+            "waiting_architecture_revision",
+            "waiting_quality_revision",
+        }:
             return "super-dev run --resume"
         return "super-dev run --phase frontend"
 
@@ -1035,7 +1279,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 "current_stage": str(run_state.get("current_stage", "")).strip(),
                 "current_stage_title": str(run_state.get("current_stage_title", "")).strip(),
                 "scope_coverage_status": str(run_state.get("scope_coverage_status", "")).strip(),
-                "scope_high_priority_gap_count": int(run_state.get("scope_high_priority_gap_count", 0) or 0),
+                "scope_high_priority_gap_count": int(
+                    run_state.get("scope_high_priority_gap_count", 0) or 0
+                ),
                 "skipped_gates": list(run_state.get("skipped_gates") or []),
             },
         }
@@ -1053,12 +1299,17 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         project_dir = Path(project_dir).resolve()
         brief_path = self._session_brief_path(project_dir)
         brief_path.parent.mkdir(parents=True, exist_ok=True)
-        preferred_host_name = str(payload.get("preferred_host_name", "")).strip() or host_display_name(
-            str(payload.get("preferred_host", "")).strip() or self._preferred_host_target_for_project(project_dir)
+        preferred_host_name = str(
+            payload.get("preferred_host_name", "")
+        ).strip() or host_display_name(
+            str(payload.get("preferred_host", "")).strip()
+            or self._preferred_host_target_for_project(project_dir)
         )
         host_prompt = str(payload.get("host_continue_prompt", "")).strip()
         continuity_rules = payload.get("continuity_rules") or []
-        action_card = payload.get("action_card") if isinstance(payload.get("action_card"), dict) else {}
+        action_card = (
+            payload.get("action_card") if isinstance(payload.get("action_card"), dict) else {}
+        )
         if not isinstance(continuity_rules, list):
             continuity_rules = []
         lines = [
@@ -1072,10 +1323,18 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             f"- 推荐宿主: {preferred_host_name or '-'}",
             f"- 工作流状态 JSON: {self._workflow_state_path(project_dir)}",
         ]
-        user_action_shortcuts = payload.get("user_action_shortcuts") if isinstance(payload.get("user_action_shortcuts"), list) else []
+        user_action_shortcuts = (
+            payload.get("user_action_shortcuts")
+            if isinstance(payload.get("user_action_shortcuts"), list)
+            else []
+        )
         if user_action_shortcuts:
-            lines.append(f"- 你现在可以直接说: {' / '.join(str(item) for item in user_action_shortcuts[:4])}")
-        action_examples = action_card.get("examples") if isinstance(action_card.get("examples"), list) else []
+            lines.append(
+                f"- 你现在可以直接说: {' / '.join(str(item) for item in user_action_shortcuts[:4])}"
+            )
+        action_examples = (
+            action_card.get("examples") if isinstance(action_card.get("examples"), list) else []
+        )
         if action_examples:
             lines.append(f"- 自然语言示例: {', '.join(str(item) for item in action_examples[:3])}")
         if host_prompt:
@@ -1159,32 +1418,37 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             }
         next_payload = self._build_next_step_payload(project_dir)
         self._write_session_brief(project_dir=project_dir, payload=next_payload)
-        action_card = next_payload.get("action_card") if isinstance(next_payload.get("action_card"), dict) else {}
+        action_card = (
+            next_payload.get("action_card")
+            if isinstance(next_payload.get("action_card"), dict)
+            else {}
+        )
         return {
             "session_mode": "continue_super_dev",
-            "continue_prompt": self._build_host_continue_prompt(project_dir=project_dir, target=target, next_payload=next_payload),
-            "recommended_workflow_command": str(next_payload.get("recommended_command", "")).strip(),
+            "continue_prompt": self._build_host_continue_prompt(
+                project_dir=project_dir, target=target, next_payload=next_payload
+            ),
+            "recommended_workflow_command": str(
+                next_payload.get("recommended_command", "")
+            ).strip(),
             "workflow_reason": str(next_payload.get("reason", "")).strip(),
             "workflow_status": str(next_payload.get("status", "")).strip(),
             "workflow_mode": str(next_payload.get("workflow_mode", "")).strip(),
-            "action_title": str(action_card.get("title", "")).strip() or str(next_payload.get("current_step_label", "")).strip(),
+            "action_title": str(action_card.get("title", "")).strip()
+            or str(next_payload.get("current_step_label", "")).strip(),
             "action_examples": list(action_card.get("examples") or []),
             "user_action_shortcuts": list(next_payload.get("user_action_shortcuts") or []),
-            "continuity_rules": list(next_payload.get("continuity_rules") or action_card.get("continuity_rules") or []),
+            "continuity_rules": list(
+                next_payload.get("continuity_rules") or action_card.get("continuity_rules") or []
+            ),
         }
 
     def _project_has_super_dev_context(self, project_dir: Path) -> bool:
+        """只有当前目录有 super-dev.yaml 且不是家目录才算 Super Dev 项目。"""
         project_dir = Path(project_dir).resolve()
-        return any(
-            path.exists()
-            for path in (
-                project_dir / "super-dev.yaml",
-                project_dir / ".super-dev" / "WORKFLOW.md",
-                project_dir / "output" / f"{project_dir.name}-prd.md",
-                project_dir / "output" / f"{project_dir.name}-architecture.md",
-                project_dir / "output" / f"{project_dir.name}-proof-pack.json",
-            )
-        )
+        if project_dir == Path.home().resolve():
+            return False
+        return (project_dir / "super-dev.yaml").exists()
 
     def _preferred_host_target_for_project(self, project_dir: Path) -> str:
         from .integrations import IntegrationManager
@@ -1192,7 +1456,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         project_dir = Path(project_dir).resolve()
         config = get_config_manager(project_dir).config
         available_targets = [item.name for item in IntegrationManager(project_dir).list_targets()]
-        preferred_order = list(dict.fromkeys(("codex-cli", "opencode", "claude-code", *PRIMARY_HOST_TOOL_IDS)))
+        preferred_order = list(
+            dict.fromkeys(("codex-cli", "opencode", "claude-code", *PRIMARY_HOST_TOOL_IDS))
+        )
 
         def _pick_best(candidates: list[str]) -> str | None:
             for host_id in preferred_order:
@@ -1200,7 +1466,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                     return host_id
             return candidates[0] if candidates else None
 
-        configured_targets = [item for item in config.host_profile_targets if item in available_targets]
+        configured_targets = [
+            item for item in config.host_profile_targets if item in available_targets
+        ]
         if configured_targets:
             best = _pick_best(configured_targets)
             if best:
@@ -1299,11 +1567,15 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             ("当前流程存在待处理项", "先按推荐动作继续当前流程，不要另起一轮普通聊天。"),
         )
 
-    def _finalize_next_step_payload(self, *, project_dir: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    def _finalize_next_step_payload(
+        self, *, project_dir: Path, payload: dict[str, Any]
+    ) -> dict[str, Any]:
         project_dir = Path(project_dir).resolve()
         preferred_host = self._preferred_host_target_for_project(project_dir)
         preferred_host_name = host_display_name(preferred_host)
-        action_card = payload.get("action_card") if isinstance(payload.get("action_card"), dict) else {}
+        action_card = (
+            payload.get("action_card") if isinstance(payload.get("action_card"), dict) else {}
+        )
         current_step_label = str(action_card.get("title", "")).strip()
         user_next_action = str(action_card.get("user_action", "")).strip()
         if not current_step_label or not user_next_action:
@@ -1315,10 +1587,16 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             host_continue_prompt = self._build_host_continue_prompt(
                 project_dir=project_dir,
                 target=preferred_host,
-                next_payload={**payload, "current_step_label": current_step_label, "user_next_action": user_next_action},
+                next_payload={
+                    **payload,
+                    "current_step_label": current_step_label,
+                    "user_next_action": user_next_action,
+                },
             )
         else:
-            host_continue_prompt = self._build_host_start_prompt(project_dir=project_dir, target=preferred_host)
+            host_continue_prompt = self._build_host_start_prompt(
+                project_dir=project_dir, target=preferred_host
+            )
         enriched = dict(payload)
         enriched.update(
             {
@@ -1329,11 +1607,17 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 "host_continue_prompt": host_continue_prompt,
                 "session_brief_path": str(self._session_brief_path(project_dir)),
                 "workflow_state_path": str(self._workflow_state_path(project_dir)),
-                "continuity_rules": self._build_session_continuity_rules(status=str(payload.get("status", "")).strip()),
-                "workflow_mode": str(action_card.get("mode", payload.get("workflow_mode", ""))).strip() or "continue",
+                "continuity_rules": self._build_session_continuity_rules(
+                    status=str(payload.get("status", "")).strip()
+                ),
+                "workflow_mode": str(
+                    action_card.get("mode", payload.get("workflow_mode", ""))
+                ).strip()
+                or "continue",
                 "action_card": action_card,
                 "user_action_shortcuts": self._workflow_mode_shortcuts(
-                    str(action_card.get("mode", payload.get("workflow_mode", ""))).strip() or "continue",
+                    str(action_card.get("mode", payload.get("workflow_mode", ""))).strip()
+                    or "continue",
                     action_card=action_card,
                 ),
             }
@@ -1343,28 +1627,39 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
     def _build_next_step_payload(self, project_dir: Path) -> dict[str, Any]:
         project_dir = Path(project_dir).resolve()
         if not self._project_has_super_dev_context(project_dir):
-            return self._finalize_next_step_payload(project_dir=project_dir, payload={
-                "status": "not_initialized",
-                "reason": "当前目录还没有进入 Super Dev 工作流。",
-                "recommended_command": "super-dev onboard",
-                "evidence": "未检测到 super-dev.yaml / .super-dev/WORKFLOW.md / output 基础产物",
-            })
+            return self._finalize_next_step_payload(
+                project_dir=project_dir,
+                payload={
+                    "status": "not_initialized",
+                    "reason": "当前目录还没有进入 Super Dev 工作流。",
+                    "recommended_command": "super-dev onboard",
+                    "evidence": "未检测到 super-dev.yaml / .super-dev/WORKFLOW.md / output 基础产物",
+                },
+            )
 
-        summary = detect_pipeline_summary(project_dir, self._read_pipeline_run_state(project_dir) or {})
+        summary = detect_pipeline_summary(
+            project_dir, self._read_pipeline_run_state(project_dir) or {}
+        )
         checkpoint_status = str(summary.get("workflow_status", "")).strip() or "ready"
-        recommended_command = str(summary.get("recommended_command", "")).strip() or "super-dev run --status"
+        recommended_command = (
+            str(summary.get("recommended_command", "")).strip() or "super-dev run --status"
+        )
         blocker = str(summary.get("blocker", "")).strip()
         evidence = str(summary.get("evidence", "")).strip()
 
         if checkpoint_status not in {"ready", "missing_quality", "missing_delivery"}:
-            return self._finalize_next_step_payload(project_dir=project_dir, payload={
-                "status": checkpoint_status,
-                "reason": blocker or "当前仓库存在运行态、确认门或范围门禁，需要先沿当前流程继续。",
-                "recommended_command": recommended_command,
-                "evidence": evidence or f"workflow_status={checkpoint_status}",
-                "workflow_mode": str(summary.get("workflow_mode", "")).strip(),
-                "action_card": summary.get("action_card"),
-            })
+            return self._finalize_next_step_payload(
+                project_dir=project_dir,
+                payload={
+                    "status": checkpoint_status,
+                    "reason": blocker
+                    or "当前仓库存在运行态、确认门或范围门禁，需要先沿当前流程继续。",
+                    "recommended_command": recommended_command,
+                    "evidence": evidence or f"workflow_status={checkpoint_status}",
+                    "workflow_mode": str(summary.get("workflow_mode", "")).strip(),
+                    "action_card": summary.get("action_card"),
+                },
+            )
 
         readiness_path = project_dir / "output" / f"{project_dir.name}-release-readiness.json"
         if readiness_path.exists():
@@ -1372,14 +1667,21 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 readiness_payload = json.loads(readiness_path.read_text(encoding="utf-8"))
             except Exception:
                 readiness_payload = {}
-            failed_checks = list(readiness_payload.get("failed_checks") or []) if isinstance(readiness_payload, dict) else []
+            failed_checks = (
+                list(readiness_payload.get("failed_checks") or [])
+                if isinstance(readiness_payload, dict)
+                else []
+            )
             if "Delivery Closure" in failed_checks:
-                return self._finalize_next_step_payload(project_dir=project_dir, payload={
-                    "status": "delivery_closure_incomplete",
-                    "reason": "发布闭环证据还没有齐。",
-                    "recommended_command": "super-dev quality --type all",
-                    "evidence": "release readiness failed_checks 包含 Delivery Closure",
-                })
+                return self._finalize_next_step_payload(
+                    project_dir=project_dir,
+                    payload={
+                        "status": "delivery_closure_incomplete",
+                        "reason": "发布闭环证据还没有齐。",
+                        "recommended_command": "super-dev quality --type all",
+                        "evidence": "release readiness failed_checks 包含 Delivery Closure",
+                    },
+                )
 
         product_audit_path = project_dir / "output" / f"{project_dir.name}-product-audit.json"
         if product_audit_path.exists():
@@ -1389,12 +1691,15 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 product_audit_payload = {}
             product_status = str(product_audit_payload.get("status", "")).strip()
             if product_status == "revision_required":
-                return self._finalize_next_step_payload(project_dir=project_dir, payload={
-                    "status": "product_revision_required",
-                    "reason": "产品审查仍然要求修订。",
-                    "recommended_command": "super-dev product-audit",
-                    "evidence": f"product_audit.status={product_status}",
-                })
+                return self._finalize_next_step_payload(
+                    project_dir=project_dir,
+                    payload={
+                        "status": "product_revision_required",
+                        "reason": "产品审查仍然要求修订。",
+                        "recommended_command": "super-dev product-audit",
+                        "evidence": f"product_audit.status={product_status}",
+                    },
+                )
 
         proof_pack_path = project_dir / "output" / f"{project_dir.name}-proof-pack.json"
         if proof_pack_path.exists():
@@ -1404,21 +1709,27 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 proof_pack_payload = {}
             proof_pack_status = str(proof_pack_payload.get("status", "")).strip()
             if proof_pack_status == "incomplete":
-                return self._finalize_next_step_payload(project_dir=project_dir, payload={
-                    "status": "proof_pack_incomplete",
-                    "reason": "当前交付证据包还没有齐。",
-                    "recommended_command": "super-dev release proof-pack",
-                    "evidence": f"proof_pack.status={proof_pack_status}",
-                })
+                return self._finalize_next_step_payload(
+                    project_dir=project_dir,
+                    payload={
+                        "status": "proof_pack_incomplete",
+                        "reason": "当前交付证据包还没有齐。",
+                        "recommended_command": "super-dev release proof-pack",
+                        "evidence": f"proof_pack.status={proof_pack_status}",
+                    },
+                )
 
-        return self._finalize_next_step_payload(project_dir=project_dir, payload={
-            "status": "ready",
-            "reason": blocker or "当前没有检测到待恢复的流程门禁，建议从状态面板继续。",
-            "recommended_command": "super-dev run --status",
-            "evidence": evidence or "未检测到更高优先级阻断项",
-            "workflow_mode": str(summary.get("workflow_mode", "")).strip(),
-            "action_card": summary.get("action_card"),
-        })
+        return self._finalize_next_step_payload(
+            project_dir=project_dir,
+            payload={
+                "status": "ready",
+                "reason": blocker or "当前没有检测到待恢复的流程门禁，建议从状态面板继续。",
+                "recommended_command": "super-dev run --status",
+                "evidence": evidence or "未检测到更高优先级阻断项",
+                "workflow_mode": str(summary.get("workflow_mode", "")).strip(),
+                "action_card": summary.get("action_card"),
+            },
+        )
 
     def _resolve_pipeline_stage_selector(self, value: str) -> int | None:
         normalized = str(value).strip().lower()
@@ -1494,7 +1805,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             self.console.print("[cyan]可用策略预设:[/cyan]")
             self.console.print("  - default: 默认策略（兼顾灵活性）")
             self.console.print("  - balanced: 团队协作增强（要求 host profile）")
-            self.console.print("  - enterprise: 商业级强治理（默认启用更高质量阈值与 host profile）")
+            self.console.print(
+                "  - enterprise: 商业级强治理（默认启用更高质量阈值与 host profile）"
+            )
             return 0
 
         if action == "init":
@@ -1511,25 +1824,39 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             self.console.print(f"[green]✓[/green] {action_label}: {path}")
             self.console.print(f"[dim]预设: {preset}[/dim]")
             if force:
-                self.console.print("[dim]说明: --force 仅表示覆盖已有 policy 文件，不代表策略“强制级别”。[/dim]")
+                self.console.print(
+                    "[dim]说明: --force 仅表示覆盖已有 policy 文件，不代表策略“强制级别”。[/dim]"
+                )
             elif existed_before:
-                self.console.print("[dim]说明: 未使用 --force；若文件已存在，本次不会覆盖旧策略。[/dim]")
+                self.console.print(
+                    "[dim]说明: 未使用 --force；若文件已存在，本次不会覆盖旧策略。[/dim]"
+                )
             return 0
 
         policy = manager.load()
         self.console.print("[cyan]当前流水线策略:[/cyan]")
         self.console.print(f"  - 红队审查: {'开启' if policy.require_redteam else '关闭'}")
         self.console.print(f"  - 质量门禁: {'开启' if policy.require_quality_gate else '关闭'}")
-        self.console.print(f"  - 发布演练验证: {'开启' if policy.require_rehearsal_verify else '关闭'}")
+        self.console.print(
+            f"  - 发布演练验证: {'开启' if policy.require_rehearsal_verify else '关闭'}"
+        )
         self.console.print(f"  - 最低质量阈值: {policy.min_quality_threshold}")
         self.console.print(
             "  - 允许的 CI/CD 平台: "
-            + (", ".join(policy.allowed_cicd_platforms) if policy.allowed_cicd_platforms else "未限制")
+            + (
+                ", ".join(policy.allowed_cicd_platforms)
+                if policy.allowed_cicd_platforms
+                else "未限制"
+            )
         )
         self.console.print(f"  - 宿主画像要求: {'开启' if policy.require_host_profile else '关闭'}")
         self.console.print(
             "  - 关键宿主列表: "
-            + (", ".join(policy.required_hosts) if policy.required_hosts else "未配置（如需强校验，请手动填写）")
+            + (
+                ", ".join(policy.required_hosts)
+                if policy.required_hosts
+                else "未配置（如需强校验，请手动填写）"
+            )
         )
         self.console.print(
             f"  - 关键宿主就绪校验: {'开启' if policy.enforce_required_hosts_ready else '关闭'}"
@@ -1537,7 +1864,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         self.console.print(f"  - 关键宿主最低分: {policy.min_required_host_score}")
         self.console.print(f"[dim]策略文件: {manager.policy_path}[/dim]")
         if not manager.policy_path.exists():
-            self.console.print("[yellow]提示: 当前使用内置默认策略，执行 super-dev policy init 可写入文件[/yellow]")
+            self.console.print(
+                "[yellow]提示: 当前使用内置默认策略，执行 super-dev policy init 可写入文件[/yellow]"
+            )
         elif policy.require_host_profile and not policy.required_hosts:
             self.console.print(
                 "[yellow]提示: 当前策略要求宿主画像，但尚未指定关键宿主；如需强校验，请在 .super-dev/policy.yaml 中填写 required_hosts。[/yellow]"
@@ -1556,9 +1885,10 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         project_name = args.name
         if not project_name:
             import re
-            words = re.findall(r'[\w]+', args.description)
+
+            words = re.findall(r"[\w]+", args.description)
             if words:
-                project_name = '-'.join(words[:3]).lower()
+                project_name = "-".join(words[:3]).lower()
             else:
                 project_name = "my-project"
         project_name = self._sanitize_project_name(project_name)
@@ -1633,8 +1963,12 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         scaffold_result: dict[str, list[str]] = {"frontend_files": [], "backend_files": []}
         task_execution_summary = None
         run_state = self._read_pipeline_run_state(project_dir) if resume_requested else None
-        metrics_payload = self._load_pipeline_metrics_payload(output_dir=output_dir, project_name=project_name)
-        run_context = self._extract_resume_context(run_state=run_state, metrics_payload=metrics_payload)
+        metrics_payload = self._load_pipeline_metrics_payload(
+            output_dir=output_dir, project_name=project_name
+        )
+        run_context = self._extract_resume_context(
+            run_state=run_state, metrics_payload=metrics_payload
+        )
 
         stored_scenario = run_context.get("scenario")
         if isinstance(stored_scenario, str) and stored_scenario in {"0-1", "1-N+1"}:
@@ -1773,13 +2107,23 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                     else ""
                 )
                 fallback_reasons: list[str] = []
-                if run_status in {"waiting_confirmation", "waiting_preview_confirmation", "waiting_ui_revision", "waiting_architecture_revision", "waiting_quality_revision"}:
+                if run_status in {
+                    "waiting_confirmation",
+                    "waiting_preview_confirmation",
+                    "waiting_ui_revision",
+                    "waiting_architecture_revision",
+                    "waiting_quality_revision",
+                }:
                     failed_stage = None
                     resume_from_stage = None
                     if isinstance(run_state, dict):
-                        resume_from_stage = self._coerce_stage_number(run_state.get("resume_from_stage"))
+                        resume_from_stage = self._coerce_stage_number(
+                            run_state.get("resume_from_stage")
+                        )
                         if resume_from_stage is None:
-                            resume_from_stage = self._coerce_stage_number(run_state.get("next_stage"))
+                            resume_from_stage = self._coerce_stage_number(
+                                run_state.get("next_stage")
+                            )
                     if resume_from_stage is None:
                         resume_from_stage = 2
                     initial_resume_stage = resume_from_stage
@@ -1808,22 +2152,31 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                     if isinstance(run_state, dict):
                         failed_stage = self._coerce_stage_number(run_state.get("failed_stage"))
                     if failed_stage is None:
-                        failed_stage = self._detect_failed_stage_from_metrics_payload(metrics_payload)
+                        failed_stage = self._detect_failed_stage_from_metrics_payload(
+                            metrics_payload
+                        )
                     if failed_stage is None:
-                        failed_stage = self._detect_failed_stage(output_dir=output_dir, project_name=project_name)
+                        failed_stage = self._detect_failed_stage(
+                            output_dir=output_dir, project_name=project_name
+                        )
 
                     resume_from_stage = self._resolve_resume_start_stage(
                         failed_stage=failed_stage,
                         skip_redteam=bool(args.skip_redteam),
                     )
                     initial_resume_stage = resume_from_stage
-                    adjusted_resume_stage, fallback_reasons = self._adjust_resume_stage_for_artifacts(
-                        project_dir=project_dir,
-                        output_dir=output_dir,
-                        project_name=project_name,
-                        resume_from_stage=resume_from_stage,
+                    adjusted_resume_stage, fallback_reasons = (
+                        self._adjust_resume_stage_for_artifacts(
+                            project_dir=project_dir,
+                            output_dir=output_dir,
+                            project_name=project_name,
+                            resume_from_stage=resume_from_stage,
+                        )
                     )
-                    if adjusted_resume_stage != resume_from_stage and adjusted_resume_stage is not None:
+                    if (
+                        adjusted_resume_stage != resume_from_stage
+                        and adjusted_resume_stage is not None
+                    ):
                         for reason in fallback_reasons:
                             self.console.print(f"[yellow]恢复校验: {reason}[/yellow]")
                         self.console.print(
@@ -1831,7 +2184,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                         )
                     resume_from_stage = adjusted_resume_stage
                     if failed_stage is None:
-                        self.console.print("[yellow]未检测到可恢复的失败记录，将执行完整流水线[/yellow]")
+                        self.console.print(
+                            "[yellow]未检测到可恢复的失败记录，将执行完整流水线[/yellow]"
+                        )
                     elif resume_from_stage is not None:
                         self.console.print(
                             f"[cyan]恢复模式：检测到上次失败阶段 {failed_stage}，将从第 {resume_from_stage} 阶段继续[/cyan]"
@@ -1859,7 +2214,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                     "started_at": datetime.now(timezone.utc).isoformat(),
                     "finished_at": "",
                     "run_state_status": (
-                        str((run_state or {}).get("status", "")) if isinstance(run_state, dict) else ""
+                        str((run_state or {}).get("status", ""))
+                        if isinstance(run_state, dict)
+                        else ""
                     ),
                     "detected_failed_stage": failed_stage,
                     "initial_resume_stage": initial_resume_stage,
@@ -1877,7 +2234,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 self.console.print(f"[dim]恢复审计报告: {resume_audit_files['markdown']}[/dim]")
 
             knowledge_dir = project_dir / "knowledge"
-            knowledge_cache_file = output_dir / "knowledge-cache" / f"{project_name}-knowledge-bundle.json"
+            knowledge_cache_file = (
+                output_dir / "knowledge-cache" / f"{project_name}-knowledge-bundle.json"
+            )
             knowledge_file_count = 0
             if knowledge_dir.exists():
                 knowledge_file_count = sum(
@@ -1900,7 +2259,10 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             remediation_outputs: dict = {"env_file": "", "checklist_file": "", "items_count": 0}
             migration_files: dict[str, str] = {}
             delivery_outputs: dict = {
-                "manifest_file": "", "report_file": "", "archive_file": "", "status": "skipped",
+                "manifest_file": "",
+                "report_file": "",
+                "archive_file": "",
+                "status": "skipped",
             }
             task_execution_summary = None
 
@@ -1941,7 +2303,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 research_file = output_dir / f"{project_name}-research.md"
                 research_file.write_text(augmenter.to_markdown(knowledge_bundle), encoding="utf-8")
                 if cache_hit:
-                    knowledge_cache_file = output_dir / "knowledge-cache" / f"{project_name}-knowledge-bundle.json"
+                    knowledge_cache_file = (
+                        output_dir / "knowledge-cache" / f"{project_name}-knowledge-bundle.json"
+                    )
                 else:
                     knowledge_cache_file = augmenter.save_bundle(
                         bundle=knowledge_bundle,
@@ -1951,7 +2315,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                         domain=args.domain or "",
                     )
 
-                enriched_description = knowledge_bundle.get("enriched_requirement", args.description)
+                enriched_description = knowledge_bundle.get(
+                    "enriched_requirement", args.description
+                )
                 self.console.print(f"  [green]✓[/green] 需求增强报告: {research_file}")
                 self.console.print(f"  [green]✓[/green] 知识缓存: {knowledge_cache_file}")
                 self.console.print(f"  [dim]缓存命中: {'yes' if cache_hit else 'no'}[/dim]")
@@ -1993,7 +2359,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
 
                 parser = RequirementParser()
                 scenario = parser.detect_scenario(project_dir)
-                request_mode = request_mode_override or parser.detect_request_mode(enriched_description)
+                request_mode = request_mode_override or parser.detect_request_mode(
+                    enriched_description
+                )
 
                 doc_generator = DocumentGenerator(
                     name=project_name,
@@ -2038,7 +2406,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                     ),
                     encoding="utf-8",
                 )
-                frontend_blueprint_file.write_text(doc_generator.generate_frontend_blueprint(), encoding="utf-8")
+                frontend_blueprint_file.write_text(
+                    doc_generator.generate_frontend_blueprint(), encoding="utf-8"
+                )
 
                 self.console.print(f"  [green]✓[/green] PRD: {prd_file}")
                 self.console.print(f"  [green]✓[/green] 架构: {arch_file}")
@@ -2064,8 +2434,12 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 # 保存技术栈到配置文件（供后续阶段使用）
                 self._save_tech_stack_to_config(project_dir, tech_stack, args.description)
 
-                requirements = self._normalize_requirements_payload(doc_generator.extract_requirements())
-                phases = parser.build_execution_phases(scenario, requirements, request_mode=request_mode)
+                requirements = self._normalize_requirements_payload(
+                    doc_generator.extract_requirements()
+                )
+                phases = parser.build_execution_phases(
+                    scenario, requirements, request_mode=request_mode
+                )
                 _update_run_context(
                     scenario=scenario,
                     request_mode=request_mode,
@@ -2086,12 +2460,20 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 self.console.print(f"  [dim]架构: {arch_file}[/dim]")
                 self.console.print(f"  [dim]UI/UX: {uiux_file}[/dim]")
                 if docs_confirmation["status"] == "revision_requested":
-                    self.console.print("[yellow]当前状态: 用户已要求修改文档，请先修正文档并再次确认。[/yellow]")
+                    self.console.print(
+                        "[yellow]当前状态: 用户已要求修改文档，请先修正文档并再次确认。[/yellow]"
+                    )
                 else:
-                    self.console.print("[yellow]当前状态: 待用户确认三文档，确认前不会创建 Spec 或开始编码。[/yellow]")
+                    self.console.print(
+                        "[yellow]当前状态: 待用户确认三文档，确认前不会创建 Spec 或开始编码。[/yellow]"
+                    )
                 self.console.print("[cyan]继续方式:[/cyan]")
-                self.console.print("  1. 在宿主中查看并修订 output/*-prd.md / *-architecture.md / *-uiux.md")
-                self.console.print('  2. 终端执行: super-dev review docs --status confirmed --comment "三文档已确认"')
+                self.console.print(
+                    "  1. 在宿主中查看并修订 output/*-prd.md / *-architecture.md / *-uiux.md"
+                )
+                self.console.print(
+                    '  2. 终端执行: super-dev review docs --status confirmed --comment "三文档已确认"'
+                )
                 self.console.print("  3. 然后执行: super-dev run --resume")
                 metric_files = _finalize_metrics(success=False, reason="waiting_confirmation")
                 contract_files = _finalize_contract(success=False, reason="waiting_confirmation")
@@ -2116,13 +2498,17 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             ui_revision = self._get_ui_revision_state(project_dir)
             _update_run_context(ui_revision=ui_revision)
             if ui_revision["status"] == "revision_requested":
-                self.console.print("[yellow]当前存在 UI 改版请求，必须先完成 UI 返工后才能继续[/yellow]")
+                self.console.print(
+                    "[yellow]当前存在 UI 改版请求，必须先完成 UI 返工后才能继续[/yellow]"
+                )
                 if ui_revision["comment"]:
                     self.console.print(f"  [dim]备注: {ui_revision['comment']}[/dim]")
                 self.console.print("[cyan]继续方式:[/cyan]")
                 self.console.print("  1. 先更新 output/*-uiux.md")
                 self.console.print("  2. 重做前端并重新执行 frontend runtime 与 UI review")
-                self.console.print('  3. 终端执行: super-dev review ui --status confirmed --comment "UI 改版已通过"')
+                self.console.print(
+                    '  3. 终端执行: super-dev review ui --status confirmed --comment "UI 改版已通过"'
+                )
                 self.console.print("  4. 然后执行: super-dev run --resume")
                 metric_files = _finalize_metrics(success=False, reason="waiting_ui_revision")
                 contract_files = _finalize_contract(success=False, reason="waiting_ui_revision")
@@ -2137,7 +2523,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                         "contract_file": str(contract_files["json"]),
                     },
                 )
-                _flush_resume_audit(status="waiting_ui_revision", failure_reason="revision_requested")
+                _flush_resume_audit(
+                    status="waiting_ui_revision", failure_reason="revision_requested"
+                )
                 self.console.print(f"[dim]指标报告: {metric_files['json']}[/dim]")
                 self.console.print(f"[dim]契约审计: {contract_files['markdown']}[/dim]")
                 if resume_audit_files:
@@ -2147,16 +2535,24 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             architecture_revision = self._get_architecture_revision_state(project_dir)
             _update_run_context(architecture_revision=architecture_revision)
             if architecture_revision["status"] == "revision_requested":
-                self.console.print("[yellow]当前存在架构返工请求，必须先完成架构方案修订后才能继续[/yellow]")
+                self.console.print(
+                    "[yellow]当前存在架构返工请求，必须先完成架构方案修订后才能继续[/yellow]"
+                )
                 if architecture_revision["comment"]:
                     self.console.print(f"  [dim]备注: {architecture_revision['comment']}[/dim]")
                 self.console.print("[cyan]继续方式:[/cyan]")
                 self.console.print("  1. 先更新 output/*-architecture.md")
                 self.console.print("  2. 同步调整任务拆解与相关实现方案")
-                self.console.print('  3. 终端执行: super-dev review architecture --status confirmed --comment "架构返工已通过"')
+                self.console.print(
+                    '  3. 终端执行: super-dev review architecture --status confirmed --comment "架构返工已通过"'
+                )
                 self.console.print("  4. 然后执行: super-dev run --resume")
-                metric_files = _finalize_metrics(success=False, reason="waiting_architecture_revision")
-                contract_files = _finalize_contract(success=False, reason="waiting_architecture_revision")
+                metric_files = _finalize_metrics(
+                    success=False, reason="waiting_architecture_revision"
+                )
+                contract_files = _finalize_contract(
+                    success=False, reason="waiting_architecture_revision"
+                )
                 _persist_run_state(
                     "waiting_architecture_revision",
                     {
@@ -2168,7 +2564,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                         "contract_file": str(contract_files["json"]),
                     },
                 )
-                _flush_resume_audit(status="waiting_architecture_revision", failure_reason="revision_requested")
+                _flush_resume_audit(
+                    status="waiting_architecture_revision", failure_reason="revision_requested"
+                )
                 self.console.print(f"[dim]指标报告: {metric_files['json']}[/dim]")
                 self.console.print(f"[dim]契约审计: {contract_files['markdown']}[/dim]")
                 if resume_audit_files:
@@ -2178,16 +2576,22 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             quality_revision = self._get_quality_revision_state(project_dir)
             _update_run_context(quality_revision=quality_revision)
             if quality_revision["status"] == "revision_requested":
-                self.console.print("[yellow]当前存在质量返工请求，必须先修复质量/安全问题后才能继续[/yellow]")
+                self.console.print(
+                    "[yellow]当前存在质量返工请求，必须先修复质量/安全问题后才能继续[/yellow]"
+                )
                 if quality_revision["comment"]:
                     self.console.print(f"  [dim]备注: {quality_revision['comment']}[/dim]")
                 self.console.print("[cyan]继续方式:[/cyan]")
                 self.console.print("  1. 先修复质量门禁或安全问题")
                 self.console.print("  2. 重新执行 quality gate 与 release proof-pack")
-                self.console.print('  3. 终端执行: super-dev review quality --status confirmed --comment "质量返工已通过"')
+                self.console.print(
+                    '  3. 终端执行: super-dev review quality --status confirmed --comment "质量返工已通过"'
+                )
                 self.console.print("  4. 然后执行: super-dev run --resume")
                 metric_files = _finalize_metrics(success=False, reason="waiting_quality_revision")
-                contract_files = _finalize_contract(success=False, reason="waiting_quality_revision")
+                contract_files = _finalize_contract(
+                    success=False, reason="waiting_quality_revision"
+                )
                 _persist_run_state(
                     "waiting_quality_revision",
                     {
@@ -2199,7 +2603,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                         "contract_file": str(contract_files["json"]),
                     },
                 )
-                _flush_resume_audit(status="waiting_quality_revision", failure_reason="revision_requested")
+                _flush_resume_audit(
+                    status="waiting_quality_revision", failure_reason="revision_requested"
+                )
                 self.console.print(f"[dim]指标报告: {metric_files['json']}[/dim]")
                 self.console.print(f"[dim]契约审计: {contract_files['markdown']}[/dim]")
                 if resume_audit_files:
@@ -2217,9 +2623,7 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 from .creators import SpecBuilder
 
                 spec_builder = SpecBuilder(
-                    project_dir=project_dir,
-                    name=project_name,
-                    description=args.description
+                    project_dir=project_dir, name=project_name, description=args.description
                 )
 
                 change_id = spec_builder.create_change(requirements, tech_stack, scenario=scenario)
@@ -2269,7 +2673,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                     f"  [green]✓[/green] 前端运行验证: {frontend_runtime['report_files']['markdown']}"
                 )
                 if frontend_runtime["preview_file"]:
-                    self.console.print(f"  [green]✓[/green] 预览页: {frontend_runtime['preview_file']}")
+                    self.console.print(
+                        f"  [green]✓[/green] 预览页: {frontend_runtime['preview_file']}"
+                    )
                 if not frontend_runtime["passed"]:
                     raise RuntimeError("前端运行验证未通过，当前不得进入后端与交付阶段")
                 self.console.print("")
@@ -2313,7 +2719,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                     self.console.print(
                         f"  [green]✓[/green] 后端骨架文件: {len(scaffold_result['backend_files'])} 个"
                     )
-                    task_executor = SpecTaskExecutor(project_dir=project_dir, project_name=project_name)
+                    task_executor = SpecTaskExecutor(
+                        project_dir=project_dir, project_name=project_name
+                    )
                     task_execution_summary = task_executor.execute(
                         change_id=change_id,
                         tech_stack=tech_stack,
@@ -2340,7 +2748,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                             "frontend_files": len(scaffold_result["frontend_files"]),
                             "backend_files": len(scaffold_result["backend_files"]),
                             "frontend_runtime_report": str(
-                                self._frontend_runtime_report_paths(output_dir=output_dir, project_name=project_name)["json"]
+                                self._frontend_runtime_report_paths(
+                                    output_dir=output_dir, project_name=project_name
+                                )["json"]
                             ),
                             "task_completed": (
                                 f"{task_execution_summary.completed_tasks}/{task_execution_summary.total_tasks}"
@@ -2371,9 +2781,7 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 from .reviewers import RedTeamReviewer
 
                 reviewer = RedTeamReviewer(
-                    project_dir=project_dir,
-                    name=project_name,
-                    tech_stack=tech_stack
+                    project_dir=project_dir, name=project_name, tech_stack=tech_stack
                 )
                 redteam_report = reviewer.review()
 
@@ -2387,9 +2795,15 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                     encoding="utf-8",
                 )
 
-                self.console.print(f"  [green]✓[/green] 安全问题: {sum(1 for i in redteam_report.security_issues if i.severity in ('critical', 'high'))} high/critical")
-                self.console.print(f"  [green]✓[/green] 性能问题: {sum(1 for i in redteam_report.performance_issues if i.severity in ('critical', 'high'))} high/critical")
-                self.console.print(f"  [green]✓[/green] 架构问题: {sum(1 for i in redteam_report.architecture_issues if i.severity in ('critical', 'high'))} high/critical")
+                self.console.print(
+                    f"  [green]✓[/green] 安全问题: {sum(1 for i in redteam_report.security_issues if i.severity in ('critical', 'high'))} high/critical"
+                )
+                self.console.print(
+                    f"  [green]✓[/green] 性能问题: {sum(1 for i in redteam_report.performance_issues if i.severity in ('critical', 'high'))} high/critical"
+                )
+                self.console.print(
+                    f"  [green]✓[/green] 架构问题: {sum(1 for i in redteam_report.architecture_issues if i.severity in ('critical', 'high'))} high/critical"
+                )
                 self.console.print(f"  [green]✓[/green] 总分: {redteam_report.total_score}/100")
                 self.console.print(f"  [green]✓[/green] 报告: {redteam_file}")
                 self.console.print(f"  [green]✓[/green] JSON: {redteam_json_file}")
@@ -2422,7 +2836,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                     self.console.print("[red]红队审查未通过，流水线终止[/red]")
                     for reason in redteam_report.blocking_reasons:
                         self.console.print(f"  - {reason}")
-                    self.console.print("[dim]可使用 --skip-redteam 跳过该阶段（不推荐生产使用）[/dim]")
+                    self.console.print(
+                        "[dim]可使用 --skip-redteam 跳过该阶段（不推荐生产使用）[/dim]"
+                    )
                     self.console.print(f"[dim]指标报告: {metric_files['json']}[/dim]")
                     self.console.print(f"[dim]契约审计: {contract_files['markdown']}[/dim]")
                     if resume_audit_files:
@@ -2464,7 +2880,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 gate_result = gate_checker.check(redteam_report)
 
                 # 显示场景信息
-                scenario_label = "0-1 新建项目" if gate_result.scenario == "0-1" else "1-N+1 增量开发"
+                scenario_label = (
+                    "0-1 新建项目" if gate_result.scenario == "0-1" else "1-N+1 增量开发"
+                )
                 self.console.print(f"  [dim]场景: {scenario_label}[/dim]")
 
                 # 保存质量门禁报告
@@ -2474,8 +2892,12 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 if gate_checker.latest_ui_review_report is not None:
                     ui_review_file = project_dir / "output" / f"{project_name}-ui-review.md"
                     ui_review_json_file = project_dir / "output" / f"{project_name}-ui-review.json"
-                    alignment_file = project_dir / "output" / f"{project_name}-ui-contract-alignment.md"
-                    alignment_json_file = project_dir / "output" / f"{project_name}-ui-contract-alignment.json"
+                    alignment_file = (
+                        project_dir / "output" / f"{project_name}-ui-contract-alignment.md"
+                    )
+                    alignment_json_file = (
+                        project_dir / "output" / f"{project_name}-ui-contract-alignment.json"
+                    )
                     ui_review_file.write_text(
                         gate_checker.latest_ui_review_report.to_markdown(),
                         encoding="utf-8",
@@ -2559,7 +2981,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 )
             else:
                 self.console.print("[yellow]第 6 阶段: 质量门禁检查 (跳过)[/yellow]")
-                self.console.print("[dim]提示: 使用 --skip-quality-gate 跳过了质量门禁检查，建议后续补充测试和质量检查[/dim]")
+                self.console.print(
+                    "[dim]提示: 使用 --skip-quality-gate 跳过了质量门禁检查，建议后续补充测试和质量检查[/dim]"
+                )
                 self.console.print("")
                 _record_stage(True, details={"skipped": True})
 
@@ -2574,9 +2998,7 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 from .reviewers import CodeReviewGenerator
 
                 review_gen = CodeReviewGenerator(
-                    project_dir=project_dir,
-                    name=project_name,
-                    tech_stack=tech_stack
+                    project_dir=project_dir, name=project_name, tech_stack=tech_stack
                 )
 
                 review_guide = review_gen.generate()
@@ -2597,10 +3019,7 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 self.console.print("[cyan]第 8 阶段: 生成 AI 提示词...[/cyan]")
                 from .creators import AIPromptGenerator
 
-                prompt_gen = AIPromptGenerator(
-                    project_dir=project_dir,
-                    name=project_name
-                )
+                prompt_gen = AIPromptGenerator(project_dir=project_dir, name=project_name)
 
                 prompt_content = prompt_gen.generate()
                 prompt_file = project_dir / "output" / f"{project_name}-ai-prompt.md"
@@ -2617,14 +3036,16 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 self.console.print("")
                 _record_stage(True, details={"skipped": True, "reason": "resume"})
             else:
-                self.console.print(f"[cyan]第 9 阶段: 生成 CI/CD 配置 ({args.cicd.upper()})...[/cyan]")
+                self.console.print(
+                    f"[cyan]第 9 阶段: 生成 CI/CD 配置 ({args.cicd.upper()})...[/cyan]"
+                )
                 from .deployers import CICDGenerator
 
                 cicd_gen = CICDGenerator(
                     project_dir=project_dir,
                     name=project_name,
                     tech_stack=tech_stack,
-                    platform=self._normalize_cicd_platform(args.cicd)
+                    platform=self._normalize_cicd_platform(args.cicd),
                 )
 
                 cicd_files = cicd_gen.generate()
@@ -2651,17 +3072,27 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                     cicd_platform=args.cicd,
                     only_missing=True,
                 )
-                self.console.print(f"  [green]✓[/green] 环境模板: {remediation_outputs['env_file']}")
-                self.console.print(f"  [green]✓[/green] 检查清单: {remediation_outputs['checklist_file']}")
-                self.console.print(f"  [dim]缺失变量条目: {remediation_outputs['items_count']}[/dim]")
+                self.console.print(
+                    f"  [green]✓[/green] 环境模板: {remediation_outputs['env_file']}"
+                )
+                self.console.print(
+                    f"  [green]✓[/green] 检查清单: {remediation_outputs['checklist_file']}"
+                )
+                self.console.print(
+                    f"  [dim]缺失变量条目: {remediation_outputs['items_count']}[/dim]"
+                )
                 if remediation_outputs.get("per_platform_files"):
-                    self.console.print(f"  [green]✓[/green] 平台拆分模板: {len(remediation_outputs['per_platform_files'])} 组")
+                    self.console.print(
+                        f"  [green]✓[/green] 平台拆分模板: {len(remediation_outputs['per_platform_files'])} 组"
+                    )
                 self.console.print("")
                 _record_stage(
                     True,
                     details={
                         "items_count": remediation_outputs["items_count"],
-                        "per_platform_groups": len(remediation_outputs.get("per_platform_files") or []),
+                        "per_platform_groups": len(
+                            remediation_outputs.get("per_platform_files") or []
+                        ),
                     },
                 )
 
@@ -2676,9 +3107,7 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 from .deployers import DeliveryPackager, MigrationGenerator
 
                 migration_gen = MigrationGenerator(
-                    project_dir=project_dir,
-                    name=project_name,
-                    tech_stack=tech_stack
+                    project_dir=project_dir, name=project_name, tech_stack=tech_stack
                 )
 
                 migration_files = migration_gen.generate()
@@ -2696,7 +3125,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 )
                 delivery_outputs = packager.package(cicd_platform=args.cicd)
                 missing_required_raw = delivery_outputs.get("missing_required_count", 0)
-                missing_required_count = missing_required_raw if isinstance(missing_required_raw, int) else 0
+                missing_required_count = (
+                    missing_required_raw if isinstance(missing_required_raw, int) else 0
+                )
                 self.console.print(f"  [green]✓[/green] 清单: {delivery_outputs['manifest_file']}")
                 self.console.print(f"  [green]✓[/green] 报告: {delivery_outputs['report_file']}")
                 self.console.print(f"  [green]✓[/green] 交付包: {delivery_outputs['archive_file']}")
@@ -2704,7 +3135,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                     f"  [dim]状态: {delivery_outputs['status']} | 缺失必需项: {missing_required_count}[/dim]"
                 )
                 if missing_required_count > 0:
-                    self.console.print("[red]  交付包标记为 incomplete，当前不得进入发布演练验证[/red]")
+                    self.console.print(
+                        "[red]  交付包标记为 incomplete，当前不得进入发布演练验证[/red]"
+                    )
                     _record_stage(
                         False,
                         details={
@@ -2713,8 +3146,12 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                             "delivery_missing_required_count": missing_required_count,
                         },
                     )
-                    metric_files = _finalize_metrics(success=False, reason="delivery_packaging_incomplete")
-                    contract_files = _finalize_contract(success=False, reason="delivery_packaging_incomplete")
+                    metric_files = _finalize_metrics(
+                        success=False, reason="delivery_packaging_incomplete"
+                    )
+                    contract_files = _finalize_contract(
+                        success=False, reason="delivery_packaging_incomplete"
+                    )
                     _persist_run_state(
                         "failed",
                         {
@@ -2724,7 +3161,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                             "contract_file": str(contract_files["json"]),
                         },
                     )
-                    _flush_resume_audit(status="failed", failure_reason="delivery_packaging_incomplete")
+                    _flush_resume_audit(
+                        status="failed", failure_reason="delivery_packaging_incomplete"
+                    )
                     self.console.print(f"[dim]指标报告: {metric_files['json']}[/dim]")
                     self.console.print(f"[dim]契约审计: {contract_files['markdown']}[/dim]")
                     if resume_audit_files:
@@ -2796,7 +3235,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                         False,
                         details={
                             "score": rehearsal_result.score,
-                            "failed_checks": [check.name for check in rehearsal_result.failed_checks],
+                            "failed_checks": [
+                                check.name for check in rehearsal_result.failed_checks
+                            ],
                         },
                     )
                     metric_files = _finalize_metrics(success=False, reason="rehearsal_failed")
@@ -2839,7 +3280,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             skipped_gates = [
                 stage_execution_state[stage]["title"]
                 for stage in gate_stage_ids
-                if bool(stage_execution_state.get(stage, {}).get("details", {}).get("skipped", False))
+                if bool(
+                    stage_execution_state.get(stage, {}).get("details", {}).get("skipped", False)
+                )
             ]
             full_gate_passed = not skipped_gates
             scope_fully_implemented = feature_coverage_report.status == "ready"
@@ -2861,11 +3304,17 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             self.console.print("")
             if full_gate_passed:
                 if scope_fully_implemented:
-                    self.console.print("[green]交付状态: 当前运行已完成，且红队 / 质量 / 演练门禁均已通过，当前范围覆盖率未发现显式缺口。[/green]")
+                    self.console.print(
+                        "[green]交付状态: 当前运行已完成，且红队 / 质量 / 演练门禁均已通过，当前范围覆盖率未发现显式缺口。[/green]"
+                    )
                 else:
-                    self.console.print("[yellow]交付状态: 当前运行已完成，且门禁已通过；但这不等于 PRD 全量范围已实现完成。[/yellow]")
+                    self.console.print(
+                        "[yellow]交付状态: 当前运行已完成，且门禁已通过；但这不等于 PRD 全量范围已实现完成。[/yellow]"
+                    )
             else:
-                self.console.print("[yellow]交付状态: 当前运行已完成，但存在跳过门禁；这不等于严格意义上的“全部通过”。[/yellow]")
+                self.console.print(
+                    "[yellow]交付状态: 当前运行已完成，但存在跳过门禁；这不等于严格意义上的“全部通过”。[/yellow]"
+                )
                 self.console.print(f"[yellow]已跳过门禁: {', '.join(skipped_gates)}[/yellow]")
             coverage_text = (
                 f"{feature_coverage_report.coverage_rate:.1f}%"
@@ -2910,9 +3359,7 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                         rel = Path(str(task_execution_summary.report_file)).relative_to(project_dir)
                     except ValueError:
                         rel = Path(str(task_execution_summary.report_file)).name
-                    self.console.print(
-                        f"    - {rel}"
-                    )
+                    self.console.print(f"    - {rel}")
                 self.console.print("")
             self.console.print("  CI/CD:")
             for file_path in cicd_files.keys():
@@ -2923,9 +3370,13 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 self.console.print(f"    - {Path(remediation_outputs['env_file']).name}")
                 if remediation_outputs.get("checklist_file"):
                     try:
-                        self.console.print(f"    - {Path(remediation_outputs['checklist_file']).relative_to(project_dir)}")
+                        self.console.print(
+                            f"    - {Path(remediation_outputs['checklist_file']).relative_to(project_dir)}"
+                        )
                     except ValueError:
-                        self.console.print(f"    - {Path(remediation_outputs['checklist_file']).name}")
+                        self.console.print(
+                            f"    - {Path(remediation_outputs['checklist_file']).name}"
+                        )
             per_platform_files = remediation_outputs.get("per_platform_files")
             if isinstance(per_platform_files, list):
                 for item in per_platform_files:
@@ -2933,22 +3384,22 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                         continue
                     checklist_file = item.get("checklist_file")
                     if isinstance(checklist_file, str):
-                        self.console.print(
-                            f"    - {Path(checklist_file).relative_to(project_dir)}"
-                        )
+                        self.console.print(f"    - {Path(checklist_file).relative_to(project_dir)}")
                     env_file = item.get("env_file")
                     if isinstance(env_file, str):
-                        self.console.print(
-                            f"    - {Path(env_file).relative_to(project_dir)}"
-                        )
+                        self.console.print(f"    - {Path(env_file).relative_to(project_dir)}")
             self.console.print("")
             self.console.print("  数据库迁移:")
             for file_path in migration_files.keys():
                 self.console.print(f"    - {file_path}")
             self.console.print("")
             self.console.print("  范围覆盖审计:")
-            self.console.print(f"    - {Path(str(feature_checklist_files['markdown'])).relative_to(project_dir)}")
-            self.console.print(f"    - {Path(str(feature_checklist_files['json'])).relative_to(project_dir)}")
+            self.console.print(
+                f"    - {Path(str(feature_checklist_files['markdown'])).relative_to(project_dir)}"
+            )
+            self.console.print(
+                f"    - {Path(str(feature_checklist_files['json'])).relative_to(project_dir)}"
+            )
             self.console.print("")
             self.console.print("  项目交付包:")
             self.console.print(
@@ -2965,7 +3416,11 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             self.console.print(f"    - output/rehearsal/{project_name}-launch-rehearsal.md")
             self.console.print(f"    - output/rehearsal/{project_name}-rollback-playbook.md")
             self.console.print(f"    - output/rehearsal/{project_name}-smoke-checklist.md")
-            if not args.skip_rehearsal_verify and not args.skip_redteam and not args.skip_quality_gate:
+            if (
+                not args.skip_rehearsal_verify
+                and not args.skip_redteam
+                and not args.skip_quality_gate
+            ):
                 self.console.print(f"    - output/rehearsal/{project_name}-rehearsal-report.md")
                 self.console.print(f"    - output/rehearsal/{project_name}-rehearsal-report.json")
             self.console.print("")
@@ -2977,11 +3432,17 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             self.console.print("  5. 运行数据库迁移脚本并推送代码触发流水线")
             self.console.print("  6. 执行并保存发布演练报告用于上线审批")
             self.console.print("  7. 使用 output/delivery/* 作为对外交付包")
-            self.console.print(f"  8. 查看 pipeline 指标: output/{project_name}-pipeline-metrics.md")
+            self.console.print(
+                f"  8. 查看 pipeline 指标: output/{project_name}-pipeline-metrics.md"
+            )
             if not full_gate_passed:
-                self.console.print("  9. 若要获得严格意义上的全门禁通过，请重新执行被跳过的红队 / 质量 / 演练阶段")
+                self.console.print(
+                    "  9. 若要获得严格意义上的全门禁通过，请重新执行被跳过的红队 / 质量 / 演练阶段"
+                )
             elif not scope_fully_implemented:
-                self.console.print("  9. 若要确认 PRD 范围是否真正实现完成，请查看 feature checklist 并补齐高优先级缺口")
+                self.console.print(
+                    "  9. 若要确认 PRD 范围是否真正实现完成，请查看 feature checklist 并补齐高优先级缺口"
+                )
             self.console.print("")
             self.console.print("[cyan]可观测性:[/cyan]")
             self.console.print(f"  - 指标 JSON: {metric_files['json']}")
@@ -3002,7 +3463,8 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                     "skipped_gates": skipped_gates,
                     "scope_coverage_status": feature_coverage_report.status,
                     "scope_coverage_rate": feature_coverage_report.coverage_rate,
-                    "scope_gap_count": feature_coverage_report.missing_count + feature_coverage_report.unknown_count,
+                    "scope_gap_count": feature_coverage_report.missing_count
+                    + feature_coverage_report.unknown_count,
                     "scope_high_priority_gap_count": feature_coverage_report.high_priority_gap_count,
                     "scope_feature_checklist_file": str(feature_checklist_files["json"]),
                 },
@@ -3031,6 +3493,7 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             _flush_resume_audit(status="failed", failure_reason=str(e))
             self.console.print(f"[red]流水线失败: {e}[/red]")
             import traceback
+
             self.console.print(traceback.format_exc())
             self.console.print(f"[dim]指标报告: {metric_files['json']}[/dim]")
             self.console.print(f"[dim]契约审计: {contract_files['markdown']}[/dim]")
@@ -3068,7 +3531,8 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 self.console.print("[red]请指定配置键和值[/red]")
                 return 1
             valid_keys = {
-                key for key in ProjectConfig.__dataclass_fields__.keys()  # type: ignore[attr-defined]
+                key
+                for key in ProjectConfig.__dataclass_fields__.keys()  # type: ignore[attr-defined]
                 if not key.startswith("_")
             }
             if args.key not in valid_keys:
@@ -3199,7 +3663,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             elif args.all:
                 targets = available_targets
             else:
-                targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
+                targets, detected_meta = self._detect_host_targets(
+                    available_targets=available_targets
+                )
                 if not targets:
                     targets = available_targets
             hardening_results: dict[str, Any] = {}
@@ -3223,7 +3689,10 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 global_slash = manager.setup_global_slash_command(target=target, force=True)
                 if global_slash is not None:
                     written_files.append(str(global_slash))
-                skill_install: dict[str, Any] = {"required": manager.requires_skill(target), "installed": False}
+                skill_install: dict[str, Any] = {
+                    "required": manager.requires_skill(target),
+                    "installed": False,
+                }
                 if manager.requires_skill(target):
                     try:
                         skill_path = skill_manager.install(
@@ -3243,7 +3712,11 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                             "installed": False,
                             "error": str(exc),
                         }
-                docs_check = manager.verify_official_docs(target) if bool(getattr(args, "verify_docs", False)) else {}
+                docs_check = (
+                    manager.verify_official_docs(target)
+                    if bool(getattr(args, "verify_docs", False))
+                    else {}
+                )
                 official_compare = (
                     manager.compare_official_capabilities(target, timeout_seconds=8.0)
                     if official_compare_enabled
@@ -3294,10 +3767,14 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 "compatibility": compatibility,
                 "usage_profiles": usage_profiles,
             }
-            official_compare_summary = self._build_official_compare_summary(hardening_results=hardening_results)
+            official_compare_summary = self._build_official_compare_summary(
+                hardening_results=hardening_results
+            )
             host_parity_summary = self._build_host_parity_summary(usage_profiles=usage_profiles)
             host_gate_summary = self._build_host_gate_summary(report=report, targets=targets)
-            host_runtime_script_summary = self._build_host_runtime_script_summary(usage_profiles=usage_profiles)
+            host_runtime_script_summary = self._build_host_runtime_script_summary(
+                usage_profiles=usage_profiles
+            )
             host_recovery_summary = self._build_host_recovery_summary(
                 targets=targets,
                 usage_profiles=usage_profiles,
@@ -3318,11 +3795,18 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             )
             payload["host_parity_index"] = parity_index
             if not bool(args.no_save):
-                report_files = self._write_host_hardening_report(project_dir=project_dir, payload=payload)
+                report_files = self._write_host_hardening_report(
+                    project_dir=project_dir, payload=payload
+                )
                 payload["report_files"] = {name: str(path) for name, path in report_files.items()}
             if args.json:
                 sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
-                return 0 if bool(report.get("overall_ready", False)) and bool(parity_index.get("passed", False)) else 1
+                return (
+                    0
+                    if bool(report.get("overall_ready", False))
+                    and bool(parity_index.get("passed", False))
+                    else 1
+                )
 
             self.console.print("[cyan]Super Dev 宿主系统级深适配[/cyan]")
             self.console.print(f"[dim]项目目录: {project_dir}[/dim]")
@@ -3376,9 +3860,13 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 skill_install = item.get("skill_install", {})
                 if isinstance(skill_install, dict) and bool(skill_install.get("required", False)):
                     if bool(skill_install.get("installed", False)):
-                        self.console.print(f"  Skill 安装: [green]ok[/green] ({skill_install.get('path', '-')})")
+                        self.console.print(
+                            f"  Skill 安装: [green]ok[/green] ({skill_install.get('path', '-')})"
+                        )
                     else:
-                        self.console.print(f"  Skill 安装: [yellow]failed[/yellow] ({skill_install.get('error', '-')})")
+                        self.console.print(
+                            f"  Skill 安装: [yellow]failed[/yellow] ({skill_install.get('error', '-')})"
+                        )
                 docs_check = item.get("docs_check", {})
                 if isinstance(docs_check, dict) and docs_check:
                     self.console.print(
@@ -3413,7 +3901,12 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                     self.console.print("[cyan]深适配报告[/cyan]")
                     for name, path in report_files.items():
                         self.console.print(f"  - {name}: {path}")
-            return 0 if bool(report.get("overall_ready", False)) and bool(parity_index.get("passed", False)) else 1
+            return (
+                0
+                if bool(report.get("overall_ready", False))
+                and bool(parity_index.get("passed", False))
+                else 1
+            )
 
         if args.action == "matrix":
             targets: list[str] | None = [args.target] if args.target else None
@@ -3425,7 +3918,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                     docs_checks[profile.host] = manager.verify_official_docs(profile.host)
             if bool(getattr(args, "official_compare", False)):
                 for profile in profiles:
-                    official_compares[profile.host] = manager.compare_official_capabilities(profile.host)
+                    official_compares[profile.host] = manager.compare_official_capabilities(
+                        profile.host
+                    )
             if args.json:
                 payload = {
                     "profiles": [profile.to_dict() for profile in profiles],
@@ -3437,9 +3932,7 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
 
             self.console.print("[cyan]Super Dev 宿主适配矩阵[/cyan]")
             verified_count = sum(1 for item in profiles if item.docs_verified)
-            self.console.print(
-                f"[dim]官方文档核验: {verified_count}/{len(profiles)}[/dim]"
-            )
+            self.console.print(f"[dim]官方文档核验: {verified_count}/{len(profiles)}[/dim]")
             for profile in profiles:
                 self.console.print(f"[cyan]- {profile.host} ({profile.category})[/cyan]")
                 self.console.print(f"  适配模式: {profile.adapter_mode}")
@@ -3451,7 +3944,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 if profile.official_docs_references:
                     self.console.print(f"  官方参考: {len(profile.official_docs_references)} 条")
                 labels = profile.capability_labels or {}
-                capability_summary = ", ".join(f"{key}={value}" for key, value in labels.items()) if labels else "-"
+                capability_summary = (
+                    ", ".join(f"{key}={value}" for key, value in labels.items()) if labels else "-"
+                )
                 self.console.print(f"  能力标签: {capability_summary}")
                 if profile.host in docs_checks:
                     docs_check = docs_checks[profile.host]
@@ -3477,7 +3972,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 self.console.print(f"  规则文件: {', '.join(profile.integration_files)}")
                 self.console.print(f"  Slash 文件: {profile.slash_command_file}")
                 self.console.print(f"  Skill 目录: {profile.skill_dir}")
-                commands = ", ".join(profile.detection_commands) if profile.detection_commands else "-"
+                commands = (
+                    ", ".join(profile.detection_commands) if profile.detection_commands else "-"
+                )
                 paths = ", ".join(profile.detection_paths) if profile.detection_paths else "-"
                 self.console.print(f"  探测命令: {commands}")
                 self.console.print(f"  探测路径: {paths}")
@@ -3495,13 +3992,17 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             return 0
 
         if args.action == "smoke":
-            targets: list[str] = [args.target] if args.target else [item.name for item in manager.list_targets()]
+            targets: list[str] = (
+                [args.target] if args.target else [item.name for item in manager.list_targets()]
+            )
             profiles = manager.list_adapter_profiles(targets=targets)
             if args.json:
                 payload = [
                     {
                         "host": profile.host,
-                        "final_trigger": str(profile.trigger_command).replace("<需求描述>", "你的需求"),
+                        "final_trigger": str(profile.trigger_command).replace(
+                            "<需求描述>", "你的需求"
+                        ),
                         "smoke_test_prompt": profile.smoke_test_prompt,
                         "smoke_test_steps": list(profile.smoke_test_steps),
                         "smoke_success_signal": profile.smoke_success_signal,
@@ -3534,7 +4035,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             elif args.all:
                 targets = available_targets
             else:
-                targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
+                targets, detected_meta = self._detect_host_targets(
+                    available_targets=available_targets
+                )
                 if not targets:
                     targets = available_targets
 
@@ -3590,17 +4093,22 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 "usage_profiles": usage_profiles,
                 "repair_actions": repair_actions,
             }
-            payload["host_parity_summary"] = self._build_host_parity_summary(usage_profiles=usage_profiles)
-            payload["host_gate_summary"] = self._build_host_gate_summary(report=report, targets=targets)
-            payload["host_runtime_script_summary"] = self._build_host_runtime_script_summary(usage_profiles=usage_profiles)
+            payload["host_parity_summary"] = self._build_host_parity_summary(
+                usage_profiles=usage_profiles
+            )
+            payload["host_gate_summary"] = self._build_host_gate_summary(
+                report=report, targets=targets
+            )
+            payload["host_runtime_script_summary"] = self._build_host_runtime_script_summary(
+                usage_profiles=usage_profiles
+            )
             payload["host_recovery_summary"] = self._build_host_recovery_summary(
                 targets=targets,
                 usage_profiles=usage_profiles,
             )
             if bool(getattr(args, "verify_docs", False)):
                 payload["docs_checks"] = {
-                    target: manager.verify_official_docs(target)
-                    for target in targets
+                    target: manager.verify_official_docs(target) for target in targets
                 }
             if bool(getattr(args, "official_compare", False)):
                 official_compares = {
@@ -3624,13 +4132,20 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 compatibility=compatibility,
             )
             if not bool(args.no_save):
-                report_files = self._write_host_surface_audit_report(project_dir=project_dir, payload=payload)
+                report_files = self._write_host_surface_audit_report(
+                    project_dir=project_dir, payload=payload
+                )
                 payload["report_files"] = {name: str(path) for name, path in report_files.items()}
 
             if args.json:
                 sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
                 parity_index = payload.get("host_parity_index", {})
-                return 0 if bool(report.get("overall_ready", False)) and bool((parity_index or {}).get("passed", False)) else 1
+                return (
+                    0
+                    if bool(report.get("overall_ready", False))
+                    and bool((parity_index or {}).get("passed", False))
+                    else 1
+                )
 
             self.console.print("[cyan]Super Dev 宿主 Surface 审计[/cyan]")
             self.console.print(f"[dim]项目目录: {project_dir}[/dim]")
@@ -3693,19 +4208,27 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 usage = usage_profiles.get(target, {})
                 ready = bool(host.get("ready", False))
                 self.console.print("")
-                self.console.print(f"[cyan]- {target}[/cyan] {'[green]ready[/green]' if ready else '[yellow]needs repair[/yellow]'}")
+                self.console.print(
+                    f"[cyan]- {target}[/cyan] {'[green]ready[/green]' if ready else '[yellow]needs repair[/yellow]'}"
+                )
                 self.console.print(f"  触发命令: {usage.get('final_trigger', '-')}")
                 self.console.print(f"  宿主协议: {usage.get('host_protocol_summary', '-')}")
                 checks = host.get("checks", {})
                 contract = checks.get("contract", {}) if isinstance(checks, dict) else {}
-                invalid_surfaces = contract.get("invalid_surfaces", {}) if isinstance(contract, dict) else {}
+                invalid_surfaces = (
+                    contract.get("invalid_surfaces", {}) if isinstance(contract, dict) else {}
+                )
                 if isinstance(invalid_surfaces, dict) and invalid_surfaces:
                     self.console.print("  [yellow]过期/缺失的接入面[/yellow]:")
                     for surface_key, surface_info in invalid_surfaces.items():
                         if not isinstance(surface_info, dict):
                             continue
                         missing_markers = surface_info.get("missing_markers", [])
-                        marker_text = ", ".join(str(item) for item in missing_markers) if isinstance(missing_markers, list) else "-"
+                        marker_text = (
+                            ", ".join(str(item) for item in missing_markers)
+                            if isinstance(missing_markers, list)
+                            else "-"
+                        )
                         self.console.print(f"    - {surface_key}")
                         self.console.print(f"      path: {surface_info.get('path', '-')}")
                         self.console.print(f"      missing: {marker_text}")
@@ -3723,7 +4246,12 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                     self.console.print("[cyan]审计报告[/cyan]")
                     for name, path in report_files.items():
                         self.console.print(f"  - {name}: {path}")
-            return 0 if bool(report.get("overall_ready", False)) and bool((parity_index or {}).get("passed", False)) else 1
+            return (
+                0
+                if bool(report.get("overall_ready", False))
+                and bool((parity_index or {}).get("passed", False))
+                else 1
+            )
 
         if args.action == "validate":
             project_dir = Path.cwd()
@@ -3763,7 +4291,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                         + "\n"
                     )
                     return 0
-                self.console.print(f"[green]已更新宿主真人验收状态[/green] {args.target}: {status_label}")
+                self.console.print(
+                    f"[green]已更新宿主真人验收状态[/green] {args.target}: {status_label}"
+                )
                 if args.comment:
                     self.console.print(f"[dim]备注: {args.comment}[/dim]")
                 self.console.print(f"[dim]状态文件: {file_path}[/dim]")
@@ -3774,7 +4304,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             elif args.all:
                 targets = available_targets
             else:
-                targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
+                targets, detected_meta = self._detect_host_targets(
+                    available_targets=available_targets
+                )
                 if not targets:
                     targets = available_targets
 
@@ -3802,7 +4334,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             )
 
             if not bool(args.no_save):
-                report_files = self._write_host_runtime_validation_report(project_dir=project_dir, payload=payload)
+                report_files = self._write_host_runtime_validation_report(
+                    project_dir=project_dir, payload=payload
+                )
                 payload["report_files"] = {name: str(path) for name, path in report_files.items()}
 
             if args.json:
@@ -3830,22 +4364,28 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
                 for item in blockers[:8]:
                     if not isinstance(item, dict):
                         continue
-                    self.console.print(
-                        f"  - {item.get('host', '-')}: {item.get('summary', '-')}"
-                    )
+                    self.console.print(f"  - {item.get('host', '-')}: {item.get('summary', '-')}")
             for host in payload.get("hosts", []):
                 if not isinstance(host, dict):
                     continue
-                ready_badge = "[green]surface-ready[/green]" if bool(host.get("surface_ready", False)) else "[yellow]surface-not-ready[/yellow]"
+                ready_badge = (
+                    "[green]surface-ready[/green]"
+                    if bool(host.get("surface_ready", False))
+                    else "[yellow]surface-not-ready[/yellow]"
+                )
                 self.console.print("")
                 self.console.print(f"[cyan]- {host.get('host', '-') }[/cyan] {ready_badge}")
                 self.console.print(f"  触发命令: {host.get('final_trigger', '-')}")
                 self.console.print(f"  宿主协议: {host.get('host_protocol_summary', '-')}")
-                self.console.print(f"  人工验收状态: {host.get('manual_runtime_status_label', '-')}")
+                self.console.print(
+                    f"  人工验收状态: {host.get('manual_runtime_status_label', '-')}"
+                )
                 if host.get("resume_probe_prompt"):
                     self.console.print("  继续当前流程:")
                     self.console.print(f"    - 宿主第一句: {host.get('resume_probe_prompt')}")
-                    self.console.print(f"    - 流程状态卡: {self._session_brief_path(Path(payload.get('project_dir', Path.cwd())))}")
+                    self.console.print(
+                        f"    - 流程状态卡: {self._session_brief_path(Path(payload.get('project_dir', Path.cwd())))}"
+                    )
                 if host.get("blocking_reason"):
                     self.console.print(f"  阻塞原因: {host.get('blocking_reason')}")
                 if host.get("recommended_action"):
@@ -3889,6 +4429,64 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         self.console.print("[yellow]未知 integrate 操作[/yellow]")
         return 1
 
+    _KNOWN_COMMANDS = {
+        "init",
+        "analyze",
+        "workflow",
+        "studio",
+        "expert",
+        "quality",
+        "metrics",
+        "preview",
+        "deploy",
+        "create",
+        "wizard",
+        "design",
+        "spec",
+        "task",
+        "pipeline",
+        "run",
+        "config",
+        "skill",
+        "integrate",
+        "onboard",
+        "doctor",
+        "setup",
+        "install",
+        "start",
+        "bootstrap",
+        "detect",
+        "policy",
+        "update",
+        "review",
+        "release",
+        "fix",
+        "repo-map",
+        "feature-checklist",
+        "product-audit",
+        "impact",
+        "regression-guard",
+        "dependency-graph",
+        "status",
+        "next",
+        "continue",
+        "resume",
+        "jump",
+        "confirm",
+        "clean",
+        "governance",
+        "generate",
+        "knowledge",
+        "memory",
+        "hooks",
+        "experts",
+        "compact",
+        "enforce",
+        "completion",
+        "feedback",
+        "migrate",
+    }
+
     def _is_direct_requirement_input(self, argv: list[str]) -> bool:
         """判断是否为直达需求输入（非子命令模式）"""
         if not argv:
@@ -3898,14 +4496,61 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         if first.startswith("-"):
             return False
 
-        known_commands = {
-            "init", "analyze", "workflow", "studio", "expert", "quality", "metrics", "preview",
-            "deploy", "create", "wizard", "design", "spec", "task", "pipeline", "run", "config", "skill", "integrate",
-            "onboard", "doctor", "setup", "install", "start", "bootstrap", "detect", "policy", "update", "review", "release",
-            "fix", "repo-map", "feature-checklist", "product-audit", "impact", "regression-guard", "dependency-graph",
-            "status", "next", "continue", "resume", "jump", "confirm", "clean",
-        }
-        return first not in known_commands
+        if first in self._KNOWN_COMMANDS:
+            return False
+
+        # Single ASCII-only bare word without spaces/colons looks like a mistyped
+        # command, not a requirement description.  Requirement mode requires either:
+        # - multiple non-flag tokens, or
+        # - the text contains `:` / `：` (host trigger prefix), or
+        # - the first token contains non-ASCII characters (e.g. Chinese text).
+        joined = " ".join(argv)
+        if ":" in joined or "：" in joined:
+            return True
+        # If there are extra flag-style args (--offline etc.), still treat as requirement
+        non_flag_tokens = [t for t in argv if not t.startswith("-")]
+        if len(non_flag_tokens) >= 2:
+            return True
+        # Single bare ASCII-only word → likely a mistyped command, not a requirement
+        if (
+            len(non_flag_tokens) == 1
+            and non_flag_tokens[0].isascii()
+            and non_flag_tokens[0].isidentifier()
+        ):
+            return False
+        # Fallback: treat as requirement (includes non-ASCII single tokens)
+        return True
+
+    def _is_unknown_command(self, argv: list[str]) -> bool:
+        """判断是否为未知的单词命令（非需求直达，非已知命令）"""
+        if not argv:
+            return False
+        first = argv[0]
+        if first.startswith("-"):
+            return False
+        if first in self._KNOWN_COMMANDS:
+            return False
+        # Single bare ASCII-only word that looks like a command name
+        non_flag_tokens = [t for t in argv if not t.startswith("-")]
+        if (
+            len(non_flag_tokens) == 1
+            and non_flag_tokens[0].isascii()
+            and non_flag_tokens[0].isidentifier()
+        ):
+            return True
+        return False
+
+    def _suggest_commands(self, unknown: str) -> list[str]:
+        """为未知命令提供建议（简单前缀 + 编辑距离匹配）"""
+        suggestions: list[str] = []
+        for cmd in sorted(self._KNOWN_COMMANDS):
+            if cmd.startswith(unknown[:2]) or unknown.startswith(cmd[:2]):
+                suggestions.append(cmd)
+        # Always include the most common commands as fallback
+        primary = ["init", "setup", "run", "status", "review", "release"]
+        if not suggestions:
+            suggestions = primary
+        return suggestions[:6]
 
     def _parse_direct_requirement_args(self, argv: list[str]) -> tuple[str, dict[str, Any]]:
         """
@@ -3971,7 +4616,11 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
 
     def _review_status_label(self, status: str, *, review_type: str = "docs") -> str:
         if status == "confirmed":
-            return "已通过" if review_type in {"preview", "ui", "architecture", "quality"} else "已确认"
+            return (
+                "已通过"
+                if review_type in {"preview", "ui", "architecture", "quality"}
+                else "已确认"
+            )
         if status == "revision_requested":
             if review_type == "preview":
                 return "需继续修改"
@@ -4072,7 +4721,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             and any(output_dir.glob("*-uiux.md"))
         )
 
-    def _ensure_docs_confirmation_for_execution(self, project_dir: Path, *, action_label: str) -> bool:
+    def _ensure_docs_confirmation_for_execution(
+        self, project_dir: Path, *, action_label: str
+    ) -> bool:
         if not self._has_core_docs(project_dir):
             return True
         if self._docs_confirmation_is_confirmed(project_dir):
@@ -4080,27 +4731,41 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
 
         current = self._get_docs_confirmation_state(project_dir)
         self.console.print(f"[red]{action_label}前，必须先完成三文档确认[/red]")
-        self.console.print(f"[dim]当前状态: {self._docs_confirmation_label(current['status'])}[/dim]")
+        self.console.print(
+            f"[dim]当前状态: {self._docs_confirmation_label(current['status'])}[/dim]"
+        )
         if current["comment"]:
             self.console.print(f"[dim]备注: {current['comment']}[/dim]")
         self.console.print("[dim]先查看 output/*-prd.md、*-architecture.md、*-uiux.md[/dim]")
-        self.console.print('[dim]然后执行: super-dev review docs --status confirmed --comment "三文档已确认"[/dim]')
+        self.console.print(
+            '[dim]然后执行: super-dev review docs --status confirmed --comment "三文档已确认"[/dim]'
+        )
         return False
 
-    def _ensure_ui_revision_clear_for_execution(self, project_dir: Path, *, action_label: str) -> bool:
+    def _ensure_ui_revision_clear_for_execution(
+        self, project_dir: Path, *, action_label: str
+    ) -> bool:
         current = self._get_ui_revision_state(project_dir)
         if current["status"] != "revision_requested":
             return True
 
         self.console.print(f"[red]{action_label}前，必须先完成 UI 改版返工[/red]")
-        self.console.print(f"[dim]当前状态: {self._review_status_label(current['status'], review_type='ui')}[/dim]")
+        self.console.print(
+            f"[dim]当前状态: {self._review_status_label(current['status'], review_type='ui')}[/dim]"
+        )
         if current["comment"]:
             self.console.print(f"[dim]备注: {current['comment']}[/dim]")
-        self.console.print("[dim]先更新 output/*-uiux.md，再重做前端，并重新执行 frontend runtime 与 UI review[/dim]")
-        self.console.print('[dim]完成后执行: super-dev review ui --status confirmed --comment "UI 改版已通过"[/dim]')
+        self.console.print(
+            "[dim]先更新 output/*-uiux.md，再重做前端，并重新执行 frontend runtime 与 UI review[/dim]"
+        )
+        self.console.print(
+            '[dim]完成后执行: super-dev review ui --status confirmed --comment "UI 改版已通过"[/dim]'
+        )
         return False
 
-    def _ensure_preview_confirmation_for_execution(self, project_dir: Path, *, action_label: str) -> bool:
+    def _ensure_preview_confirmation_for_execution(
+        self, project_dir: Path, *, action_label: str
+    ) -> bool:
         output_dir = project_dir / "output"
         frontend_ready = any(output_dir.glob("*-frontend-runtime.json"))
         if not frontend_ready:
@@ -4110,50 +4775,74 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
 
         current = self._get_preview_confirmation_state(project_dir)
         self.console.print(f"[red]{action_label}前，必须先完成前端预览确认[/red]")
-        self.console.print(f"[dim]当前状态: {self._review_status_label(current['status'], review_type='preview')}[/dim]")
+        self.console.print(
+            f"[dim]当前状态: {self._review_status_label(current['status'], review_type='preview')}[/dim]"
+        )
         if current["comment"]:
             self.console.print(f"[dim]备注: {current['comment']}[/dim]")
-        self.console.print("[dim]先评审当前前端预览；若需要继续修改，完成前端返工并重跑 frontend runtime 后再确认[/dim]")
-        self.console.print('[dim]完成后执行: super-dev review preview --status confirmed --comment "前端预览已确认"[/dim]')
+        self.console.print(
+            "[dim]先评审当前前端预览；若需要继续修改，完成前端返工并重跑 frontend runtime 后再确认[/dim]"
+        )
+        self.console.print(
+            '[dim]完成后执行: super-dev review preview --status confirmed --comment "前端预览已确认"[/dim]'
+        )
         return False
 
-    def _ensure_architecture_revision_clear_for_execution(self, project_dir: Path, *, action_label: str) -> bool:
+    def _ensure_architecture_revision_clear_for_execution(
+        self, project_dir: Path, *, action_label: str
+    ) -> bool:
         current = self._get_architecture_revision_state(project_dir)
         if current["status"] != "revision_requested":
             return True
 
         self.console.print(f"[red]{action_label}前，必须先完成架构返工[/red]")
-        self.console.print(f"[dim]当前状态: {self._review_status_label(current['status'], review_type='architecture')}[/dim]")
+        self.console.print(
+            f"[dim]当前状态: {self._review_status_label(current['status'], review_type='architecture')}[/dim]"
+        )
         if current["comment"]:
             self.console.print(f"[dim]备注: {current['comment']}[/dim]")
-        self.console.print("[dim]先更新 output/*-architecture.md，再同步调整实现方案与相关任务拆解[/dim]")
-        self.console.print('[dim]完成后执行: super-dev review architecture --status confirmed --comment "架构返工已通过"[/dim]')
+        self.console.print(
+            "[dim]先更新 output/*-architecture.md，再同步调整实现方案与相关任务拆解[/dim]"
+        )
+        self.console.print(
+            '[dim]完成后执行: super-dev review architecture --status confirmed --comment "架构返工已通过"[/dim]'
+        )
         return False
 
-    def _ensure_quality_revision_clear_for_execution(self, project_dir: Path, *, action_label: str) -> bool:
+    def _ensure_quality_revision_clear_for_execution(
+        self, project_dir: Path, *, action_label: str
+    ) -> bool:
         current = self._get_quality_revision_state(project_dir)
         if current["status"] != "revision_requested":
             return True
 
         self.console.print(f"[red]{action_label}前，必须先完成质量返工[/red]")
-        self.console.print(f"[dim]当前状态: {self._review_status_label(current['status'], review_type='quality')}[/dim]")
+        self.console.print(
+            f"[dim]当前状态: {self._review_status_label(current['status'], review_type='quality')}[/dim]"
+        )
         if current["comment"]:
             self.console.print(f"[dim]备注: {current['comment']}[/dim]")
-        self.console.print("[dim]先修复质量/安全问题，重新执行 quality gate 与 release proof-pack[/dim]")
-        self.console.print('[dim]完成后执行: super-dev review quality --status confirmed --comment "质量返工已通过"[/dim]')
+        self.console.print(
+            "[dim]先修复质量/安全问题，重新执行 quality gate 与 release proof-pack[/dim]"
+        )
+        self.console.print(
+            '[dim]完成后执行: super-dev review quality --status confirmed --comment "质量返工已通过"[/dim]'
+        )
         return False
 
     def _ensure_execution_gates(self, project_dir: Path, *, action_label: str) -> bool:
-        return self._ensure_docs_confirmation_for_execution(
-            project_dir, action_label=action_label
-        ) and self._ensure_preview_confirmation_for_execution(
-            project_dir, action_label=action_label
-        ) and self._ensure_ui_revision_clear_for_execution(
-            project_dir, action_label=action_label
-        ) and self._ensure_architecture_revision_clear_for_execution(
-            project_dir, action_label=action_label
-        ) and self._ensure_quality_revision_clear_for_execution(
-            project_dir, action_label=action_label
+        return (
+            self._ensure_docs_confirmation_for_execution(project_dir, action_label=action_label)
+            and self._ensure_preview_confirmation_for_execution(
+                project_dir, action_label=action_label
+            )
+            and self._ensure_ui_revision_clear_for_execution(project_dir, action_label=action_label)
+            and self._ensure_architecture_revision_clear_for_execution(
+                project_dir, action_label=action_label
+            )
+            and self._ensure_quality_revision_clear_for_execution(
+                project_dir, action_label=action_label
+            )
         )
 
     def _cmd_task(self, args) -> int:
@@ -4189,7 +4878,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
 
         if args.action == "status":
             completed = sum(1 for task in loaded_change.tasks if task.status.value == "completed")
-            in_progress = sum(1 for task in loaded_change.tasks if task.status.value == "in_progress")
+            in_progress = sum(
+                1 for task in loaded_change.tasks if task.status.value == "in_progress"
+            )
             pending = sum(1 for task in loaded_change.tasks if task.status.value == "pending")
             self.console.print(f"[cyan]任务状态: {loaded_change.id}[/cyan]")
             self.console.print(f"  标题: {loaded_change.title}")
@@ -4198,7 +4889,11 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             self.console.print(f"  进行中: {in_progress}")
             self.console.print(f"  待处理: {pending}")
             for task in loaded_change.tasks:
-                marker = "[x]" if task.status.value == "completed" else "[~]" if task.status.value == "in_progress" else "[ ]"
+                marker = (
+                    "[x]"
+                    if task.status.value == "completed"
+                    else "[~]" if task.status.value == "in_progress" else "[ ]"
+                )
                 self.console.print(f"  {marker} {task.id} {task.title}")
             return 0
 
@@ -4208,14 +4903,16 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
 
         tech_stack = {
             "platform": args.platform or (config.platform if config_exists else "web"),
-            "frontend": args.frontend or (self._normalize_pipeline_frontend(config.frontend) if config_exists else "react"),
+            "frontend": args.frontend
+            or (self._normalize_pipeline_frontend(config.frontend) if config_exists else "react"),
             "backend": args.backend or (config.backend if config_exists else "node"),
-            "domain": args.domain if args.domain is not None else (config.domain if config_exists else ""),
+            "domain": (
+                args.domain if args.domain is not None else (config.domain if config_exists else "")
+            ),
         }
 
-        project_name = (
-            args.project_name
-            or (config.name if config_exists and config.name else args.change_id)
+        project_name = args.project_name or (
+            config.name if config_exists and config.name else args.change_id
         )
 
         if not self._ensure_execution_gates(project_dir, action_label="执行 Spec 任务"):
@@ -4343,7 +5040,15 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             return "failed"
         if normalized in {"cancelled"}:
             return "cancelled"
-        if normalized in {"running", "cancelling", "waiting_confirmation", "waiting_preview_confirmation", "waiting_ui_revision", "waiting_architecture_revision", "waiting_quality_revision"}:
+        if normalized in {
+            "running",
+            "cancelling",
+            "waiting_confirmation",
+            "waiting_preview_confirmation",
+            "waiting_ui_revision",
+            "waiting_architecture_revision",
+            "waiting_quality_revision",
+        }:
             return "running"
         if normalized in {"queued"}:
             return "queued"
@@ -4353,7 +5058,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         state_file = self._pipeline_run_state_path(project_dir)
         state_file.parent.mkdir(parents=True, exist_ok=True)
         payload_with_normalized = dict(payload)
-        payload_with_normalized["status_normalized"] = self._normalize_run_status(payload_with_normalized.get("status"))
+        payload_with_normalized["status_normalized"] = self._normalize_run_status(
+            payload_with_normalized.get("status")
+        )
         lock_file = state_file.parent / ".runs.lock"
         lock_handle = lock_file.open("a+", encoding="utf-8")
         try:
@@ -4376,7 +5083,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             lock_handle.close()
         try:
             if self._project_has_super_dev_context(project_dir):
-                self._write_session_brief(project_dir=project_dir, payload=self._build_next_step_payload(project_dir))
+                self._write_session_brief(
+                    project_dir=project_dir, payload=self._build_next_step_payload(project_dir)
+                )
         except Exception:
             pass
 
@@ -4443,7 +5152,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
     ) -> dict[str, Path]:
         files = self._resume_audit_paths(output_dir=output_dir, project_name=project_name)
         files["json"].parent.mkdir(parents=True, exist_ok=True)
-        files["json"].write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        files["json"].write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         files["markdown"].write_text(self._render_resume_audit_markdown(payload), encoding="utf-8")
         return files
 
@@ -4453,7 +5164,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             return None
         return int(text)
 
-    def _load_pipeline_metrics_payload(self, output_dir: Path, project_name: str) -> dict[str, Any] | None:
+    def _load_pipeline_metrics_payload(
+        self, output_dir: Path, project_name: str
+    ) -> dict[str, Any] | None:
         metrics_file = output_dir / f"{project_name}-pipeline-metrics.json"
         if not metrics_file.exists():
             return None
@@ -4486,7 +5199,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             return {}
         return {}
 
-    def _resolve_resume_start_stage(self, failed_stage: int | None, skip_redteam: bool) -> int | None:
+    def _resolve_resume_start_stage(
+        self, failed_stage: int | None, skip_redteam: bool
+    ) -> int | None:
         """
         将失败阶段映射为安全恢复起点。
 
@@ -4536,7 +5251,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
 
         # 中后段恢复依赖前置文档产物，缺失时回退到第 1 阶段重建上下文。
         if adjusted in {5, 6, 7, 8}:
-            required_docs = self._stage_one_artifact_paths(output_dir=output_dir, project_name=project_name)
+            required_docs = self._stage_one_artifact_paths(
+                output_dir=output_dir, project_name=project_name
+            )
             missing_docs = [name for name, path in required_docs.items() if not path.exists()]
             if missing_docs:
                 adjusted = 1
@@ -4577,11 +5294,7 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
 
         stage1_details = self._extract_metrics_stage_details(metrics_payload, "1")
         scenario = stage1_details.get("scenario")
-        if (
-            "scenario" not in context
-            and isinstance(scenario, str)
-            and scenario in {"0-1", "1-N+1"}
-        ):
+        if "scenario" not in context and isinstance(scenario, str) and scenario in {"0-1", "1-N+1"}:
             context["scenario"] = scenario
 
         stage3_details = self._extract_metrics_stage_details(metrics_payload, "3")
@@ -4601,11 +5314,10 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         for item in raw:
             if isinstance(item, dict):
                 spec_name = str(item.get("spec_name", "core")).strip() or "core"
-                req_name = str(
-                    item.get("req_name")
-                    or item.get("name")
+                req_name = (
+                    str(item.get("req_name") or item.get("name") or "requirement").strip()
                     or "requirement"
-                ).strip() or "requirement"
+                )
                 description = str(item.get("description", "")).strip() or req_name
                 scenarios = item.get("scenarios", [])
                 if not isinstance(scenarios, list):
@@ -4689,7 +5401,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             notes.append(f"critical_failures={len(details['critical_failures'])}")
         return notes
 
-    def _detect_failed_stage_from_metrics_payload(self, metrics_payload: dict[str, Any] | None) -> int | None:
+    def _detect_failed_stage_from_metrics_payload(
+        self, metrics_payload: dict[str, Any] | None
+    ) -> int | None:
         if not isinstance(metrics_payload, dict):
             return None
         if bool(metrics_payload.get("success", False)):
@@ -4708,10 +5422,14 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         return None
 
     def _detect_failed_stage(self, output_dir: Path, project_name: str) -> int | None:
-        payload = self._load_pipeline_metrics_payload(output_dir=output_dir, project_name=project_name)
+        payload = self._load_pipeline_metrics_payload(
+            output_dir=output_dir, project_name=project_name
+        )
         return self._detect_failed_stage_from_metrics_payload(payload)
 
-    def _run_direct_requirement(self, description: str, direct_overrides: dict[str, Any] | None = None) -> int:
+    def _run_direct_requirement(
+        self, description: str, direct_overrides: dict[str, Any] | None = None
+    ) -> int:
         """将 `super-dev <需求描述>` 直达路由到完整流水线"""
         if not description:
             self.console.print("[red]请提供需求描述[/red]")
@@ -4722,12 +5440,16 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         config_exists = config_manager.exists()
         config = config_manager.config
 
-        platform = str(direct_overrides.get("platform") or (config.platform if config_exists else "web"))
+        platform = str(
+            direct_overrides.get("platform") or (config.platform if config_exists else "web")
+        )
         frontend = str(
             direct_overrides.get("frontend")
             or (self._normalize_pipeline_frontend(config.frontend) if config_exists else "react")
         )
-        backend = str(direct_overrides.get("backend") or (config.backend if config_exists else "node"))
+        backend = str(
+            direct_overrides.get("backend") or (config.backend if config_exists else "node")
+        )
         domain = str(direct_overrides.get("domain") or (config.domain if config_exists else ""))
         cicd = str(direct_overrides.get("cicd") or "all")
 
@@ -4771,7 +5493,9 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         )
         return self._cmd_pipeline(args)
 
-    def _save_tech_stack_to_config(self, project_dir: Path, tech_stack: dict, description: str) -> None:
+    def _save_tech_stack_to_config(
+        self, project_dir: Path, tech_stack: dict, description: str
+    ) -> None:
         """保存技术栈到项目配置文件"""
         import yaml  # type: ignore[import-untyped]
 
@@ -4780,18 +5504,18 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
         # 读取现有配置（如果有）
         config: dict[str, Any] = {}
         if config_file.exists():
-            with open(config_file, encoding='utf-8') as f:
+            with open(config_file, encoding="utf-8") as f:
                 config = yaml.safe_load(f) or {}
 
         # 更新配置
-        config['platform'] = tech_stack.get('platform', 'web')
-        config['frontend'] = tech_stack.get('frontend', 'react')
-        config['backend'] = tech_stack.get('backend', 'node')
-        config['domain'] = tech_stack.get('domain', '')
-        config['description'] = description
+        config["platform"] = tech_stack.get("platform", "web")
+        config["frontend"] = tech_stack.get("frontend", "react")
+        config["backend"] = tech_stack.get("backend", "node")
+        config["domain"] = tech_stack.get("domain", "")
+        config["description"] = description
 
         # 保存配置
-        with open(config_file, 'w', encoding='utf-8') as f:
+        with open(config_file, "w", encoding="utf-8") as f:
             yaml.dump(config, f, allow_unicode=True, default_flow_style=False)
 
     def _export_deploy_remediation_templates(
@@ -5017,18 +5741,12 @@ class SuperDevCLI(CliParserMixin, CliAnalysisMixin, CliReleaseQualityMixin, CliD
             banner.append(__description__, style="white")
             banner.append("\n宿主负责编码，Super Dev 负责治理与交付标准", style="dim")
 
-            self.console.print(Panel.fit(
-                banner,
-                title="Super Dev",
-                border_style="cyan"
-            ))
+            self.console.print(Panel.fit(banner, title="Super Dev", border_style="cyan"))
 
     def _print_governance_boundary_notice(self, message: str) -> None:
         if not self.console:
             return
-        self.console.print(
-            f"[dim]治理边界: {message} 宿主负责模型调用、工具使用与代码产出。[/dim]"
-        )
+        self.console.print(f"[dim]治理边界: {message} 宿主负责模型调用、工具使用与代码产出。[/dim]")
 
 
 def main() -> int:

@@ -5,6 +5,22 @@ import type { SiteLocale } from '@/lib/site-locale';
 
 const CHANGELOG = {
   zh: [
+    { version: '2.3.0', date: '2026-04-01', type: 'major' as const, changes: [
+      '治理模式升级：从 Advisory（建议）到 Enforcement（执行），SKILL.md frontmatter hooks 自动注册 emoji 检查',
+      '三层治理模型：CLAUDE.md 持久规则 + Hooks 运行时执行 + CLI 按需检查',
+      'Agent Teams 协作支持：多位 Super Dev 专家可并行工作',
+      '错误恢复 3 阶段策略：便宜恢复 → 上下文重建 → 暴露错误',
+      'CLAUDE.md @include 知识引用：宿主自动加载对应技术栈 knowledge/ 文件',
+      '编码前门禁 7 步强制确认：技术栈预研 → 配置 → 图标 → 组件 → API → token → 构建',
+      'Enforcement 系统：super-dev enforce install/validate/status',
+      '记忆系统：4 种记忆类型 + Dream 整合器',
+      '组件脚手架 + API 契约类型 + Next.js 脚手架生成器',
+      '对抗性验证专家 + 三 Agent 并行审查',
+      '12 位 Markdown 专家 + 条件规则 + Pipeline 状态/成本追踪',
+      '命令路由：所有命令在宿主内输入，终端只需 pip install + super-dev',
+      '21 个宿主全部深度适配 + 项目模板 + Shell 补全',
+      '统一错误处理 + E2E 测试 + 1671 单元测试通过',
+    ] },
     { version: '2.2.0', date: '2026-03-29', type: 'major' as const, changes: [
       '系统级大升级：宿主接入、流程恢复、UI 系统、质量门禁、交付闭环整体重构',
       '工作流恢复链重构：新增 super-dev resume，裸跑 super-dev 自动进入恢复路由，SESSION_BRIEF.md 和 workflow-state.json 成为统一恢复真源',
@@ -63,6 +79,22 @@ const CHANGELOG = {
     { version: '1.0.0', date: '2025-12-29', type: 'major' as const, changes: ['首次发布', '基础流水线框架（research / documents / spec / implement）', 'Spec-Driven Development 模块', '支持 Claude Code、Cursor、Windsurf 宿主', 'PyPI 正式发布'] },
   ],
   en: [
+    { version: '2.3.0', date: '2026-04-01', type: 'major' as const, changes: [
+      'Governance upgrade: Advisory → Enforcement mode with SKILL.md frontmatter hooks',
+      'Three-layer governance: CLAUDE.md persistent rules + Hooks runtime enforcement + CLI on-demand checks',
+      'Agent Teams support: parallel expert collaboration across pipeline phases',
+      '3-stage error recovery: cheap recovery → context rebuild → surface error',
+      'CLAUDE.md @include: auto-load tech stack knowledge from knowledge/ files',
+      'Pre-code gate: 7-step mandatory checklist (tech research → config → icons → components → API → tokens → build)',
+      'Enforcement system: super-dev enforce install/validate/status',
+      'Memory system: 4 types (user/feedback/project/reference) + Dream consolidator',
+      'Code generators: component scaffold, API contract types, Next.js scaffold',
+      'Adversarial verification agent + 4-way parallel review (reuse/quality/efficiency/security)',
+      '12 Markdown expert definitions + conditional rules + pipeline state/cost tracking',
+      'Command routing: all commands via /super-dev in host, terminal only for pip install + super-dev',
+      '21 hosts fully adapted + project templates + shell completion',
+      'Unified error handling + 22 E2E tests + 1671 unit tests passing',
+    ] },
     { version: '2.2.0', date: '2026-03-29', type: 'major' as const, changes: [
       'System-level upgrade: host onboarding, workflow recovery, UI system, quality gates, delivery closure — all rebuilt',
       'Workflow recovery chain: new super-dev resume, bare super-dev auto-enters recovery route, SESSION_BRIEF.md as unified recovery source',

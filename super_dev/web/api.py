@@ -126,8 +126,10 @@ def _public_host_targets(*, integration_manager: IntegrationManager) -> list[str
 
 # ==================== 数据模型 ====================
 
+
 class ProjectInitRequest(BaseModel):
     """项目初始化请求"""
+
     name: str = Field(..., min_length=1, max_length=200)
     description: str = Field("", max_length=5000)
     platform: str = "web"
@@ -144,6 +146,7 @@ class ProjectInitRequest(BaseModel):
 
 class ProjectConfigResponse(BaseModel):
     """项目配置响应"""
+
     name: str
     description: str
     version: str
@@ -163,6 +166,7 @@ class ProjectConfigResponse(BaseModel):
 
 class WorkflowRunRequest(BaseModel):
     """工作流运行请求"""
+
     phases: list[str] | None = None
     quality_gate: int | None = None
     host_compatibility_min_score: int | None = None
@@ -183,6 +187,7 @@ class WorkflowRunRequest(BaseModel):
 
 class WorkflowRunResponse(BaseModel):
     """工作流运行响应"""
+
     status: str
     message: str
     run_id: str | None = None
@@ -190,6 +195,7 @@ class WorkflowRunResponse(BaseModel):
 
 class WorkflowDocsConfirmationRequest(BaseModel):
     """文档确认状态更新请求"""
+
     status: Literal["pending_review", "revision_requested", "confirmed"]
     comment: str = ""
     actor: str = "user"
@@ -197,6 +203,7 @@ class WorkflowDocsConfirmationRequest(BaseModel):
 
 class WorkflowUIRevisionRequest(BaseModel):
     """UI 改版状态更新请求"""
+
     status: Literal["pending_review", "revision_requested", "confirmed"]
     comment: str = ""
     actor: str = "user"
@@ -204,6 +211,7 @@ class WorkflowUIRevisionRequest(BaseModel):
 
 class WorkflowPreviewConfirmationRequest(BaseModel):
     """前端预览确认状态更新请求"""
+
     status: Literal["pending_review", "revision_requested", "confirmed"]
     comment: str = ""
     actor: str = "user"
@@ -211,6 +219,7 @@ class WorkflowPreviewConfirmationRequest(BaseModel):
 
 class WorkflowArchitectureRevisionRequest(BaseModel):
     """架构返工状态更新请求"""
+
     status: Literal["pending_review", "revision_requested", "confirmed"]
     comment: str = ""
     actor: str = "user"
@@ -218,6 +227,7 @@ class WorkflowArchitectureRevisionRequest(BaseModel):
 
 class WorkflowQualityRevisionRequest(BaseModel):
     """质量返工状态更新请求"""
+
     status: Literal["pending_review", "revision_requested", "confirmed"]
     comment: str = ""
     actor: str = "user"
@@ -225,6 +235,7 @@ class WorkflowQualityRevisionRequest(BaseModel):
 
 class HostRuntimeValidationRequest(BaseModel):
     """宿主真人验收状态更新请求"""
+
     host: str
     status: Literal["pending", "passed", "failed"]
     comment: str = ""
@@ -233,11 +244,13 @@ class HostRuntimeValidationRequest(BaseModel):
 
 class ExpertAdviceRequest(BaseModel):
     """专家建议请求"""
+
     prompt: str = ""
 
 
 class DeployGenerateRequest(BaseModel):
     """部署配置生成请求"""
+
     cicd_platform: str = "all"
     include_runtime: bool = True
     overwrite: bool = True
@@ -250,6 +263,7 @@ class DeployGenerateRequest(BaseModel):
 
 class DeployRemediationExportRequest(BaseModel):
     """部署修复建议导出请求"""
+
     cicd_platform: str = "all"
     only_missing: bool = True
     split_by_platform: bool = True
@@ -287,9 +301,7 @@ class PipelinePolicyUpdateRequest(BaseModel):
 # ==================== FastAPI 应用 ====================
 
 app = FastAPI(
-    title="Super Dev API",
-    description=f"{__description__} - Web API",
-    version=__version__
+    title="Super Dev API", description=f"{__description__} - Web API", version=__version__
 )
 
 # CORS 配置
@@ -519,7 +531,9 @@ def _list_persisted_runs(project_dir: Path, limit: int = 20) -> list[dict[str, A
     return runs
 
 
-def _detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = None) -> dict[str, Any]:
+def _detect_pipeline_summary(
+    project_dir: Path, run: dict[str, Any] | None = None
+) -> dict[str, Any]:
     return detect_pipeline_summary(project_dir, run)
 
 
@@ -544,7 +558,15 @@ def _normalize_run_status(status: Any) -> str:
         return "failed"
     if normalized in {"cancelled"}:
         return "cancelled"
-    if normalized in {"running", "cancelling", "waiting_confirmation", "waiting_preview_confirmation", "waiting_ui_revision", "waiting_architecture_revision", "waiting_quality_revision"}:
+    if normalized in {
+        "running",
+        "cancelling",
+        "waiting_confirmation",
+        "waiting_preview_confirmation",
+        "waiting_ui_revision",
+        "waiting_architecture_revision",
+        "waiting_quality_revision",
+    }:
         return "running"
     if normalized in {"queued"}:
         return "queued"
@@ -594,6 +616,11 @@ def _sanitize_project_name(name: str) -> str:
 def _default_host_commands(host_id: str, *, supports_slash: bool) -> dict[str, str]:
     profile = IntegrationManager(Path.cwd()).get_adapter_profile(host_id)
     trigger = str(profile.trigger_command).replace("<需求描述>", "你的需求")
+    skill_name = (
+        SkillManager.default_skill_name(host_id)
+        if IntegrationManager.requires_skill(host_id)
+        else ""
+    )
     commands = {
         "setup": f"super-dev setup --host {host_id} --force --yes",
         "onboard": f"super-dev onboard --host {host_id} --force --yes",
@@ -603,9 +630,10 @@ def _default_host_commands(host_id: str, *, supports_slash: bool) -> dict[str, s
         "bugfix": 'super-dev fix "修复当前项目中的关键问题并补充回归验证"',
         "run": 'super-dev "你的需求"',
         "slash": '/super-dev "你的需求"' if supports_slash else "",
+        "skill_slash": "/super-dev" if host_id == "codex-cli" else "",
         "trigger": trigger,
     }
-    commands["skill"] = "super-dev-core" if IntegrationManager.requires_skill(host_id) else ""
+    commands["skill"] = skill_name
     return commands
 
 
@@ -634,7 +662,11 @@ def _build_host_tool_catalog_payload() -> list[dict[str, Any]]:
                 "official_project_surfaces": list(profile.official_project_surfaces),
                 "official_user_surfaces": list(profile.official_user_surfaces),
                 "observed_compatibility_surfaces": list(profile.observed_compatibility_surfaces),
-                "slash_command_file": IntegrationManager.SLASH_COMMAND_FILES.get(host_id, "") if supports_slash else "",
+                "slash_command_file": (
+                    IntegrationManager.SLASH_COMMAND_FILES.get(host_id, "")
+                    if supports_slash
+                    else ""
+                ),
                 "supports_slash": supports_slash,
                 "usage_mode": profile.usage_mode,
                 "primary_entry": profile.primary_entry,
@@ -647,6 +679,13 @@ def _build_host_tool_catalog_payload() -> list[dict[str, Any]]:
                 "smoke_test_prompt": profile.smoke_test_prompt,
                 "smoke_test_steps": list(profile.smoke_test_steps),
                 "smoke_success_signal": profile.smoke_success_signal,
+                "supports_skill_slash_entry": host_id == "codex-cli",
+                "skill_slash_entry_command": "/super-dev" if host_id == "codex-cli" else "",
+                "skill_slash_entry_note": (
+                    "Only indicates the enabled Skill entry shown in the Codex slash list, not a project-level custom slash command."
+                    if host_id == "codex-cli"
+                    else ""
+                ),
                 "notes": profile.notes,
                 "commands": _default_host_commands(host_id, supports_slash=supports_slash),
             }
@@ -759,7 +798,9 @@ def _host_resume_checklist(target: str) -> list[str]:
     return [*overrides.get("resume_checklist", []), *common]
 
 
-def _build_session_resume_card(project_dir: Path, target: str, usage: dict[str, Any]) -> dict[str, Any]:
+def _build_session_resume_card(
+    project_dir: Path, target: str, usage: dict[str, Any]
+) -> dict[str, Any]:
     host_first_sentence = _build_resume_probe_prompt(project_dir, target, usage)
     enabled = bool(host_first_sentence)
     workflow_mode = ""
@@ -771,7 +812,9 @@ def _build_session_resume_card(project_dir: Path, target: str, usage: dict[str, 
     summary: dict[str, Any] = {}
     if enabled:
         summary = _detect_pipeline_summary(project_dir)
-        recommended_workflow_command = str(summary.get("recommended_command", "")).strip() or "super-dev run --resume"
+        recommended_workflow_command = (
+            str(summary.get("recommended_command", "")).strip() or "super-dev run --resume"
+        )
         workflow_mode = str(summary.get("workflow_mode", "")).strip()
         if workflow_mode:
             workflow_mode_display = workflow_mode_label(workflow_mode)
@@ -786,20 +829,28 @@ def _build_session_resume_card(project_dir: Path, target: str, usage: dict[str, 
                 rules = [str(item).strip() for item in raw_rules if str(item).strip()]
             raw_shortcuts = action_card.get("shortcuts")
             if isinstance(raw_shortcuts, list):
-                user_action_shortcuts = [str(item).strip() for item in raw_shortcuts if str(item).strip()]
+                user_action_shortcuts = [
+                    str(item).strip() for item in raw_shortcuts if str(item).strip()
+                ]
             else:
-                user_action_shortcuts = workflow_mode_shortcuts(workflow_mode, examples=action_examples)
+                user_action_shortcuts = workflow_mode_shortcuts(
+                    workflow_mode, examples=action_examples
+                )
         else:
             user_action_shortcuts = workflow_mode_shortcuts(workflow_mode)
         if not rules:
             rules = workflow_continuity_rules(str(summary.get("workflow_status", "")).strip())
     else:
         user_action_shortcuts = []
-    session_brief_path = str((project_dir / ".super-dev" / "SESSION_BRIEF.md").resolve()) if enabled else ""
+    session_brief_path = (
+        str((project_dir / ".super-dev" / "SESSION_BRIEF.md").resolve()) if enabled else ""
+    )
     workflow_state_path = str(workflow_state_file(project_dir).resolve()) if enabled else ""
     lines = []
     if enabled:
-        generic_continue_rule = "用户说“改一下 / 补充 / 继续改 / 确认 / 通过”时，仍然留在当前 Super Dev 流程。"
+        generic_continue_rule = (
+            "用户说“改一下 / 补充 / 继续改 / 确认 / 通过”时，仍然留在当前 Super Dev 流程。"
+        )
         generic_exit_rule = "只有用户明确说取消当前流程、重新开始或切回普通聊天，才允许离开流程。"
         primary_rule = str(rules[0]).strip() if rules else ""
         exit_rule = str(rules[1]).strip() if len(rules) > 1 else ""
@@ -810,14 +861,24 @@ def _build_session_resume_card(project_dir: Path, target: str, usage: dict[str, 
             f"流程状态卡: {session_brief_path}",
             f"工作流状态 JSON: {workflow_state_path}",
             f"继续规则: {generic_continue_rule}",
-            f"当前门禁规则: {primary_rule}" if primary_rule and primary_rule != generic_continue_rule else "",
+            (
+                f"当前门禁规则: {primary_rule}"
+                if primary_rule and primary_rule != generic_continue_rule
+                else ""
+            ),
             f"退出条件: {generic_exit_rule}",
-            f"当前门禁退出条件: {exit_rule}" if exit_rule and exit_rule != generic_exit_rule else "",
+            (
+                f"当前门禁退出条件: {exit_rule}"
+                if exit_rule and exit_rule != generic_exit_rule
+                else ""
+            ),
         ]
         if user_action_shortcuts:
             lines.insert(2, f"你现在可以直接说: {' / '.join(user_action_shortcuts[:4])}")
         if action_examples:
-            lines.insert(3 if user_action_shortcuts else 2, f"自然语言示例: {', '.join(action_examples[:3])}")
+            lines.insert(
+                3 if user_action_shortcuts else 2, f"自然语言示例: {', '.join(action_examples[:3])}"
+            )
         if recommended_workflow_command:
             lines.append(f"机器侧动作: {recommended_workflow_command}")
         lines = [line for line in lines if line]
@@ -858,7 +919,9 @@ def _build_no_host_decision_card() -> dict[str, Any]:
         "workflow_mode_label": workflow_mode_label("start"),
         "action_title": "先完成宿主安装与接入",
         "action_examples": ["先装 Codex", "我先用 Claude Code", "先把宿主接好再开始"],
-        "user_action_shortcuts": workflow_mode_shortcuts("start", examples=["先装 Codex", "我先用 Claude Code", "先把宿主接好再开始"]),
+        "user_action_shortcuts": workflow_mode_shortcuts(
+            "start", examples=["先装 Codex", "我先用 Claude Code", "先把宿主接好再开始"]
+        ),
         "title": "未检测到可用宿主",
         "summary": "当前机器上没有命中受支持宿主，或宿主不在默认路径与当前 PATH 中。",
         "recommended_reason": "先保证机器上至少有一个正式支持的宿主可用，再进入接入流程。",
@@ -871,7 +934,9 @@ def _build_no_host_decision_card() -> dict[str, Any]:
                 "name": host_display,
                 "env_key": str(host_path_override_guide(host_id).get("env_key", "")),
                 "unix_example": str(host_path_override_guide(host_id).get("unix_example", "")),
-                "windows_example": str(host_path_override_guide(host_id).get("windows_example", "")),
+                "windows_example": str(
+                    host_path_override_guide(host_id).get("windows_example", "")
+                ),
             }
             for host_id, host_display in (("claude-code", "Claude Code"), ("codex-cli", "Codex"))
         ],
@@ -899,9 +964,14 @@ def _build_detected_host_decision_card(
     if not candidate_targets:
         return _build_no_host_decision_card()
     candidate_display_limit = 3
+
     def _sort_key(target: str) -> tuple[int, int, int, str]:
         profile = integration_manager.get_adapter_profile(target)
-        certification_rank = 0 if profile.certification_level == "certified" else (1 if profile.certification_level == "compatible" else 2)
+        certification_rank = (
+            0
+            if profile.certification_level == "certified"
+            else (1 if profile.certification_level == "compatible" else 2)
+        )
         return (
             certification_rank,
             0 if integration_manager.supports_slash(target) else 1,
@@ -917,10 +987,14 @@ def _build_detected_host_decision_card(
             key=lambda target: (0 if target in preferred_set else 1, ranked_targets.index(target)),
         )
     selected_host = ranked_targets[0]
-    usage = _serialize_host_usage_profile(integration_manager=integration_manager, target=selected_host)
+    usage = _serialize_host_usage_profile(
+        integration_manager=integration_manager, target=selected_host
+    )
     session_resume_card = _build_session_resume_card(project_dir, selected_host, usage)
     selected_profile = integration_manager.get_adapter_profile(selected_host)
-    if selected_profile.certification_level == "certified" and integration_manager.supports_slash(selected_host):
+    if selected_profile.certification_level == "certified" and integration_manager.supports_slash(
+        selected_host
+    ):
         recommended_reason = "它当前是已检测宿主里认证等级最高、触发入口最直接的一项。"
     elif selected_profile.certification_level == "certified":
         recommended_reason = "它当前是已检测宿主里认证等级最高的一项。"
@@ -947,9 +1021,13 @@ def _build_detected_host_decision_card(
     user_action_shortcuts = workflow_mode_shortcuts(workflow_mode, examples=action_examples)
     candidates: list[dict[str, Any]] = []
     for target in ranked_targets:
-        candidate_usage = _serialize_host_usage_profile(integration_manager=integration_manager, target=target)
+        candidate_usage = _serialize_host_usage_profile(
+            integration_manager=integration_manager, target=target
+        )
         profile = integration_manager.get_adapter_profile(target)
-        if profile.certification_level == "certified" and integration_manager.supports_slash(target):
+        if profile.certification_level == "certified" and integration_manager.supports_slash(
+            target
+        ):
             candidate_reason = "它当前是已检测宿主里认证等级最高、触发入口最直接的一项。"
         elif profile.certification_level == "certified":
             candidate_reason = "它当前是已检测宿主里认证等级最高的一项。"
@@ -965,7 +1043,9 @@ def _build_detected_host_decision_card(
                 "certification_level": profile.certification_level,
                 "recommended": target == selected_host,
                 "recommended_reason": candidate_reason,
-                "reasons": _explain_detection_details({target: detected_meta.get(target, [])}).get(target, []),
+                "reasons": _explain_detection_details({target: detected_meta.get(target, [])}).get(
+                    target, []
+                ),
                 "trigger": str(profile.trigger_command).replace("<需求描述>", "你的需求"),
                 "path_override": host_path_override_guide(target),
             }
@@ -989,8 +1069,7 @@ def _build_detected_host_decision_card(
     if action_examples:
         lines.append(f"自然语言示例: {', '.join(str(item) for item in action_examples[:3])}")
     candidate_summary = "、".join(
-        f"{item['name']} [{item['certification_label']}]"
-        for item in display_candidates
+        f"{item['name']} [{item['certification_label']}]" for item in display_candidates
     )
     if candidate_summary:
         lines.append(f"优先候选: {candidate_summary}")
@@ -1044,7 +1123,9 @@ def _build_primary_repair_action(
                 "host": "当前机器",
                 "reason": str(decision_card.get("summary", "")).strip(),
                 "command": first_action,
-                "secondary_actions": secondary_actions if isinstance(secondary_actions, list) else [],
+                "secondary_actions": (
+                    secondary_actions if isinstance(secondary_actions, list) else []
+                ),
             }
     if not isinstance(hosts, dict):
         return {"host": "", "reason": "", "command": "", "secondary_actions": []}
@@ -1070,7 +1151,9 @@ def _build_primary_repair_action(
                 if len(secondary_actions) >= 2:
                     break
         return {
-            "host": _serialize_host_usage_profile(integration_manager=integration_manager, target=target)["host"],
+            "host": _serialize_host_usage_profile(
+                integration_manager=integration_manager, target=target
+            )["host"],
             "reason": reason,
             "command": command,
             "secondary_actions": secondary_actions,
@@ -1139,13 +1222,15 @@ def _collect_host_diagnostics(
         if invalid_surfaces:
             host_report["ready"] = False
             host_report["missing"].append("contract")
-            host_report["suggestions"].append(
-                f"super-dev onboard --host {target} --force --yes"
-            )
+            host_report["suggestions"].append(f"super-dev onboard --host {target} --force --yes")
 
         if check_integrate:
             integration_target = integration_targets.get(target)
-            integrate_files = [project_dir / item for item in integration_target.files] if integration_target else []
+            integrate_files = (
+                [project_dir / item for item in integration_target.files]
+                if integration_target
+                else []
+            )
             integrate_ok = all(path.exists() for path in integrate_files)
             host_report["checks"]["integrate"] = {
                 "ok": integrate_ok,
@@ -1159,10 +1244,14 @@ def _collect_host_diagnostics(
                 )
 
         if check_skill and IntegrationManager.requires_skill(target):
-            skill_root = skill_manager._target_dir(target) if target in SkillManager.TARGET_PATHS else None
+            skill_root = (
+                skill_manager._target_dir(target) if target in SkillManager.TARGET_PATHS else None
+            )
             skill_file = skill_root / skill_name / "SKILL.md" if skill_root else None
             skill_path = str(skill_file) if skill_file else ""
-            surface_available = skill_manager.skill_surface_available(target) if skill_file else False
+            surface_available = (
+                skill_manager.skill_surface_available(target) if skill_file else False
+            )
             skill_ok = skill_file.exists() if (skill_file and surface_available) else True
             host_report["checks"]["skill"] = {
                 "ok": skill_ok,
@@ -1227,7 +1316,9 @@ def _collect_host_diagnostics(
             host_report["preconditions"] = {
                 "status": precondition_status,
                 "label": precondition_label,
-                "guidance": precondition_guidance if isinstance(precondition_guidance, list) else [],
+                "guidance": (
+                    precondition_guidance if isinstance(precondition_guidance, list) else []
+                ),
                 "signals": precondition_signals if isinstance(precondition_signals, dict) else {},
                 "items": precondition_items if isinstance(precondition_items, list) else [],
             }
@@ -1238,7 +1329,9 @@ def _collect_host_diagnostics(
             if precondition_status == "session-restart-required":
                 host_report["suggestions"].append("接入后先关闭旧宿主会话，再开一个新会话后重试。")
             if precondition_status == "project-context-required":
-                host_report["suggestions"].append("确认当前聊天/终端绑定的是目标项目，再重新触发 Super Dev。")
+                host_report["suggestions"].append(
+                    "确认当前聊天/终端绑定的是目标项目，再重新触发 Super Dev。"
+                )
         report["hosts"][target] = host_report
         if not host_report["ready"]:
             report["overall_ready"] = False
@@ -1278,6 +1371,13 @@ def _serialize_host_usage_profile(
         "smoke_test_prompt": profile.smoke_test_prompt,
         "smoke_test_steps": list(profile.smoke_test_steps),
         "smoke_success_signal": profile.smoke_success_signal,
+        "supports_skill_slash_entry": target == "codex-cli",
+        "skill_slash_entry_command": "/super-dev" if target == "codex-cli" else "",
+        "skill_slash_entry_note": (
+            "Only indicates the enabled Skill entry shown in the Codex slash list, not a project-level custom slash command."
+            if target == "codex-cli"
+            else ""
+        ),
         "path_override": host_path_override_guide(target),
         "precondition_status": profile.precondition_status,
         "precondition_label": profile.precondition_label,
@@ -1380,9 +1480,7 @@ def _build_host_runtime_validation_payload(
             blocker_type = "runtime"
         elif runtime_status != "passed":
             blocking_reason = "宿主尚未完成真人运行时验收"
-            recommended_action = (
-                f"super-dev integrate validate --target {target} --status passed --comment \"首轮先进入 research，三文档已真实落盘\""
-            )
+            recommended_action = f'super-dev integrate validate --target {target} --status passed --comment "首轮先进入 research，三文档已真实落盘"'
             blocker_type = "validation"
 
         if not surface_ready or runtime_status != "passed":
@@ -1399,7 +1497,12 @@ def _build_host_runtime_validation_payload(
 
         if isinstance(precondition_guidance, list):
             for item in precondition_guidance[:2]:
-                if isinstance(item, str) and item.strip() and item not in next_actions and runtime_status != "passed":
+                if (
+                    isinstance(item, str)
+                    and item.strip()
+                    and item not in next_actions
+                    and runtime_status != "passed"
+                ):
                     next_actions.append(item.strip())
 
         entries.append(
@@ -1420,7 +1523,9 @@ def _build_host_runtime_validation_payload(
                 "certification_label": usage.get("certification_label", "-"),
                 "precondition_label": precondition_label,
                 "precondition_guidance": precondition_guidance,
-                "precondition_items": precondition_items if isinstance(precondition_items, list) else [],
+                "precondition_items": (
+                    precondition_items if isinstance(precondition_items, list) else []
+                ),
                 "smoke_test_prompt": usage.get("smoke_test_prompt", ""),
                 "smoke_success_signal": usage.get("smoke_success_signal", ""),
                 "runtime_checklist": _host_runtime_checklist(target, usage),
@@ -1432,9 +1537,15 @@ def _build_host_runtime_validation_payload(
 
     total_hosts = len(entries)
     surface_ready_count = sum(1 for item in entries if bool(item.get("surface_ready", False)))
-    runtime_passed_count = sum(1 for item in entries if item.get("manual_runtime_status") == "passed")
-    runtime_failed_count = sum(1 for item in entries if item.get("manual_runtime_status") == "failed")
-    runtime_pending_count = sum(1 for item in entries if item.get("manual_runtime_status") == "pending")
+    runtime_passed_count = sum(
+        1 for item in entries if item.get("manual_runtime_status") == "passed"
+    )
+    runtime_failed_count = sum(
+        1 for item in entries if item.get("manual_runtime_status") == "failed"
+    )
+    runtime_pending_count = sum(
+        1 for item in entries if item.get("manual_runtime_status") == "pending"
+    )
     fully_ready_count = sum(1 for item in entries if bool(item.get("ready_for_delivery", False)))
 
     return {
@@ -1447,7 +1558,9 @@ def _build_host_runtime_validation_payload(
         "detection_details_pretty": _explain_detection_details(detected_meta),
         "selected_targets": targets,
         "summary": {
-            "overall_status": "ready" if total_hosts > 0 and fully_ready_count == total_hosts else "attention",
+            "overall_status": (
+                "ready" if total_hosts > 0 and fully_ready_count == total_hosts else "attention"
+            ),
             "total_hosts": total_hosts,
             "surface_ready_count": surface_ready_count,
             "runtime_passed_count": runtime_passed_count,
@@ -1634,7 +1747,16 @@ def _collect_workflow_artifact_files(project_dir_path: Path) -> list[Path]:
 
     output_dir = project_dir_path / "output"
     if output_dir.exists():
-        for pattern in ("**/*.md", "**/*.json", "**/*.html", "**/*.css", "**/*.js", "**/*.yml", "**/*.yaml", "**/*.png"):
+        for pattern in (
+            "**/*.md",
+            "**/*.json",
+            "**/*.html",
+            "**/*.css",
+            "**/*.js",
+            "**/*.yml",
+            "**/*.yaml",
+            "**/*.png",
+        ):
             for file_path in output_dir.glob(pattern):
                 _append(file_path)
 
@@ -1729,7 +1851,9 @@ def _collect_deploy_env_items(cicd_platform: str, only_missing: bool) -> list[di
     return items
 
 
-def _render_deploy_env_example(cicd_platform: str, items: list[dict[str, Any]], only_missing: bool) -> str:
+def _render_deploy_env_example(
+    cicd_platform: str, items: list[dict[str, Any]], only_missing: bool
+) -> str:
     lines = [
         "# Super Dev Deployment Environment Template",
         f"# Platform: {cicd_platform}",
@@ -1904,7 +2028,9 @@ def _normalize_string_list(values: list[str] | None) -> list[str]:
     return [str(item).strip() for item in values if str(item).strip()]
 
 
-def _build_policy_response(policy: PipelinePolicy, manager: PipelinePolicyManager) -> dict[str, Any]:
+def _build_policy_response(
+    policy: PipelinePolicy, manager: PipelinePolicyManager
+) -> dict[str, Any]:
     return {
         "require_redteam": policy.require_redteam,
         "require_quality_gate": policy.require_quality_gate,
@@ -1921,6 +2047,7 @@ def _build_policy_response(policy: PipelinePolicy, manager: PipelinePolicyManage
 
 
 # ==================== API 路由 ====================
+
 
 @app.get("/api/health")
 async def health_check():
@@ -2014,7 +2141,9 @@ async def update_policy(
         min_quality_threshold = current.min_quality_threshold
         if request.min_quality_threshold is not None:
             if request.min_quality_threshold < 0 or request.min_quality_threshold > 100:
-                raise HTTPException(status_code=400, detail="min_quality_threshold 必须在 0-100 之间")
+                raise HTTPException(
+                    status_code=400, detail="min_quality_threshold 必须在 0-100 之间"
+                )
             min_quality_threshold = request.min_quality_threshold
 
         allowed_cicd_platforms = current.allowed_cicd_platforms
@@ -2045,7 +2174,9 @@ async def update_policy(
         min_required_host_score = current.min_required_host_score
         if request.min_required_host_score is not None:
             if request.min_required_host_score < 0 or request.min_required_host_score > 100:
-                raise HTTPException(status_code=400, detail="min_required_host_score 必须在 0-100 之间")
+                raise HTTPException(
+                    status_code=400, detail="min_required_host_score 必须在 0-100 之间"
+                )
             min_required_host_score = request.min_required_host_score
 
         updated = PipelinePolicy(
@@ -2121,7 +2252,7 @@ async def init_project(request: ProjectInitRequest, project_dir: str = ".") -> d
                 "platform": config.platform,
                 "frontend": config.frontend,
                 "backend": config.backend,
-            }
+            },
         }
     except HTTPException:
         raise
@@ -2132,10 +2263,7 @@ async def init_project(request: ProjectInitRequest, project_dir: str = ".") -> d
 
 
 @app.put("/api/config", dependencies=[Depends(get_api_key)])
-async def update_config(
-    updates: dict,
-    project_dir: str = "."
-) -> dict:
+async def update_config(updates: dict, project_dir: str = ".") -> dict:
     """更新项目配置"""
     try:
         project_dir_path = _validate_project_dir(project_dir)
@@ -2155,9 +2283,7 @@ async def update_config(
 
 @app.post("/api/workflow/run", dependencies=[Depends(get_api_key)])
 async def run_workflow(
-    request: WorkflowRunRequest,
-    background_tasks: BackgroundTasks,
-    project_dir: str = "."
+    request: WorkflowRunRequest, background_tasks: BackgroundTasks, project_dir: str = "."
 ) -> WorkflowRunResponse:
     """运行工作流"""
     try:
@@ -2173,11 +2299,15 @@ async def run_workflow(
         if request.host_compatibility_min_score is not None:
             workflow_updates["host_compatibility_min_score"] = request.host_compatibility_min_score
         if request.host_compatibility_min_ready_hosts is not None:
-            workflow_updates["host_compatibility_min_ready_hosts"] = request.host_compatibility_min_ready_hosts
+            workflow_updates["host_compatibility_min_ready_hosts"] = (
+                request.host_compatibility_min_ready_hosts
+            )
         if request.host_profile_targets is not None:
             workflow_updates["host_profile_targets"] = request.host_profile_targets
         if request.host_profile_enforce_selected is not None:
-            workflow_updates["host_profile_enforce_selected"] = request.host_profile_enforce_selected
+            workflow_updates["host_profile_enforce_selected"] = (
+                request.host_profile_enforce_selected
+            )
         if request.language_preferences is not None:
             workflow_updates["language_preferences"] = request.language_preferences
         if workflow_updates:
@@ -2200,8 +2330,7 @@ async def run_workflow(
             invalid_phases = [p for p in request.phases if p not in phase_map]
             if invalid_phases:
                 raise HTTPException(
-                    status_code=400,
-                    detail=f"无效阶段: {', '.join(invalid_phases)}"
+                    status_code=400, detail=f"无效阶段: {', '.join(invalid_phases)}"
                 )
             phases = [phase_map[p] for p in request.phases]
             requested_phase_names = list(request.phases)
@@ -2210,6 +2339,7 @@ async def run_workflow(
 
         # 生成运行 ID
         import uuid
+
         run_id = str(uuid.uuid4())[:8]
 
         _store_run_state(
@@ -2254,7 +2384,11 @@ async def run_workflow(
                     config=manager,
                     user_input={
                         "name": request.name or config.name or project_dir_path.name,
-                        "description": request.description if request.description is not None else config.description,
+                        "description": (
+                            request.description
+                            if request.description is not None
+                            else config.description
+                        ),
                         "platform": request.platform or config.platform,
                         "frontend": request.frontend or config.frontend,
                         "backend": request.backend or config.backend,
@@ -2312,7 +2446,11 @@ async def run_workflow(
                         }
                     )
 
-                all_success = all(item["success"] for item in serialized_results) if serialized_results else True
+                all_success = (
+                    all(item["success"] for item in serialized_results)
+                    if serialized_results
+                    else True
+                )
                 progress = min(100, int(len(completed) / planned * 100))
                 if _is_cancel_requested(run_id):
                     status = "cancelled"
@@ -2351,9 +2489,7 @@ async def run_workflow(
         background_tasks.add_task(_run_workflow_background_sync)
 
         return WorkflowRunResponse(
-            status="started",
-            message=f"工作流已启动 (ID: {run_id})",
-            run_id=run_id
+            status="started", message=f"工作流已启动 (ID: {run_id})", run_id=run_id
         )
 
     except HTTPException:
@@ -2372,7 +2508,9 @@ async def get_workflow_status(run_id: str, project_dir: str = ".") -> dict:
     if run is None:
         raise HTTPException(status_code=404, detail=f"运行记录不存在: {run_id}")
     enriched = _with_pipeline_summary(run, project_dir_path)
-    _store_run_state(run_id, persist_dir=project_dir_path, pipeline_summary=enriched["pipeline_summary"])
+    _store_run_state(
+        run_id, persist_dir=project_dir_path, pipeline_summary=enriched["pipeline_summary"]
+    )
     return enriched
 
 
@@ -2640,7 +2778,10 @@ async def list_workflow_runs(project_dir: str = ".", limit: int = 20) -> dict:
         limit = 500
 
     project_dir_path = _validate_project_dir(project_dir)
-    runs = [_with_pipeline_summary(run, project_dir_path) for run in _list_persisted_runs(project_dir_path, limit=limit)]
+    runs = [
+        _with_pipeline_summary(run, project_dir_path)
+        for run in _list_persisted_runs(project_dir_path, limit=limit)
+    ]
     return {"runs": runs, "count": len(runs)}
 
 
@@ -2746,7 +2887,9 @@ async def get_workflow_ui_review(run_id: str, project_dir: str = ".") -> dict:
 
 
 @app.get("/api/workflow/ui-review/{run_id}/screenshot")
-async def download_workflow_ui_review_screenshot(run_id: str, project_dir: str = ".") -> FileResponse:
+async def download_workflow_ui_review_screenshot(
+    run_id: str, project_dir: str = "."
+) -> FileResponse:
     """获取某次工作流 UI 审查截图。"""
     _, run_project_dir = _resolve_run_project_dir(run_id, project_dir)
     screenshot = _find_ui_review_screenshot(run_project_dir)
@@ -3048,7 +3191,9 @@ async def get_hosts_runtime_validation(
     skill_name: str = "super-dev-core",
 ) -> dict[str, Any]:
     """读取宿主真人运行时验收状态。"""
-    return await validate_hosts(project_dir=project_dir, host=host, auto=auto, skill_name=skill_name)
+    return await validate_hosts(
+        project_dir=project_dir, host=host, auto=auto, skill_name=skill_name
+    )
 
 
 @app.post("/api/hosts/runtime-validation", dependencies=[Depends(get_api_key)])
@@ -3426,6 +3571,328 @@ async def get_dependency_graph(project_dir: str = ".") -> dict[str, Any]:
     return payload
 
 
+# ==================== Memory 端点 ====================
+
+
+@app.get("/api/memory")
+async def list_memories(project_dir: str = ".") -> dict[str, Any]:
+    """List all memory entries."""
+    try:
+        from super_dev.memory.store import MemoryStore
+
+        project_dir_path = _validate_project_dir(project_dir)
+        memory_dir = project_dir_path / ".super-dev" / "memory"
+        store = MemoryStore(memory_dir)
+        entries = store.list_all()
+        return {
+            "status": "success",
+            "data": [
+                {
+                    "filename": e.filename,
+                    "name": e.name,
+                    "type": e.type,
+                    "description": e.description,
+                    "created_at": e.created_at,
+                    "updated_at": e.updated_at,
+                }
+                for e in entries
+            ],
+        }
+    except ImportError:
+        raise HTTPException(status_code=501, detail="memory module not available")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/memory/{filename}")
+async def get_memory(filename: str, project_dir: str = ".") -> dict[str, Any]:
+    """Get a specific memory entry."""
+    try:
+        from super_dev.memory.store import MemoryStore
+
+        project_dir_path = _validate_project_dir(project_dir)
+        memory_dir = project_dir_path / ".super-dev" / "memory"
+        store = MemoryStore(memory_dir)
+        entry = store.load(filename)
+        if entry is None:
+            raise HTTPException(status_code=404, detail=f"Memory entry not found: {filename}")
+        return {
+            "status": "success",
+            "data": {
+                "filename": entry.filename,
+                "name": entry.name,
+                "type": entry.type,
+                "description": entry.description,
+                "content": entry.content,
+                "created_at": entry.created_at,
+                "updated_at": entry.updated_at,
+            },
+        }
+    except HTTPException:
+        raise
+    except ImportError:
+        raise HTTPException(status_code=501, detail="memory module not available")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.delete("/api/memory/{filename}")
+async def delete_memory(filename: str, project_dir: str = ".") -> dict[str, Any]:
+    """Delete a memory entry."""
+    try:
+        from super_dev.memory.store import MemoryStore
+
+        project_dir_path = _validate_project_dir(project_dir)
+        memory_dir = project_dir_path / ".super-dev" / "memory"
+        store = MemoryStore(memory_dir)
+        deleted = store.delete(filename)
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Memory entry not found: {filename}")
+        return {"status": "success", "data": {"filename": filename, "deleted": True}}
+    except HTTPException:
+        raise
+    except ImportError:
+        raise HTTPException(status_code=501, detail="memory module not available")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/memory/consolidate")
+async def consolidate_memories(project_dir: str = ".") -> dict[str, Any]:
+    """Trigger dream consolidation."""
+    try:
+        from super_dev.memory.consolidator import MemoryConsolidator
+
+        project_dir_path = _validate_project_dir(project_dir)
+        memory_dir = project_dir_path / ".super-dev" / "memory"
+        consolidator = MemoryConsolidator(memory_dir)
+        if not consolidator.should_consolidate():
+            return {
+                "status": "skipped",
+                "data": {"reason": "Consolidation conditions not met"},
+            }
+        result = consolidator.consolidate()
+        return {
+            "status": "success",
+            "data": {
+                "phase": result.phase,
+                "merged_count": result.merged_count,
+                "pruned_count": result.pruned_count,
+                "duration_ms": result.duration_ms,
+                "errors": result.errors,
+            },
+        }
+    except ImportError:
+        raise HTTPException(status_code=501, detail="memory consolidator module not available")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ==================== Hooks 端点 ====================
+
+
+def _load_yaml_config(project_dir_path: Path) -> dict[str, Any]:
+    """Load raw YAML config for hook manager initialization."""
+    try:
+        import yaml  # type: ignore[import-untyped]
+
+        config_path = project_dir_path / "super-dev.yaml"
+        if config_path.exists():
+            with open(config_path, encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+    except Exception:
+        pass
+    return {}
+
+
+@app.get("/api/hooks")
+async def list_hooks(project_dir: str = ".") -> dict[str, Any]:
+    """List configured hooks."""
+    try:
+        from super_dev.hooks.manager import HookManager
+
+        project_dir_path = _validate_project_dir(project_dir)
+        yaml_config = _load_yaml_config(project_dir_path)
+        hook_mgr = HookManager.from_yaml_config(yaml_config, project_dir=project_dir_path)
+        configured = hook_mgr.list_configured_hooks()
+        return {"status": "success", "data": configured}
+    except ImportError:
+        raise HTTPException(status_code=501, detail="hooks module not available")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/hooks/test")
+async def test_hook(
+    event: str,
+    phase: str = "",
+    project_dir: str = ".",
+) -> dict[str, Any]:
+    """Test execute a hook event."""
+    try:
+        from super_dev.hooks.manager import HookManager
+
+        project_dir_path = _validate_project_dir(project_dir)
+        yaml_config = _load_yaml_config(project_dir_path)
+        hook_mgr = HookManager.from_yaml_config(yaml_config, project_dir=project_dir_path)
+        results = hook_mgr.execute(event, context={"test": True}, phase=phase)
+        return {
+            "status": "success",
+            "data": [
+                {
+                    "hook_name": r.hook_name,
+                    "event": r.event,
+                    "success": r.success,
+                    "blocked": r.blocked,
+                    "output": r.output,
+                    "error": r.error,
+                    "duration_ms": r.duration_ms,
+                }
+                for r in results
+            ],
+        }
+    except ImportError:
+        raise HTTPException(status_code=501, detail="hooks module not available")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ==================== Experts (扩展) 端点 ====================
+
+
+@app.get("/api/experts/{name}")
+async def get_expert(name: str, project_dir: str = ".") -> dict[str, Any]:
+    """Get a specific expert definition."""
+    try:
+        from super_dev.orchestrator.experts import EXPERT_PROFILES, ExpertRole
+
+        name_upper = name.upper()
+        try:
+            role = ExpertRole(name_upper)
+        except ValueError:
+            raise HTTPException(status_code=404, detail=f"Unknown expert: {name}")
+        profile = EXPERT_PROFILES.get(role)
+        if profile is None:
+            raise HTTPException(status_code=404, detail=f"Expert profile not found: {name}")
+        return {
+            "status": "success",
+            "data": {
+                "role": profile.role.value,
+                "title": profile.title,
+                "goal": profile.goal,
+                "backstory": profile.backstory,
+                "focus_areas": profile.focus_areas,
+                "thinking_framework": profile.thinking_framework,
+                "quality_criteria": profile.quality_criteria,
+            },
+        }
+    except HTTPException:
+        raise
+    except ImportError:
+        raise HTTPException(status_code=501, detail="experts module not available")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ==================== Compact 端点 ====================
+
+
+@app.get("/api/compact")
+async def list_compacts(project_dir: str = ".") -> dict[str, Any]:
+    """List all phase compact summaries."""
+    try:
+        from super_dev.orchestrator.context_compact import CompactEngine
+
+        project_dir_path = _validate_project_dir(project_dir)
+        engine = CompactEngine(project_dir_path)
+        compact_dir = engine.compact_dir
+        summaries: list[dict[str, Any]] = []
+        if compact_dir.exists():
+            for json_file in sorted(compact_dir.glob("*.json")):
+                phase_name = json_file.stem
+                summary = engine.load_compact(phase_name)
+                if summary is not None:
+                    summaries.append(
+                        {
+                            "phase": summary.phase,
+                            "timestamp": summary.timestamp,
+                            "primary_request": summary.primary_request,
+                            "key_concepts_count": len(summary.key_concepts),
+                            "files_count": len(summary.files_and_code),
+                            "pending_tasks_count": len(summary.pending_tasks),
+                        }
+                    )
+        return {"status": "success", "data": summaries}
+    except ImportError:
+        raise HTTPException(status_code=501, detail="context_compact module not available")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/compact/{phase}")
+async def get_compact(phase: str, project_dir: str = ".") -> dict[str, Any]:
+    """Get a specific phase compact summary."""
+    try:
+        from super_dev.orchestrator.context_compact import CompactEngine
+
+        project_dir_path = _validate_project_dir(project_dir)
+        engine = CompactEngine(project_dir_path)
+        summary = engine.load_compact(phase)
+        if summary is None:
+            raise HTTPException(
+                status_code=404, detail=f"Compact summary not found for phase: {phase}"
+            )
+        return {"status": "success", "data": summary.to_dict()}
+    except HTTPException:
+        raise
+    except ImportError:
+        raise HTTPException(status_code=501, detail="context_compact module not available")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ==================== Session Brief 端点 ====================
+
+
+@app.get("/api/session-brief")
+async def get_session_brief(project_dir: str = ".") -> dict[str, Any]:
+    """Get current session brief."""
+    try:
+        from super_dev.session.brief import SessionBrief
+
+        project_dir_path = _validate_project_dir(project_dir)
+        sections = SessionBrief.load(project_dir_path)
+        return {"status": "success", "data": sections}
+    except ImportError:
+        raise HTTPException(status_code=501, detail="session brief module not available")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/session-brief/generate")
+async def generate_session_brief(
+    project_name: str,
+    project_dir: str = ".",
+) -> dict[str, Any]:
+    """Generate a new session brief template."""
+    try:
+        from super_dev.session.brief import SessionBrief
+
+        project_dir_path = _validate_project_dir(project_dir)
+        template = SessionBrief.generate_template(project_name)
+        # Parse the template into sections and save it
+        sections = SessionBrief._parse_sections(template)
+        saved_path = SessionBrief.save(project_dir_path, sections)
+        return {
+            "status": "success",
+            "data": {"path": str(saved_path), "sections": sections},
+        }
+    except ImportError:
+        raise HTTPException(status_code=501, detail="session brief module not available")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 def _mount_frontend_if_present() -> None:
     """在 API 路由注册完成后挂载前端，避免遮蔽 /api 路由。"""
     frontend_path = Path(__file__).parent / "frontend" / "dist"
@@ -3444,17 +3911,19 @@ _mount_frontend_if_present()
 
 # ==================== 主函数 ====================
 
+
 def main():
     """启动 API 服务器"""
     host = os.getenv("SUPER_DEV_API_HOST", "127.0.0.1")
     port = int(os.getenv("SUPER_DEV_API_PORT", "8000"))
-    reload_enabled = os.getenv("SUPER_DEV_API_RELOAD", "true").strip().lower() in {"1", "true", "yes", "on"}
+    reload_enabled = os.getenv("SUPER_DEV_API_RELOAD", "true").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     uvicorn.run(
-        "super_dev.web.api:app",
-        host=host,
-        port=port,
-        reload=reload_enabled,
-        log_level="info"
+        "super_dev.web.api:app", host=host, port=port, reload=reload_enabled, log_level="info"
     )
 
 

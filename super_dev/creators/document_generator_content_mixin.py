@@ -281,6 +281,19 @@ const theme: ThemeConfig = {
             "color_palette": palette,
             "typography_preset": typography,
             "icon_system": icon_system,
+            "emoji_policy": {
+                "allowed_in_ui": False,
+                "allowed_as_icon": False,
+                "allowed_during_development": False,
+                "rule": "绝对不允许 emoji 表情作为图标，也不允许在 UI 开发过程中使用 emoji 充当占位、临时装饰或功能按钮。",
+                "approved_icon_libraries": [
+                    "Lucide",
+                    "Heroicons",
+                    "Tabler Icons",
+                    "官方组件图标库",
+                ],
+                "enforcement": "system-wide",
+            },
             "ui_library_preference": {
                 "preferred": (
                     "shadcn/ui + Radix UI + Tailwind CSS"
@@ -3015,6 +3028,7 @@ spec:
                 "**视觉方案输出要求**:",
                 "- 每个关键页面至少提供 2 个视觉方向候选（主方案 + 备选方案），并记录为什么不用另一种方向。",
                 "- 开始编码前先冻结图标库、token 策略和页面骨架，不允许边写边猜。",
+                "- 绝对不允许 emoji 表情作为图标，也不允许在开发过程中用 emoji 充当临时占位；从文档冻结到最终交付都必须使用正式图标库。",
             ]
         )
 

@@ -1,6 +1,6 @@
 # Super Dev 快速开始
 
-> 面向 `2.1.6` 版本，5-10 分钟完成从安装到首次流水线运行。
+> 面向 `2.3.0` 版本，5 分钟完成从安装到首次流水线运行。
 
 ## 1. 环境要求
 
@@ -22,7 +22,7 @@ pip install -U super-dev
 ### 方式 B：安装指定版本（复现/回滚）
 
 ```bash
-pip install super-dev==2.1.6
+pip install super-dev==2.3.0
 ```
 
 ## 3. 启动方式（推荐）
@@ -32,12 +32,26 @@ pip install super-dev==2.1.6
 如果你只想最快跑通一次，不想自己摸索，直接按这 3 步：
 
 ```bash
-super-dev start --idea "构建一个电商后台，包含登录、订单、支付"
+# 步骤 1: 初始化项目
+super-dev init my-project
+
+# 或使用项目模板快速初始化（可选模板: ecommerce/saas/dashboard/mobile/api/blog/miniapp）
+super-dev init --template ecommerce
+
+# 步骤 2: 自动检测并安装到所有宿主（会自动安装 enforcement hooks）
+super-dev detect --auto
+
+# 步骤 3: 在宿主中开始
+# Claude Code / Codex 等支持 / 命令的宿主:
+/super-dev 构建一个电商后台，包含登录、订单、支付
+
+# 其他宿主:
+super-dev: 构建一个电商后台，包含登录、订单、支付
 ```
 
 然后：
 
-1. 按输出选择的宿主打开正确入口
+1. 按 SKILL.md 的指引进入 pipeline 模式
 2. 复制输出里的那句触发命令到宿主会话
 3. 确认宿主第一轮回复明确说当前阶段是 `research`
 
@@ -134,6 +148,15 @@ super-dev spec list
 super-dev quality --type all
 super-dev deploy --cicd github
 super-dev studio --port 8765
+
+# 2.3.0 新增命令
+super-dev init --template ecommerce   # 使用项目模板
+super-dev doctor --fix                # 自动修复安装问题
+super-dev completion bash             # Shell 补全 (bash/zsh/fish)
+super-dev feedback                    # 快速反馈到 GitHub Issues
+super-dev migrate                     # 2.2.0 → 2.3.0 一键迁移
+super-dev enforce install             # 安装宿主 hooks
+super-dev enforce validate            # 运行约束验证
 ```
 
 ## 5. 流程控制

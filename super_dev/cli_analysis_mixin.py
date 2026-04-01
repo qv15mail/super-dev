@@ -19,21 +19,53 @@ class CliAnalysisMixin:
 
         # 检查是否已初始化
         if config_manager.exists():
-            self.console.print("[yellow]项目已初始化，使用 'super-dev config set' 修改配置[/yellow]")
+            self.console.print(
+                "[yellow]项目已初始化，使用 'super-dev config set' 修改配置[/yellow]"
+            )
             return 0
+
+        name = getattr(args, "name", None) or Path.cwd().name
+
+        # Apply template defaults (user-provided args override)
+        if getattr(args, "template", None):
+            from .project_templates import get_template
+
+            tmpl = get_template(args.template)
+            if tmpl:
+                _tmpl_defaults = {
+                    "frontend": "next",
+                    "backend": "node",
+                    "domain": "",
+                    "platform": "web",
+                }
+                for key, default_val in _tmpl_defaults.items():
+                    current = getattr(args, key, None)
+                    if current is None or current == default_val:
+                        tmpl_val = tmpl.get(key, "")
+                        if tmpl_val:
+                            setattr(args, key, tmpl_val)
+                # Also set optional fields from template
+                for opt_key in ["ui_library", "style"]:
+                    if not getattr(args, opt_key, None) and tmpl.get(opt_key):
+                        setattr(args, opt_key, tmpl[opt_key])
+                for list_key in ["state", "testing"]:
+                    if not getattr(args, list_key, None) and tmpl.get(list_key):
+                        setattr(args, list_key, [tmpl[list_key]])
+                if not args.description and tmpl.get("description"):
+                    args.description = tmpl["description"]
 
         # 创建配置
         config = config_manager.create(
-            name=args.name,
+            name=name,
             description=args.description,
             platform=args.platform,
             frontend=args.frontend,
             backend=args.backend,
             domain=args.domain,
-            ui_library=getattr(args, 'ui_library', None),
-            style_solution=getattr(args, 'style', None),
-            state_management=getattr(args, 'state', []) or [],
-            testing_frameworks=getattr(args, 'testing', []) or [],
+            ui_library=getattr(args, "ui_library", None),
+            style_solution=getattr(args, "style", None),
+            state_management=getattr(args, "state", []) or [],
+            testing_frameworks=getattr(args, "testing", []) or [],
         )
 
         # 创建输出目录
@@ -61,10 +93,26 @@ class CliAnalysisMixin:
         self.console.print(f"  工作流契约: {workflow_file}")
         self.console.print(f"  Bootstrap 摘要: {summary_file}")
 
+        # Auto-detect and setup hosts
+        project_dir = Path.cwd()
+        try:
+            from .integrations import IntegrationManager
+
+            manager = IntegrationManager(project_dir)
+            for host_target in ["claude-code", "cursor"]:
+                try:
+                    files = manager.setup(target=host_target, force=True)
+                    if files:
+                        self.console.print(f"  [green]✓[/green] 已自动安装到 {host_target}")
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
         self.console.print("\n[dim]下一步:[/dim]")
-        self.console.print("  1. 查看 output/*-bootstrap.md 确认初始化结果")
-        self.console.print("  2. 运行 'super-dev start --idea \"你的需求\"' 或在宿主中触发 /super-dev")
-        self.console.print("  3. 如需手动管理 SDD，可运行 'super-dev spec init'")
+        self.console.print("  在宿主中输入以下任一方式开始:")
+        self.console.print("    /super-dev <你的需求>        (支持 / 命令的宿主)")
+        self.console.print("    super-dev: <你的需求>        (所有宿主通用)")
 
         return 0
 
@@ -99,7 +147,7 @@ class CliAnalysisMixin:
         self.console.print(f"  Bootstrap 摘要: {summary_file}")
         self.console.print("")
         self.console.print("[cyan]下一步:[/cyan]")
-        self.console.print("  1. 运行 super-dev start --idea \"你的需求\"")
+        self.console.print('  1. 运行 super-dev start --idea "你的需求"')
         self.console.print("  2. 或直接在已接入宿主中触发 /super-dev / super-dev:")
         return 0
 
@@ -185,16 +233,52 @@ Fill `.super-dev/project.md` with domain constraints, architecture notes, delive
 
     def _render_bootstrap_summary_markdown(self, config, project_dir: Path) -> str:
         timestamp = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
-        return f"""# {config.name} Bootstrap Summary
+
+        # Detect installed host surfaces
+        installed_items: list[str] = []
+        claude_md = project_dir / ".claude" / "CLAUDE.md"
+        if claude_md.exists():
+            installed_items.append("`.claude/CLAUDE.md` — 编码约束规则")
+        settings_json = project_dir / ".claude" / "settings.local.json"
+        if settings_json.exists():
+            installed_items.append("`.claude/settings.local.json` — enforcement hooks")
+        skill_md = project_dir / "SKILL.md"
+        if skill_md.exists():
+            installed_items.append("`SKILL.md` — pipeline 治理技能")
+        cursorrules = project_dir / ".cursorrules"
+        if cursorrules.exists():
+            installed_items.append("`.cursorrules` — Cursor 编码约束")
+        windsurfrules = project_dir / ".windsurfrules"
+        if windsurfrules.exists():
+            installed_items.append("`.windsurfrules` — Windsurf 编码约束")
+
+        installed_section = ""
+        if installed_items:
+            installed_section = "\n## 已安装\n\n" + "\n".join(
+                f"- {item}" for item in installed_items
+            ) + "\n"
+
+        return f"""# {config.name} Bootstrap
 
 > Generated by `super-dev bootstrap`
 > Updated: {timestamp}
 
-## Result
+## 项目信息
 
-Super Dev has explicitly initialized this repository.
+- 名称: {config.name}
+- 平台: {config.platform}
+- 前端: {config.frontend}
+- 后端: {config.backend}
+- 数据库: {config.database or "未指定"}
+- 领域: {config.domain or "未指定"}
 
-Generated bootstrap assets:
+## 下一步
+
+1. 在宿主中输入: `/super-dev 你的需求` 或 `super-dev: 你的需求`
+2. Super Dev 会依次执行: 研究 -> 文档 -> 确认 -> Spec -> 编码 -> 质量 -> 交付
+3. 每个阶段都有对应的专家主导
+{installed_section}
+## 生成资产
 
 - `super-dev.yaml`
 - `.super-dev/WORKFLOW.md`
@@ -203,42 +287,22 @@ Generated bootstrap assets:
 - `.super-dev/specs/`
 - `.super-dev/changes/`
 
-## Current Stack
+## 流程说明
 
-- Platform: `{config.platform}`
-- Frontend: `{config.frontend}`
-- Backend: `{config.backend}`
-- Domain: `{config.domain or "未指定"}`
-
-## How To Start
-
-### Option 1. Guided bootstrap
-
-```bash
-super-dev start --idea "你的需求"
-```
-
-### Option 2. Host trigger
-
-- Slash hosts: `/super-dev 你的需求`
-- Text-trigger hosts: `super-dev: 你的需求` or `super-dev：你的需求`
-
-## What Happens Next
-
-1. Super Dev enforces `research` first.
-2. The host writes:
+1. Super Dev 强制 `research` 先行
+2. 宿主依次产出:
    - `output/*-research.md`
    - `output/*-prd.md`
    - `output/*-architecture.md`
    - `output/*-uiux.md`
-3. The workflow pauses for user confirmation.
-4. Only then can Spec / tasks and implementation continue.
+3. 流程暂停，等待用户确认三文档
+4. 确认后才进入 Spec / 任务分解 / 编码实现
 
-## Notes
+## 备注
 
-- This bootstrap summary is the visible initialization artifact for repository operators.
-- `.super-dev/WORKFLOW.md` is the repository workflow contract for hosts and maintainers.
-- `super-dev spec init` can be used later to reinitialize SDD directories if needed.
+- 本文档是仓库的初始化可见产物，供开发者和 AI 宿主参考
+- `.super-dev/WORKFLOW.md` 是工作流契约
+- `super-dev spec init` 可重新初始化 SDD 目录
 """
 
     def _cmd_analyze(self, args) -> int:
@@ -260,6 +324,7 @@ super-dev start --idea "你的需求"
 
             if output_format == "json":
                 import json
+
                 output = json.dumps(report.to_dict(), indent=2, ensure_ascii=False)
 
                 if args.output:
@@ -306,25 +371,22 @@ super-dev start --idea "你的需求"
 
         except FileNotFoundError as e:
             self.console.print(f"[red]路径不存在: {e}[/red]")
-            self.logger.error("分析失败: 文件不存在", extra={'path': str(e)})
+            self.logger.error("分析失败: 文件不存在", extra={"path": str(e)})
             return 1
 
         except PermissionError as e:
             self.console.print(f"[red]权限不足: {e}[/red]")
-            self.logger.error("分析失败: 权限错误", extra={'path': str(e)})
+            self.logger.error("分析失败: 权限错误", extra={"path": str(e)})
             return 1
 
         except Exception as e:
             self.console.print(f"[red]分析失败: {e}[/red]")
             self.logger.error(
                 f"分析异常: {type(e).__name__}",
-                extra={
-                    'error_message': str(e),
-                    'traceback': traceback.format_exc()
-                }
+                extra={"error_message": str(e), "traceback": traceback.format_exc()},
             )
 
-            if '--debug' in sys.argv or '-d' in sys.argv:
+            if "--debug" in sys.argv or "-d" in sys.argv:
                 self.console.print(traceback.format_exc())
 
             return 1
@@ -385,9 +447,13 @@ super-dev start --idea "你的需求"
             self.console.print(f"[red]生成 Repo Map 失败: {e}[/red]")
             self.logger.error(
                 "Repo Map 生成失败",
-                extra={"error_type": type(e).__name__, "error_message": str(e), "traceback": traceback.format_exc()},
+                extra={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "traceback": traceback.format_exc(),
+                },
             )
-            if '--debug' in sys.argv or '-d' in sys.argv:
+            if "--debug" in sys.argv or "-d" in sys.argv:
                 self.console.print(traceback.format_exc())
             return 1
 
@@ -430,9 +496,7 @@ super-dev start --idea "你的需求"
 
             paths = builder.write(report)
             coverage_text = (
-                f"{report.coverage_rate:.1f}%"
-                if report.coverage_rate is not None
-                else "unknown"
+                f"{report.coverage_rate:.1f}%" if report.coverage_rate is not None else "unknown"
             )
             self.console.print("[green]Feature Checklist 已生成[/green]")
             self.console.print(f"  项目: {report.project_name}")
@@ -454,9 +518,13 @@ super-dev start --idea "你的需求"
             self.console.print(f"[red]Feature Checklist 生成失败: {e}[/red]")
             self.logger.error(
                 "Feature Checklist 生成失败",
-                extra={"error_type": type(e).__name__, "error_message": str(e), "traceback": traceback.format_exc()},
+                extra={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "traceback": traceback.format_exc(),
+                },
             )
-            if '--debug' in sys.argv or '-d' in sys.argv:
+            if "--debug" in sys.argv or "-d" in sys.argv:
                 self.console.print(traceback.format_exc())
             return 1
 
@@ -518,9 +586,13 @@ super-dev start --idea "你的需求"
             self.console.print(f"[red]Product Audit 生成失败: {e}[/red]")
             self.logger.error(
                 "Product Audit 生成失败",
-                extra={"error_type": type(e).__name__, "error_message": str(e), "traceback": traceback.format_exc()},
+                extra={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "traceback": traceback.format_exc(),
+                },
             )
-            if '--debug' in sys.argv or '-d' in sys.argv:
+            if "--debug" in sys.argv or "-d" in sys.argv:
                 self.console.print(traceback.format_exc())
             return 1
 
@@ -534,7 +606,9 @@ super-dev start --idea "你的需求"
             return 1
 
         if not args.description and not args.files:
-            self.console.print("[yellow]请提供变更描述或 --files 列表，例如 `super-dev impact \"修改登录流程\" --files services/auth.py`[/yellow]")
+            self.console.print(
+                '[yellow]请提供变更描述或 --files 列表，例如 `super-dev impact "修改登录流程" --files services/auth.py`[/yellow]'
+            )
             return 1
 
         try:
@@ -590,9 +664,13 @@ super-dev start --idea "你的需求"
             self.console.print(f"[red]Impact Analysis 生成失败: {e}[/red]")
             self.logger.error(
                 "Impact Analysis 生成失败",
-                extra={"error_type": type(e).__name__, "error_message": str(e), "traceback": traceback.format_exc()},
+                extra={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "traceback": traceback.format_exc(),
+                },
             )
-            if '--debug' in sys.argv or '-d' in sys.argv:
+            if "--debug" in sys.argv or "-d" in sys.argv:
                 self.console.print(traceback.format_exc())
             return 1
 
@@ -607,7 +685,7 @@ super-dev start --idea "你的需求"
 
         if not args.description and not args.files:
             self.console.print(
-                "[yellow]请提供变更描述或 --files 列表，例如 `super-dev regression-guard \"修改登录流程\" --files services/auth.py`[/yellow]"
+                '[yellow]请提供变更描述或 --files 列表，例如 `super-dev regression-guard "修改登录流程" --files services/auth.py`[/yellow]'
             )
             return 1
 
@@ -660,9 +738,13 @@ super-dev start --idea "你的需求"
             self.console.print(f"[red]Regression Guard 生成失败: {e}[/red]")
             self.logger.error(
                 "Regression Guard 生成失败",
-                extra={"error_type": type(e).__name__, "error_message": str(e), "traceback": traceback.format_exc()},
+                extra={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "traceback": traceback.format_exc(),
+                },
             )
-            if '--debug' in sys.argv or '-d' in sys.argv:
+            if "--debug" in sys.argv or "-d" in sys.argv:
                 self.console.print(traceback.format_exc())
             return 1
 
@@ -720,9 +802,13 @@ super-dev start --idea "你的需求"
             self.console.print(f"[red]Dependency Graph 生成失败: {e}[/red]")
             self.logger.error(
                 "Dependency Graph 生成失败",
-                extra={"error_type": type(e).__name__, "error_message": str(e), "traceback": traceback.format_exc()},
+                extra={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "traceback": traceback.format_exc(),
+                },
             )
-            if '--debug' in sys.argv or '-d' in sys.argv:
+            if "--debug" in sys.argv or "-d" in sys.argv:
                 self.console.print(traceback.format_exc())
             return 1
 
@@ -755,6 +841,7 @@ super-dev start --idea "你的需求"
 
         # 运行工作流
         import asyncio
+
         config = config_manager.config
         context = WorkflowContext(
             project_dir=project_dir,

@@ -4,6 +4,7 @@ Skill 安装管理器
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess  # nosec B404
 import tempfile
@@ -11,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..catalogs import HOST_TOOL_IDS
+from .skill_template import SkillTemplate
 
 
 @dataclass
@@ -24,6 +26,16 @@ class SkillInstallResult:
 class SkillManager:
     """跨平台 AI Coding 工具 Skill 管理"""
 
+    CANONICAL_SKILL_NAMES = {
+        "codex-cli": "super-dev",
+        "claude-code": "super-dev",
+    }
+
+    LEGACY_SKILL_ALIASES = {
+        "codex-cli": ["super-dev-core"],
+        "claude-code": ["super-dev-core"],
+    }
+
     # Official user-level skill paths confirmed by vendor docs.
     OFFICIAL_TARGET_PATHS = {
         "antigravity": "~/.gemini/skills",
@@ -32,8 +44,6 @@ class SkillManager:
         "codebuddy": "~/.codebuddy/skills",
         "copilot-cli": "~/.copilot/skills",
         "codex-cli": "~/.agents/skills",
-        "iflow": "~/.iflow/skills",
-        "jetbrains-ai": "~/.junie/skills",
         "kiro-cli": "~/.kiro/skills",
         "kiro": "~/.kiro/skills",
         "openclaw": "~/.openclaw/skills",
@@ -47,13 +57,11 @@ class SkillManager:
     # Observed compatibility paths used when a host exposes a local skill loader
     # but the vendor docs do not yet publish a stable user-level install path.
     OBSERVED_TARGET_PATHS = {
-        "aider": "~/.aider/skills",
         "claude-code": "~/.claude/skills",
         "cursor-cli": "~/.cursor/skills",
         "cursor": "~/.cursor/skills",
         "gemini-cli": "~/.gemini/skills",
         "kilo-code": "~/.kilocode/skills",
-        "kimi-cli": "~/.kimi/skills",
         "trae": "~/.trae/skills",
         "vscode-copilot": "~/.copilot/skills",
     }
@@ -83,6 +91,26 @@ class SkillManager:
         return list(self.TARGET_PATHS.keys())
 
     @classmethod
+    def default_skill_name(cls, target: str) -> str:
+        return cls.CANONICAL_SKILL_NAMES.get(target, "super-dev")
+
+    @classmethod
+    def codex_home_dir(cls) -> Path:
+        raw = os.getenv("CODEX_HOME", "").strip()
+        if raw:
+            return Path(raw).expanduser()
+        return Path.home() / ".codex"
+
+    @classmethod
+    def compatibility_skill_names(cls, target: str, requested_name: str | None = None) -> list[str]:
+        canonical = cls.default_skill_name(target)
+        names: list[str] = []
+        for item in [canonical, requested_name, *cls.LEGACY_SKILL_ALIASES.get(target, [])]:
+            if isinstance(item, str) and item.strip() and item not in names:
+                names.append(item)
+        return names
+
+    @classmethod
     def target_path_kind(cls, target: str) -> str:
         if target in cls.OFFICIAL_TARGET_PATHS:
             return "official-user-surface"
@@ -104,9 +132,7 @@ class SkillManager:
         for base in self._all_target_dirs(target):
             if not base.exists():
                 continue
-            names.update(
-                d.name for d in base.iterdir() if d.is_dir() and (d / "SKILL.md").exists()
-            )
+            names.update(d.name for d in base.iterdir() if d.is_dir() and (d / "SKILL.md").exists())
         return sorted(names)
 
     def install(
@@ -134,7 +160,7 @@ class SkillManager:
 
         # 内置 skill
         if source == "super-dev":
-            skill_name = name or "super-dev"
+            skill_name = name or self.default_skill_name(target)
             target_dir = base / skill_name
             self._prepare_target_dir(target_dir, force=force)
             self._write_builtin_skill(target_dir, skill_name, target)
@@ -144,6 +170,20 @@ class SkillManager:
                 force=force,
                 writer=lambda mirror_dir: self._write_builtin_skill(mirror_dir, skill_name, target),
             )
+            for alias in self.compatibility_skill_names(target, skill_name):
+                if alias == skill_name:
+                    continue
+                alias_dir = base / alias
+                self._prepare_target_dir(alias_dir, force=force)
+                self._write_builtin_skill(alias_dir, alias, target)
+                self._mirror_skill_install(
+                    target=target,
+                    skill_name=alias,
+                    force=force,
+                    writer=lambda mirror_dir, alias_name=alias: self._write_builtin_skill(
+                        mirror_dir, alias_name, target
+                    ),
+                )
             return SkillInstallResult(
                 name=skill_name,
                 target=target,
@@ -156,22 +196,21 @@ class SkillManager:
         )
 
     def uninstall(self, name: str, target: str) -> Path:
+        names = self.compatibility_skill_names(target, name)
         target_dir = self._target_dir(target) / name
-        if not target_dir.exists():
-            compatibility_found = False
+        removed_any = False
+        for candidate in names:
+            primary = self._target_dir(target) / candidate
+            if primary.exists():
+                shutil.rmtree(primary)
+                removed_any = True
             for mirror_base in self._compatibility_target_dirs(target):
-                mirror_dir = mirror_base / name
+                mirror_dir = mirror_base / candidate
                 if mirror_dir.exists():
                     shutil.rmtree(mirror_dir)
-                    compatibility_found = True
-            if not compatibility_found:
-                raise FileNotFoundError(f"Skill not found: {name} ({target})")
-            return target_dir
-        shutil.rmtree(target_dir)
-        for mirror_base in self._compatibility_target_dirs(target):
-            mirror_dir = mirror_base / name
-            if mirror_dir.exists():
-                shutil.rmtree(mirror_dir)
+                    removed_any = True
+        if not removed_any:
+            raise FileNotFoundError(f"Skill not found: {name} ({target})")
         return target_dir
 
     def _target_dir(self, target: str) -> Path:
@@ -187,7 +226,11 @@ class SkillManager:
         paths = self.COMPATIBILITY_MIRROR_PATHS.get(target, [])
         resolved: list[Path] = []
         for item in paths:
-            raw_path = Path(item).expanduser()
+            raw_path = (
+                self.codex_home_dir() / "skills"
+                if target == "codex-cli"
+                else Path(item).expanduser()
+            )
             resolved.append(raw_path if raw_path.is_absolute() else self.project_dir / raw_path)
         return resolved
 
@@ -208,7 +251,9 @@ class SkillManager:
             writer(mirror_dir)
 
     def _is_git_source(self, source: str) -> bool:
-        return source.startswith("http://") or source.startswith("https://") or source.endswith(".git")
+        return (
+            source.startswith("http://") or source.startswith("https://") or source.endswith(".git")
+        )
 
     def _validate_git_source(self, source: str) -> None:
         """验证 Git 源地址安全性"""
@@ -217,7 +262,9 @@ class SkillManager:
             raise ValueError(f"Git 源地址包含危险字符: {source}")
         if source.startswith("-") or source.startswith("--"):
             raise ValueError(f"Git 源地址不允许以 - 开头: {source}")
-        if not (source.startswith("https://") or source.startswith("http://") or source.endswith(".git")):
+        if not (
+            source.startswith("https://") or source.startswith("http://") or source.endswith(".git")
+        ):
             raise ValueError(f"Git 源地址格式无效，必须以 https:// 或 http:// 开头: {source}")
 
     def _install_from_git(
@@ -306,181 +353,24 @@ class SkillManager:
 
     def _write_builtin_skill(self, target_dir: Path, skill_name: str, target: str) -> None:
         target_dir.mkdir(parents=True, exist_ok=True)
-        if target == "codex-cli":
-            skill_content = f"""---
-name: {skill_name}
-description: Activate the Super Dev pipeline inside Codex CLI.
----
-# {skill_name} for Codex CLI
-
-## Direct Activation Rule（强制）
-
-- If this skill is invoked, Super Dev pipeline mode is already active.
-- Do not spend a turn saying you will read the skill first, explain the skill, or decide whether to enter the workflow.
-- Do not answer with variants of “我先读取 skill 再判断流程”.
-- If this file is loaded from `~/.codex/skills`, treat it as the compatibility mirror of the same Super Dev contract.
-
-## 触发方式（强制）
-
-- Treat `super-dev: <需求描述>` and `super-dev：<需求描述>` as the Super Dev entry point.
-- Do not treat it as ordinary chat.
-- 当前宿主负责调用模型、工具、终端与实际代码修改。
-- Super Dev 不是大模型平台，也不提供自己的代码生成 API。
-
-## Runtime Contract（强制）
-
-- Super Dev 由两部分组成：
-  1. 当前项目内的本地 Python CLI 工具
-  2. 当前宿主里的规则/Skill/命令映射
-- 当前宿主负责调用模型、联网、终端、编辑器与实际代码修改。
-- 当用户触发 `super-dev: ...` 或 `super-dev：...` 时，意味着你必须进入 Super Dev 流水线。
-- 需要研究、设计、编码、运行、调试时，优先使用 Codex 自身的 web/search/terminal/edit 能力。
-- 需要做治理动作时，才使用本地 `super-dev` CLI。
-
-## 首轮响应契约（强制）
-
-- 第一轮回复必须明确说明：Super Dev 流水线已激活，当前不是普通聊天模式。
-- 第一轮回复前，优先读取 `.super-dev/WORKFLOW.md` 与 `output/*-bootstrap.md`（若存在），把其中的初始化契约视为当前仓库的显式 bootstrap 规则。
-- 第一轮回复必须明确说明当前阶段是 `research`。
-- 第一轮回复必须明确说明三份核心文档完成后会暂停等待用户确认。
-
-## 本地知识库契约（强制）
-
-- 先读取 `knowledge/`。
-- 如果存在 `output/knowledge-cache/*-knowledge-bundle.json`，必须先读取并继承其中约束。
-
-## 会话连续性契约（强制）
-
-- 若存在 `.super-dev/SESSION_BRIEF.md`，每次继续前必须先读取，并把它视为当前流程状态真源。
-- 当前流程停在确认门或返工门时，用户说“改一下”“补充”“继续改”“确认”“通过”“继续”等，都属于当前流程内动作，不得退回普通聊天。
-- 每次按用户意见修改后，必须留在当前门里，重新总结变化，并再次等待明确确认。
-- 只有用户明确说取消当前流程、重新开始、或切回普通聊天时，才允许离开当前 Super Dev 流程。
-
-## Implementation Closure Contract（强制）
-
-- 完成每轮代码修改后，必须先做一次最小 diff review，再汇报“已完成”。
-- 必须运行项目原生 build / compile / type-check / test / runtime smoke；没有对应命令时要说明原因。
-- 本轮新增函数、方法、字段、模块、日志埋点必须接入真实调用链；未接入则删除。
-- 不允许留下新增 unused code、只定义不调用的 helper、无效日志或无效兜底分支。
-
-## Required behavior
-
-1. First reply: say Super Dev pipeline mode is active and the current phase is `research`.
-2. Before the first reply, read `.super-dev/WORKFLOW.md` and `output/*-bootstrap.md` when present and treat them as the explicit bootstrap contract for this repository.
-3. Read `knowledge/` and `output/knowledge-cache/*-knowledge-bundle.json` when present.
-4. Use Codex native web/search/edit/terminal capabilities to produce:
-   - `output/*-research.md`
-   - `output/*-prd.md`
-   - `output/*-architecture.md`
-   - `output/*-uiux.md`
-5. Write the required artifacts into the repository workspace. Chat-only summaries do not count as completion.
-6. Stop after the three core documents and wait for explicit confirmation.
-7. Only after confirmation, create `.super-dev/changes/*/proposal.md` and `.super-dev/changes/*/tasks.md`, then continue with frontend-first implementation.
-8. If the user says the UI is unsatisfactory, requests a redesign, or says the page looks AI-generated, first update `output/*-uiux.md`, then redo the frontend, rerun frontend runtime and UI review, and only then continue.
-9. If the user says the architecture is wrong or the technical plan must change, first update `output/*-architecture.md`, then realign Spec/tasks and implementation before continuing.
-10. If the user says quality or security is not acceptable, first fix the issues, rerun quality gate and `super-dev release proof-pack`, and only then continue.
-
-## Never do this
-
-- Never jump straight into coding after `super-dev:` or `super-dev：`.
-- Never create Spec or implementation work before the documents are confirmed.
-- 未经用户明确确认，禁止创建 `.super-dev/changes/*`。
-- Use local `super-dev` CLI for governance actions only; keep research, drafting, coding, and debugging inside Codex.
-
-## Super Dev System Flow Contract
-
-- SUPER_DEV_FLOW_CONTRACT_V1
-- PHASE_CHAIN: research>docs>docs_confirm>spec>frontend>preview_confirm>backend>quality>delivery
-- DOC_CONFIRM_GATE: required
-- PREVIEW_CONFIRM_GATE: required
-- HOST_PARITY: required
-"""
-        else:
-            skill_content = f"""---
-name: {skill_name}
-description: Super Dev pipeline governance for research-first, commercial-grade AI coding delivery
----
-# {skill_name} - Super Dev AI Coding Skill
-
-> 版本: 2.2.0 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
-
----
-
-## Skill 角色定义
-
-你是“**超级开发战队**”的一员，由 11 位专家协同完成流水线式 AI Coding 交付。当用户调用 Super Dev 时，你需要根据任务类型自动切换专家角色：
-
-## 定位边界（强制）
-
-- 当前宿主负责调用模型、工具、终端与实际代码修改。
-- Super Dev 不是大模型平台，也不提供自己的代码生成 API。
-- 你的职责是利用宿主现有能力，严格执行 Super Dev 的流程规范、设计约束、质量门禁与交付标准。
-- 不要把 Super Dev 当作独立编码平台；真正的实现动作仍在当前宿主上下文完成。
-
-## 触发方式（强制）
-
-- 支持 `/super-dev` 的宿主：用户会直接输入 `/super-dev <需求描述>`。
-- 不支持 `/super-dev` 的宿主：把 `super-dev: <需求描述>` 与 `super-dev：<需求描述>` 视为等效触发词。
-- 当用户使用这个文本触发词时，立即进入完整的 Super Dev 流水线，而不是把它当作普通聊天内容。
-
-## Runtime Contract（强制）
-
-- Super Dev 由两部分组成：
-  1. 当前项目内的本地 Python CLI 工具
-  2. 当前宿主里的规则/Skill/命令映射
-- 当前宿主负责调用模型、联网、终端、编辑器与实际代码修改。
-- 当用户触发 `/super-dev ...`、`super-dev: ...` 或 `super-dev：...` 时，意味着你必须进入 Super Dev 流水线。
-- 需要生成或刷新文档、Spec、质量报告、交付产物时，优先调用本地 `super-dev` CLI。
-- 需要研究、设计、编码、运行、调试时，优先使用宿主自身的 browse/search/terminal/edit 能力。
-- 不要等待用户解释“Super Dev 是什么”；你要把它理解为当前项目已经安装好的开发治理协议。
-
-## 首轮响应契约（强制）
-
-- 当用户首次输入 `/super-dev <需求描述>`、`super-dev: <需求描述>` 或 `super-dev：<需求描述>` 时，第一轮回复必须明确说明：Super Dev 流水线已激活，当前不是普通聊天模式。
-- 第一轮回复前，优先读取 `.super-dev/WORKFLOW.md` 与 `output/*-bootstrap.md`（若存在），把其中的初始化契约视为当前仓库的显式 bootstrap 规则。
-- 第一轮回复必须明确说明当前阶段是 `research`，并承诺先读取 `knowledge/` 与 `output/knowledge-cache/*-knowledge-bundle.json`（若存在），再用宿主原生联网研究同类产品。
-- 第一轮回复必须明确说明后续固定顺序：research -> 三份核心文档 -> 等待用户确认 -> Spec / tasks -> 前端优先并运行验证 -> 后端 / 测试 / 交付。
-- 第一轮回复必须明确说明：三份核心文档完成后会暂停等待用户确认；未经确认不会创建 Spec，也不会开始编码。
-
-## 本地知识库契约（强制）
-
-- 当前项目如果存在 `knowledge/`，必须在 research 与文档阶段优先读取与需求相关的知识文件。
-- 当前项目如果存在 `output/knowledge-cache/*-knowledge-bundle.json`，必须先读取其中命中的：
-  - `local_knowledge`
-  - `web_knowledge`
-  - `research_summary`
-- 命中的本地知识不是普通参考资料，而是当前项目的约束输入：
-  - 标准
-  - 检查清单
-  - 反模式
-  - 场景包
-  - 质量门禁
-- 这些约束必须被继承到 PRD、架构、UIUX、Spec、任务拆解和实现阶段。
-- 未经用户明确确认，禁止创建 `.super-dev/changes/*`，禁止开始编码。
-- research、PRD、架构、UIUX、Spec、质量报告等要求中的产物，必须真实写入项目文件，不能只在聊天里口头描述。
-- 若存在 `.super-dev/SESSION_BRIEF.md`，每次继续前必须先读取，并把它视为当前流程状态真源。
-- 当前流程停在确认门或返工门时，用户说“改一下”“补充”“继续改”“确认”“通过”“继续”等，都属于当前流程内动作，不得退回普通聊天。
-- 每次按用户意见修改后，必须留在当前门里，重新总结变化，并再次等待明确确认。
-- 只有用户明确说取消当前流程、重新开始、或切回普通聊天时，才允许离开当前 Super Dev 流程。
-- 当用户明确表示 UI 不满意、要求改版、重做视觉、页面太 AI 味时，必须先更新 `output/*-uiux.md`，再重做前端，并重新执行 frontend runtime 与 UI review。
-- 当用户明确表示架构不合理、模块边界错误、技术方案需要重构时，必须先更新 `output/*-architecture.md`，再同步调整 Spec / tasks 与实现方案。
-- 当用户明确表示质量不达标、安全问题未解决或交付证据不完整时，必须先修复问题，重新执行 quality gate 与 `super-dev release proof-pack`，再继续后续动作。
-- 若当前项目启用了 policy / 强治理策略，不得默认建议关闭红队、降低质量阈值或跳过门禁；只有在用户明确要求降级治理强度时，才可说明风险后调整 policy。
-
-## 实现闭环契约（强制）
-
-- 完成每轮代码修改后，必须先做一次最小 diff review，再汇报“已完成”。
-- 必须运行项目原生 build / compile / type-check / test / runtime smoke；如果项目缺少某一项，要说明原因。
-- 本轮新增函数、方法、字段、模块、日志埋点必须接入真实调用链；未接入则删除，不允许只为“以后可能会用”而保留。
-- 不允许留下新增 unused code、未引用文件、只定义不调用的 helper、无效日志或无效兜底分支。
-- 如果新增日志、恢复逻辑、告警、埋点，必须验证它们会在真实路径触发，而不是只把方法写进去。
-
-## Super Dev System Flow Contract
-
-- SUPER_DEV_FLOW_CONTRACT_V1
-- PHASE_CHAIN: research>docs>docs_confirm>spec>frontend>preview_confirm>backend>quality>delivery
-- DOC_CONFIRM_GATE: required
-- PREVIEW_CONFIRM_GATE: required
-- HOST_PARITY: required
-"""
+        template = SkillTemplate.for_builtin(skill_name, target)
+        skill_content = template.render(target)
         (target_dir / "SKILL.md").write_text(skill_content, encoding="utf-8")
+
+        if target == "codex-cli":
+            metadata_dir = target_dir / "agents"
+            metadata_dir.mkdir(parents=True, exist_ok=True)
+            openai_yaml = (
+                "interface:\n"
+                '  display_name: "Super Dev"\n'
+                '  short_description: "Research-first governed'
+                ' delivery pipeline for Codex."\n'
+                '  default_prompt: "Continue with the Super Dev'
+                ' pipeline for the current request."\n'
+                "policy:\n"
+                "  allow_implicit_invocation: true\n"
+            )
+            (metadata_dir / "openai.yaml").write_text(
+                openai_yaml,
+                encoding="utf-8",
+            )

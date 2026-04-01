@@ -299,6 +299,18 @@ class UIReviewReviewer:
                 "observed": str(self.project_dir / "output" / f"{self.name}-ui-contract.json") if ui_contract else "",
             }
         }
+        emoji_policy = ui_contract.get("emoji_policy", {}) if isinstance(ui_contract.get("emoji_policy"), dict) else {}
+        alignment_summary["emoji_policy"] = {
+            "label": "Emoji 禁令",
+            "passed": (
+                bool(emoji_policy)
+                and emoji_policy.get("allowed_in_ui") is False
+                and emoji_policy.get("allowed_as_icon") is False
+                and emoji_policy.get("allowed_during_development") is False
+            ),
+            "expected": "UI 与开发过程都禁止 emoji，图标只能来自正式图标库",
+            "observed": emoji_policy.get("rule", "") if emoji_policy else "",
+        }
         product_type = self._infer_product_type(description)
         conversational_product = any(
             token in description.lower() for token in ("ai", "chat", "对话", "助手", "agent", "copilot")
@@ -315,6 +327,18 @@ class UIReviewReviewer:
             )
             score -= 25
         else:
+            if ui_contract and not alignment_summary["emoji_policy"]["passed"]:
+                findings.append(
+                    UIReviewFinding(
+                        level="high",
+                        title="UI 契约未冻结 emoji 禁令",
+                        description="当前 UI 契约没有把“开发与成品都禁止 emoji 图标”写成正式规则，宿主在实现阶段容易再次回退到 emoji 占位。",
+                        recommendation="把 emoji 禁令写入 output/*-ui-contract.json，明确 UI 与开发过程中都绝对不允许使用 emoji 充当图标或临时占位。",
+                        evidence=[str(ui_contract.get("emoji_policy", ""))],
+                    )
+                )
+                score -= 12
+
             required_sections = [
                 "设计 Intelligence 结论",
                 "组件生态与实现基线",

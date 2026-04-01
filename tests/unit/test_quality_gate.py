@@ -786,6 +786,7 @@ class TestQualityGateChecker:
                 '  "style_direction": "Editorial workspace",\n'
                 '  "typography": {"heading": "Space Grotesk", "body": "Inter"},\n'
                 '  "icon_system": "lucide-react",\n'
+                '  "emoji_policy": {"allowed_in_ui": false, "allowed_as_icon": false, "allowed_during_development": false},\n'
                 '  "ui_library_preference": {"final_selected": "shadcn/ui + Radix + Tailwind"},\n'
                 '  "design_tokens": {"color": {"primary": "#0f172a"}}\n'
                 "}\n"
@@ -840,6 +841,7 @@ class TestQualityGateChecker:
                 '  "style_direction": "Editorial workspace",\n'
                 '  "typography": {"heading": "Space Grotesk", "body": "Inter"},\n'
                 '  "icon_system": "lucide-react",\n'
+                '  "emoji_policy": {"allowed_in_ui": false, "allowed_as_icon": false, "allowed_during_development": false},\n'
                 '  "ui_library_preference": {"final_selected": "shadcn/ui + Radix + Tailwind"},\n'
                 '  "design_tokens": {"color": {"primary": "#0f172a"}}\n'
                 "}\n"
@@ -883,3 +885,45 @@ class TestQualityGateChecker:
         check = checker._check_ui_contract_execution()
         assert check.status.value == "failed"
         assert "frontend runtime 未证明 UI 契约文件和 Design Token 已真实接入前端" in check.details
+
+    def test_ui_contract_execution_failed_when_contract_missing_emoji_policy(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        frontend_dir = output_dir / "frontend"
+        frontend_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-ui-contract.json").write_text(
+            (
+                "{\n"
+                '  "style_direction": "Editorial workspace",\n'
+                '  "typography": {"heading": "Space Grotesk", "body": "Inter"},\n'
+                '  "icon_system": "lucide-react",\n'
+                '  "ui_library_preference": {"final_selected": "shadcn/ui + Radix + Tailwind"},\n'
+                '  "design_tokens": {"color": {"primary": "#0f172a"}}\n'
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        (frontend_dir / "design-tokens.css").write_text(":root { --color-primary: #0f172a; }\n", encoding="utf-8")
+        (output_dir / "demo-frontend-runtime.json").write_text(
+            (
+                "{\n"
+                '  "passed": true,\n'
+                '  "checks": {\n'
+                '    "ui_contract_json": true,\n'
+                '    "output_frontend_design_tokens": true,\n'
+                '    "ui_contract_alignment": true,\n'
+                '    "ui_banned_patterns": true\n'
+                "  }\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "react", "backend": "python"},
+            scenario_override="1-N+1",
+        )
+        check = checker._check_ui_contract_execution()
+        assert check.status.value == "failed"
+        assert "emoji_policy" in check.details

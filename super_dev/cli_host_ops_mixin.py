@@ -22,6 +22,7 @@ try:
     from rich.panel import Panel
     from rich.table import Table
     from rich.text import Text
+
     RICH_AVAILABLE = True
 except ImportError:
     RICH_AVAILABLE = False
@@ -29,6 +30,7 @@ except ImportError:
 from . import __version__
 from .catalogs import (
     HOST_COMMAND_CANDIDATES,
+    PRIMARY_HOST_TOOL_IDS,
     SPECIAL_INSTALL_HOST_TOOL_IDS,
     host_detection_path_candidates,
     host_display_name,
@@ -41,7 +43,7 @@ from .review_state import (
     load_host_runtime_validation,
     save_host_runtime_validation,
 )
-from .terminal import normalize_terminal_text, output_mode_label, output_mode_reason, symbol
+from .terminal import normalize_terminal_text, output_mode_label, output_mode_reason
 
 
 class CliHostOpsMixin:
@@ -56,7 +58,9 @@ class CliHostOpsMixin:
         host_name = self._host_label(target)
         if not RICH_AVAILABLE:
             self.console.print(f"{host_name} 不走 super-dev {command_name} 统一安装流。")
-            self.console.print("请直接在宿主侧手动安装官方插件：openclaw plugins install @super-dev/openclaw-plugin")
+            self.console.print(
+                "请直接在宿主侧手动安装官方插件：openclaw plugins install @super-dev/openclaw-plugin"
+            )
             return 0
 
         lines = [
@@ -74,7 +78,15 @@ class CliHostOpsMixin:
             lines.append("官方文档:")
             for url in docs[:2]:
                 lines.append(f"- {url}")
-        self.console.print(Panel("\n".join(lines), title=f"{host_name} 手动安装", padding=(1, 2), border_style="cyan", expand=True))
+        self.console.print(
+            Panel(
+                "\n".join(lines),
+                title=f"{host_name} 手动安装",
+                padding=(1, 2),
+                border_style="cyan",
+                expand=True,
+            )
+        )
         return 0
 
     def _collect_runtime_install_health(self) -> dict[str, Any]:
@@ -122,13 +134,17 @@ class CliHostOpsMixin:
             warnings.append("检测到 site-packages 中残留的 super_dev 实体目录，可能覆盖当前版本。")
             remediation.append("删除旧的 site-packages/super_dev 目录后重新执行 pip install -e .")
         if len(dist_info_versions) > 1:
-            warnings.append("检测到多个 super-dev dist-info 版本并存: " + ", ".join(dist_info_versions))
+            warnings.append(
+                "检测到多个 super-dev dist-info 版本并存: " + ", ".join(dist_info_versions)
+            )
             remediation.append("清理旧的 super_dev-*.dist-info 残留，只保留当前版本。")
         if len(editable_versions) > 1:
             warnings.append("检测到多个 editable 安装记录并存: " + ", ".join(editable_versions))
             remediation.append("清理旧的 __editable__.super_dev-*.pth 和 finder 文件后重新安装。")
         if installed_dist_version and installed_dist_version != __version__:
-            warnings.append(f"包元数据版本 {installed_dist_version} 与当前运行版本 {__version__} 不一致。")
+            warnings.append(
+                f"包元数据版本 {installed_dist_version} 与当前运行版本 {__version__} 不一致。"
+            )
             remediation.append("重新安装 super-dev，确保脚本与导入版本一致。")
         if metadata_error:
             warnings.append(f"读取安装元数据失败: {metadata_error}")
@@ -145,8 +161,14 @@ class CliHostOpsMixin:
             "remediation": remediation,
         }
 
-    def _print_runtime_install_health(self, runtime_health: dict[str, Any], *, indent: str = "") -> None:
-        status = "[green]正常[/green]" if runtime_health.get("healthy", False) else "[yellow]异常[/yellow]"
+    def _print_runtime_install_health(
+        self, runtime_health: dict[str, Any], *, indent: str = ""
+    ) -> None:
+        status = (
+            "[green]正常[/green]"
+            if runtime_health.get("healthy", False)
+            else "[yellow]异常[/yellow]"
+        )
         self.console.print(
             f"{indent}[cyan]运行时安装[/cyan]: {status} 版本 {runtime_health.get('current_version', '-')}"
         )
@@ -184,7 +206,9 @@ class CliHostOpsMixin:
         label = source_labels.get(source, source or "检测来源")
         return f"{label}: {value}" if value else label
 
-    def _explain_detection_details(self, detected_meta: dict[str, list[str]]) -> dict[str, list[str]]:
+    def _explain_detection_details(
+        self, detected_meta: dict[str, list[str]]
+    ) -> dict[str, list[str]]:
         explained: dict[str, list[str]] = {}
         for host, reasons in detected_meta.items():
             explained[host] = [self._format_detection_reason(item) for item in reasons]
@@ -349,9 +373,15 @@ class CliHostOpsMixin:
                 " >  当前光标   [✓] 已选中  [○] 未选中\n"
                 "slash 宿主用 /super-dev；非 slash 宿主用 super-dev: / super-dev："
             )
-            header = Panel(f"{self._super_dev_ascii_banner()}\n\n{normalize_terminal_text(subtitle)}", title="Super Dev", expand=True)
+            header = Panel(
+                f"{self._super_dev_ascii_banner()}\n\n{normalize_terminal_text(subtitle)}",
+                title="Super Dev",
+                expand=True,
+            )
 
-            table = Table(title="选择宿主工具", show_header=True, header_style="bold cyan", expand=True)
+            table = Table(
+                title="选择宿主工具", show_header=True, header_style="bold cyan", expand=True
+            )
             table.add_column("", min_width=3, max_width=4, justify="center")
             table.add_column("#", min_width=3, max_width=4, style="cyan", justify="center")
             table.add_column("宿主", style="bold", ratio=2)
@@ -377,10 +407,14 @@ class CliHostOpsMixin:
                 profile = integration_manager.get_adapter_profile(target)
                 selected_mark = "[✓]" if target in selected else "[○]"
                 pointer = " > " if idx == cursor else "   "
-                trigger = "/super-dev" if integration_manager.supports_slash(target) else "super-dev:"
+                trigger = (
+                    "/super-dev" if integration_manager.supports_slash(target) else "super-dev:"
+                )
                 detected = "已检测" if target in detected_targets else ""
                 host_label = Text()
-                host_label.append(f"{selected_mark} ", style="green" if target in selected else "dim")
+                host_label.append(
+                    f"{selected_mark} ", style="green" if target in selected else "dim"
+                )
                 host_label.append(target, style="bold white" if idx == cursor else "bold")
                 table.add_row(
                     pointer,
@@ -412,7 +446,13 @@ class CliHostOpsMixin:
                 parts.append(Text(status_message, style="yellow"))
             return Group(*parts)
 
-        with Live(renderable(), console=self.console, refresh_per_second=8, transient=True, auto_refresh=False) as live:
+        with Live(
+            renderable(),
+            console=self.console,
+            refresh_per_second=8,
+            transient=True,
+            auto_refresh=False,
+        ) as live:
             while True:
                 key = self._read_single_key()
                 status_message = ""
@@ -438,14 +478,16 @@ class CliHostOpsMixin:
                     continue
                 if key in ("c", "C"):
                     selected = {
-                        target for target in available_targets
+                        target
+                        for target in available_targets
                         if integration_manager.get_adapter_profile(target).category == "cli"
                     }
                     live.update(renderable(), refresh=True)
                     continue
                 if key in ("i", "I"):
                     selected = {
-                        target for target in available_targets
+                        target
+                        for target in available_targets
                         if integration_manager.get_adapter_profile(target).category == "ide"
                     }
                     live.update(renderable(), refresh=True)
@@ -461,6 +503,7 @@ class CliHostOpsMixin:
                         continue
                     # 卸载选中宿主的 super-dev 集成
                     from .skills import SkillManager
+
                     skill_manager = SkillManager(Path.cwd())
                     uninstalled_count = 0
                     for target in sorted(selected):
@@ -476,7 +519,9 @@ class CliHostOpsMixin:
                                 uninstalled_count += 1
                         except Exception:
                             pass
-                    status_message = f"已从 {len(selected)} 个宿主卸载 Super Dev（{uninstalled_count} 个文件）"
+                    status_message = (
+                        f"已从 {len(selected)} 个宿主卸载 Super Dev（{uninstalled_count} 个文件）"
+                    )
                     selected.clear()
                     live.update(renderable(), refresh=True)
                     continue
@@ -495,8 +540,12 @@ class CliHostOpsMixin:
         from .integrations import IntegrationManager
 
         integration_manager = IntegrationManager(Path.cwd())
-        slash_hosts = [target for target in available_targets if integration_manager.supports_slash(target)]
-        text_hosts = [target for target in available_targets if not integration_manager.supports_slash(target)]
+        slash_hosts = [
+            target for target in available_targets if integration_manager.supports_slash(target)
+        ]
+        text_hosts = [
+            target for target in available_targets if not integration_manager.supports_slash(target)
+        ]
         return (
             f"slash 宿主 ({len(slash_hosts)}): "
             + ", ".join(self._host_label(target) for target in slash_hosts)
@@ -555,9 +604,13 @@ class CliHostOpsMixin:
         if not RICH_AVAILABLE:
             self.console.print("[cyan]Super Dev 安装入口[/cyan]")
             self.console.print("宿主负责编码与模型调用；Super Dev 负责流程、门禁、审计与交付标准。")
-            self.console.print("slash 宿主输入 /super-dev；非 slash 宿主输入 super-dev: 或 super-dev：")
+            self.console.print(
+                "slash 宿主输入 /super-dev；非 slash 宿主输入 super-dev: 或 super-dev："
+            )
             if not runtime_health.get("healthy", False):
-                self.console.print("[yellow]检测到 super-dev 运行时安装残留，建议先执行 doctor 检查。[/yellow]")
+                self.console.print(
+                    "[yellow]检测到 super-dev 运行时安装残留，建议先执行 doctor 检查。[/yellow]"
+                )
             return
 
         integration_manager = IntegrationManager(Path.cwd())
@@ -578,9 +631,13 @@ class CliHostOpsMixin:
             lines.append(f"当前模式: 仅接入 {self._host_label(args.host)}。")
         elif getattr(args, "all", False):
             lines.append("当前模式: 接入全部宿主。")
-        self.console.print(Panel("\n".join(lines), title="Super Dev 安装入口", padding=(1, 2), expand=True))
+        self.console.print(
+            Panel("\n".join(lines), title="Super Dev 安装入口", padding=(1, 2), expand=True)
+        )
         if not runtime_health.get("healthy", False):
-            self.console.print("[yellow]检测到当前 super-dev 安装存在旧版本残留，建议先修复运行时安装环境。[/yellow]")
+            self.console.print(
+                "[yellow]检测到当前 super-dev 安装存在旧版本残留，建议先修复运行时安装环境。[/yellow]"
+            )
             self._print_runtime_install_health(runtime_health, indent="  ")
             self.console.print("")
 
@@ -625,7 +682,9 @@ class CliHostOpsMixin:
         for target in available_targets:
             integration_files = IntegrationManager.TARGETS[target].files
 
-            has_integration = any((project_dir / relative).exists() for relative in integration_files)
+            has_integration = any(
+                (project_dir / relative).exists() for relative in integration_files
+            )
             if IntegrationManager.supports_slash(target):
                 project_slash_exists = IntegrationManager.resolve_slash_command_path(
                     target=target,
@@ -669,14 +728,18 @@ class CliHostOpsMixin:
         )
 
         if config.host_profile_enforce_selected and config.host_profile_targets:
-            candidate_targets = [item for item in config.host_profile_targets if item in available_targets]
+            candidate_targets = [
+                item for item in config.host_profile_targets if item in available_targets
+            ]
         else:
             candidate_targets = sorted(set(detected_targets + configured_targets))
 
         if not candidate_targets:
             self.console.print("[red]流水线宿主校验失败：未检测到可用宿主[/red]")
             self.console.print("[dim]请先执行: super-dev install --auto --force --yes[/dim]")
-            self.console.print("[dim]或手动接入: super-dev setup --host codex-cli --force --yes[/dim]")
+            self.console.print(
+                "[dim]或手动接入: super-dev setup --host codex-cli --force --yes[/dim]"
+            )
             return False
 
         report = self._collect_host_diagnostics(
@@ -699,7 +762,8 @@ class CliHostOpsMixin:
         if not isinstance(host_scores, dict):
             host_scores = {}
         ready_targets = [
-            target for target in candidate_targets
+            target
+            for target in candidate_targets
             if bool((host_scores.get(target) or {}).get("ready", False))
         ]
         ready_detected_targets = [target for target in ready_targets if target in detected_targets]
@@ -818,14 +882,24 @@ class CliHostOpsMixin:
                     )
 
             if check_skill and IntegrationManager.requires_skill(target):
-                skill_files = IntegrationManager.expected_skill_paths(target=target, skill_name=skill_name)
-                primary_skill_file = skill_files[0] if skill_files else (skill_manager._target_dir(target) / skill_name / "SKILL.md")
+                skill_files = IntegrationManager.expected_skill_paths(
+                    target=target, skill_name=skill_name
+                )
+                primary_skill_file = (
+                    skill_files[0]
+                    if skill_files
+                    else (skill_manager._target_dir(target) / skill_name / "SKILL.md")
+                )
                 surface_available = skill_manager.skill_surface_available(target)
                 skill_ok = any(path.exists() for path in skill_files) if surface_available else True
                 host_report["checks"]["skill"] = {
                     "ok": skill_ok,
                     "file": str(primary_skill_file),
-                    "files": [str(item) for item in skill_files] if skill_files else [str(primary_skill_file)],
+                    "files": (
+                        [str(item) for item in skill_files]
+                        if skill_files
+                        else [str(primary_skill_file)]
+                    ),
                     "surface_available": surface_available,
                     "mode": "managed" if surface_available else "compatibility-surface-unavailable",
                 }
@@ -886,8 +960,12 @@ class CliHostOpsMixin:
                 host_report["preconditions"] = {
                     "status": precondition_status,
                     "label": precondition_label,
-                    "guidance": precondition_guidance if isinstance(precondition_guidance, list) else [],
-                    "signals": precondition_signals if isinstance(precondition_signals, dict) else {},
+                    "guidance": (
+                        precondition_guidance if isinstance(precondition_guidance, list) else []
+                    ),
+                    "signals": (
+                        precondition_signals if isinstance(precondition_signals, dict) else {}
+                    ),
                     "items": precondition_items if isinstance(precondition_items, list) else [],
                 }
                 if precondition_status == "host-auth-required":
@@ -895,9 +973,13 @@ class CliHostOpsMixin:
                         "若宿主报 Invalid API key provided，请先在宿主内完成 /auth 或更新宿主 API key 配置。"
                     )
                 if precondition_status == "session-restart-required":
-                    host_report["suggestions"].append("接入后先关闭旧宿主会话，再开一个新会话后重试。")
+                    host_report["suggestions"].append(
+                        "接入后先关闭旧宿主会话，再开一个新会话后重试。"
+                    )
                 if precondition_status == "project-context-required":
-                    host_report["suggestions"].append("确认当前聊天/终端绑定的是目标项目，再重新触发 Super Dev。")
+                    host_report["suggestions"].append(
+                        "确认当前聊天/终端绑定的是目标项目，再重新触发 Super Dev。"
+                    )
             host_report["diagnosis"] = self._build_host_diagnosis(
                 target=target,
                 host_report=host_report,
@@ -976,8 +1058,12 @@ class CliHostOpsMixin:
             if flow_consistent:
                 flow_consistent_hosts += 1
 
-        overall_score = round((total_passed / total_possible) * 100, 2) if total_possible > 0 else 100.0
-        flow_consistency_score = round((flow_consistent_hosts / len(targets)) * 100, 2) if targets else 100.0
+        overall_score = (
+            round((total_passed / total_possible) * 100, 2) if total_possible > 0 else 100.0
+        )
+        flow_consistency_score = (
+            round((flow_consistent_hosts / len(targets)) * 100, 2) if targets else 100.0
+        )
         return {
             "overall_score": overall_score,
             "ready_hosts": ready_hosts,
@@ -997,7 +1083,9 @@ class CliHostOpsMixin:
     ) -> dict[str, str]:
         profile = integration_manager.get_adapter_profile(target)
         missing = host_report.get("missing", [])
-        preconditions = host_report.get("preconditions", {}) if isinstance(host_report, dict) else {}
+        preconditions = (
+            host_report.get("preconditions", {}) if isinstance(host_report, dict) else {}
+        )
         precondition_status = str(preconditions.get("status", "")).strip()
         precondition_label = str(preconditions.get("label", "")).strip()
         suggestions = host_report.get("suggestions", [])
@@ -1026,11 +1114,18 @@ class CliHostOpsMixin:
         elif "skill" in missing:
             blocker_summary = "宿主级 Skill 目录存在，但 Super Dev Skill 还没装进去。"
             if not suggested_command:
-                suggested_command = f"super-dev skill install super-dev --target {target} --name super-dev-core --force"
+                from .skills import SkillManager
+
+                suggested_command = (
+                    f"super-dev skill install super-dev --target {target} "
+                    f"--name {SkillManager.default_skill_name(target)} --force"
+                )
         elif "slash" in missing:
             blocker_summary = "宿主命令映射还没写入，所以宿主里还不能直接触发 `/super-dev`。"
             if not suggested_command:
-                suggested_command = f"super-dev onboard --host {target} --skip-integrate --skip-skill --force --yes"
+                suggested_command = (
+                    f"super-dev onboard --host {target} --skip-integrate --skip-skill --force --yes"
+                )
         elif precondition_status == "host-auth-required":
             blocker_summary = precondition_label or "宿主鉴权还没完成。"
         elif precondition_status == "session-restart-required":
@@ -1044,7 +1139,9 @@ class CliHostOpsMixin:
             "suggested_command": suggested_command,
         }
 
-    def _build_official_compare_summary(self, *, hardening_results: dict[str, Any]) -> dict[str, Any]:
+    def _build_official_compare_summary(
+        self, *, hardening_results: dict[str, Any]
+    ) -> dict[str, Any]:
         total = 0
         passed = 0
         partial = 0
@@ -1078,7 +1175,9 @@ class CliHostOpsMixin:
             "hosts": per_host,
         }
 
-    def _build_host_parity_summary(self, *, usage_profiles: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    def _build_host_parity_summary(
+        self, *, usage_profiles: dict[str, dict[str, Any]]
+    ) -> dict[str, Any]:
         total = 0
         passed = 0
         per_host: dict[str, dict[str, Any]] = {}
@@ -1086,10 +1185,18 @@ class CliHostOpsMixin:
         for host, usage in usage_profiles.items():
             total += 1
             labels = usage.get("capability_labels", {}) if isinstance(usage, dict) else {}
-            trigger_command = str(usage.get("trigger_command", "")) if isinstance(usage, dict) else ""
-            smoke_prompt = str(usage.get("smoke_test_prompt", "")) if isinstance(usage, dict) else ""
-            smoke_signal = str(usage.get("smoke_success_signal", "")) if isinstance(usage, dict) else ""
-            protocol_mode = str(usage.get("host_protocol_mode", "")).strip() if isinstance(usage, dict) else ""
+            trigger_command = (
+                str(usage.get("trigger_command", "")) if isinstance(usage, dict) else ""
+            )
+            smoke_prompt = (
+                str(usage.get("smoke_test_prompt", "")) if isinstance(usage, dict) else ""
+            )
+            smoke_signal = (
+                str(usage.get("smoke_success_signal", "")) if isinstance(usage, dict) else ""
+            )
+            protocol_mode = (
+                str(usage.get("host_protocol_mode", "")).strip() if isinstance(usage, dict) else ""
+            )
             slash_label = str((labels or {}).get("slash", "")).strip()
             trigger_ok = (
                 trigger_command.startswith("/super-dev")
@@ -1142,19 +1249,34 @@ class CliHostOpsMixin:
                     slash_label = str(labels.get("slash", "")).strip()
             commands = [f"super-dev integrate setup --target {target} --force"]
             if IntegrationManager.requires_skill(target):
-                commands.append(f"super-dev skill install super-dev --target {target} --name super-dev-core --force")
+                from .skills import SkillManager
+
+                commands.append(
+                    f"super-dev skill install super-dev --target {target} "
+                    f"--name {SkillManager.default_skill_name(target)} --force"
+                )
             if slash_label == "native":
-                commands.append(f"super-dev onboard --host {target} --skip-integrate --skip-skill --force --yes")
+                commands.append(
+                    f"super-dev onboard --host {target} --skip-integrate --skip-skill --force --yes"
+                )
             commands.append(f"super-dev integrate audit --target {target} --repair --force")
             checks = {
-                "has_setup": any(cmd.startswith("super-dev integrate setup --target ") for cmd in commands),
-                "has_repair_audit": any(cmd.startswith("super-dev integrate audit --target ") for cmd in commands),
+                "has_setup": any(
+                    cmd.startswith("super-dev integrate setup --target ") for cmd in commands
+                ),
+                "has_repair_audit": any(
+                    cmd.startswith("super-dev integrate audit --target ") for cmd in commands
+                ),
                 "contains_target": all(f" {target} " in f" {cmd} " for cmd in commands),
             }
             if IntegrationManager.requires_skill(target):
-                checks["has_skill_install"] = any(cmd.startswith("super-dev skill install ") for cmd in commands)
+                checks["has_skill_install"] = any(
+                    cmd.startswith("super-dev skill install ") for cmd in commands
+                )
             if slash_label == "native":
-                checks["has_slash_recovery"] = any(cmd.startswith("super-dev onboard --host ") for cmd in commands)
+                checks["has_slash_recovery"] = any(
+                    cmd.startswith("super-dev onboard --host ") for cmd in commands
+                )
             host_pass = all(bool(item) for item in checks.values())
             if host_pass:
                 passed += 1
@@ -1171,7 +1293,9 @@ class CliHostOpsMixin:
             "hosts": hosts,
         }
 
-    def _build_host_gate_summary(self, *, report: dict[str, Any], targets: list[str]) -> dict[str, Any]:
+    def _build_host_gate_summary(
+        self, *, report: dict[str, Any], targets: list[str]
+    ) -> dict[str, Any]:
         total = 0
         passed = 0
         hosts: dict[str, dict[str, Any]] = {}
@@ -1217,7 +1341,9 @@ class CliHostOpsMixin:
             "hosts": hosts,
         }
 
-    def _build_host_runtime_script_summary(self, *, usage_profiles: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    def _build_host_runtime_script_summary(
+        self, *, usage_profiles: dict[str, dict[str, Any]]
+    ) -> dict[str, Any]:
         total = 0
         passed = 0
         hosts: dict[str, dict[str, Any]] = {}
@@ -1337,7 +1463,11 @@ class CliHostOpsMixin:
                     if integration_manager.supports_slash(target):
                         integration_manager.setup_slash_command(target=target, force=True)
                         integration_manager.setup_global_slash_command(target=target, force=True)
-                    if check_skill and IntegrationManager.requires_skill(target) and skill_manager.skill_surface_available(target):
+                    if (
+                        check_skill
+                        and IntegrationManager.requires_skill(target)
+                        and skill_manager.skill_surface_available(target)
+                    ):
                         skill_manager.install(
                             source="super-dev",
                             target=target,
@@ -1356,7 +1486,12 @@ class CliHostOpsMixin:
                 host_actions["integrate"] = f"failed: {exc}"
 
             try:
-                if check_skill and IntegrationManager.requires_skill(target) and "skill" in missing and not contract_needs_repair:
+                if (
+                    check_skill
+                    and IntegrationManager.requires_skill(target)
+                    and "skill" in missing
+                    and not contract_needs_repair
+                ):
                     skill_manager.install(
                         source="super-dev",
                         target=target,
@@ -1368,7 +1503,11 @@ class CliHostOpsMixin:
                 host_actions["skill"] = f"failed: {exc}"
 
             try:
-                if check_slash and integration_manager.supports_slash(target) and not contract_needs_repair:
+                if (
+                    check_slash
+                    and integration_manager.supports_slash(target)
+                    and not contract_needs_repair
+                ):
                     integration_manager.setup_slash_command(target=target, force=force)
                     integration_manager.setup_global_slash_command(target=target, force=force)
                     if "slash" in missing:
@@ -1389,7 +1528,9 @@ class CliHostOpsMixin:
         if not self._ensure_host_support_matrix():
             return 1
         if self._is_manual_install_host(getattr(args, "host", None)):
-            return self._print_manual_install_host_guidance(target=str(args.host), command_name="onboard")
+            return self._print_manual_install_host_guidance(
+                target=str(args.host), command_name="onboard"
+            )
 
         project_dir = Path.cwd()
         integration_manager = IntegrationManager(project_dir)
@@ -1414,7 +1555,9 @@ class CliHostOpsMixin:
                 f"[cyan]自动检测到 {len(targets)} 个宿主：{', '.join(self._host_label(target) for target in targets)}[/cyan]"
             )
             for target in targets:
-                reasons = ", ".join(self._format_detection_reason(item) for item in detected_meta.get(target, []))
+                reasons = ", ".join(
+                    self._format_detection_reason(item) for item in detected_meta.get(target, [])
+                )
                 if reasons:
                     self.console.print(f"[dim]  - {self._host_label(target)}: {reasons}[/dim]")
         else:
@@ -1433,7 +1576,7 @@ class CliHostOpsMixin:
             self.console.print("[red]未选择任何宿主工具[/red]")
             return 1
 
-        if getattr(args, 'stable_only', False):
+        if getattr(args, "stable_only", False):
             stable_targets = []
             for t in targets:
                 profile = integration_manager.get_adapter_profile(t)
@@ -1455,24 +1598,29 @@ class CliHostOpsMixin:
         self.console.print("")
         from rich.panel import Panel
         from rich.rule import Rule
-        self.console.print(Panel(
-            f"[bold cyan]Super Dev Onboard[/bold cyan]\n\n"
-            f"  [dim]项目[/dim]      {project_dir.name}\n"
-            f"  [dim]目标宿主[/dim]  {len(targets)} 个\n"
-            f"  [dim]版本[/dim]      {__version__}",
-            border_style="cyan",
-            expand=True,
-            padding=(1, 2),
-        ))
+
+        self.console.print(
+            Panel(
+                f"[bold cyan]Super Dev Onboard[/bold cyan]\n\n"
+                f"  [dim]项目[/dim]      {project_dir.name}\n"
+                f"  [dim]目标宿主[/dim]  {len(targets)} 个\n"
+                f"  [dim]版本[/dim]      {__version__}",
+                border_style="cyan",
+                expand=True,
+                padding=(1, 2),
+            )
+        )
         self.console.print("")
         has_error = False
         for idx, target in enumerate(targets, 1):
             protocol = integration_manager._protocol_profile(target=target)
             protocol_summary = protocol.get("summary", "") if isinstance(protocol, dict) else ""
-            self.console.print(Rule(
-                f"[bold cyan] {idx}/{len(targets)} [/bold cyan] [bold]{self._host_label(target)}[/bold]  [dim]{protocol_summary}[/dim]",
-                style="dim cyan",
-            ))
+            self.console.print(
+                Rule(
+                    f"[bold cyan] {idx}/{len(targets)} [/bold cyan] [bold]{self._host_label(target)}[/bold]  [dim]{protocol_summary}[/dim]",
+                    style="dim cyan",
+                )
+            )
             self.console.print("")
             profile = integration_manager.get_adapter_profile(target)
 
@@ -1498,10 +1646,14 @@ class CliHostOpsMixin:
                                     soft_wrap=True,
                                 )
                         else:
-                            self.console.print(f"  [green]✓[/green] 集成规则: {integrate_written_count} 项")
+                            self.console.print(
+                                f"  [green]✓[/green] 集成规则: {integrate_written_count} 项"
+                            )
                     else:
                         self.console.print("  [dim]- 集成规则已存在（可加 --force 覆盖）[/dim]")
-                    global_protocol = integration_manager.setup_global_protocol(target=target, force=args.force)
+                    global_protocol = integration_manager.setup_global_protocol(
+                        target=target, force=args.force
+                    )
                     if global_protocol is not None:
                         if detail:
                             self.console.print(
@@ -1517,7 +1669,9 @@ class CliHostOpsMixin:
             if not args.skip_skill and IntegrationManager.requires_skill(target):
                 try:
                     if not skill_manager.skill_surface_available(target):
-                        self.console.print("  [dim]- 未检测到官方或兼容 Skill 目录，已跳过宿主级 Skill 安装[/dim]")
+                        self.console.print(
+                            "  [dim]- 未检测到官方或兼容 Skill 目录，已跳过宿主级 Skill 安装[/dim]"
+                        )
                     else:
                         installed = set(skill_manager.list_installed(target))
                         if args.skill_name in installed and not args.force:
@@ -1552,7 +1706,9 @@ class CliHostOpsMixin:
                             force=args.force,
                         )
                         if slash_file is None:
-                            self.console.print("  [dim]- /super-dev 映射已存在（可加 --force 覆盖）[/dim]")
+                            self.console.print(
+                                "  [dim]- /super-dev 映射已存在（可加 --force 覆盖）[/dim]"
+                            )
                         else:
                             if detail:
                                 self.console.print(
@@ -1566,17 +1722,26 @@ class CliHostOpsMixin:
                             force=args.force,
                         )
                         if global_slash_file is None:
-                            self.console.print("  [dim]- 全局 /super-dev 映射已存在（可加 --force 覆盖）[/dim]")
-                        elif slash_file is None or global_slash_file.resolve() != slash_file.resolve():
+                            self.console.print(
+                                "  [dim]- 全局 /super-dev 映射已存在（可加 --force 覆盖）[/dim]"
+                            )
+                        elif (
+                            slash_file is None
+                            or global_slash_file.resolve() != slash_file.resolve()
+                        ):
                             if detail:
                                 self.console.print(
                                     f"  [green]✓[/green] 全局 /super-dev 映射: {global_slash_file}",
                                     soft_wrap=True,
                                 )
                             else:
-                                self.console.print("  [green]✓[/green] 全局 /super-dev 映射: 已写入")
+                                self.console.print(
+                                    "  [green]✓[/green] 全局 /super-dev 映射: 已写入"
+                                )
                     else:
-                        self.console.print("  [dim]- 该宿主不支持 /super-dev，已跳过 slash 映射[/dim]")
+                        self.console.print(
+                            "  [dim]- 该宿主不支持 /super-dev，已跳过 slash 映射[/dim]"
+                        )
                 except Exception as exc:
                     has_error = True
                     self.console.print(f"  [red]✗[/red] /super-dev 映射失败: {exc}")
@@ -1624,7 +1789,9 @@ class CliHostOpsMixin:
             )
             if auto_repair_actions:
                 action_text = ", ".join(f"{k}={v}" for k, v in auto_repair_actions.items())
-                self.console.print(f"  [yellow]![/yellow] 检测到安装残留，已自动修复: {action_text}")
+                self.console.print(
+                    f"  [yellow]![/yellow] 检测到安装残留，已自动修复: {action_text}"
+                )
                 contract_failures = self._collect_onboard_contract_failures(
                     integration_manager=integration_manager,
                     target=target,
@@ -1641,44 +1808,54 @@ class CliHostOpsMixin:
 
         self.console.print("")
         if args.dry_run:
-            self.console.print(Panel(
-                "[bold cyan]Dry Run 完成[/bold cyan]\n\n"
-                "  以上为预览，未实际写入任何文件\n"
-                "  去掉 --dry-run 参数执行实际安装",
-                border_style="cyan",
-                expand=True,
-                padding=(1, 2),
-            ))
+            self.console.print(
+                Panel(
+                    "[bold cyan]Dry Run 完成[/bold cyan]\n\n"
+                    "  以上为预览，未实际写入任何文件\n"
+                    "  去掉 --dry-run 参数执行实际安装",
+                    border_style="cyan",
+                    expand=True,
+                    padding=(1, 2),
+                )
+            )
             return 0
         if has_error:
-            self.console.print(Panel(
-                "[bold red]Onboard 完成（部分失败）[/bold red]\n\n"
-                "  请检查上方错误信息\n"
-                "  使用 [cyan]super-dev doctor[/cyan] 诊断并自动修复\n"
-                "  需要看完整落点时加 [cyan]--detail[/cyan]",
-                border_style="red",
-                expand=True,
-                padding=(1, 2),
-            ))
+            self.console.print(
+                Panel(
+                    "[bold red]Onboard 完成（部分失败）[/bold red]\n\n"
+                    "  请检查上方错误信息\n"
+                    "  使用 [cyan]super-dev doctor[/cyan] 诊断并自动修复\n"
+                    "  需要看完整落点时加 [cyan]--detail[/cyan]",
+                    border_style="red",
+                    expand=True,
+                    padding=(1, 2),
+                )
+            )
             return 1
 
         next_steps = self._build_onboard_next_steps(targets=targets)
         steps_text = "\n".join(f"  [green]>[/green] {line}" for line in next_steps)
-        resume_lines = self._build_session_resume_card_lines(project_dir=project_dir, target=targets[0]) if targets else []
+        resume_lines = (
+            self._build_session_resume_card_lines(project_dir=project_dir, target=targets[0])
+            if targets
+            else []
+        )
         resume_text = ""
         if resume_lines:
             resume_text = "\n\n[bold]如果你是在继续已有流程:[/bold]\n\n" + "\n".join(
                 f"  [cyan]>[/cyan] {line}" for line in resume_lines
             )
-        self.console.print(Panel(
-            f"[bold green]Onboard 完成[/bold green]\n\n"
-            f"[bold]接下来这样用:[/bold]\n\n{steps_text}{resume_text}\n\n"
-            f"[dim]提示: 终端 super-dev \"你的需求\" 仅触发本地编排，不替代宿主会话编码[/dim]\n"
-            f"[dim]需要看完整落点与逐项步骤时，可加 --detail[/dim]",
-            border_style="green",
-            expand=True,
-            padding=(1, 2),
-        ))
+        self.console.print(
+            Panel(
+                f"[bold green]Onboard 完成[/bold green]\n\n"
+                f"[bold]接下来这样用:[/bold]\n\n{steps_text}{resume_text}\n\n"
+                f"[dim]提示: 请在宿主中输入 /super-dev init 初始化项目，然后 /super-dev <需求> 开始开发[/dim]\n"
+                f"[dim]所有命令都在宿主内输入，无需回到终端[/dim]",
+                border_style="green",
+                expand=True,
+                padding=(1, 2),
+            )
+        )
         return 0
 
     def _collect_onboard_contract_failures(
@@ -1704,7 +1881,9 @@ class CliHostOpsMixin:
             except Exception:
                 contract_failures.append(str(surface_path))
                 continue
-            if integration_manager.audit_surface_contract(target, surface_key, surface_path, content):
+            if integration_manager.audit_surface_contract(
+                target, surface_key, surface_path, content
+            ):
                 contract_failures.append(str(surface_path))
         return contract_failures
 
@@ -1794,24 +1973,33 @@ class CliHostOpsMixin:
             targets = [str(args.host)]
         else:
             available_targets = self._public_host_targets(integration_manager=integration_manager)
+            detected_targets, detected_meta = self._detect_host_targets(
+                available_targets=available_targets
+            )
             targets: list[str]
         if args.host:
             targets = [args.host]
         elif args.auto:
-            targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
-            if not targets:
+            if not detected_targets:
                 if not args.json:
                     self.console.print("[yellow]未检测到可用宿主，已回退为诊断全部目标[/yellow]")
                     self.console.print(f"[dim]{self._custom_host_path_override_hint()}[/dim]")
                 targets = available_targets
-            elif not args.json:
-                self.console.print(
-                    f"[cyan]自动检测到 {len(targets)} 个宿主：{', '.join(self._host_label(target) for target in targets)}[/cyan]"
-                )
-                for target in targets:
-                    reasons = ", ".join(self._format_detection_reason(item) for item in detected_meta.get(target, []))
-                    if reasons:
-                        self.console.print(f"[dim]  - {self._host_label(target)}: {reasons}[/dim]")
+            else:
+                targets = detected_targets
+                if not args.json:
+                    self.console.print(
+                        f"[cyan]自动检测到 {len(targets)} 个宿主：{', '.join(self._host_label(target) for target in targets)}[/cyan]"
+                    )
+                    for target in targets:
+                        reasons = ", ".join(
+                            self._format_detection_reason(item)
+                            for item in detected_meta.get(target, [])
+                        )
+                        if reasons:
+                            self.console.print(
+                                f"[dim]  - {self._host_label(target)}: {reasons}[/dim]"
+                            )
         elif args.all:
             targets = available_targets
         else:
@@ -1889,6 +2077,65 @@ class CliHostOpsMixin:
             decision_card=decision_card,
         )
 
+        # --fix: auto-repair common issues
+        if getattr(args, "fix", False) and not bool(report.get("overall_ready", False)):
+            fix_actions: list[str] = []
+            claude_code_missing = False
+            skill_missing = False
+            hooks_missing = False
+            for target, host_report in report.get("hosts", {}).items():
+                checks = host_report.get("checks", {})
+                if not checks.get("integrate", {}).get("ok", True):
+                    claude_code_missing = True
+                if not checks.get("skill", {}).get("ok", True):
+                    skill_missing = True
+            enforce_status = report.get("hosts", {})
+            if claude_code_missing or skill_missing:
+                try:
+                    setup_args = argparse.Namespace(
+                        host=None,
+                        target=None,
+                        all=True,
+                        auto=False,
+                        skill_name=args.skill_name,
+                        skip_integrate=False,
+                        skip_skill=False,
+                        skip_slash=False,
+                        skip_doctor=True,
+                        yes=True,
+                        force=True,
+                        detail=False,
+                    )
+                    self._cmd_setup(setup_args)
+                    fix_actions.append("setup (集成规则 + Skill 安装)")
+                except Exception as exc:
+                    fix_actions.append(f"setup 失败: {exc}")
+
+            if fix_actions:
+                self.console.print("[cyan]--fix 自动修复执行结果:[/cyan]")
+                for action in fix_actions:
+                    self.console.print(f"  [green]✓[/green] {action}")
+                self.console.print("")
+                # Re-collect diagnostics after fix
+                report = self._collect_host_diagnostics(
+                    project_dir=project_dir,
+                    targets=targets,
+                    skill_name=args.skill_name,
+                    check_integrate=not args.skip_integrate,
+                    check_skill=not args.skip_skill,
+                    check_slash=not args.skip_slash,
+                )
+                runtime_health = self._collect_runtime_install_health()
+                compatibility = self._build_compatibility_summary(
+                    report=report,
+                    targets=targets,
+                    check_integrate=not args.skip_integrate,
+                    check_skill=not args.skip_skill,
+                    check_slash=not args.skip_slash,
+                )
+                report["compatibility"] = compatibility
+                report["runtime_install_health"] = runtime_health
+
         if args.json:
             sys.stdout.write(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
             return 0 if bool(report.get("overall_ready", False)) else 1
@@ -1921,12 +2168,18 @@ class CliHostOpsMixin:
                 f"({compatibility.get('flow_consistent_hosts', 0)}/{compatibility.get('total_hosts', 0)})[/cyan]"
             )
             certified_count = sum(
-                1 for t in targets
-                if integration_manager.get_adapter_profile(t).certification_label.lower().startswith("certified")
+                1
+                for t in targets
+                if integration_manager.get_adapter_profile(t)
+                .certification_label.lower()
+                .startswith("certified")
             )
             compatible_count = sum(
-                1 for t in targets
-                if integration_manager.get_adapter_profile(t).certification_label.lower().startswith("compatible")
+                1
+                for t in targets
+                if integration_manager.get_adapter_profile(t)
+                .certification_label.lower()
+                .startswith("compatible")
             )
             experimental_count = len(targets) - certified_count - compatible_count
             self.console.print(
@@ -1936,12 +2189,18 @@ class CliHostOpsMixin:
         if detail:
             self._print_runtime_install_health(runtime_health)
             self.console.print("")
-        ready_targets = [target for target in targets if bool((report.get("hosts", {}).get(target) or {}).get("ready", False))]
+        ready_targets = [
+            target
+            for target in targets
+            if bool((report.get("hosts", {}).get(target) or {}).get("ready", False))
+        ]
         if ready_targets:
             self.console.print("[green]现在可以直接这样开始[/green]")
             for line in self._build_onboard_next_steps(targets=ready_targets[:3]):
                 self.console.print(f"[green]>[/green] {line}")
-            resume_lines = self._build_session_resume_card_lines(project_dir=project_dir, target=ready_targets[0])
+            resume_lines = self._build_session_resume_card_lines(
+                project_dir=project_dir, target=ready_targets[0]
+            )
             if resume_lines:
                 self.console.print("[cyan]如果你是在继续已有流程[/cyan]")
                 for line in resume_lines:
@@ -1974,6 +2233,7 @@ class CliHostOpsMixin:
             self.console.print("")
         # 摘要表格
         from rich.table import Table
+
         summary_table = Table(
             title="宿主接入状态",
             expand=True,
@@ -2002,8 +2262,24 @@ class CliHostOpsMixin:
             slash_ok = bool(host.get("checks", {}).get("slash", {}).get("ok", True))
 
             integrate_text = "[green]已安装[/green]" if integrate_ok else "[red]未安装[/red]"
-            skill_text = "[green]已安装[/green]" if skill_ok else ("[dim]不适用[/dim]" if not IntegrationManager.requires_skill(target) else "[red]未安装[/red]")
-            slash_text = "[green]已安装[/green]" if slash_ok else ("[dim]不适用[/dim]" if not integration_manager.supports_slash(target) else "[red]未安装[/red]")
+            skill_text = (
+                "[green]已安装[/green]"
+                if skill_ok
+                else (
+                    "[dim]不适用[/dim]"
+                    if not IntegrationManager.requires_skill(target)
+                    else "[red]未安装[/red]"
+                )
+            )
+            slash_text = (
+                "[green]已安装[/green]"
+                if slash_ok
+                else (
+                    "[dim]不适用[/dim]"
+                    if not integration_manager.supports_slash(target)
+                    else "[red]未安装[/red]"
+                )
+            )
 
             profile = integration_manager.get_adapter_profile(target)
             cert_label = profile.certification_label
@@ -2014,7 +2290,14 @@ class CliHostOpsMixin:
             else:
                 cert_text = f"[yellow]{cert_label}[/yellow]"
 
-            row = [self._host_label(target), status, integrate_text, skill_text, slash_text, cert_text]
+            row = [
+                self._host_label(target),
+                status,
+                integrate_text,
+                skill_text,
+                slash_text,
+                cert_text,
+            ]
             if detail:
                 row.append(protocol_summary)
             summary_table.add_row(*row)
@@ -2068,8 +2351,14 @@ class CliHostOpsMixin:
 
     def _cmd_setup(self, args) -> int:
         """一步接入：onboard + doctor"""
+        # 支持 `super-dev setup claude-code` 位置参数
+        target = getattr(args, "target", None)
+        if target and not getattr(args, "host", None):
+            args.host = target
         if self._is_manual_install_host(getattr(args, "host", None)):
-            return self._print_manual_install_host_guidance(target=str(args.host), command_name="setup")
+            return self._print_manual_install_host_guidance(
+                target=str(args.host), command_name="setup"
+            )
         setup_all = bool(args.all or (bool(args.yes) and not args.host and not args.auto))
         onboard_args = argparse.Namespace(
             host=args.host,
@@ -2133,7 +2422,9 @@ class CliHostOpsMixin:
         """面向 PyPI 用户的一键安装入口"""
         self._render_install_intro(args=args)
         if self._is_manual_install_host(getattr(args, "host", None)):
-            return self._print_manual_install_host_guidance(target=str(args.host), command_name="install")
+            return self._print_manual_install_host_guidance(
+                target=str(args.host), command_name="install"
+            )
         setup_args = argparse.Namespace(
             host=args.host,
             all=bool(args.all),
@@ -2155,12 +2446,16 @@ class CliHostOpsMixin:
         if not self._ensure_host_support_matrix():
             return 1
         if self._is_manual_install_host(getattr(args, "host", None)):
-            return self._print_manual_install_host_guidance(target=str(args.host), command_name="start")
+            return self._print_manual_install_host_guidance(
+                target=str(args.host), command_name="start"
+            )
 
         project_dir = Path.cwd()
         integration_manager = IntegrationManager(project_dir)
         available_targets = self._public_host_targets(integration_manager=integration_manager)
-        detected_targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
+        detected_targets, detected_meta = self._detect_host_targets(
+            available_targets=available_targets
+        )
 
         target = args.host
         selection_reason = "manual"
@@ -2192,9 +2487,7 @@ class CliHostOpsMixin:
                         self.console.print(f"[dim]- {line}[/dim]")
                     self.console.print("[cyan]优先建议安装这些宿主:[/cyan]")
                     for host in decision_card["recommended_hosts"]:
-                        self.console.print(
-                            f"  - {host['name']} [{host['certification_label']}]"
-                        )
+                        self.console.print(f"  - {host['name']} [{host['certification_label']}]")
                 return 1
 
         usage = self._build_host_usage_profile(
@@ -2238,7 +2531,9 @@ class CliHostOpsMixin:
                 profile_save_error = str(exc)
 
         session_hint = self._build_workflow_session_hint(project_dir=project_dir, target=target)
-        session_resume_card = self._build_session_resume_card(project_dir=project_dir, target=target)
+        session_resume_card = self._build_session_resume_card(
+            project_dir=project_dir, target=target
+        )
         decision_card = self._build_detected_host_decision_card(
             project_dir=project_dir,
             integration_manager=integration_manager,
@@ -2319,7 +2614,9 @@ class CliHostOpsMixin:
             available_targets = targets
         else:
             available_targets = self._public_host_targets(integration_manager=integration_manager)
-        detected_targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
+        detected_targets, detected_meta = self._detect_host_targets(
+            available_targets=available_targets
+        )
 
         if args.host:
             targets = [args.host]
@@ -2372,7 +2669,9 @@ class CliHostOpsMixin:
             },
         }
         if not bool(args.no_save):
-            report_files = self._write_host_compatibility_report(project_dir=project_dir, payload=payload)
+            report_files = self._write_host_compatibility_report(
+                project_dir=project_dir, payload=payload
+            )
             payload["report_files"] = {name: str(path) for name, path in report_files.items()}
 
         if bool(args.save_profile):
@@ -2398,7 +2697,9 @@ class CliHostOpsMixin:
                 f"[cyan]自动检测到 {len(detected_targets)} 个宿主：{', '.join(self._host_label(target) for target in detected_targets)}[/cyan]"
             )
             for target in detected_targets:
-                reasons = ", ".join(self._format_detection_reason(item) for item in detected_meta.get(target, []))
+                reasons = ", ".join(
+                    self._format_detection_reason(item) for item in detected_meta.get(target, [])
+                )
                 if reasons:
                     self.console.print(f"[dim]  - {self._host_label(target)}: {reasons}[/dim]")
         else:
@@ -2431,7 +2732,9 @@ class CliHostOpsMixin:
                 integration_manager=integration_manager,
                 targets=targets,
             )
-            resume_card = self._build_session_resume_card(project_dir=project_dir, target=guidance_target)
+            resume_card = self._build_session_resume_card(
+                project_dir=project_dir, target=guidance_target
+            )
             if bool(resume_card.get("enabled", False)):
                 self.console.print("")
                 self.console.print("[cyan]如果你是在继续已有流程[/cyan]")
@@ -2452,10 +2755,45 @@ class CliHostOpsMixin:
                     self.console.print(f"[dim]数据: {json_file}[/dim]")
         if bool(args.save_profile):
             if bool(payload.get("host_profile_updated", False)):
-                self.console.print("[green]✓[/green] 已更新宿主画像: host_profile_targets + host_profile_enforce_selected")
+                self.console.print(
+                    "[green]✓[/green] 已更新宿主画像: host_profile_targets + host_profile_enforce_selected"
+                )
             else:
                 err = payload.get("host_profile_update_error", "")
                 self.console.print(f"[yellow]宿主画像更新失败: {err}[/yellow]")
+
+        # --auto: 检测完成后自动安装 skill + rules + hooks 到检测到的主要宿主
+        if getattr(args, "auto", False) and detected_targets:
+            auto_install_targets = [t for t in detected_targets if t in PRIMARY_HOST_TOOL_IDS]
+            if not auto_install_targets:
+                auto_install_targets = detected_targets[:3]
+            self.console.print("")
+            self.console.print("[cyan]自动安装到检测到的宿主...[/cyan]")
+            for target in auto_install_targets:
+                try:
+                    written = integration_manager.setup(target=target, force=True)
+                    if written:
+                        self.console.print(
+                            f"  [green]✓[/green] {self._host_label(target)}: "
+                            f"已写入 {len(written)} 个文件"
+                        )
+                except Exception as exc:
+                    self.console.print(f"  [yellow]⚠[/yellow] {self._host_label(target)}: {exc}")
+            # 自动安装 enforcement hooks (仅 claude-code)
+            try:
+                from .enforcement import HostHooksConfigurator
+
+                configurator = HostHooksConfigurator(project_dir)
+                for target in auto_install_targets:
+                    if target in ("claude-code",):
+                        configurator.install_hooks(target)
+                        self.console.print(
+                            f"  [green]✓[/green] {self._host_label(target)}: "
+                            "enforcement hooks 已安装"
+                        )
+            except Exception:
+                pass  # enforcement 模块可选
+            self.console.print("[green]自动安装完成[/green]")
 
         return 0
 
@@ -2490,12 +2828,28 @@ class CliHostOpsMixin:
 
             # 已知的产物后缀模式
             artifact_suffixes = [
-                "-prd", "-architecture", "-uiux", "-research", "-execution-plan",
-                "-frontend-blueprint", "-redteam", "-quality-gate", "-code-review",
-                "-ai-prompt", "-release-readiness", "-pipeline-metrics",
-                "-ui-review", "-proof-pack", "-contract-report", "-knowledge-bundle",
-                "-frontend-runtime", "-repo-map", "-dependency-graph",
-                "-feature-checklist", "-resume-audit", "-rehearsal-report",
+                "-prd",
+                "-architecture",
+                "-uiux",
+                "-research",
+                "-execution-plan",
+                "-frontend-blueprint",
+                "-redteam",
+                "-quality-gate",
+                "-code-review",
+                "-ai-prompt",
+                "-release-readiness",
+                "-pipeline-metrics",
+                "-ui-review",
+                "-proof-pack",
+                "-contract-report",
+                "-knowledge-bundle",
+                "-frontend-runtime",
+                "-repo-map",
+                "-dependency-graph",
+                "-feature-checklist",
+                "-resume-audit",
+                "-rehearsal-report",
             ]
 
             groups: dict[str, list[Path]] = defaultdict(list)
@@ -2571,17 +2925,25 @@ class CliHostOpsMixin:
         method = self._resolve_update_method(args.method)
         if args.check:
             if self._is_version_newer(latest_version, current_version):
-                self.console.print("[yellow]发现新版本，可执行 `super-dev update` 完成升级[/yellow]")
+                self.console.print(
+                    "[yellow]发现新版本，可执行 `super-dev update` 完成升级[/yellow]"
+                )
             elif self._version_key(current_version) > self._version_key(latest_version):
-                self.console.print("[yellow]当前本地版本高于 PyPI 最新版本，可能是尚未发布的开发版本[/yellow]")
+                self.console.print(
+                    "[yellow]当前本地版本高于 PyPI 最新版本，可能是尚未发布的开发版本[/yellow]"
+                )
             else:
                 self.console.print("[green]✓ 当前已是最新版本[/green]")
             return 0
 
         if self._version_key(current_version) > self._version_key(latest_version):
-            self.console.print("[yellow]当前本地版本高于 PyPI 最新版本，将继续执行升级命令以刷新当前安装[/yellow]")
+            self.console.print(
+                "[yellow]当前本地版本高于 PyPI 最新版本，将继续执行升级命令以刷新当前安装[/yellow]"
+            )
         elif not self._is_version_newer(latest_version, current_version):
-            self.console.print("[green]当前版本已与 PyPI 一致，将继续执行升级命令以确保安装状态最新[/green]")
+            self.console.print(
+                "[green]当前版本已与 PyPI 一致，将继续执行升级命令以确保安装状态最新[/green]"
+            )
 
         self.console.print(f"[cyan]升级方式[/cyan]: {method}")
         command = self._build_update_command(method=method)
@@ -2603,6 +2965,7 @@ class CliHostOpsMixin:
                         "Windows 下文件可能被占用，等待 2 秒后重试...[/yellow]"
                     )
                     import time
+
                     time.sleep(2)
             except FileNotFoundError:
                 self.console.print(f"[red]未找到升级工具: {method}[/red]")
@@ -2624,16 +2987,19 @@ class CliHostOpsMixin:
             return completed.returncode if completed else 1
 
         from rich.panel import Panel
+
         self.console.print("")
-        self.console.print(Panel(
-            "[bold green]升级完成[/bold green]\n\n"
-            "  [bold]请关闭当前终端，重新打开后再使用 super-dev[/bold]\n\n"
-            "  [dim]当前进程仍加载旧版本代码，必须重启终端才能生效[/dim]\n"
-            "  [dim]验证: super-dev --version[/dim]",
-            border_style="green",
-            expand=True,
-            padding=(1, 2),
-        ))
+        self.console.print(
+            Panel(
+                "[bold green]升级完成[/bold green]\n\n"
+                "  [bold]请关闭当前终端，重新打开后再使用 super-dev[/bold]\n\n"
+                "  [dim]当前进程仍加载旧版本代码，必须重启终端才能生效[/dim]\n"
+                "  [dim]验证: super-dev --version[/dim]",
+                border_style="green",
+                expand=True,
+                padding=(1, 2),
+            )
+        )
         return 0
 
     def _fetch_latest_pypi_version(self) -> str | None:
@@ -2661,7 +3027,9 @@ class CliHostOpsMixin:
             os.environ.get("UV_TOOL_BIN_DIR", ""),
             os.environ.get("PATH", ""),
         ]
-        if uv_binary and any(".local/share/uv" in marker or "/uv/tools/" in marker for marker in runtime_markers):
+        if uv_binary and any(
+            ".local/share/uv" in marker or "/uv/tools/" in marker for marker in runtime_markers
+        ):
             return "uv"
         return "uv" if uv_binary and "uv" in sys.executable.lower() else "pip"
 
@@ -2769,7 +3137,9 @@ class CliHostOpsMixin:
         order = {"certified": 0, "compatible": 1, "experimental": 2}
         return order.get(level, 3)
 
-    def _host_selection_sort_key(self, *, integration_manager, target: str) -> tuple[int, int, int, str]:
+    def _host_selection_sort_key(
+        self, *, integration_manager, target: str
+    ) -> tuple[int, int, int, str]:
         profile = integration_manager.get_adapter_profile(target)
         return (
             self._host_certification_rank(profile.certification_level),
@@ -2779,7 +3149,12 @@ class CliHostOpsMixin:
         )
 
     def _rank_host_targets(self, *, integration_manager, targets: list[str]) -> list[str]:
-        return sorted(targets, key=lambda target: self._host_selection_sort_key(integration_manager=integration_manager, target=target))
+        return sorted(
+            targets,
+            key=lambda target: self._host_selection_sort_key(
+                integration_manager=integration_manager, target=target
+            ),
+        )
 
     def _select_best_start_host(self, *, integration_manager, targets: list[str]) -> str:
         return self._rank_host_targets(integration_manager=integration_manager, targets=targets)[0]
@@ -2827,8 +3202,12 @@ class CliHostOpsMixin:
                     "id": item["id"],
                     "name": item["name"],
                     "env_key": str(host_path_override_guide(item["id"]).get("env_key", "")),
-                    "unix_example": str(host_path_override_guide(item["id"]).get("unix_example", "")),
-                    "windows_example": str(host_path_override_guide(item["id"]).get("windows_example", "")),
+                    "unix_example": str(
+                        host_path_override_guide(item["id"]).get("unix_example", "")
+                    ),
+                    "windows_example": str(
+                        host_path_override_guide(item["id"]).get("windows_example", "")
+                    ),
                 }
                 for item in recommended_hosts[:2]
             ],
@@ -2844,7 +3223,9 @@ class CliHostOpsMixin:
 
     def _host_selection_reason(self, *, integration_manager, target: str) -> str:
         profile = integration_manager.get_adapter_profile(target)
-        if profile.certification_level == "certified" and integration_manager.supports_slash(target):
+        if profile.certification_level == "certified" and integration_manager.supports_slash(
+            target
+        ):
             return "它当前是已检测宿主里认证等级最高、触发入口最直接的一项。"
         if profile.certification_level == "certified":
             return "它当前是已检测宿主里认证等级最高的一项。"
@@ -2860,7 +3241,7 @@ class CliHostOpsMixin:
         detected_targets: list[str],
         detected_meta: dict[str, list[str]],
         preferred_targets: list[str] | None = None,
-        ) -> dict[str, Any]:
+    ) -> dict[str, Any]:
         candidate_targets = list(dict.fromkeys([*(preferred_targets or []), *detected_targets]))
         if not candidate_targets:
             return self._build_no_host_decision_card(integration_manager=integration_manager)
@@ -2873,14 +3254,21 @@ class CliHostOpsMixin:
         if preferred_set:
             ranked_targets = sorted(
                 ranked_targets,
-                key=lambda target: (0 if target in preferred_set else 1, ranked_targets.index(target)),
+                key=lambda target: (
+                    0 if target in preferred_set else 1,
+                    ranked_targets.index(target),
+                ),
             )
         selected_host = ranked_targets[0]
         selected_profile = integration_manager.get_adapter_profile(selected_host)
-        session_resume_card = self._build_session_resume_card(project_dir=project_dir, target=selected_host)
+        session_resume_card = self._build_session_resume_card(
+            project_dir=project_dir, target=selected_host
+        )
         candidates: list[dict[str, Any]] = []
         for target in ranked_targets:
-            reasons = self._explain_detection_details({target: detected_meta.get(target, [])}).get(target, [])
+            reasons = self._explain_detection_details({target: detected_meta.get(target, [])}).get(
+                target, []
+            )
             profile = integration_manager.get_adapter_profile(target)
             candidates.append(
                 {
@@ -2907,7 +3295,11 @@ class CliHostOpsMixin:
             target=selected_host,
         )
         workflow_mode = "continue" if session_resume_card.get("enabled") else "start"
-        action_title = str(session_resume_card.get("action_title", "")).strip() if session_resume_card.get("enabled") else f"在 {self._host_label(selected_host)} 里启动 Super Dev"
+        action_title = (
+            str(session_resume_card.get("action_title", "")).strip()
+            if session_resume_card.get("enabled")
+            else f"在 {self._host_label(selected_host)} 里启动 Super Dev"
+        )
         action_examples = (
             list(session_resume_card.get("action_examples") or [])
             if session_resume_card.get("enabled")
@@ -2934,8 +3326,7 @@ class CliHostOpsMixin:
         if action_examples:
             lines.append(f"自然语言示例: {', '.join(str(item) for item in action_examples[:3])}")
         candidate_summary = "、".join(
-            f"{item['name']} [{item['certification_label']}]"
-            for item in display_candidates
+            f"{item['name']} [{item['certification_label']}]" for item in display_candidates
         )
         if candidate_summary:
             lines.append(f"优先候选: {candidate_summary}")
@@ -2987,7 +3378,9 @@ class CliHostOpsMixin:
                     "host": "当前机器",
                     "reason": str(decision_card.get("summary", "")).strip(),
                     "command": first_action,
-                    "secondary_actions": secondary_actions if isinstance(secondary_actions, list) else [],
+                    "secondary_actions": (
+                        secondary_actions if isinstance(secondary_actions, list) else []
+                    ),
                 }
         if not isinstance(hosts, dict):
             return {"host": "", "reason": "", "command": "", "secondary_actions": []}
@@ -3092,15 +3485,31 @@ class CliHostOpsMixin:
         continue_mode = str(session_hint.get("session_mode", "") or "") == "continue_super_dev"
         if not continue_mode or not continue_prompt:
             return []
-        recommended_workflow_command = str(session_hint.get("recommended_workflow_command", "") or "").strip()
+        recommended_workflow_command = str(
+            session_hint.get("recommended_workflow_command", "") or ""
+        ).strip()
         workflow_mode = str(session_hint.get("workflow_mode", "") or "").strip()
         action_title = str(session_hint.get("action_title", "") or "").strip()
-        action_examples = session_hint.get("action_examples") if isinstance(session_hint.get("action_examples"), list) else []
-        user_action_shortcuts = session_hint.get("user_action_shortcuts") if isinstance(session_hint.get("user_action_shortcuts"), list) else []
-        continuity_rules = session_hint.get("continuity_rules") if isinstance(session_hint.get("continuity_rules"), list) else []
+        action_examples = (
+            session_hint.get("action_examples")
+            if isinstance(session_hint.get("action_examples"), list)
+            else []
+        )
+        user_action_shortcuts = (
+            session_hint.get("user_action_shortcuts")
+            if isinstance(session_hint.get("user_action_shortcuts"), list)
+            else []
+        )
+        continuity_rules = (
+            session_hint.get("continuity_rules")
+            if isinstance(session_hint.get("continuity_rules"), list)
+            else []
+        )
         primary_rule = str(continuity_rules[0]).strip() if continuity_rules else ""
         exit_rule = str(continuity_rules[1]).strip() if len(continuity_rules) > 1 else ""
-        generic_continue_rule = "用户说“改一下 / 补充 / 继续改 / 确认 / 通过”时，仍然留在当前 Super Dev 流程。"
+        generic_continue_rule = (
+            "用户说“改一下 / 补充 / 继续改 / 确认 / 通过”时，仍然留在当前 Super Dev 流程。"
+        )
         generic_exit_rule = "只有用户明确说取消当前流程、重新开始或切回普通聊天，才允许离开流程。"
         lines = [
             f"动作类型: {self._workflow_mode_label(workflow_mode)}" if workflow_mode else "",
@@ -3108,14 +3517,28 @@ class CliHostOpsMixin:
             f"宿主第一句: {continue_prompt}",
             f"流程状态卡: {self._session_brief_path(project_dir)}",
             f"继续规则: {generic_continue_rule}",
-            f"当前门禁规则: {primary_rule}" if primary_rule and primary_rule != generic_continue_rule else "",
+            (
+                f"当前门禁规则: {primary_rule}"
+                if primary_rule and primary_rule != generic_continue_rule
+                else ""
+            ),
             f"退出条件: {generic_exit_rule}",
-            f"当前门禁退出条件: {exit_rule}" if exit_rule and exit_rule != generic_exit_rule else "",
+            (
+                f"当前门禁退出条件: {exit_rule}"
+                if exit_rule and exit_rule != generic_exit_rule
+                else ""
+            ),
         ]
         if user_action_shortcuts:
-            lines.insert(2, f"你现在可以直接说: {' / '.join(str(item) for item in user_action_shortcuts[:4])}")
+            lines.insert(
+                2,
+                f"你现在可以直接说: {' / '.join(str(item) for item in user_action_shortcuts[:4])}",
+            )
         if action_examples:
-            lines.insert(3 if user_action_shortcuts else 2, f"自然语言示例: {', '.join(str(item) for item in action_examples[:3])}")
+            lines.insert(
+                3 if user_action_shortcuts else 2,
+                f"自然语言示例: {', '.join(str(item) for item in action_examples[:3])}",
+            )
         if recommended_workflow_command:
             lines.append(f"机器侧动作: {recommended_workflow_command}")
         return [line for line in lines if line]
@@ -3125,12 +3548,26 @@ class CliHostOpsMixin:
         continue_prompt = str(session_hint.get("continue_prompt", "") or "").strip()
         continue_mode = str(session_hint.get("session_mode", "") or "") == "continue_super_dev"
         enabled = bool(continue_mode and continue_prompt)
-        recommended_workflow_command = str(session_hint.get("recommended_workflow_command", "") or "").strip()
+        recommended_workflow_command = str(
+            session_hint.get("recommended_workflow_command", "") or ""
+        ).strip()
         workflow_mode = str(session_hint.get("workflow_mode", "") or "").strip()
         action_title = str(session_hint.get("action_title", "") or "").strip()
-        action_examples = session_hint.get("action_examples") if isinstance(session_hint.get("action_examples"), list) else []
-        user_action_shortcuts = session_hint.get("user_action_shortcuts") if isinstance(session_hint.get("user_action_shortcuts"), list) else []
-        specific_rules = session_hint.get("continuity_rules") if isinstance(session_hint.get("continuity_rules"), list) else []
+        action_examples = (
+            session_hint.get("action_examples")
+            if isinstance(session_hint.get("action_examples"), list)
+            else []
+        )
+        user_action_shortcuts = (
+            session_hint.get("user_action_shortcuts")
+            if isinstance(session_hint.get("user_action_shortcuts"), list)
+            else []
+        )
+        specific_rules = (
+            session_hint.get("continuity_rules")
+            if isinstance(session_hint.get("continuity_rules"), list)
+            else []
+        )
         rules = [
             "用户说“改一下 / 补充 / 继续改 / 确认 / 通过”时，仍然留在当前 Super Dev 流程。",
             *[str(item).strip() for item in specific_rules if str(item).strip()],
@@ -3139,7 +3576,9 @@ class CliHostOpsMixin:
         return {
             "enabled": enabled,
             "workflow_mode": workflow_mode if enabled else "",
-            "workflow_mode_label": self._workflow_mode_label(workflow_mode) if enabled and workflow_mode else "",
+            "workflow_mode_label": (
+                self._workflow_mode_label(workflow_mode) if enabled and workflow_mode else ""
+            ),
             "action_title": action_title if enabled else "",
             "action_examples": action_examples if enabled else [],
             "user_action_shortcuts": user_action_shortcuts if enabled else [],
@@ -3162,19 +3601,27 @@ class CliHostOpsMixin:
     ) -> str:
         trigger_text = self._build_host_trigger_example(target=host_id, idea=idea)
         if not trigger_text:
-            trigger_text = str(host_profile.get("final_trigger", "") or host_profile.get("primary_entry", "-"))
+            trigger_text = str(
+                host_profile.get("final_trigger", "") or host_profile.get("primary_entry", "-")
+            )
         session_hint = session_hint or {}
         continue_prompt = str(session_hint.get("continue_prompt", "") or "").strip()
         continue_mode = str(session_hint.get("session_mode", "") or "") == "continue_super_dev"
         workflow_reason = str(session_hint.get("workflow_reason", "") or "").strip()
-        recommended_workflow_command = str(session_hint.get("recommended_workflow_command", "") or "").strip()
+        recommended_workflow_command = str(
+            session_hint.get("recommended_workflow_command", "") or ""
+        ).strip()
 
         if host_id in {"codex-cli", "opencode"}:
             lines = [
                 f"{host_name} 最短路径",
                 "",
                 "当前会话目标"
-                + ("：继续仓库里已有的 Super Dev 流程" if continue_mode else "：启动一次新的 Super Dev 流程"),
+                + (
+                    "：继续仓库里已有的 Super Dev 流程"
+                    if continue_mode
+                    else "：启动一次新的 Super Dev 流程"
+                ),
                 f"现在就去这里：{host_profile.get('trigger_context', '-')}",
                 (
                     f"重开宿主后第一句直接复制：{continue_prompt}"
@@ -3190,12 +3637,14 @@ class CliHostOpsMixin:
                         "退出条件：只有用户明确说取消当前流程、重新开始或切回普通聊天，才允许离开流程。",
                     ]
                 )
-            lines.extend([
-                "",
-                "成功标志",
-                "1. 第一轮回复明确说当前阶段是 research",
-                "2. 三份核心文档完成后会停下来等你确认",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "成功标志",
+                    "1. 第一轮回复明确说当前阶段是 research",
+                    "2. 三份核心文档完成后会停下来等你确认",
+                ]
+            )
             if continue_mode and workflow_reason:
                 lines.extend(["", f"当前流程说明：{workflow_reason}"])
             if continue_mode and recommended_workflow_command:
@@ -3205,18 +3654,24 @@ class CliHostOpsMixin:
                 lines.extend(["", "最关键的提醒"])
                 for index, note in enumerate(priority_notes, start=1):
                     lines.append(f"{index}. {note}")
-            lines.extend([
-                "",
-                "重新接入或修复",
-                f"super-dev setup --host {host_id} --force --yes",
-                f"super-dev doctor --host {host_id} --repair --force",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "重新接入或修复",
+                    f"super-dev setup --host {host_id} --force --yes",
+                    f"super-dev doctor --host {host_id} --repair --force",
+                ]
+            )
             return "\n".join(lines)
 
         lines = [
             f"{host_name} 最短路径",
             "",
-            "当前会话目标：继续已有流程" if continue_mode else "当前会话目标：启动新的 Super Dev 流程",
+            (
+                "当前会话目标：继续已有流程"
+                if continue_mode
+                else "当前会话目标：启动新的 Super Dev 流程"
+            ),
             "1. 确认当前会话就在目标项目里。",
             f"2. {'先重启宿主，再' if host_profile.get('restart_required_label', '-') == '是' else ''}打开正确入口：{host_profile.get('trigger_context', '-')}",
             f"3. {'重开宿主后第一句直接复制' if continue_mode and continue_prompt else '直接输入'}：{continue_prompt if continue_mode and continue_prompt else trigger_text}",
@@ -3259,24 +3714,28 @@ class CliHostOpsMixin:
             lines.extend(["", "如果还是没生效，按这个顺序排查"])
             for index, step in enumerate(steps, start=1):
                 lines.append(f"{index}. {step}")
-        lines.extend([
-            "",
-            "重新接入或修复",
-            f"super-dev setup --host {host_id} --force --yes",
-            f"super-dev doctor --host {host_id} --repair --force",
-        ])
+        lines.extend(
+            [
+                "",
+                "重新接入或修复",
+                f"super-dev setup --host {host_id} --force --yes",
+                f"super-dev doctor --host {host_id} --repair --force",
+            ]
+        )
         return "\n".join(lines)
 
     def _build_host_priority_notes(self, *, host_id: str) -> list[str]:
         if host_id == "codex-cli":
             return [
-                "不要输入 `/super-dev`，直接输入 `super-dev: 你的需求`。",
+                "最稳妥的方式仍是直接输入 `super-dev: 你的需求`。",
+                "如果你想显式调用官方 Skill，可输入 `$super-dev`。",
+                "Codex 桌面端如果在 `/` 列表里出现 `super-dev`，可以直接选择；那是 Skill 列表入口，不是项目自定义 slash 文件。",
                 "接入完成后必须彻底重开 `codex`，旧会话不会重新加载 AGENTS.md 和 Skill。",
                 "先确认当前终端就在目标项目目录里，再开始新会话。",
             ]
         if host_id == "opencode":
             return [
-                "直接在 OpenCode 会话里输入 `/super-dev \"你的需求\"`。",
+                '直接在 OpenCode 会话里输入 `/super-dev "你的需求"`。',
                 "通常不需要重启；如果命令列表没有刷新，关掉当前会话再重开一次。",
                 "优先保留项目级 `.opencode/commands/super-dev.md`，不要只依赖全局命令目录。",
             ]
@@ -3321,6 +3780,13 @@ class CliHostOpsMixin:
             "smoke_test_prompt": profile.smoke_test_prompt,
             "smoke_test_steps": list(profile.smoke_test_steps),
             "smoke_success_signal": profile.smoke_success_signal,
+            "supports_skill_slash_entry": profile.host == "codex-cli",
+            "skill_slash_entry_command": "/super-dev" if profile.host == "codex-cli" else "",
+            "skill_slash_entry_note": (
+                "仅表示 Codex 桌面端 `/` 列表里的已启用 Skill 入口，不代表项目支持自定义 slash 文件。"
+                if profile.host == "codex-cli"
+                else ""
+            ),
             "path_override": host_path_override_guide(target),
             "precondition_status": profile.precondition_status,
             "precondition_label": profile.precondition_label,
@@ -3436,7 +3902,9 @@ class CliHostOpsMixin:
                 ready = "yes" if bool(info.get("ready", False)) else "no"
                 passed = int(info.get("passed", 0))
                 possible = int(info.get("possible", 0))
-                lines.append(f"| {self._host_label(target)} | {certification} | {score} | {ready} | {passed}/{possible} |")
+                lines.append(
+                    f"| {self._host_label(target)} | {certification} | {score} | {ready} | {passed}/{possible} |"
+                )
 
         lines.extend(["", "## Usage Guidance", ""])
         usage_profiles = payload.get("usage_profiles", {})
@@ -3563,7 +4031,9 @@ class CliHostOpsMixin:
             checks = host.get("checks", {})
             contract = checks.get("contract", {}) if isinstance(checks, dict) else {}
             surfaces = contract.get("surfaces", {}) if isinstance(contract, dict) else {}
-            invalid_surfaces = contract.get("invalid_surfaces", {}) if isinstance(contract, dict) else {}
+            invalid_surfaces = (
+                contract.get("invalid_surfaces", {}) if isinstance(contract, dict) else {}
+            )
             lines.extend(
                 [
                     f"## {target}",
@@ -3582,7 +4052,11 @@ class CliHostOpsMixin:
                         continue
                     exists = "yes" if bool(surface_info.get("exists", False)) else "no"
                     missing = surface_info.get("missing_markers", [])
-                    missing_text = ", ".join(str(item) for item in missing) if isinstance(missing, list) and missing else "-"
+                    missing_text = (
+                        ", ".join(str(item) for item in missing)
+                        if isinstance(missing, list) and missing
+                        else "-"
+                    )
                     lines.append(
                         f"| {surface_key} | {exists} | {missing_text} | {surface_info.get('path', '-')} |"
                     )
@@ -3593,7 +4067,11 @@ class CliHostOpsMixin:
                     if not isinstance(surface_info, dict):
                         continue
                     missing = surface_info.get("missing_markers", [])
-                    missing_text = ", ".join(str(item) for item in missing) if isinstance(missing, list) and missing else "-"
+                    missing_text = (
+                        ", ".join(str(item) for item in missing)
+                        if isinstance(missing, list) and missing
+                        else "-"
+                    )
                     lines.append(f"- `{surface_key}` -> {missing_text}")
             if isinstance(suggestions, list) and suggestions:
                 lines.extend(["", "### Suggested Commands", ""])
@@ -3650,9 +4128,7 @@ class CliHostOpsMixin:
                 blocker_type = "runtime"
             elif runtime_status != "passed":
                 blocking_reason = "宿主尚未完成真人运行时验收"
-                recommended_action = (
-                    f"super-dev integrate validate --target {target} --status passed --comment \"首轮先进入 research，三文档已真实落盘\""
-                )
+                recommended_action = f'super-dev integrate validate --target {target} --status passed --comment "首轮先进入 research，三文档已真实落盘"'
                 blocker_type = "validation"
 
             if not surface_ready or runtime_status != "passed":
@@ -3668,7 +4144,12 @@ class CliHostOpsMixin:
 
             if isinstance(precondition_guidance, list):
                 for item in precondition_guidance[:2]:
-                    if isinstance(item, str) and item.strip() and item not in next_actions and runtime_status != "passed":
+                    if (
+                        isinstance(item, str)
+                        and item.strip()
+                        and item not in next_actions
+                        and runtime_status != "passed"
+                    ):
                         next_actions.append(item.strip())
 
             entries.append(
@@ -3689,22 +4170,34 @@ class CliHostOpsMixin:
                     "certification_label": usage.get("certification_label", "-"),
                     "precondition_label": precondition_label,
                     "precondition_guidance": precondition_guidance,
-                    "precondition_items": precondition_items if isinstance(precondition_items, list) else [],
+                    "precondition_items": (
+                        precondition_items if isinstance(precondition_items, list) else []
+                    ),
                     "smoke_test_prompt": usage.get("smoke_test_prompt", ""),
                     "smoke_success_signal": usage.get("smoke_success_signal", ""),
                     "runtime_checklist": self._host_runtime_checklist(target=target, usage=usage),
                     "pass_criteria": self._host_runtime_pass_criteria(target=target),
-                    "resume_probe_prompt": self._host_resume_probe_prompt(project_dir=project_dir, target=target),
+                    "resume_probe_prompt": self._host_resume_probe_prompt(
+                        project_dir=project_dir, target=target
+                    ),
                     "resume_checklist": self._host_resume_checklist(target=target),
                 }
             )
 
         total_hosts = len(entries)
         surface_ready_count = sum(1 for item in entries if bool(item.get("surface_ready", False)))
-        runtime_passed_count = sum(1 for item in entries if item.get("manual_runtime_status") == "passed")
-        runtime_failed_count = sum(1 for item in entries if item.get("manual_runtime_status") == "failed")
-        runtime_pending_count = sum(1 for item in entries if item.get("manual_runtime_status") == "pending")
-        fully_ready_count = sum(1 for item in entries if bool(item.get("ready_for_delivery", False)))
+        runtime_passed_count = sum(
+            1 for item in entries if item.get("manual_runtime_status") == "passed"
+        )
+        runtime_failed_count = sum(
+            1 for item in entries if item.get("manual_runtime_status") == "failed"
+        )
+        runtime_pending_count = sum(
+            1 for item in entries if item.get("manual_runtime_status") == "pending"
+        )
+        fully_ready_count = sum(
+            1 for item in entries if bool(item.get("ready_for_delivery", False))
+        )
 
         return {
             "project_dir": str(project_dir),
@@ -3716,7 +4209,9 @@ class CliHostOpsMixin:
             "detection_details_pretty": self._explain_detection_details(detected_meta),
             "selected_targets": targets,
             "summary": {
-                "overall_status": "ready" if total_hosts > 0 and fully_ready_count == total_hosts else "attention",
+                "overall_status": (
+                    "ready" if total_hosts > 0 and fully_ready_count == total_hosts else "attention"
+                ),
                 "total_hosts": total_hosts,
                 "surface_ready_count": surface_ready_count,
                 "runtime_passed_count": runtime_passed_count,
@@ -3779,8 +4274,8 @@ class CliHostOpsMixin:
             lines.append("")
         lines.extend(
             [
-            "| Host | Surface Ready | Trigger | Protocol | Manual Runtime Status |",
-            "|---|---|---|---|---|",
+                "| Host | Surface Ready | Trigger | Protocol | Manual Runtime Status |",
+                "|---|---|---|---|---|",
             ]
         )
         for host in hosts:
@@ -3902,22 +4397,36 @@ class CliHostOpsMixin:
             official_compare = item.get("official_compare", {})
             gate_hosts = (payload.get("host_gate_summary", {}) or {}).get("hosts", {})
             gate_info = gate_hosts.get(target, {}) if isinstance(gate_hosts, dict) else {}
-            runtime_script_hosts = (payload.get("host_runtime_script_summary", {}) or {}).get("hosts", {})
-            runtime_script_info = runtime_script_hosts.get(target, {}) if isinstance(runtime_script_hosts, dict) else {}
+            runtime_script_hosts = (payload.get("host_runtime_script_summary", {}) or {}).get(
+                "hosts", {}
+            )
+            runtime_script_info = (
+                runtime_script_hosts.get(target, {})
+                if isinstance(runtime_script_hosts, dict)
+                else {}
+            )
             recovery_hosts = (payload.get("host_recovery_summary", {}) or {}).get("hosts", {})
-            recovery_info = recovery_hosts.get(target, {}) if isinstance(recovery_hosts, dict) else {}
+            recovery_info = (
+                recovery_hosts.get(target, {}) if isinstance(recovery_hosts, dict) else {}
+            )
             lines.extend([f"## {target}", ""])
             lines.append(f"- Trigger: {plan.get('final_trigger', '-')}")
             lines.append(f"- Trigger Mode: {plan.get('trigger_mode', '-')}")
-            lines.append(f"- Contract OK: {'yes' if bool((contract or {}).get('ok', False)) else 'no'}")
+            lines.append(
+                f"- Contract OK: {'yes' if bool((contract or {}).get('ok', False)) else 'no'}"
+            )
             if isinstance(gate_info, dict) and gate_info:
-                lines.append(f"- Gate Parity: {'yes' if bool(gate_info.get('passed', False)) else 'no'}")
+                lines.append(
+                    f"- Gate Parity: {'yes' if bool(gate_info.get('passed', False)) else 'no'}"
+                )
             if isinstance(runtime_script_info, dict) and runtime_script_info:
                 lines.append(
                     f"- Runtime Script Parity: {'yes' if bool(runtime_script_info.get('passed', False)) else 'no'}"
                 )
             if isinstance(recovery_info, dict) and recovery_info:
-                lines.append(f"- Recovery Parity: {'yes' if bool(recovery_info.get('passed', False)) else 'no'}")
+                lines.append(
+                    f"- Recovery Parity: {'yes' if bool(recovery_info.get('passed', False)) else 'no'}"
+                )
                 commands = recovery_info.get("recommended_commands", [])
                 if isinstance(commands, list) and commands:
                     lines.append("- Recovery Commands:")
@@ -3987,19 +4496,49 @@ class CliHostOpsMixin:
             item = hardening_results.get(target, {}) if isinstance(target, str) else {}
             contract = item.get("contract", {}) if isinstance(item, dict) else {}
             recovery = recovery_hosts.get(target, {}) if isinstance(recovery_hosts, dict) else {}
-            recovery_commands = recovery.get("recommended_commands", []) if isinstance(recovery, dict) else []
+            recovery_commands = (
+                recovery.get("recommended_commands", []) if isinstance(recovery, dict) else []
+            )
             dimensions: list[tuple[str, bool]] = []
-            dimensions.append(("official_compare", str((official_hosts or {}).get(target, "unknown")) == "passed"))
-            dimensions.append(("host_parity", bool(((parity_hosts or {}).get(target, {}) or {}).get("passed", False))))
-            dimensions.append(("host_gate", bool(((gate_hosts or {}).get(target, {}) or {}).get("passed", False))))
-            dimensions.append(("runtime_script", bool(((runtime_hosts or {}).get(target, {}) or {}).get("passed", False))))
-            dimensions.append(("host_recovery", bool(((recovery_hosts or {}).get(target, {}) or {}).get("passed", False))))
-            dimensions.append(("flow_consistency", bool(((flow_hosts or {}).get(target, {}) or {}).get("flow_consistent", False))))
+            dimensions.append(
+                ("official_compare", str((official_hosts or {}).get(target, "unknown")) == "passed")
+            )
+            dimensions.append(
+                (
+                    "host_parity",
+                    bool(((parity_hosts or {}).get(target, {}) or {}).get("passed", False)),
+                )
+            )
+            dimensions.append(
+                ("host_gate", bool(((gate_hosts or {}).get(target, {}) or {}).get("passed", False)))
+            )
+            dimensions.append(
+                (
+                    "runtime_script",
+                    bool(((runtime_hosts or {}).get(target, {}) or {}).get("passed", False)),
+                )
+            )
+            dimensions.append(
+                (
+                    "host_recovery",
+                    bool(((recovery_hosts or {}).get(target, {}) or {}).get("passed", False)),
+                )
+            )
+            dimensions.append(
+                (
+                    "flow_consistency",
+                    bool(((flow_hosts or {}).get(target, {}) or {}).get("flow_consistent", False)),
+                )
+            )
             contract_ok = bool((contract or {}).get("ok", False))
             status = "PASS" if contract_ok and all(ok for _, ok in dimensions) else "FAIL"
             failed = [name for name, ok in dimensions if not ok]
             failed_text = ", ".join(failed) if failed else "-"
-            next_command = recovery_commands[0] if isinstance(recovery_commands, list) and recovery_commands else "-"
+            next_command = (
+                recovery_commands[0]
+                if isinstance(recovery_commands, list) and recovery_commands
+                else "-"
+            )
             lines.append(f"| {target} | {status} | {failed_text} | `{next_command}` |")
         return "\n".join(lines).rstrip() + "\n"
 
@@ -4017,7 +4556,9 @@ class CliHostOpsMixin:
         onepage_file = output_dir / f"{project_name}-host-parity-onepage.md"
         json_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         md_file.write_text(self._render_host_hardening_markdown(payload), encoding="utf-8")
-        onepage_file.write_text(self._render_host_parity_onepage_markdown(payload), encoding="utf-8")
+        onepage_file.write_text(
+            self._render_host_parity_onepage_markdown(payload), encoding="utf-8"
+        )
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         history_dir = output_dir / "host-hardening-history"
         history_dir.mkdir(parents=True, exist_ok=True)
@@ -4026,7 +4567,9 @@ class CliHostOpsMixin:
         history_onepage = history_dir / f"{project_name}-host-parity-onepage-{stamp}.md"
         history_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         history_md.write_text(self._render_host_hardening_markdown(payload), encoding="utf-8")
-        history_onepage.write_text(self._render_host_parity_onepage_markdown(payload), encoding="utf-8")
+        history_onepage.write_text(
+            self._render_host_parity_onepage_markdown(payload), encoding="utf-8"
+        )
         return {
             "json": json_file,
             "markdown": md_file,
@@ -4057,7 +4600,9 @@ class CliHostOpsMixin:
         history_json = history_dir / f"{project_name}-host-runtime-validation-{stamp}.json"
         history_md = history_dir / f"{project_name}-host-runtime-validation-{stamp}.md"
         history_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        history_md.write_text(self._render_host_runtime_validation_markdown(payload), encoding="utf-8")
+        history_md.write_text(
+            self._render_host_runtime_validation_markdown(payload), encoding="utf-8"
+        )
 
         return {
             "json": json_file,

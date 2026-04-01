@@ -19,6 +19,7 @@ from typing import Any
 try:
     from rich.panel import Panel
     from rich.table import Table
+
     RICH_AVAILABLE = True
 except ImportError:
     RICH_AVAILABLE = False
@@ -30,19 +31,59 @@ from ..utils import get_logger
 
 try:
     from .knowledge_pusher import KnowledgePusher
+
     KNOWLEDGE_PUSHER_AVAILABLE = True
 except ImportError:
     KNOWLEDGE_PUSHER_AVAILABLE = False
 
 try:
     from .governance import PipelineGovernance
+
     GOVERNANCE_AVAILABLE = True
 except ImportError:
     GOVERNANCE_AVAILABLE = False
 
+try:
+    from ..hooks.manager import HookEvent, HookManager
+
+    HOOKS_AVAILABLE = True
+except ImportError:
+    HOOKS_AVAILABLE = False
+
+try:
+    from .context_compact import CompactEngine
+
+    COMPACT_AVAILABLE = True
+except ImportError:
+    COMPACT_AVAILABLE = False
+
+try:
+    from ..memory.consolidator import MemoryConsolidator
+    from ..memory.extractor import MemoryExtractor
+    from ..memory.store import MemoryStore
+
+    MEMORY_AVAILABLE = True
+except ImportError:
+    MEMORY_AVAILABLE = False
+
+try:
+    from ..session.brief import SessionBrief
+
+    SESSION_BRIEF_AVAILABLE = True
+except ImportError:
+    SESSION_BRIEF_AVAILABLE = False
+
+try:
+    from ..pipeline_cost import PipelineCostTracker
+
+    COST_TRACKER_AVAILABLE = True
+except ImportError:
+    COST_TRACKER_AVAILABLE = False
+
 
 class Phase(Enum):
     """工作流阶段"""
+
     DISCOVERY = "discovery"
     INTELLIGENCE = "intelligence"
     DRAFTING = "drafting"
@@ -55,6 +96,7 @@ class Phase(Enum):
 @dataclass
 class PhaseResult:
     """阶段执行结果"""
+
     phase: Phase
     success: bool
     duration: float
@@ -66,6 +108,7 @@ class PhaseResult:
 @dataclass
 class WorkflowContext:
     """工作流上下文"""
+
     project_dir: Path
     config: ConfigManager
     results: dict = field(default_factory=dict)
@@ -86,9 +129,7 @@ class WorkflowEngine:
         self.config_manager = get_config_manager(self.project_dir)
         self.console = create_console() if RICH_AVAILABLE else None
         self.logger = get_logger(
-            'workflow_engine',
-            level='INFO',
-            log_file=self.project_dir / 'logs' / 'workflow.log'
+            "workflow_engine", level="INFO", log_file=self.project_dir / "logs" / "workflow.log"
         )
 
         # 阶段注册表
@@ -124,7 +165,157 @@ class WorkflowEngine:
             except Exception as e:
                 self.logger.warning(f"知识推送引擎初始化失败，pipeline 将在无推送模式下运行: {e}")
 
-        self.logger.info("工作流引擎初始化完成", extra={'project_dir': str(self.project_dir)})
+        # Initialize hook manager (optional, doesn't affect pipeline)
+        self.hook_manager = None
+        if HOOKS_AVAILABLE:
+            try:
+                import yaml
+
+                config_path = self.project_dir / "super-dev.yaml"
+                yaml_config = {}
+                if config_path.exists():
+                    with open(config_path, encoding="utf-8") as f:
+                        yaml_config = yaml.safe_load(f) or {}
+                self.hook_manager = HookManager.from_yaml_config(yaml_config, self.project_dir)
+            except Exception as e:
+                self.logger.warning(f"Hook 管理器初始化失败: {e}")
+
+        # Initialize compact engine (optional)
+        self.compact_engine = None
+        if COMPACT_AVAILABLE:
+            try:
+                self.compact_engine = CompactEngine(self.project_dir)
+            except Exception as e:
+                self.logger.warning(f"上下文压缩引擎初始化失败: {e}")
+
+        # Initialize memory system (optional)
+        self.memory_store = None
+        self.memory_extractor = None
+        self.memory_consolidator = None
+        if MEMORY_AVAILABLE:
+            try:
+                memory_dir = self.project_dir / ".super-dev" / "memory"
+                self.memory_store = MemoryStore(memory_dir)
+                self.memory_extractor = MemoryExtractor(self.memory_store)
+                self.memory_consolidator = MemoryConsolidator(memory_dir)
+            except Exception as e:
+                self.logger.warning(f"记忆系统初始化失败: {e}")
+
+        # Initialize pipeline cost tracker (optional)
+        self.cost_tracker = None
+        if COST_TRACKER_AVAILABLE:
+            try:
+                self.cost_tracker = PipelineCostTracker()
+            except Exception as e:
+                self.logger.warning(f"成本追踪器初始化失败: {e}")
+
+        self.logger.info("工作流引擎初始化完成", extra={"project_dir": str(self.project_dir)})
+
+    def _emit_state_event(
+        self, event: str, phase: str = "", **kwargs: Any
+    ) -> None:
+        """Emit a pipeline state change event to interested subsystems.
+
+        Events: ``phase_started``, ``phase_completed``, ``phase_failed``,
+        ``pipeline_completed``.  Each subsystem handles errors internally
+        so a failing listener never breaks the pipeline.
+        """
+        if event == "phase_started" and SESSION_BRIEF_AVAILABLE:
+            try:
+                SessionBrief.update_section(
+                    self.project_dir,
+                    "Current State",
+                    f"Running phase: {phase}",
+                )
+            except Exception:
+                pass
+
+        if event == "phase_completed" and self.memory_extractor:
+            try:
+                ctx = kwargs.get("context")
+                if ctx is not None:
+                    phase_context = {
+                        "user_input": ctx.user_input,
+                        "research_data": ctx.research_data,
+                        "documents": ctx.documents,
+                        "quality_reports": ctx.quality_reports,
+                        "output": kwargs.get("output"),
+                    }
+                    if self.memory_extractor.should_extract(phase, phase_context):
+                        self.memory_extractor.extract_from_phase(phase, phase_context)
+            except Exception:
+                pass
+
+        if event == "phase_failed":
+            # Persist error state so resume can report the failure reason
+            try:
+                err_dir = self.project_dir / ".super-dev" / "errors"
+                err_dir.mkdir(parents=True, exist_ok=True)
+                err_file = err_dir / f"{phase}.json"
+                err_file.write_text(
+                    json.dumps(
+                        {"phase": phase, "error": kwargs.get("error", ""), "event": event},
+                        ensure_ascii=False,
+                        indent=2,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+            except Exception:
+                pass
+
+        if event == "pipeline_completed":
+            # Trigger memory consolidation
+            if self.memory_consolidator:
+                try:
+                    self.memory_consolidator.increment_session_count()
+                    if self.memory_consolidator.should_consolidate():
+                        self.memory_consolidator.consolidate()
+                except Exception:
+                    pass
+            # Save cost metrics
+            if self.cost_tracker:
+                try:
+                    self.cost_tracker.save(self.project_dir)
+                except Exception:
+                    pass
+
+    def _emit_pipeline_state(
+        self,
+        current_phase: str,
+        phases: list[Phase],
+        results: dict[Phase, PhaseResult],
+    ) -> None:
+        """Write current pipeline state to .super-dev/pipeline-state.json.
+
+        This file is read by ``super-dev status`` and can be referenced in
+        SKILL.md so the host knows which phase the pipeline is in.
+        """
+        try:
+            all_names = [p.value for p in phases]
+            completed = [p.value for p in phases if p in results and results[p].success]
+            phase_idx = all_names.index(current_phase) if current_phase in all_names else 0
+            remaining = all_names[phase_idx:]
+
+            state = {
+                "current_phase": current_phase,
+                "phase_index": phase_idx + 1,
+                "total_phases": len(phases),
+                "phases_completed": completed,
+                "phases_remaining": remaining,
+                "started_at": self._pipeline_started_at,
+                "last_updated": datetime.now(timezone.utc).isoformat(),
+            }
+
+            state_dir = self.project_dir / ".super-dev"
+            state_dir.mkdir(parents=True, exist_ok=True)
+            state_path = state_dir / "pipeline-state.json"
+            state_path.write_text(
+                json.dumps(state, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+        except Exception:
+            pass  # Never break the pipeline for state tracking
 
     def _register_default_handlers(self) -> None:
         """注册默认阶段处理器"""
@@ -255,11 +446,9 @@ class WorkflowEngine:
         resume: bool = False,
         phase_timeout: int = 600,
     ) -> dict[Phase, PhaseResult]:
+        self._pipeline_started_at = datetime.now(timezone.utc).isoformat()
         if context is None:
-            context = WorkflowContext(
-                project_dir=self.project_dir,
-                config=self.config_manager
-            )
+            context = WorkflowContext(project_dir=self.project_dir, config=self.config_manager)
         self._seed_context_user_input(context)
 
         if phases is None:
@@ -276,23 +465,34 @@ class WorkflowEngine:
         results = {}
         if not resume:
             self._clear_checkpoints()
+
+        # Cost tracker: mark pipeline start
+        if self.cost_tracker:
+            try:
+                self.cost_tracker.start_pipeline()
+            except Exception as e:
+                self.logger.warning(f"成本追踪器 start_pipeline 失败: {e}")
+
         self._print_workflow_start(phases)
 
         for phase in phases:
             if stop_requested and stop_requested():
                 self.logger.warning(
                     f"工作流收到停止请求，在阶段 {phase.value} 开始前终止",
-                    extra={"phase": phase.value}
+                    extra={"phase": phase.value},
                 )
                 break
 
             # 检查点恢复：跳过已成功完成的阶段
             if resume:
                 checkpoint = self._load_checkpoint(phase)
-                if checkpoint and checkpoint.get("success") and checkpoint.get("project") == self.config_manager.config.name:
+                if (
+                    checkpoint
+                    and checkpoint.get("success")
+                    and checkpoint.get("project") == self.config_manager.config.name
+                ):
                     self.logger.info(
-                        f"恢复模式：跳过已完成阶段 {phase.value}",
-                        extra={"phase": phase.value}
+                        f"恢复模式：跳过已完成阶段 {phase.value}", extra={"phase": phase.value}
                     )
                     results[phase] = PhaseResult(
                         phase=phase,
@@ -312,6 +512,20 @@ class WorkflowEngine:
                         self.logger.warning(f"恢复阶段 {phase.value} 输出数据失败: {e}")
                     continue
 
+            # 输出阶段标识
+            phase_idx = phases.index(phase) + 1
+            self._print_phase_start(phase, phase_idx, len(phases))
+
+            # Emit pipeline state for host awareness
+            self._emit_pipeline_state(phase.value, phases, results)
+
+            # Cost tracker: mark phase start
+            if self.cost_tracker:
+                try:
+                    self.cost_tracker.start_phase(phase.value)
+                except Exception as e:
+                    self.logger.warning(f"成本追踪器 start_phase({phase.value}) 失败: {e}")
+
             # 治理层：进入阶段
             if self.governance:
                 try:
@@ -320,26 +534,123 @@ class WorkflowEngine:
                     self.logger.warning(f"治理层 enter_phase({phase.value}) 失败: {e}")
 
             try:
+                # Hook: PrePhase
+                if self.hook_manager:
+                    try:
+                        hook_results = self.hook_manager.execute(
+                            HookEvent.PRE_PHASE,
+                            context={
+                                "phase": phase.value,
+                                "name": context.user_input.get("name", ""),
+                            },
+                            phase=phase.value,
+                        )
+                        if self.hook_manager.has_blocking_result(hook_results):
+                            raise PhaseExecutionError(
+                                phase=phase.value,
+                                message=f"PrePhase hook blocked execution for {phase.value}",
+                            )
+                    except PhaseExecutionError:
+                        raise
+                    except Exception as e:
+                        self.logger.warning(f"PrePhase hook 执行失败: {e}")
+
+                # Inject compact context from previous phases
+                if self.compact_engine and results:
+                    try:
+                        previous_phases = [p.value for p in results if results[p].success]
+                        compact_context = self.compact_engine.build_context_for_phase(
+                            phase.value, previous_phases
+                        )
+                        if compact_context:
+                            context.metadata["compact_context"] = compact_context
+                    except Exception as e:
+                        self.logger.warning(f"上下文压缩注入失败: {e}")
+
                 result = await self._run_phase(phase, context, phase_timeout=phase_timeout)
                 results[phase] = result
+
+                # Compact: save phase summary
+                if self.compact_engine and result.success:
+                    try:
+                        summary = self.compact_engine.compact_phase_output(
+                            phase.value,
+                            {
+                                "user_input": context.user_input,
+                                "research_data": context.research_data,
+                                "documents": context.documents,
+                                "quality_reports": context.quality_reports,
+                                "output": result.output,
+                            },
+                        )
+                        self.compact_engine.save_compact(summary)
+                    except Exception as e:
+                        self.logger.warning(f"阶段压缩保存失败: {e}")
+
+                # Memory: extract memories from phase
+                if self.memory_extractor and result.success:
+                    try:
+                        phase_context = {
+                            "user_input": context.user_input,
+                            "research_data": context.research_data,
+                            "documents": context.documents,
+                            "quality_reports": context.quality_reports,
+                            "output": result.output,
+                        }
+                        if self.memory_extractor.should_extract(phase.value, phase_context):
+                            entries = self.memory_extractor.extract_from_phase(
+                                phase.value, phase_context
+                            )
+                            if entries:
+                                self.logger.info(f"记忆提取 [{phase.value}]: {len(entries)} 条")
+                    except Exception as e:
+                        self.logger.warning(f"记忆提取失败: {e}")
+
+                # Hook: PostPhase
+                if self.hook_manager:
+                    try:
+                        self.hook_manager.execute(
+                            HookEvent.POST_PHASE,
+                            context={
+                                "phase": phase.value,
+                                "success": str(result.success),
+                                "quality_score": str(result.quality_score),
+                            },
+                            phase=phase.value,
+                        )
+                    except Exception as e:
+                        self.logger.warning(f"PostPhase hook 执行失败: {e}")
 
                 # 治理层：退出阶段
                 if self.governance:
                     try:
-                        self.governance.exit_phase(phase.value, context={
-                            "success": result.success,
-                            "duration": result.duration,
-                            "quality_score": result.quality_score,
-                            "project_dir": str(self.project_dir),
-                            "name": context.user_input.get("name", self.project_dir.name),
-                            "output_dir": str(self.project_dir / "output"),
-                        })
+                        self.governance.exit_phase(
+                            phase.value,
+                            context={
+                                "success": result.success,
+                                "duration": result.duration,
+                                "quality_score": result.quality_score,
+                                "project_dir": str(self.project_dir),
+                                "name": context.user_input.get("name", self.project_dir.name),
+                                "output_dir": str(self.project_dir / "output"),
+                            },
+                        )
                     except Exception as e:
                         self.logger.warning(f"治理层 exit_phase({phase.value}) 失败: {e}")
 
                 # 保存检查点
                 if result.success:
                     self._save_checkpoint(phase, result, context)
+
+                # Update pipeline state after phase completion
+                self._emit_pipeline_state(phase.value, phases, results)
+
+                # Cost tracker: mark phase end
+                if self.cost_tracker:
+                    try:
+                        self.cost_tracker.end_phase(phase.value)
+                    except Exception as e:
+                        self.logger.warning(f"成本追踪器 end_phase({phase.value}) 失败: {e}")
 
                 # 红队审查必须通过，避免风险进入后续阶段
                 if phase == Phase.REDTEAM and isinstance(result.output, dict):
@@ -356,12 +667,15 @@ class WorkflowEngine:
                         raise quality_error
 
                 # 质量门禁只在 QA 阶段执行，避免前置阶段被全局阈值误杀
-                if phase == Phase.QA and result.quality_score < self.config_manager.config.quality_gate:
+                if (
+                    phase == Phase.QA
+                    and result.quality_score < self.config_manager.config.quality_gate
+                ):
                     self._print_quality_gate_failed(phase, result)
                     quality_error = QualityGateError(
                         score=result.quality_score,
                         threshold=self.config_manager.config.quality_gate,
-                        details={'phase': phase.value}
+                        details={"phase": phase.value},
                     )
                     result.success = False
                     result.errors.append(str(quality_error))
@@ -372,12 +686,13 @@ class WorkflowEngine:
             except QualityGateError as e:
                 self.logger.error(
                     f"工作流在阶段 {phase.value} 因质量门禁终止",
-                    extra={'error': str(e), 'phase': phase.value}
+                    extra={"error": str(e), "phase": phase.value},
                 )
                 if phase in results:
                     results[phase].success = False
                     if str(e) not in results[phase].errors:
                         results[phase].errors.append(str(e))
+                self._save_cost_tracker()  # 异常中断也保存成本
                 break
 
             except PhaseExecutionError as e:
@@ -386,7 +701,7 @@ class WorkflowEngine:
                 if phase in skippable_phases:
                     self.logger.warning(
                         f"阶段 {phase.value} 执行失败但可跳过: {e}",
-                        extra={'error': str(e), 'phase': phase.value}
+                        extra={"error": str(e), "phase": phase.value},
                     )
                     results[phase] = PhaseResult(
                         phase=phase,
@@ -398,26 +713,54 @@ class WorkflowEngine:
                     if self.console:
                         try:
                             self.console.print(
-                                f"[yellow]⚠[/yellow] {phase.value}: "
-                                f"执行失败但已跳过 ({e})"
+                                f"[yellow]⚠[/yellow] {phase.value}: " f"执行失败但已跳过 ({e})"
                             )
                         except Exception:
                             pass
                     continue
                 self.logger.error(
                     f"工作流在阶段 {phase.value} 终止",
-                    extra={'error': str(e), 'phase': phase.value}
+                    extra={"error": str(e), "phase": phase.value},
                 )
                 results[phase] = PhaseResult(
-                    phase=phase,
-                    success=False,
-                    duration=0.0,
-                    errors=[str(e)]
+                    phase=phase, success=False, duration=0.0, errors=[str(e)]
                 )
                 break
 
+        # Session Brief: update status
+        if SESSION_BRIEF_AVAILABLE:
+            try:
+                SessionBrief.update_section(
+                    self.project_dir,
+                    "Current State",
+                    f"Pipeline completed. Phases: {', '.join(p.value for p in results)}. "
+                    f"Success: {sum(1 for r in results.values() if r.success)}/{len(results)}.",
+                )
+            except Exception as e:
+                self.logger.warning(f"Session Brief 更新失败: {e}")
+
+        # Memory: trigger dream consolidation if conditions met
+        if self.memory_consolidator:
+            try:
+                self.memory_consolidator.increment_session_count()
+                if self.memory_consolidator.should_consolidate():
+                    consolidation_result = self.memory_consolidator.consolidate()
+                    if consolidation_result.errors:
+                        self.logger.warning(f"记忆整合有错误: {consolidation_result.errors}")
+                    else:
+                        self.logger.info(
+                            f"记忆整合完成: 删除 {consolidation_result.files_deleted}, "
+                            f"矛盾解决 {consolidation_result.contradictions_resolved}"
+                        )
+            except Exception as e:
+                self.logger.warning(f"记忆整合失败: {e}")
+
         self._print_workflow_complete(results)
         self._save_report(results)
+
+        # Cost tracker: save in finally-equivalent position
+        # 即使 pipeline 因异常中断，成本数据也会被保存
+        self._save_cost_tracker()
 
         # 治理层：生成治理报告
         governance_report = None
@@ -436,6 +779,14 @@ class WorkflowEngine:
 
         return results
 
+    def _save_cost_tracker(self) -> None:
+        """保存成本追踪数据（在正常和异常路径都调用）。"""
+        if self.cost_tracker:
+            try:
+                self.cost_tracker.save(self.project_dir)
+            except Exception as e:
+                self.logger.warning(f"成本追踪器保存失败: {e}")
+
     def _get_phases_from_config(self) -> list[Phase]:
         config_phases = self.config_manager.config.phases
         phases = []
@@ -453,11 +804,13 @@ class WorkflowEngine:
                 phases.append(phase_map[p])
         return phases
 
-    async def _run_phase(self, phase: Phase, context: WorkflowContext, phase_timeout: int = 600) -> PhaseResult:
+    async def _run_phase(
+        self, phase: Phase, context: WorkflowContext, phase_timeout: int = 600
+    ) -> PhaseResult:
         start_time = datetime.now()
         phase_name = phase.value.upper()
 
-        self.logger.info(f"开始执行阶段: {phase_name}", extra={'phase': phase_name})
+        self.logger.info(f"开始执行阶段: {phase_name}", extra={"phase": phase_name})
 
         # 知识推送：每个阶段开始时推送与该阶段相关的知识约束
         # 优先使用三层渐进式加载（push_layered），回退到传统 push
@@ -473,9 +826,7 @@ class WorkflowEngine:
                     description=description,
                     token_budget=4000,  # 每阶段最多 4K tokens 的知识
                 )
-                context.metadata[f"knowledge_push_layered_{phase.value}"] = (
-                    layered_push.to_dict()
-                )
+                context.metadata[f"knowledge_push_layered_{phase.value}"] = layered_push.to_dict()
                 if layered_push.l1_index:
                     self.logger.info(
                         f"分层知识推送 [{phase_name}]: "
@@ -508,7 +859,7 @@ class WorkflowEngine:
                 raise PhaseExecutionError(
                     phase=phase_name,
                     message=f"No handler registered for phase: {phase}",
-                    details={'available_phases': list(self._phase_handlers.keys())}
+                    details={"available_phases": list(self._phase_handlers.keys())},
                 )
 
             try:
@@ -540,11 +891,7 @@ class WorkflowEngine:
 
             self.logger.info(
                 f"阶段执行成功: {phase_name}",
-                extra={
-                    'phase': phase_name,
-                    'duration': duration,
-                    'quality_score': quality_score
-                }
+                extra={"phase": phase_name, "duration": duration, "quality_score": quality_score},
             )
 
             return PhaseResult(
@@ -552,7 +899,7 @@ class WorkflowEngine:
                 success=True,
                 duration=duration,
                 output=output,
-                quality_score=quality_score
+                quality_score=quality_score,
             )
 
         except PhaseExecutionError:
@@ -562,17 +909,15 @@ class WorkflowEngine:
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds()
             error_details = {
-                'error_type': type(e).__name__,
-                'error_message': str(e),
-                'traceback': traceback.format_exc(),
-                'phase': phase_name,
-                'duration': duration
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+                "traceback": traceback.format_exc(),
+                "phase": phase_name,
+                "duration": duration,
             }
             self.logger.error(f"阶段执行失败: {phase_name}", extra=error_details)
             raise PhaseExecutionError(
-                phase=phase_name,
-                message=f"Phase execution failed: {str(e)}",
-                details=error_details
+                phase=phase_name, message=f"Phase execution failed: {str(e)}", details=error_details
             ) from e
 
     async def _execute_handler_async(self, handler: Callable, context: WorkflowContext) -> Any:
@@ -588,6 +933,7 @@ class WorkflowEngine:
         """使用真实质量评分引擎计算分数"""
         try:
             from .quality import QualityScorer
+
             configured_name = "project"
             config_obj = getattr(context, "config", None)
             if config_obj is not None:
@@ -673,7 +1019,9 @@ class WorkflowEngine:
             context.research_data["knowledge_bundle"] = knowledge_bundle
             context.user_input["knowledge_enhanced"] = bool(knowledge_bundle.get("local_knowledge"))
             context.user_input["web_research"] = bool(knowledge_bundle.get("web_knowledge"))
-            context.user_input["enriched_description"] = knowledge_bundle.get("enriched_requirement", description)
+            context.user_input["enriched_description"] = knowledge_bundle.get(
+                "enriched_requirement", description
+            )
         except Exception as e:
             self.logger.warning(f"需求知识增强跳过: {e}")
             context.user_input["knowledge_enhanced"] = False
@@ -681,14 +1029,19 @@ class WorkflowEngine:
 
         # 断点修复3: 将 augmenter 的知识引用追踪同步到 governance 层
         try:
-            if self.governance and augmenter is not None and hasattr(augmenter, '_tracker') and augmenter._tracker:
+            if (
+                self.governance
+                and augmenter is not None
+                and hasattr(augmenter, "_tracker")
+                and augmenter._tracker
+            ):
                 for ref in augmenter._tracker.references:
                     try:
                         self.governance.track_knowledge(
                             ref.knowledge_file,
                             usage_type=ref.usage_type,
                             relevance=ref.relevance_score,
-                            excerpt=getattr(ref, 'excerpt', ''),
+                            excerpt=getattr(ref, "excerpt", ""),
                         )
                     except Exception:
                         pass
@@ -963,7 +1316,9 @@ class WorkflowEngine:
                 encoding="utf-8",
             )
             ui_alignment_json_path.write_text(
-                json.dumps(ui_review_payload.get("alignment_summary", {}), ensure_ascii=False, indent=2),
+                json.dumps(
+                    ui_review_payload.get("alignment_summary", {}), ensure_ascii=False, indent=2
+                ),
                 encoding="utf-8",
             )
             if not ui_review_md_path.exists():
@@ -999,7 +1354,7 @@ class WorkflowEngine:
             raise QualityGateError(
                 score=expert_output.quality_score,
                 threshold=effective_threshold,
-                details={"phase": "qa", "report_path": str(qg_path)}
+                details={"phase": "qa", "report_path": str(qg_path)},
             )
 
         return {
@@ -1007,10 +1362,26 @@ class WorkflowEngine:
             "score": expert_output.quality_score,
             "scenario": expert_output.metadata.get("scenario"),
             "report_path": str(qg_path),
-            "ui_review_path": str(output_dir / f"{name}-ui-review.md") if isinstance(ui_review_payload, dict) else "",
-            "ui_review_json_path": str(output_dir / f"{name}-ui-review.json") if isinstance(ui_review_payload, dict) else "",
-            "ui_alignment_path": str(output_dir / f"{name}-ui-contract-alignment.md") if isinstance(ui_review_payload, dict) else "",
-            "ui_alignment_json_path": str(output_dir / f"{name}-ui-contract-alignment.json") if isinstance(ui_review_payload, dict) else "",
+            "ui_review_path": (
+                str(output_dir / f"{name}-ui-review.md")
+                if isinstance(ui_review_payload, dict)
+                else ""
+            ),
+            "ui_review_json_path": (
+                str(output_dir / f"{name}-ui-review.json")
+                if isinstance(ui_review_payload, dict)
+                else ""
+            ),
+            "ui_alignment_path": (
+                str(output_dir / f"{name}-ui-contract-alignment.md")
+                if isinstance(ui_review_payload, dict)
+                else ""
+            ),
+            "ui_alignment_json_path": (
+                str(output_dir / f"{name}-ui-contract-alignment.json")
+                if isinstance(ui_review_payload, dict)
+                else ""
+            ),
             "ui_review": ui_review_payload if isinstance(ui_review_payload, dict) else None,
         }
 
@@ -1174,6 +1545,7 @@ class WorkflowEngine:
         """
         # 优先尝试 Tavily（如配置了 API Key）
         import os
+
         tavily_key = os.environ.get("TAVILY_API_KEY") or os.environ.get("SUPER_DEV_TAVILY_KEY")
         if tavily_key:
             try:
@@ -1203,12 +1575,14 @@ class WorkflowEngine:
                 for entry in entries:
                     if not isinstance(entry, dict):
                         continue
-                    items.append({
-                        "title": str(entry.get("title", "")).strip(),
-                        "snippet": str(entry.get("body", "")).strip()[:300],
-                        "url": str(entry.get("href", "")).strip(),
-                        "source": "DuckDuckGo",
-                    })
+                    items.append(
+                        {
+                            "title": str(entry.get("title", "")).strip(),
+                            "snippet": str(entry.get("body", "")).strip()[:300],
+                            "url": str(entry.get("href", "")).strip(),
+                            "source": "DuckDuckGo",
+                        }
+                    )
                 return items
 
             results = await loop.run_in_executor(None, _ddgs_search)
@@ -1225,10 +1599,7 @@ class WorkflowEngine:
         encoded_query = urllib.parse.quote(query)
         url = f"https://api.duckduckgo.com/?q={encoded_query}&format=json&no_html=1&skip_disambig=1"
 
-        response_text = await loop.run_in_executor(
-            None,
-            lambda: self._http_get(url, timeout=5)
-        )
+        response_text = await loop.run_in_executor(None, lambda: self._http_get(url, timeout=5))
 
         if not response_text:
             return []
@@ -1238,22 +1609,26 @@ class WorkflowEngine:
 
         # 摘要结果
         if data.get("Abstract"):
-            results.append({
-                "title": data.get("Heading", query),
-                "snippet": data.get("Abstract", ""),
-                "url": data.get("AbstractURL", ""),
-                "source": "DuckDuckGo",
-            })
+            results.append(
+                {
+                    "title": data.get("Heading", query),
+                    "snippet": data.get("Abstract", ""),
+                    "url": data.get("AbstractURL", ""),
+                    "source": "DuckDuckGo",
+                }
+            )
 
         # 相关主题
-        for topic in data.get("RelatedTopics", [])[:max_results - 1]:
+        for topic in data.get("RelatedTopics", [])[: max_results - 1]:
             if isinstance(topic, dict) and topic.get("Text"):
-                results.append({
-                    "title": topic.get("Text", "")[:80],
-                    "snippet": topic.get("Text", ""),
-                    "url": topic.get("FirstURL", ""),
-                    "source": "DuckDuckGo",
-                })
+                results.append(
+                    {
+                        "title": topic.get("Text", "")[:80],
+                        "snippet": topic.get("Text", ""),
+                        "url": topic.get("FirstURL", ""),
+                        "source": "DuckDuckGo",
+                    }
+                )
 
         return results[:max_results]
 
@@ -1261,12 +1636,14 @@ class WorkflowEngine:
         """使用 Tavily API 进行深度检索"""
         import json as json_mod
 
-        payload = json_mod.dumps({
-            "api_key": api_key,
-            "query": query,
-            "search_depth": "basic",
-            "max_results": max_results,
-        }).encode("utf-8")
+        payload = json_mod.dumps(
+            {
+                "api_key": api_key,
+                "query": query,
+                "search_depth": "basic",
+                "max_results": max_results,
+            }
+        ).encode("utf-8")
 
         loop = asyncio.get_running_loop()
         response_text = await loop.run_in_executor(
@@ -1276,7 +1653,7 @@ class WorkflowEngine:
                 payload,
                 headers={"Content-Type": "application/json"},
                 timeout=10,
-            )
+            ),
         )
 
         if not response_text:
@@ -1285,18 +1662,21 @@ class WorkflowEngine:
         data = json.loads(response_text)
         results = []
         for item in data.get("results", [])[:max_results]:
-            results.append({
-                "title": item.get("title", ""),
-                "snippet": item.get("content", "")[:300],
-                "url": item.get("url", ""),
-                "source": "Tavily",
-            })
+            results.append(
+                {
+                    "title": item.get("title", ""),
+                    "snippet": item.get("content", "")[:300],
+                    "url": item.get("url", ""),
+                    "source": "Tavily",
+                }
+            )
         return results
 
     def _http_get(self, url: str, timeout: int = 5) -> str | None:
         """同步 HTTP GET（在 executor 中执行）"""
         import urllib.request
         from urllib.parse import urlparse
+
         try:
             parsed = urlparse(url)
             if parsed.scheme not in {"http", "https"}:
@@ -1313,6 +1693,7 @@ class WorkflowEngine:
         """同步 HTTP POST（在 executor 中执行）"""
         import urllib.request
         from urllib.parse import urlparse
+
         try:
             parsed = urlparse(url)
             if parsed.scheme not in {"http", "https"}:
@@ -1330,7 +1711,9 @@ class WorkflowEngine:
         if (self.project_dir / "prisma").exists():
             return "prisma"
         if (self.project_dir / "requirements.txt").exists():
-            req = (self.project_dir / "requirements.txt").read_text(encoding="utf-8", errors="ignore")
+            req = (self.project_dir / "requirements.txt").read_text(
+                encoding="utf-8", errors="ignore"
+            )
             if "sqlalchemy" in req.lower():
                 return "sqlalchemy"
             if "django" in req.lower():
@@ -1349,26 +1732,49 @@ class WorkflowEngine:
 
     def _print_workflow_start(self, phases: list[Phase]) -> None:
         if self.console:
-            self.console.print(Panel.fit(
-                f"[bold cyan]Super Dev 工作流引擎[/bold cyan]\n\n"
-                f"项目: {self.config_manager.config.name}\n"
-                f"阶段: {len(phases)} 个",
-                title="启动"
-            ))
+            try:
+                from ..branding import banner, progress_bar
+
+                self.console.print(banner(f"项目: {self.config_manager.config.name}"))
+                self.console.print(progress_bar(0, len(phases), "准备中..."))
+            except ImportError:
+                self.console.print(
+                    Panel.fit(
+                        f"[bold cyan]Super Dev 工作流引擎[/bold cyan]\n\n"
+                        f"项目: {self.config_manager.config.name}\n"
+                        f"阶段: {len(phases)} 个",
+                        title="启动",
+                    )
+                )
+
+    def _print_phase_start(self, phase: Phase, phase_index: int, total: int) -> None:
+        """输出阶段开始标识。"""
+        if self.console:
+            try:
+                from ..branding import phase_start, progress_bar
+
+                self.console.print(phase_start(phase.value))
+                self.console.print(progress_bar(phase_index, total, phase.value))
+            except ImportError:
+                self.console.print(f"\n[cyan]▶[/cyan] {phase.value}: 开始执行...")
 
     def _print_phase_complete(self, phase: Phase, result: PhaseResult) -> None:
         if self.console:
-            self.console.print(
-                f"[green]✓[/green] {phase.value}: "
-                f"完成 ({result.duration:.1f}s, 质量分: {result.quality_score:.0f})"
-            )
+            try:
+                from ..branding import phase_complete
+
+                self.console.print(
+                    phase_complete(phase.value, result.success, result.quality_score)
+                )
+            except ImportError:
+                self.console.print(
+                    f"[green]✓[/green] {phase.value}: "
+                    f"完成 ({result.duration:.1f}s, 质量分: {result.quality_score:.0f})"
+                )
 
     def _print_phase_failed(self, phase: Phase, result: PhaseResult) -> None:
         if self.console:
-            self.console.print(
-                f"[red]✗[/red] {phase.value}: "
-                f"失败 ({', '.join(result.errors)})"
-            )
+            self.console.print(f"[red]✗[/red] {phase.value}: " f"失败 ({', '.join(result.errors)})")
 
     def _print_quality_gate_failed(self, phase: Phase, result: PhaseResult) -> None:
         if self.console:
@@ -1401,15 +1807,16 @@ class WorkflowEngine:
 
             self.console.print(table)
             self.console.print(
-                f"\n总计: {success_count}/{len(results)} 成功, "
-                f"总耗时: {total_duration:.1f}s"
+                f"\n总计: {success_count}/{len(results)} 成功, " f"总耗时: {total_duration:.1f}s"
             )
 
     def _save_report(self, results: dict[Phase, PhaseResult]) -> None:
         output_dir = self.project_dir / self.config_manager.config.output_dir
         output_dir.mkdir(exist_ok=True)
 
-        report_path = output_dir / f"workflow_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        report_path = (
+            output_dir / f"workflow_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        )
 
         report_data = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -1419,10 +1826,10 @@ class WorkflowEngine:
                     "success": result.success,
                     "duration": result.duration,
                     "quality_score": result.quality_score,
-                    "errors": result.errors
+                    "errors": result.errors,
                 }
                 for phase, result in results.items()
-            }
+            },
         }
 
         with open(report_path, "w", encoding="utf-8") as f:

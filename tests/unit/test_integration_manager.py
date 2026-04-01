@@ -32,7 +32,7 @@ class TestIntegrationManager:
         manager = IntegrationManager(temp_project_dir)
         files = manager.setup(target, force=True)
 
-        assert len(files) == len(IntegrationManager.TARGETS[target].files)
+        assert len(files) >= len(IntegrationManager.TARGETS[target].files)
         rule_file = temp_project_dir / expected_file
         assert rule_file.exists()
         content = rule_file.read_text(encoding="utf-8")
@@ -52,11 +52,12 @@ class TestIntegrationManager:
     def test_codex_setup_upserts_root_agents_without_clobbering_existing_content(self, temp_project_dir: Path):
         agents = temp_project_dir / "AGENTS.md"
         agents.write_text("# Existing Project Rules\n\n- Keep current behavior.\n", encoding="utf-8")
+        project_skill = temp_project_dir / ".agents" / "skills" / "super-dev" / "SKILL.md"
 
         manager = IntegrationManager(temp_project_dir)
         files = manager.setup("codex-cli", force=True)
 
-        assert [item.resolve() for item in files] == [agents.resolve()]
+        assert {item.resolve() for item in files} == {agents.resolve(), project_skill.resolve()}
         content = agents.read_text(encoding="utf-8")
         assert "# Existing Project Rules" in content
         assert "BEGIN SUPER DEV CODEX" in content
@@ -65,12 +66,48 @@ class TestIntegrationManager:
         assert "output/*-prd.md" in content
         assert "actual project files" in content or "repository workspace" in content
         assert "Do not spend a turn saying you will read the skill first" in content
+        assert project_skill.exists()
+
+    def test_codex_setup_global_protocol_writes_global_codex_agents(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+
+        manager = IntegrationManager(temp_project_dir)
+        global_file = manager.setup_global_protocol("codex-cli", force=True)
+
+        expected = fake_home / ".codex" / "AGENTS.md"
+        assert global_file == expected
+        assert expected.exists()
+        content = expected.read_text(encoding="utf-8")
+        assert "BEGIN SUPER DEV CODEX" in content
+        assert "super-dev:" in content
+        assert "$super-dev" in content
+
+    def test_codex_global_protocol_and_skill_paths_follow_codex_home(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        codex_home = temp_project_dir / "custom-codex-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        codex_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+        manager = IntegrationManager(temp_project_dir)
+
+        assert manager.resolve_global_protocol_path("codex-cli") == codex_home / "AGENTS.md"
+        paths = manager.expected_skill_paths("codex-cli")
+        normalized = {path.as_posix() for path in paths}
+        assert any(item.endswith("/.agents/skills/super-dev/SKILL.md") for item in normalized)
+        assert any(item.endswith("/custom-codex-home/skills/super-dev/SKILL.md") for item in normalized)
+        assert any(item.endswith("/custom-codex-home/skills/super-dev-core/SKILL.md") for item in normalized)
 
     def test_codex_expected_skill_paths_include_compatibility_mirror(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)
         paths = manager.expected_skill_paths("codex-cli")
         normalized = {path.as_posix() for path in paths}
+        assert any(item.endswith("/.agents/skills/super-dev/SKILL.md") for item in normalized)
         assert any(item.endswith("/.agents/skills/super-dev-core/SKILL.md") for item in normalized)
+        assert any(item.endswith("/.codex/skills/super-dev/SKILL.md") for item in normalized)
         assert any(item.endswith("/.codex/skills/super-dev-core/SKILL.md") for item in normalized)
 
     def test_adapter_profiles_cover_all_targets(self, temp_project_dir: Path):
@@ -108,10 +145,15 @@ class TestIntegrationManager:
         assert codex.trigger_command == "super-dev: <需求描述>"
         assert "重启 codex" in codex.usage_location
         assert any("重启 codex" in step for step in codex.post_onboard_steps)
-        assert any("不要输入 /super-dev" in note for note in codex.usage_notes)
+        assert any("官方不走自定义项目 slash" in note for note in codex.usage_notes)
         assert codex.host_protocol_mode == "official-skill"
         assert codex.host_protocol_summary == "官方 AGENTS.md + 官方 Skills"
-        assert "~/.agents/skills/super-dev-core/SKILL.md" in codex.official_user_surfaces
+        assert codex.capability_labels["slash"] == "skill-list"
+        assert ".agents/skills/super-dev/SKILL.md" in codex.official_project_surfaces
+        assert "~/.codex/AGENTS.md" in codex.official_user_surfaces
+        assert "~/.agents/skills/super-dev/SKILL.md" in codex.official_user_surfaces
+        assert "~/.agents/skills/super-dev-core/SKILL.md" in codex.observed_compatibility_surfaces
+        assert "~/.codex/skills/super-dev/SKILL.md" in codex.observed_compatibility_surfaces
         assert "~/.codex/skills/super-dev-core/SKILL.md" in codex.observed_compatibility_surfaces
         assert "Skill" in codex.primary_entry or "AGENTS" in codex.notes
 
@@ -160,14 +202,6 @@ class TestIntegrationManager:
         assert "~/.gemini/GEMINI.md" in gemini.official_user_surfaces
         assert "~/.gemini/commands/super-dev.md" in gemini.official_user_surfaces
 
-        iflow = by_host["iflow"]
-        assert iflow.precondition_status == "host-auth-required"
-        assert iflow.precondition_guidance
-        assert any("/auth" in item for item in iflow.precondition_guidance)
-        assert iflow.precondition_label in {"需宿主鉴权", "已检测到鉴权配置"}
-        assert any(item["status"] == "project-context-required" for item in iflow.precondition_items)
-        assert any(item["status"] == "host-auth-required" for item in iflow.precondition_items)
-
         assert codex.precondition_status == "session-restart-required"
         assert any("重开宿主会话" in item["label"] for item in codex.precondition_items)
         assert any(item["status"] == "project-context-required" for item in codex.precondition_items)
@@ -179,22 +213,6 @@ class TestIntegrationManager:
         assert any("目标项目" in item for item in cursor.precondition_guidance)
         assert cursor.host_protocol_summary == "官方 commands + rules + AGENTS.md compatibility"
         assert "AGENTS.md" in cursor.observed_compatibility_surfaces
-
-        kimi = by_host["kimi-cli"]
-        assert kimi.category == "cli"
-        assert kimi.host_protocol_mode == "official-context"
-        assert kimi.host_protocol_summary == "官方 AGENTS.md + 文本触发"
-        assert kimi.docs_verified is True
-        assert kimi.certification_level == "experimental"
-        assert kimi.slash_command_file == ""
-        assert kimi.skill_dir == "~/.kimi/skills"
-        assert kimi.usage_mode == "agents-and-skill"
-        assert kimi.trigger_command == "super-dev: <需求描述>"
-        assert ".kimi/AGENTS.md" in kimi.integration_files
-        assert "~/.kimi/skills/super-dev-core/SKILL.md" in kimi.observed_compatibility_surfaces
-        assert "SMOKE_OK" in kimi.smoke_test_prompt
-        assert kimi.smoke_test_steps
-        assert "SMOKE_OK" in kimi.smoke_success_signal
 
         kiro_cli = by_host["kiro-cli"]
         assert kiro_cli.host_protocol_mode == "official-steering"
@@ -238,12 +256,6 @@ class TestIntegrationManager:
         assert "~/.copilot/skills/super-dev-core/SKILL.md" in copilot_cli.official_user_surfaces
         assert "AGENTS.md" in copilot_cli.observed_compatibility_surfaces
 
-        aider = by_host["aider"]
-        assert aider.category == "cli"
-        assert aider.capability_labels["slash"] == "none"
-        assert aider.capability_labels["skills"] == "none"
-        assert "aider.chat/docs" in aider.official_docs_url
-
     def test_adapter_profile_contains_docs_references_and_capability_labels(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)
         claude = manager.get_adapter_profile("claude-code")
@@ -254,7 +266,7 @@ class TestIntegrationManager:
         assert claude.capability_labels["skills"] == "none"
         assert claude.capability_labels["trigger"] == "slash"
 
-        assert codex.capability_labels["slash"] == "none"
+        assert codex.capability_labels["slash"] == "skill-list"
         assert codex.capability_labels["trigger"] == "text"
         assert codex.capability_labels["skills"] == "official"
 
@@ -551,15 +563,6 @@ class TestIntegrationManager:
         assert "SUPER_DEV_FLOW_CONTRACT_V1" in content
         assert "PHASE_CHAIN: research>docs>docs_confirm>spec>frontend>preview_confirm>backend>quality>delivery" in content
 
-    def test_iflow_toml_slash_command_injects_flow_contract_comment(self, temp_project_dir: Path):
-        manager = IntegrationManager(temp_project_dir)
-        command_file = manager.setup_slash_command(target="iflow", force=True)
-        assert command_file is not None
-        assert command_file.suffix == ".toml"
-        content = command_file.read_text(encoding="utf-8")
-        assert "# SUPER_DEV_FLOW_CONTRACT_V1" in content
-        assert "# DOC_CONFIRM_GATE: required" in content
-
     def test_setup_global_slash_command(self, temp_project_dir: Path, monkeypatch: pytest.MonkeyPatch):
         fake_home = temp_project_dir / "fake-home"
         fake_home.mkdir(parents=True, exist_ok=True)
@@ -653,19 +656,15 @@ class TestIntegrationManager:
     def test_skill_only_target_skips_slash_mapping(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)
         assert manager.supports_slash("codex-cli") is False
-        assert manager.supports_slash("kimi-cli") is False
         assert manager.supports_slash("kiro-cli") is False
         assert manager.setup_slash_command(target="codex-cli", force=True) is None
-        assert manager.setup_slash_command(target="kimi-cli", force=True) is None
         assert manager.setup_slash_command(target="kiro-cli", force=True) is None
         assert manager.setup_global_slash_command(target="codex-cli", force=True) is None
-        assert manager.setup_global_slash_command(target="kimi-cli", force=True) is None
         assert manager.setup_global_slash_command(target="kiro-cli", force=True) is None
         assert manager.supports_slash("kiro") is False
         assert manager.supports_slash("qoder") is True
         assert manager.supports_slash("trae") is False
         assert manager.supports_slash("antigravity") is True
-        assert manager.requires_skill("kimi-cli") is True
         assert manager.requires_skill("codebuddy") is True
         assert manager.setup_slash_command(target="kiro", force=True) is None
         assert manager.setup_slash_command(target="qoder", force=True) is not None

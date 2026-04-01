@@ -23,6 +23,11 @@ def _seed_required_files(temp_project_dir: Path, name: str) -> None:
                 "style_direction": "Bold editorial SaaS",
                 "typography": {"heading": "Space Grotesk", "body": "Inter"},
                 "icon_system": "lucide-react",
+                "emoji_policy": {
+                    "allowed_in_ui": False,
+                    "allowed_as_icon": False,
+                    "allowed_during_development": False,
+                },
                 "ui_library_preference": {
                     "preferred": "shadcn/ui + Radix + Tailwind",
                     "strict": False,

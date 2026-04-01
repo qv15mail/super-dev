@@ -131,7 +131,6 @@ CICD_PLATFORM_TARGET_IDS: tuple[str, ...] = tuple(item for item in CICD_PLATFORM
 
 HOST_TOOL_CATALOG: list[dict[str, str]] = [
     {"id": "antigravity", "name": "Antigravity"},
-    {"id": "aider", "name": "Aider CLI"},
     {"id": "claude-code", "name": "Claude Code"},
     {"id": "cline", "name": "Cline"},
     {"id": "codebuddy-cli", "name": "CodeBuddy CLI"},
@@ -141,10 +140,7 @@ HOST_TOOL_CATALOG: list[dict[str, str]] = [
     {"id": "cursor-cli", "name": "Cursor CLI"},
     {"id": "windsurf", "name": "Windsurf"},
     {"id": "gemini-cli", "name": "Gemini CLI"},
-    {"id": "iflow", "name": "iFlow CLI"},
-    {"id": "jetbrains-ai", "name": "JetBrains Junie"},
     {"id": "kilo-code", "name": "Kilo Code"},
-    {"id": "kimi-cli", "name": "Kimi CLI"},
     {"id": "kiro-cli", "name": "Kiro CLI"},
     {"id": "opencode", "name": "OpenCode"},
     {"id": "qoder-cli", "name": "Qoder CLI"},
@@ -165,8 +161,6 @@ HOST_TOOL_ALIASES: dict[str, list[str]] = {
     "copilot-cli": ["copilot"],
     "cursor-cli": ["cursor-agent"],
     "gemini-cli": ["gemini"],
-    "iflow": ["iflow-cli"],
-    "kimi-cli": ["kimi"],
     "opencode": ["open-code"],
     "vscode-copilot": ["copilot-chat", "vscode"],
 }
@@ -202,15 +196,12 @@ SPECIAL_INSTALL_HOST_TOOL_IDS: tuple[str, ...] = ("openclaw",)
 PRODUCT_HOST_TOOL_IDS: tuple[str, ...] = PRIMARY_HOST_TOOL_IDS + SPECIAL_INSTALL_HOST_TOOL_IDS
 
 CLI_HOST_TOOL_IDS: tuple[str, ...] = (
-    "aider",
     "claude-code",
     "codebuddy-cli",
     "codex-cli",
     "copilot-cli",
     "cursor-cli",
     "gemini-cli",
-    "iflow",
-    "kimi-cli",
     "kiro-cli",
     "openclaw",
     "opencode",
@@ -291,14 +282,18 @@ HOST_RUNTIME_VALIDATION_OVERRIDES: dict[str, dict[str, list[str]]] = {
     "codex-cli": {
         "runtime_checklist": [
             "确认接入完成后已经彻底重开 codex，新会话会重新加载 AGENTS.md 与官方 Skills。",
-            "确认当前终端就在目标项目目录里，再输入 `super-dev:` 触发。",
+            "确认项目根 `AGENTS.md`、项目级 `.agents/skills/super-dev/`、全局 `CODEX_HOME/AGENTS.md`（默认 `~/.codex/AGENTS.md`）与官方用户级 Skills 一起生效。",
+            "确认当前终端就在目标项目目录里，优先输入 `super-dev:` 触发；如果想显式调 Skill，可输入 `$super-dev`。",
+            "如果 Codex 桌面端 `/` 列表里出现 `super-dev`，确认它被当作已启用 Skill 入口，而不是项目自定义 slash 文件。",
             "确认会话没有先解释 skill 或退回普通聊天，而是直接进入 Super Dev 流程。",
         ],
         "pass_criteria": [
-            "重开 codex 后的新会话确实加载了项目 AGENTS.md 与官方 Skills。",
+            "重开 codex 后的新会话确实加载了项目 AGENTS.md、项目级 `.agents/skills/super-dev/`、全局 AGENTS 与官方 Skills。",
+            "无论使用 `super-dev:`、`$super-dev`，还是桌面端 Skill 列表入口，都会进入同一条 Super Dev 流程。",
         ],
         "resume_checklist": [
             "Codex 必须在新会话里恢复，不能复用接入前的旧会话。",
+            "恢复时优先继续使用 `super-dev:`；如果当前会话明确以 Skill 入口运行，也要保持同一条 Super Dev 流程，不要切回普通聊天。",
         ],
     },
     "copilot-cli": {
@@ -491,7 +486,6 @@ def host_runtime_validation_overrides(target: str) -> dict[str, list[str]]:
 
 HOST_COMMAND_CANDIDATES: dict[str, list[str]] = {
     "antigravity": ["antigravity"],
-    "aider": ["aider"],
     "claude-code": ["claude", "claude-code"],
     "cline": ["cline"],
     "codebuddy-cli": ["codebuddy", "codebuddy-cli"],
@@ -501,9 +495,7 @@ HOST_COMMAND_CANDIDATES: dict[str, list[str]] = {
     "cursor-cli": ["cursor-agent", "cursor", "cursor-cli"],
     "windsurf": ["windsurf"],
     "gemini-cli": ["gemini", "gemini-cli"],
-    "iflow": ["iflow"],
     "kilo-code": ["kilo-code"],
-    "kimi-cli": ["kimi", "kimi-cli"],
     "kiro-cli": ["kiro"],
     "opencode": ["opencode"],
     "qoder-cli": ["qoder", "qoder-cli"],
@@ -587,12 +579,6 @@ HOST_PATH_PATTERNS: dict[str, list[str]] = {
         "%LOCALAPPDATA%/Programs/Microsoft VS Code/Code.exe",
         "%PROGRAMFILES%/Microsoft VS Code/Code.exe",
         "%PROGRAMFILES(X86)%/Microsoft VS Code/Code.exe",
-    ],
-    "jetbrains-ai": [
-        "~/Applications/IntelliJ IDEA.app",
-        "/Applications/IntelliJ IDEA.app",
-        "~/Applications/PyCharm.app",
-        "/Applications/PyCharm.app",
     ],
 }
 

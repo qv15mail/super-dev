@@ -86,7 +86,6 @@ def test_host_tool_catalog_ids_unique():
     assert ids == list(HOST_TOOL_IDS)
     assert len(ids) == len(set(ids))
     assert {
-        "aider",
         "claude-code",
         "cline",
         "codebuddy-cli",
@@ -95,9 +94,7 @@ def test_host_tool_catalog_ids_unique():
         "cursor-cli",
         "windsurf",
         "gemini-cli",
-        "iflow",
-        "jetbrains-ai",
-        "kimi-cli",
+        "kilo-code",
         "kiro-cli",
         "opencode",
         "qoder-cli",
@@ -107,6 +104,7 @@ def test_host_tool_catalog_ids_unique():
         "kiro",
         "qoder",
         "trae",
+        "openclaw",
     }.issubset(set(ids))
 
 
@@ -128,7 +126,7 @@ def test_primary_product_host_scope_is_locked():
     assert SPECIAL_INSTALL_HOST_TOOL_IDS == ("openclaw",)
     assert "openclaw" not in PRIMARY_HOST_TOOL_IDS
     assert "openclaw" in PRODUCT_HOST_TOOL_IDS
-    assert {"aider", "iflow", "jetbrains-ai", "kimi-cli"}.isdisjoint(set(PRIMARY_HOST_TOOL_IDS))
+    assert "antigravity" in PRIMARY_HOST_TOOL_IDS
 
 
 @pytest.mark.parametrize(

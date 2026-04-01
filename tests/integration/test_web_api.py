@@ -58,8 +58,6 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
                 "/.codebuddy/",
                 "/.cursor/",
                 "/.gemini/",
-                "/.iflow/",
-                "/.kimi/",
                 "/.kiro/",
                 "/.opencode/",
                 "/.qoder/",
@@ -178,6 +176,11 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
                 "style_direction": "Editorial workspace",
                 "typography": {"heading": "Space Grotesk", "body": "Inter"},
                 "icon_system": "lucide-react",
+                "emoji_policy": {
+                    "allowed_in_ui": False,
+                    "allowed_as_icon": False,
+                    "allowed_during_development": False,
+                },
                 "ui_library_preference": {
                     "preferred": "shadcn/ui + Radix + Tailwind",
                     "strict": False,
@@ -248,6 +251,11 @@ def _prepare_proof_pack_project(project_dir: Path) -> None:
                 "style_direction": "Editorial workspace",
                 "typography": {"heading": "Space Grotesk", "body": "Inter"},
                 "icon_system": "lucide-react",
+                "emoji_policy": {
+                    "allowed_in_ui": False,
+                    "allowed_as_icon": False,
+                    "allowed_during_development": False,
+                },
                 "ui_library_preference": {
                     "preferred": "shadcn/ui + Radix + Tailwind",
                     "strict": False,
@@ -325,6 +333,11 @@ def _prepare_proof_pack_project(project_dir: Path) -> None:
                 "style_direction": "Editorial workspace",
                 "typography": {"heading": "Space Grotesk", "body": "Inter"},
                 "icon_system": "lucide-react",
+                "emoji_policy": {
+                    "allowed_in_ui": False,
+                    "allowed_as_icon": False,
+                    "allowed_during_development": False,
+                },
                 "ui_library_preference": {
                     "preferred": "shadcn/ui + Radix + Tailwind",
                     "strict": False,
@@ -1682,8 +1695,6 @@ class TestWebAPI:
             "cursor-cli",
             "windsurf",
             "gemini-cli",
-            "iflow",
-            "kimi-cli",
             "kiro-cli",
             "opencode",
             "qoder-cli",
@@ -1760,26 +1771,6 @@ class TestWebAPI:
         assert host["usage_profile"]["usage_mode"] == "native-slash"
         assert host["usage_profile"]["certification_label"] == "Certified"
         assert host["usage_profile"]["requires_restart_after_onboard"] is False
-
-    def test_hosts_doctor_iflow_exposes_host_preconditions(self, temp_project_dir: Path):
-        client = TestClient(web_api.app)
-        resp = client.get(
-            "/api/hosts/doctor",
-            params={
-                "project_dir": str(temp_project_dir),
-                "host": "iflow",
-            },
-        )
-        assert resp.status_code == 200
-        payload = resp.json()
-        usage = payload["usage_profiles"]["iflow"]
-        assert usage["precondition_status"] == "host-auth-required"
-        assert usage["precondition_label"] in {"需宿主鉴权", "已检测到鉴权配置"}
-        assert any("/auth" in item for item in usage["precondition_guidance"])
-        host = payload["report"]["hosts"]["iflow"]
-        assert host["preconditions"]["status"] == "host-auth-required"
-        assert any("Invalid API key provided" in item for item in host["suggestions"])
-        assert any(item["status"] == "project-context-required" for item in usage["precondition_items"])
 
     def test_hosts_doctor_default_targets_follow_primary_product_scope(self, temp_project_dir: Path):
         client = TestClient(web_api.app)
@@ -2076,8 +2067,15 @@ class TestWebAPI:
         assert codex_host["requires_restart_after_onboard"] is True
         assert any("重启 codex" in step for step in codex_host["post_onboard_steps"])
         assert codex_host["commands"]["slash"] == ""
-        assert codex_host["commands"]["skill"] == "super-dev-core"
-        assert "~/.agents/skills/super-dev-core/SKILL.md" in codex_host["official_user_surfaces"]
+        assert codex_host["commands"]["skill_slash"] == "/super-dev"
+        assert codex_host["commands"]["skill"] == "super-dev"
+        assert codex_host["supports_skill_slash_entry"] is True
+        assert codex_host["skill_slash_entry_command"] == "/super-dev"
+        assert ".agents/skills/super-dev/SKILL.md" in codex_host["official_project_surfaces"]
+        assert "~/.codex/AGENTS.md" in codex_host["official_user_surfaces"]
+        assert "~/.agents/skills/super-dev/SKILL.md" in codex_host["official_user_surfaces"]
+        assert "~/.agents/skills/super-dev-core/SKILL.md" in codex_host["observed_compatibility_surfaces"]
+        assert "~/.codex/skills/super-dev/SKILL.md" in codex_host["observed_compatibility_surfaces"]
         assert "~/.codex/skills/super-dev-core/SKILL.md" in codex_host["observed_compatibility_surfaces"]
         assert codex_host["commands"]["trigger"] == "super-dev: 你的需求"
         assert codex_host["final_trigger"] == "super-dev: 你的需求"
@@ -2097,25 +2095,6 @@ class TestWebAPI:
         assert "~/.claude/commands/super-dev.md" in claude_host["official_user_surfaces"]
         assert "~/.claude/agents/super-dev-core.md" in claude_host["official_user_surfaces"]
         assert claude_host["commands"]["skill"] == ""
-
-    def test_kimi_host_catalog_is_agents_and_skill(self):
-        client = TestClient(web_api.app)
-        resp = client.get("/api/catalogs")
-        assert resp.status_code == 200
-        payload = resp.json()
-        kimi_host = next(item for item in payload["host_tools"] if item["id"] == "kimi-cli")
-        assert kimi_host["supports_slash"] is False
-        assert kimi_host["slash_command_file"] == ""
-        assert kimi_host["usage_mode"] == "agents-and-skill"
-        assert kimi_host["host_protocol_mode"] == "official-context"
-        assert kimi_host["host_protocol_summary"] == "官方 AGENTS.md + 文本触发"
-        assert kimi_host["commands"]["slash"] == ""
-        assert kimi_host["commands"]["skill"] == "super-dev-core"
-        assert kimi_host["commands"]["trigger"] == "super-dev: 你的需求"
-        assert kimi_host["final_trigger"] == "super-dev: 你的需求"
-        assert "SMOKE_OK" in kimi_host["smoke_test_prompt"]
-        assert ".kimi/AGENTS.md" in kimi_host["integration_files"]
-        assert "super-dev: <需求描述>" in kimi_host["primary_entry"]
 
     def test_qoder_host_catalog_is_native_slash(self):
         client = TestClient(web_api.app)
@@ -2645,17 +2624,16 @@ class TestWebAPI:
 
         resp = client.get(
             "/api/hosts/validate",
-            params={"project_dir": str(temp_project_dir), "host": "iflow"},
+            params={"project_dir": str(temp_project_dir), "host": "kiro-cli"},
         )
         assert resp.status_code == 200
         payload = resp.json()
-        assert payload["selected_targets"] == ["iflow"]
-        assert payload["report"]["hosts"][0]["host"] == "iflow"
+        assert payload["selected_targets"] == ["kiro-cli"]
+        assert payload["report"]["hosts"][0]["host"] == "kiro-cli"
         assert payload["report"]["hosts"][0]["manual_runtime_status_label"] == "待真人验收"
-        assert payload["report"]["hosts"][0]["precondition_label"] in {"需宿主鉴权", "已检测到鉴权配置"}
         assert payload["report"]["summary"]["total_hosts"] == 1
         assert payload["report"]["summary"]["blocking_count"] >= 1
-        assert payload["report"]["blockers"][0]["host"] == "iflow"
+        assert payload["report"]["blockers"][0]["host"] == "kiro-cli"
 
     def test_hosts_validate_codex_uses_host_specific_runtime_checklist(self, temp_project_dir: Path, monkeypatch):
         fake_home = temp_project_dir / "fake-home"
@@ -2679,8 +2657,11 @@ class TestWebAPI:
         assert resp.status_code == 200
         host = resp.json()["report"]["hosts"][0]
         assert any("重开 codex" in item for item in host["runtime_checklist"])
+        assert any(".agents/skills/super-dev" in item for item in host["runtime_checklist"])
         assert any("当前终端就在目标项目目录" in item for item in host["runtime_checklist"])
-        assert any("AGENTS.md 与官方 Skills" in item for item in host["pass_criteria"])
+        assert any(".agents/skills/super-dev" in item for item in host["pass_criteria"])
+        assert any("官方 Skills" in item for item in host["pass_criteria"])
+        assert any("$super-dev" in item for item in host["pass_criteria"])
 
     def test_hosts_validate_opencode_uses_host_specific_runtime_checklist(self, temp_project_dir: Path, monkeypatch):
         fake_home = temp_project_dir / "fake-home"

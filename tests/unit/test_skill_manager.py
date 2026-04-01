@@ -69,14 +69,14 @@ class TestSkillManager:
         assert "Super Dev 不是大模型平台" in skill_content
         assert "Runtime Contract（强制）" in skill_content
         assert "首轮响应契约（强制）" in skill_content
-        assert "第一轮回复必须明确说明当前阶段是 `research`" in skill_content
-        assert "三份核心文档完成后会暂停等待用户确认" in skill_content
+        assert "当前阶段是 `research`" in skill_content
+        assert "三份核心文档完成后暂停等待确认" in skill_content
         assert "本地知识库契约（强制）" in skill_content
         assert "output/knowledge-cache/*-knowledge-bundle.json" in skill_content
-        assert "未经用户明确确认，禁止创建 `.super-dev/changes/*`" in skill_content
+        assert "未经用户确认禁止创建 `.super-dev/changes/*`" in skill_content
         assert "super-dev：" in skill_content
         assert ".super-dev/SESSION_BRIEF.md" in skill_content
-        assert "当前流程停在确认门或返工门时" in skill_content
+        assert "确认门/返工门" in skill_content
         assert "super-dev-core" in manager.list_installed(target)
 
         removed = manager.uninstall("super-dev-core", target)
@@ -88,18 +88,46 @@ class TestSkillManager:
         monkeypatch.setenv("HOME", str(fake_home))
         manager = SkillManager(temp_project_dir)
 
-        result = manager.install(source="super-dev", target="codex-cli", name="super-dev-core")
+        result = manager.install(source="super-dev", target="codex-cli", name="super-dev")
 
         primary_skill = result.path / "SKILL.md"
-        compatibility_skill = fake_home / ".codex" / "skills" / "super-dev-core" / "SKILL.md"
+        official_legacy_skill = fake_home / ".agents" / "skills" / "super-dev-core" / "SKILL.md"
+        compatibility_skill = fake_home / ".codex" / "skills" / "super-dev" / "SKILL.md"
+        compatibility_legacy_skill = fake_home / ".codex" / "skills" / "super-dev-core" / "SKILL.md"
+        metadata_file = result.path / "agents" / "openai.yaml"
         assert primary_skill.exists()
+        assert official_legacy_skill.exists()
         assert compatibility_skill.exists()
+        assert compatibility_legacy_skill.exists()
+        assert metadata_file.exists()
         primary_content = primary_skill.read_text(encoding="utf-8")
         compatibility_content = compatibility_skill.read_text(encoding="utf-8")
+        metadata_content = metadata_file.read_text(encoding="utf-8")
         assert "Do not answer with variants of" in primary_content
+        assert "$super-dev" in primary_content
         assert primary_content == compatibility_content
-        assert "super-dev-core" in manager.list_installed("codex-cli")
+        assert "interface:" in metadata_content
+        assert 'display_name: "Super Dev"' in metadata_content
+        assert "allow_implicit_invocation: true" in metadata_content
+        assert {"super-dev", "super-dev-core"}.issubset(set(manager.list_installed("codex-cli")))
 
-        manager.uninstall("super-dev-core", "codex-cli")
+        manager.uninstall("super-dev", "codex-cli")
         assert not primary_skill.exists()
+        assert not official_legacy_skill.exists()
         assert not compatibility_skill.exists()
+        assert not compatibility_legacy_skill.exists()
+
+    def test_codex_compatibility_mirror_uses_codex_home_when_set(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        codex_home = temp_project_dir / "custom-codex-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        codex_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+        manager = SkillManager(temp_project_dir)
+
+        result = manager.install(source="super-dev", target="codex-cli", name="super-dev")
+
+        assert (result.path / "SKILL.md").exists()
+        assert (codex_home / "skills" / "super-dev" / "SKILL.md").exists()
+        assert (codex_home / "skills" / "super-dev-core" / "SKILL.md").exists()

@@ -183,6 +183,12 @@ class IntegrationManagerContentMixin:
                 "- For non-conversational AI products, avoid Claude / ChatGPT-style sidebar chat shells unless the UI plan explicitly justifies them.\n"
                 "- Keep using the component ecosystem and design token direction defined in output/*-uiux.md rather than switching ad hoc.\n"
                 "- If `.super-dev/SESSION_BRIEF.md` exists, read it before responding and keep the current Super Dev gate active across follow-up edits.\n"
+                "\n## Coding Constraints (active during ALL coding phases)\n"
+                "- Before writing ANY code, run `cat package.json` to check framework versions. If unsure, read official docs first.\n"
+                "- Icons MUST come from Lucide/Heroicons/Tabler. No emoji as icons. No purple/pink gradient themes.\n"
+                "- Frontend fetch URLs must exactly match backend route definitions.\n"
+                "- Before writing each file: correct imports, no emoji, colors from tokens only.\n"
+                "- After completing a feature, run build + lint. Fix errors before moving on.\n"
             )
             cursor_template = self.templates_dir / ".cursorrules.template"
             if cursor_template.exists():
@@ -217,7 +223,6 @@ class IntegrationManagerContentMixin:
             "cline",
             "continue",
             "vscode-copilot",
-            "jetbrains-ai",
             "kilo-code",
             "roo-code",
             "augment",
@@ -239,8 +244,6 @@ class IntegrationManagerContentMixin:
             "cursor-cli",
             "qoder-cli",
             "codebuddy-cli",
-            "iflow",
-            "aider",
             "openclaw",
         }:
             return self._generic_cli_rules(target)
@@ -414,40 +417,6 @@ class IntegrationManagerContentMixin:
         )
 
     def _build_slash_command_content(self, target: str) -> str:
-        if target == "iflow":
-            return (
-                'description = "Super Dev 流水线式开发编排（先文档/Spec，再编码）"\n'
-                "prompt = \"\"\"\n"
-                "你正在执行 /super-dev。\n"
-                "需求描述: {{args}}\n\n"
-                "定位边界：宿主负责调用自身模型、工具与实际编码；Super Dev 负责流程规范、质量门禁、审计产物与交付标准。\n\n"
-                "本地知识库要求：\n"
-                "- 进入流水线后，先阅读当前项目 `knowledge/` 中与需求相关的知识文件\n"
-                "- 若已生成 `output/knowledge-cache/*-knowledge-bundle.json`，必须读取其中命中的 `local_knowledge` 与 `research_summary`\n"
-                "- 本地知识库命中的规范、检查清单、反模式与场景包默认视为项目硬约束\n\n"
-                "严格执行顺序（不可跳步）：\n"
-                "1. 先使用宿主原生联网/搜索能力研究同类产品，沉淀 output/*-research.md\n"
-                "2. 再生成 output/*-prd.md、output/*-architecture.md、output/*-uiux.md\n"
-                "3. 三份核心文档完成后，必须先向用户汇报并等待确认；用户未确认前禁止创建 Spec 或开始编码\n"
-                "4. 用户确认后，再创建 .super-dev/changes/*/proposal.md 与 tasks.md\n"
-                "5. 先实现并运行前端，再进入后端、联调、测试与交付\n\n"
-                "研究要求：\n"
-                "- 至少总结 3-5 个相似产品或可借鉴对象\n"
-                "- 总结共性功能、关键流程、信息架构、交互模式、差异化机会\n"
-                "- 未完成 research 阶段前不得直接编码\n\n"
-                "执行命令：\n"
-                "super-dev create \\\"{{args}}\\\"\n"
-                "super-dev spec list\n\n"
-                "UI 强制规则：\n"
-                "- 默认避免紫/粉渐变主视觉；若品牌或用户明确要求，先说明适配理由再采用\n"
-                "- 禁止 emoji 充当功能图标\n"
-                "- 开始任何 UI 代码前必须先明确图标库（Lucide / Heroicons / Tabler / 官方组件图标）\n"
-                "- 非对话式 AI 产品默认避免复刻 Claude / ChatGPT 式侧栏聊天骨架与同款中性色配色；若要采用必须先说明原因\n"
-                "- 禁止模板化、同质化页面直出\n"
-                "- 必须在编码前先确定字体系统、颜色 token、栅格和状态矩阵\n"
-                "\"\"\"\n"
-            )
-
         if target == "windsurf":
             return (
                 "---\n"
@@ -618,6 +587,20 @@ class IntegrationManagerContentMixin:
             "11. Do not use emoji as functional icons or placeholders, and do not leave icon decisions for later.\n"
             "12. For non-conversational AI products, default to avoiding Claude / ChatGPT-style sidebar chat shells, narrow-center conversation layouts, and the same neutral chat color shell unless the UI plan explicitly justifies it.\n"
             "13. UI implementation must use the recommended component ecosystem/design token direction from `output/*-uiux.md`, not switch ad hoc.\n"
+            "\n\n## Coding Constraints (active during ALL coding phases)\n\n"
+            "These rules apply every time you write or edit a file:\n\n"
+            "### Tech Stack Pre-Research\n"
+            "- Before writing ANY code, run `cat package.json` (or equivalent) to check framework versions.\n"
+            "- If unsure about an API, use WebFetch to read official docs first. Never guess.\n\n"
+            "### Icon & Visual Rules\n"
+            "- Icons MUST come from a declared icon library (Lucide/Heroicons/Tabler). No emoji as icons.\n"
+            "- No purple/pink gradient themes. No default system font only.\n\n"
+            "### Frontend/Backend Alignment\n"
+            "- Frontend fetch URLs must exactly match backend route definitions.\n"
+            "- Define API paths as shared constants when possible.\n\n"
+            "### Per-File Self-Check\n"
+            "- Before writing each file: correct imports, no emoji, colors from tokens only.\n"
+            "- After completing a feature, run build + lint. Fix errors before moving on.\n"
         )
 
     def _generic_ide_rules(self, target: str) -> str:
@@ -667,6 +650,20 @@ class IntegrationManagerContentMixin:
             "- For non-conversational AI products, avoid Claude / ChatGPT-style sidebar chat shells unless the UI plan explicitly justifies it.\n"
             "- UI must define typography, design tokens, grid, component states and trust signals before page implementation.\n"
             "- Prefer the component ecosystem and design token baseline recommended in output/*-uiux.md instead of switching UI libraries ad hoc.\n"
+            "\n\n## Coding Constraints (active during ALL coding phases)\n\n"
+            "These rules apply every time you write or edit a file:\n\n"
+            "### Tech Stack Pre-Research\n"
+            "- Before writing ANY code, run `cat package.json` (or equivalent) to check framework versions.\n"
+            "- If unsure about an API, use WebFetch to read official docs first. Never guess.\n\n"
+            "### Icon & Visual Rules\n"
+            "- Icons MUST come from a declared icon library (Lucide/Heroicons/Tabler). No emoji as icons.\n"
+            "- No purple/pink gradient themes. No default system font only.\n\n"
+            "### Frontend/Backend Alignment\n"
+            "- Frontend fetch URLs must exactly match backend route definitions.\n"
+            "- Define API paths as shared constants when possible.\n\n"
+            "### Per-File Self-Check\n"
+            "- Before writing each file: correct imports, no emoji, colors from tokens only.\n"
+            "- After completing a feature, run build + lint. Fix errors before moving on.\n"
         )
 
     def _trae_rules(self) -> str:
@@ -704,6 +701,20 @@ class IntegrationManagerContentMixin:
             "- Before any UI implementation, first lock the icon library, typography, design token system, component ecosystem, and page skeleton from `output/*-uiux.md`.\n"
             "- Do not use emoji as functional icons or placeholders.\n"
             "- Keep using the design token direction and component ecosystem frozen in `output/*-uiux.md` rather than switching ad hoc.\n"
+            "\n\n## Coding Constraints (active during ALL coding phases)\n\n"
+            "These rules apply every time you write or edit a file:\n\n"
+            "### Tech Stack Pre-Research\n"
+            "- Before writing ANY code, run `cat package.json` (or equivalent) to check framework versions.\n"
+            "- If unsure about an API, use WebFetch to read official docs first. Never guess.\n\n"
+            "### Icon & Visual Rules\n"
+            "- Icons MUST come from a declared icon library (Lucide/Heroicons/Tabler). No emoji as icons.\n"
+            "- No purple/pink gradient themes. No default system font only.\n\n"
+            "### Frontend/Backend Alignment\n"
+            "- Frontend fetch URLs must exactly match backend route definitions.\n"
+            "- Define API paths as shared constants when possible.\n\n"
+            "### Per-File Self-Check\n"
+            "- Before writing each file: correct imports, no emoji, colors from tokens only.\n"
+            "- After completing a feature, run build + lint. Fix errors before moving on.\n"
         )
 
     def _claude_rules(self) -> str:
@@ -743,7 +754,38 @@ class IntegrationManagerContentMixin:
             "- Do not use emoji as functional icons or placeholders.\n"
             "- For non-conversational AI products, avoid Claude / ChatGPT-style shells unless the UI plan explicitly justifies them.\n"
             "- UI implementation must define typography system, design tokens, page hierarchy and component states before polishing visuals.\n"
-            "- Prioritize real screenshots, trust modules, proof points and task flows over decorative hero sections.\n"
+            "- Prioritize real screenshots, trust modules, proof points and task flows over decorative hero sections.\n\n"
+            "## Coding Constraints (active during ALL coding phases)\n\n"
+            "These rules apply every time you write or edit a file. They are NOT suggestions:\n\n"
+            "### Tech Stack Pre-Research\n"
+            "- Before writing ANY code, run `cat package.json` (or equivalent) to check framework versions.\n"
+            "- If unsure about an API for the installed version, use WebFetch to read official docs first.\n"
+            "- Never guess API signatures. Check docs.\n\n"
+            "### Icon & Visual Rules\n"
+            "- Icons MUST come from a declared icon library (Lucide/Heroicons/Tabler). No emoji as icons.\n"
+            "- No purple/pink gradient themes. No default system font only.\n"
+            "- Before showing any UI code, self-check: no emoji characters in the source.\n\n"
+            "### Frontend/Backend Alignment\n"
+            "- Frontend fetch URLs must exactly match backend route definitions.\n"
+            "- Define API paths as shared constants when possible.\n\n"
+            "### Per-File Self-Check\n"
+            "- Before writing each file: correct imports, no emoji, colors from tokens only.\n"
+            "- After completing a feature, run build + lint. Fix errors before moving on.\n\n"
+            "### CLI Commands During Coding\n"
+            "- Run `super-dev enforce validate` after writing UI code.\n"
+            "- Run `super-dev quality` after completing a feature.\n"
+            "- Run `super-dev review --state ui` after frontend is done.\n"
+            "- Run `super-dev release proof-pack` before final delivery.\n\n"
+            "## Three-Layer Governance Model\n\n"
+            "Super Dev governance operates at three layers:\n\n"
+            "**Layer 1 — CLAUDE.md (Persistent Rules)**\n"
+            "These rules are ALWAYS in context. They override default behavior.\n\n"
+            "**Layer 2 — Hooks (Runtime Enforcement)**\n"
+            "PreToolUse hooks validate every file write. PostToolUse hooks audit results.\n"
+            "Hooks are auto-registered when /super-dev is invoked.\n\n"
+            "**Layer 3 — CLI Commands (On-Demand Checks)**\n"
+            "Run `super-dev enforce validate` / `super-dev quality` for deeper checks.\n"
+            "These are triggered at key milestones, not every turn.\n"
         )
 
     def _antigravity_workflow_rules(self) -> str:
@@ -884,5 +926,11 @@ super-dev skill install super-dev --target antigravity  # 安装 Skill
             "9. If the user requests quality remediation, first fix the issues, rerun quality gate and `super-dev release proof-pack`, and only then continue\n"
             "10. Before any UI implementation, first lock the icon library, typography, design token system, component ecosystem, and page skeleton from `output/*-uiux.md`\n"
             "11. Do not use emoji as functional icons or placeholders\n"
-            "12. Keep using the design token direction and component ecosystem frozen in `output/*-uiux.md` rather than switching ad hoc\n"
+            "12. Keep using the design token direction and component ecosystem frozen in `output/*-uiux.md` rather than switching ad hoc\n\n"
+            "## Coding Constraints (active during ALL coding phases)\n\n"
+            "- Before writing ANY code, run `cat package.json` to check framework versions. If unsure, read official docs first.\n"
+            "- Icons MUST come from Lucide/Heroicons/Tabler. No emoji as icons. No purple/pink gradient themes.\n"
+            "- Frontend fetch URLs must exactly match backend route definitions.\n"
+            "- Before writing each file: correct imports, no emoji, colors from tokens only.\n"
+            "- After completing a feature, run build + lint. Fix errors before moving on.\n"
         )

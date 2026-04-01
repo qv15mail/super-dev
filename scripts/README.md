@@ -119,15 +119,28 @@ python3 scripts/generate_lifecycle_packet.py --project-dir . --name order-center
 
 ### `release.sh`
 
-历史发布脚本（包含 changelog/tag/upload 等步骤）。
+完整发布脚本（包含 PyPI 发布、git tag、GitHub Release）。
 
 ```bash
 ./scripts/release.sh
 ```
 
-## 推荐顺序（2.2.0）
+常见用法：
+
+```bash
+# 完整发布到 PyPI，并创建/推送 tag
+./scripts/release.sh --repository pypi --push-tag --yes
+
+# 对已有 tag + dist 产物补发 GitHub Release（不重复上传 PyPI）
+./scripts/release.sh --skip-publish --github-release --generate-notes --yes
+
+# 使用自定义 Release Notes
+./scripts/release.sh --skip-publish --github-release --notes-file docs/releases/v2.3.0.md --title "v2.3.0 - Super Dev" --yes
+```
+
+## 推荐顺序（2.3.0）
 
 1. `./scripts/preflight.sh`
 2. `python3 -m build && twine check dist/*`
 3. `twine upload dist/*`
-4. `git tag v2.2.0 && git push origin v2.2.0`
+4. `./scripts/release.sh --repository pypi --push-tag --github-release --generate-notes --yes`

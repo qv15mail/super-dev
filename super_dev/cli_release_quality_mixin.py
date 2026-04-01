@@ -423,4 +423,26 @@ class CliReleaseQualityMixin:
         if payload.get("failure_reason"):
             self.console.print(f"  失败原因: {payload['failure_reason']}")
         self.console.print(f"  文件: {metrics_file}")
+
+        # Show per-phase cost data from PipelineCostTracker if available
+        try:
+            from .pipeline_cost import PipelineCostTracker
+
+            tracker = PipelineCostTracker()
+            cost = tracker.load(Path.cwd())
+            if cost and cost.phases:
+                self.console.print("\n[cyan]Per-Phase Cost Breakdown:[/cyan]")
+                for name, phase_cost in cost.phases.items():
+                    parts = [f"{phase_cost.duration_seconds:.2f}s"]
+                    if phase_cost.files_read:
+                        parts.append(f"read={phase_cost.files_read}")
+                    if phase_cost.files_written:
+                        parts.append(f"written={phase_cost.files_written}")
+                    if phase_cost.commands_executed:
+                        parts.append(f"cmds={phase_cost.commands_executed}")
+                    self.console.print(f"  {name}: {' | '.join(parts)}")
+                self.console.print(f"  Total: {cost.total_duration:.2f}s")
+        except Exception:
+            pass
+
         return 0

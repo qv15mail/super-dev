@@ -5,7 +5,7 @@
 ## 1. 发布前准备
 
 - 确认版本号已更新：`pyproject.toml`
-- 确认更新日志已更新：`CHANGELOG.md`
+- 确认更新日志或 Release Notes 已准备：`CHANGELOG.md` / `docs/releases/*.md`
 - 确认主分支状态与发布分支策略（建议从 `main` 发布）
 - 确认 PyPI Token 可用（`PYPI_API_TOKEN`）
 
@@ -57,9 +57,12 @@
 4. 手动打 Tag 并推送（可选）：
    - `git tag v<version>`
    - `git push origin v<version>`
-5. 创建 GitHub Release（附变更说明和风险提示）。
+5. 自动创建 GitHub Release（附变更说明和风险提示）：
+   - `./scripts/release.sh --repository pypi --push-tag --github-release --generate-notes --yes`
+6. 如果 tag 已存在、只缺 GitHub Release：
+   - `./scripts/release.sh --skip-publish --github-release --generate-notes --yes`
 
-当前仓库不依赖 GitHub Actions 自动发布，发布链路以本地预检 + 手动上传 PyPI 为准。
+当前仓库不依赖 GitHub Actions 自动发布，发布链路以本地预检 + 本地脚本发布为准。
 
 ## 4. 发布后验证
 

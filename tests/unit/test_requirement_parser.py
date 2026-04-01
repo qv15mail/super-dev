@@ -141,6 +141,9 @@ class TestDocumentGeneratorIntegration:
         assert contract["ui_library_preference"]["strict"] is False
         assert contract["component_stack"]["icons"]
         assert contract["icon_system"] == contract["component_stack"]["icons"]
+        assert contract["emoji_policy"]["allowed_in_ui"] is False
+        assert contract["emoji_policy"]["allowed_as_icon"] is False
+        assert contract["emoji_policy"]["allowed_during_development"] is False
         assert contract["design_tokens"]["css_variables"]
         assert contract["typography_preset"]["heading"]
 

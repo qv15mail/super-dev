@@ -128,10 +128,6 @@ def test_public_host_targets_prioritize_primary_product_scope() -> None:
     integration_manager = SimpleNamespace(
         list_targets=lambda: [SimpleNamespace(name=host_id) for host_id in (
             *PRIMARY_HOST_TOOL_IDS,
-            "aider",
-            "iflow",
-            "jetbrains-ai",
-            "kimi-cli",
             "openclaw",
         )]
     )
@@ -144,12 +140,12 @@ def test_public_host_targets_prioritize_primary_product_scope() -> None:
 def test_public_host_targets_fallback_to_available_targets_when_primary_absent() -> None:
     cli = SuperDevCLI()
     integration_manager = SimpleNamespace(
-        list_targets=lambda: [SimpleNamespace(name=host_id) for host_id in ("aider", "iflow", "openclaw")]
+        list_targets=lambda: [SimpleNamespace(name=host_id) for host_id in ("openclaw",)]
     )
 
     targets = cli._public_host_targets(integration_manager=integration_manager)
 
-    assert targets == ["aider", "iflow", "openclaw"]
+    assert targets == ["openclaw"]
 
 
 def test_resolve_pipeline_stage_selector_supports_aliases() -> None:

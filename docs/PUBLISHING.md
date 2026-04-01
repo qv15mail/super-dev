@@ -1,11 +1,11 @@
-# 发布指南（2.1.1）
+# 发布指南（2.3.0）
 
 > 面向 Super Dev 2.x 的标准发布流程。
 
 ## 1. 发布前检查
 
 1. 更新版本号（`pyproject.toml` 与 `super_dev/__init__.py`）。
-2. 更新 `CHANGELOG.md`。
+2. 更新 `CHANGELOG.md` 或准备本次 GitHub Release Notes。
 3. 确认本地预检全部通过。
 
 执行强制预检：
@@ -49,24 +49,37 @@ export PYPI_API_TOKEN="<your-token>"
 - 自动优先使用 `uv build + uv publish`
 - 未检测到 `uv` 时回退为 `python -m build + twine upload`
 
-## 3. Git Tag 与 Release
+## 3. Git Tag 与 GitHub Release
 
 ```bash
-git tag v2.1.1
-git push origin v2.1.1
+./scripts/release.sh --repository pypi --push-tag --github-release --generate-notes --yes
 ```
 
-然后在 GitHub 创建 Release，关联本次变更说明。
-当前仓库采用手动发布策略，不依赖 GitHub Actions 自动发布。
+如果包已经上传、tag 也已存在，只是漏了 GitHub Release，可以直接补发：
+
+```bash
+./scripts/release.sh --skip-publish --github-release --generate-notes --yes
+```
+
+如需自定义 Release Notes：
+
+```bash
+./scripts/release.sh --skip-publish --github-release \
+  --notes-file docs/releases/2.3.0.md \
+  --title "v2.3.0 - Super Dev" \
+  --yes
+```
+
+当前仓库采用本地脚本发布，不依赖 GitHub Actions 自动发布。
 
 ## 4. 发布后验证
 
 ```bash
-uv tool install super-dev==2.1.1
+uv tool install super-dev==2.3.0
 super-dev --help
 
 # 或 pip
-pip install --no-cache-dir super-dev==2.1.1
+pip install --no-cache-dir super-dev==2.3.0
 super-dev --help
 super-dev "构建一个包含登录和订单的系统"
 ```

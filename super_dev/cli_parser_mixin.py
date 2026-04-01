@@ -32,16 +32,37 @@ class CliParserMixin:
             prog="super-dev",
             description=__description__,
             formatter_class=argparse.RawDescriptionHelpFormatter,
-            epilog="""
-示例:
-  super-dev init my-project        初始化新项目
-  super-dev analyze [path]         分析现有项目
-  super-dev workflow               运行完整工作流
-  super-dev expert PM              调用产品经理专家
-  super-dev quality                运行质量检查
-  super-dev preview                生成原型预览
-  super-dev deploy                 生成部署配置
-            """,
+            epilog=(
+                "核心命令 (快速开始):\n"
+                "  init              初始化新项目\n"
+                "  setup             一步接入宿主 (如: setup claude-code)\n"
+                "  run               阶段跳转 / 运行指定阶段\n"
+                "  status            查看当前流程状态\n"
+                "  review            三文档 / UI / 架构确认\n"
+                "  release           发布就绪度 & 证据包\n"
+                "\n"
+                "治理命令:\n"
+                "  quality           运行质量门禁\n"
+                "  enforce           安装 / 验证 enforcement hooks\n"
+                "  governance        治理报告\n"
+                "  memory            记忆系统管理\n"
+                "  hooks             Hook 事件管理\n"
+                "  experts           专家角色管理\n"
+                "  compact           上下文压缩\n"
+                "\n"
+                "分析命令:\n"
+                "  analyze           分析现有项目\n"
+                "  repo-map          仓库结构总览\n"
+                "  impact            影响分析\n"
+                "\n"
+                "使用 'super-dev <command> -h' 查看单个命令的详细帮助\n"
+                "使用 'super-dev --help-all' 查看所有命令\n"
+                "\n"
+                "示例:\n"
+                "  super-dev init my-project        初始化新项目\n"
+                "  super-dev setup claude-code      一步接入 Claude Code\n"
+                "  super-dev run research           运行研究阶段\n"
+            ),
         )
 
         parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
@@ -55,7 +76,9 @@ class CliParserMixin:
         init_parser = subparsers.add_parser(
             "init", help="初始化新项目", description="创建一个新的 Super Dev 项目"
         )
-        init_parser.add_argument("name", help="项目名称")
+        init_parser.add_argument(
+            "name", nargs="?", default=None, help="项目名称（默认使用当前目录名）"
+        )
         init_parser.add_argument("-d", "--description", default="", help="项目描述")
         init_parser.add_argument(
             "-p", "--platform", choices=SUPPORTED_PLATFORMS, default="web", help="目标平台"
@@ -115,6 +138,12 @@ class CliParserMixin:
             "-b", "--backend", choices=SUPPORTED_PIPELINE_BACKENDS, default="node", help="后端框架"
         )
         init_parser.add_argument("--domain", choices=SUPPORTED_DOMAINS, default="", help="业务领域")
+        init_parser.add_argument(
+            "--template",
+            "-t",
+            choices=["ecommerce", "saas", "dashboard", "mobile", "api", "blog", "miniapp"],
+            help="使用预设项目模板",
+        )
         bootstrap_parser = subparsers.add_parser(
             "bootstrap",
             help="显式初始化 Super Dev 工作流契约",
@@ -674,12 +703,22 @@ class CliParserMixin:
         doctor_parser.add_argument(
             "--detail", action="store_true", help="显示详细诊断、路径与逐项建议"
         )
+        doctor_parser.add_argument(
+            "--fix", action="store_true", help="自动修复检测到的问题"
+        )
 
         # setup 命令 - 非技术用户一步接入
         setup_parser = subparsers.add_parser(
             "setup",
-            help="一步接入安装",
+            help="一步接入安装 (如: super-dev setup claude-code)",
             description="一步完成宿主接入（规则 + Skill + /super-dev）并执行诊断",
+        )
+        setup_parser.add_argument(
+            "target",
+            nargs="?",
+            default=None,
+            type=normalize_host_tool_id,
+            help="目标宿主 (如 claude-code, cursor 等)",
         )
         setup_parser.add_argument(
             "--host",
@@ -1318,9 +1357,7 @@ class CliParserMixin:
         knowledge_stats_parser = knowledge_subparsers.add_parser(
             "stats", help="查看知识文件使用统计"
         )
-        knowledge_stats_parser.add_argument(
-            "--json", action="store_true", help="以 JSON 格式输出"
-        )
+        knowledge_stats_parser.add_argument("--json", action="store_true", help="以 JSON 格式输出")
         knowledge_stats_parser.add_argument(
             "--top", type=int, default=10, help="显示 Top N 最有效的知识文件（默认 10）"
         )
@@ -1330,9 +1367,7 @@ class CliParserMixin:
         knowledge_evolve_parser = knowledge_subparsers.add_parser(
             "evolve", help="生成知识演化报告与改进建议"
         )
-        knowledge_evolve_parser.add_argument(
-            "--json", action="store_true", help="以 JSON 格式输出"
-        )
+        knowledge_evolve_parser.add_argument("--json", action="store_true", help="以 JSON 格式输出")
         knowledge_evolve_parser.add_argument(
             "--save", action="store_true", help="保存报告到 output/knowledge-evolution-report.md"
         )
@@ -1620,6 +1655,159 @@ class CliParserMixin:
             "--force",
             action="store_true",
             help="强制覆盖已有策略文件",
+        )
+
+        # memory 命令 - 管理 pipeline 记忆
+        memory_parser = subparsers.add_parser(
+            "memory",
+            help="管理 pipeline 记忆",
+            description="查看、搜索、删除和整合 .super-dev/memory/ 中的记忆条目",
+        )
+        memory_subparsers = memory_parser.add_subparsers(
+            dest="memory_action",
+            title="记忆命令",
+            description="使用 'super-dev memory <command> -h' 查看帮助",
+        )
+        memory_subparsers.add_parser("list", help="列出所有记忆条目")
+        memory_show_parser = memory_subparsers.add_parser("show", help="查看指定记忆")
+        memory_show_parser.add_argument("name", help="记忆名称（文件名前缀匹配）")
+        memory_forget_parser = memory_subparsers.add_parser("forget", help="删除指定记忆")
+        memory_forget_parser.add_argument("name", help="记忆名称（文件名前缀匹配）")
+        memory_subparsers.add_parser("consolidate", help="手动触发记忆整合")
+
+        # hooks 命令 - 管理 pipeline hooks
+        hooks_parser = subparsers.add_parser(
+            "hooks",
+            help="管理 pipeline hooks",
+            description="列出和测试 super-dev.yaml 中配置的 hook 事件",
+        )
+        hooks_subparsers = hooks_parser.add_subparsers(
+            dest="hooks_action",
+            title="Hook 命令",
+            description="使用 'super-dev hooks <command> -h' 查看帮助",
+        )
+        hooks_subparsers.add_parser("list", help="列出所有已配置的 hooks")
+        hooks_test_parser = hooks_subparsers.add_parser("test", help="测试执行指定 hook（dry-run）")
+        hooks_test_parser.add_argument("event", help="Hook 事件名")
+
+        # experts 命令 - 查看专家角色
+        experts_parser = subparsers.add_parser(
+            "experts",
+            help="查看专家角色",
+            description="列出和查看内置/自定义专家角色定义",
+        )
+        experts_subparsers = experts_parser.add_subparsers(
+            dest="experts_action",
+            title="专家命令",
+            description="使用 'super-dev experts <command> -h' 查看帮助",
+        )
+        experts_subparsers.add_parser("list", help="列出所有专家角色")
+        experts_show_parser = experts_subparsers.add_parser("show", help="查看专家角色详情")
+        experts_show_parser.add_argument("name", help="专家名称（如 PM, ARCHITECT, SECURITY）")
+
+        # compact 命令 - 查看阶段压缩摘要
+        compact_parser = subparsers.add_parser(
+            "compact",
+            help="查看阶段压缩摘要",
+            description="查看和列出 .super-dev/compact/ 中的阶段压缩摘要",
+        )
+        compact_subparsers = compact_parser.add_subparsers(
+            dest="compact_action",
+            title="Compact 命令",
+            description="使用 'super-dev compact <command> -h' 查看帮助",
+        )
+        compact_subparsers.add_parser("show", help="查看最近的 compact 摘要")
+        compact_subparsers.add_parser("list", help="列出所有 compact 文件")
+
+        # enforce 命令 - 宿主侧执行机制
+        enforce_parser = subparsers.add_parser(
+            "enforce",
+            help="宿主侧执行机制管理",
+            description="安装、验证和查看宿主侧 hooks 与验证规则",
+        )
+        enforce_subparsers = enforce_parser.add_subparsers(
+            dest="enforce_action",
+            title="Enforce 命令",
+            description="使用 'super-dev enforce <command> -h' 查看帮助",
+        )
+        enforce_install_parser = enforce_subparsers.add_parser(
+            "install", help="安装宿主 hooks 和验证脚本"
+        )
+        enforce_install_parser.add_argument(
+            "--host",
+            choices=["claude-code"],
+            default="claude-code",
+            help="目标宿主 (默认 claude-code)",
+        )
+        enforce_install_parser.add_argument(
+            "--frontend", default="", help="前端框架 (用于验证脚本)"
+        )
+        enforce_install_parser.add_argument(
+            "--backend", default="", help="后端框架 (用于 pre-code checklist)"
+        )
+        enforce_install_parser.add_argument(
+            "--icon-library", default="lucide", help="图标库 (默认 lucide)"
+        )
+        enforce_subparsers.add_parser("validate", help="运行验证脚本")
+        enforce_subparsers.add_parser("status", help="查看 enforcement 状态")
+
+        # generate 命令 - 项目脚手架生成
+        generate_parser = subparsers.add_parser(
+            "generate",
+            help="生成项目脚手架",
+            description="根据前端框架类型生成完整项目脚手架",
+        )
+        generate_subparsers = generate_parser.add_subparsers(
+            dest="generate_action",
+            title="生成命令",
+            description="使用 'super-dev generate <command> -h' 查看帮助",
+        )
+        scaffold_parser = generate_subparsers.add_parser("scaffold", help="生成完整项目脚手架")
+        scaffold_parser.add_argument(
+            "--frontend",
+            choices=["next"],
+            default="next",
+            help="前端框架 (默认 next)",
+        )
+        scaffold_parser.add_argument("--name", default="", help="项目名称 (可选)")
+
+        generate_subparsers.add_parser(
+            "components",
+            help="从 UIUX 规范生成 UI 组件脚手架",
+        )
+        generate_subparsers.add_parser(
+            "types",
+            help="从架构文档生成共享 TypeScript 类型定义",
+        )
+        generate_subparsers.add_parser(
+            "tailwind",
+            help="从 UIUX 规范生成 tailwind.config.ts",
+        )
+
+        # completion 命令 - shell 补全脚本
+        completion_parser = subparsers.add_parser(
+            "completion",
+            help="生成 shell 补全脚本",
+            description="输出 bash/zsh/fish 补全脚本，可通过 eval 加载",
+        )
+        completion_parser.add_argument(
+            "shell",
+            choices=["bash", "zsh", "fish"],
+            help="shell 类型",
+        )
+
+        # feedback 命令 - 打开反馈页面
+        subparsers.add_parser(
+            "feedback",
+            help="打开反馈 / 问题报告页面",
+            description="在浏览器中打开 GitHub Issues 页面",
+        )
+
+        # migrate 命令 - 项目版本迁移
+        subparsers.add_parser(
+            "migrate",
+            help="迁移项目到最新版本",
+            description="将 2.2.0 项目配置迁移到 2.3.0（更新配置、规则文件与 hooks）",
         )
 
         return parser

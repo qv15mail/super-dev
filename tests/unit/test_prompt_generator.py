@@ -61,6 +61,7 @@ class TestAIPromptGenerator:
         assert "每个关键页面必须提供 **2 个视觉方案**" in prompt
         assert "Token → Primitive → Pattern → Surface" in prompt
         assert "不存在任何 emoji 功能图标" in prompt
+        assert "在向用户展示任何 UI 预览前，必须自检源码和预览里不存在任何 emoji 字符" in prompt
         assert "非技术与专业用户都能使用同一套交互" in prompt
         assert "Web/H5/微信小程序/APP/桌面端" in prompt
         assert "TDesign 小程序 / RN / Flutter / SwiftUI / Electron / Tauri" in prompt

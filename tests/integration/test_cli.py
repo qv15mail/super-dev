@@ -187,6 +187,11 @@ def _prepare_release_ready_project(project_dir: Path) -> None:
                 "style_direction": "Editorial workspace",
                 "typography": {"heading": "Space Grotesk", "body": "Inter"},
                 "icon_system": "lucide-react",
+                "emoji_policy": {
+                    "allowed_in_ui": False,
+                    "allowed_as_icon": False,
+                    "allowed_during_development": False,
+                },
                 "ui_library_preference": {
                     "preferred": "shadcn/ui + Radix + Tailwind",
                     "strict": False,
@@ -257,6 +262,11 @@ def _prepare_proof_pack_project(project_dir: Path) -> None:
                 "style_direction": "Editorial workspace",
                 "typography": {"heading": "Space Grotesk", "body": "Inter"},
                 "icon_system": "lucide-react",
+                "emoji_policy": {
+                    "allowed_in_ui": False,
+                    "allowed_as_icon": False,
+                    "allowed_during_development": False,
+                },
                 "ui_library_preference": {
                     "preferred": "shadcn/ui + Radix + Tailwind",
                     "strict": False,
@@ -334,6 +344,11 @@ def _prepare_proof_pack_project(project_dir: Path) -> None:
                 "style_direction": "Editorial workspace",
                 "typography": {"heading": "Space Grotesk", "body": "Inter"},
                 "icon_system": "lucide-react",
+                "emoji_policy": {
+                    "allowed_in_ui": False,
+                    "allowed_as_icon": False,
+                    "allowed_during_development": False,
+                },
                 "ui_library_preference": {
                     "preferred": "shadcn/ui + Radix + Tailwind",
                     "strict": False,
@@ -517,7 +532,9 @@ class TestCLIInit:
             assert workflow_file.exists()
             assert summary_file.exists()
             assert "Required Pipeline Order" in workflow_file.read_text(encoding="utf-8")
-            assert "How To Start" in summary_file.read_text(encoding="utf-8")
+            summary_content = summary_file.read_text(encoding="utf-8")
+            assert "项目信息" in summary_content
+            assert "下一步" in summary_content
         finally:
             os.chdir(original_cwd)
 
@@ -1380,6 +1397,8 @@ class TestCLISkillAndIntegrate:
             result = cli.run(["onboard", "--host", "codex-cli", "--force", "--yes"])
             assert result == 0
             assert (temp_project_dir / "AGENTS.md").exists()
+            assert (fake_home / ".codex" / "AGENTS.md").exists()
+            assert (fake_home / ".agents" / "skills" / "super-dev" / "SKILL.md").exists()
             assert (fake_home / ".agents" / "skills" / "super-dev-core" / "SKILL.md").exists()
             assert not (temp_project_dir / ".codex" / "commands" / "super-dev.md").exists()
         finally:
@@ -1427,12 +1446,12 @@ class TestCLISkillAndIntegrate:
         os.chdir(temp_project_dir)
         try:
             cli = SuperDevCLI()
-            result = cli.run(["onboard", "--host", "kimi-cli", "--force", "--yes"])
+            result = cli.run(["onboard", "--host", "kiro-cli", "--force", "--yes"])
             assert result == 0
 
             output = capsys.readouterr().out
             assert "接下来这样用" in output
-            assert "Kimi CLI: 打开宿主后输入 super-dev: 你的需求" in output
+            assert "Kiro CLI: 打开宿主后输入 super-dev: 你的需求" in output
         finally:
             os.chdir(original_cwd)
 
@@ -1601,23 +1620,6 @@ class TestCLISkillAndIntegrate:
                 os.environ.pop("HOME", None)
             else:
                 os.environ["HOME"] = original_home
-            os.chdir(original_cwd)
-
-    def test_doctor_prints_host_preconditions_for_iflow(self, temp_project_dir: Path, capsys):
-        original_cwd = os.getcwd()
-        os.chdir(temp_project_dir)
-        try:
-            cli = SuperDevCLI()
-            result = cli.run(["doctor", "--host", "iflow", "--repair", "--force", "--detail"])
-            assert result == 0
-
-            output = capsys.readouterr().out
-            assert "宿主前置条件" in output
-            assert "需宿主鉴权" in output or "已检测到鉴权配置" in output
-            assert "/auth" in output
-            assert "IFLOW_API_KEY" in output
-            assert "Invalid API key provided" in output
-        finally:
             os.chdir(original_cwd)
 
     def test_doctor_prints_multiple_host_precondition_items_for_codex(self, temp_project_dir: Path, capsys):
@@ -1815,8 +1817,8 @@ class TestCLISkillAndIntegrate:
             onboard = cli.run(["onboard", "--host", "codex-cli", "--force", "--yes"])
             assert onboard == 0
 
-            official_skill = fake_home / ".agents" / "skills" / "super-dev-core" / "SKILL.md"
-            compatibility_skill = fake_home / ".codex" / "skills" / "super-dev-core" / "SKILL.md"
+            official_skill = fake_home / ".agents" / "skills" / "super-dev" / "SKILL.md"
+            compatibility_skill = fake_home / ".codex" / "skills" / "super-dev" / "SKILL.md"
             assert official_skill.exists()
             assert compatibility_skill.exists()
             official_skill.unlink()
@@ -2173,8 +2175,12 @@ class TestCLISkillAndIntegrate:
             assert host["runtime_checklist"]
             assert host["pass_criteria"]
             assert any("重开 codex" in item for item in host["runtime_checklist"])
+            assert any(".agents/skills/super-dev" in item for item in host["runtime_checklist"])
             assert any("当前终端就在目标项目目录" in item for item in host["runtime_checklist"])
-            assert any("AGENTS.md 与官方 Skills" in item for item in host["pass_criteria"])
+            assert any("$super-dev" in item for item in host["runtime_checklist"])
+            assert any(".agents/skills/super-dev" in item for item in host["pass_criteria"])
+            assert any("官方 Skills" in item for item in host["pass_criteria"])
+            assert any("$super-dev" in item for item in host["pass_criteria"])
             assert host["resume_probe_prompt"] == ""
             assert host["resume_checklist"]
         finally:
@@ -2203,6 +2209,7 @@ class TestCLISkillAndIntegrate:
             assert ".super-dev/SESSION_BRIEF.md" in host["resume_probe_prompt"]
             assert "super-dev:" in host["resume_probe_prompt"]
             assert any("新会话里恢复" in item for item in host["resume_checklist"])
+            assert any("同一条 Super Dev 流程" in item for item in host["resume_checklist"])
         finally:
             os.chdir(original_cwd)
 
@@ -3153,7 +3160,8 @@ class TestCLIPipeline:
             assert payload["selected_host"] == "codex-cli"
             assert payload["selected_host_name"] == "Codex"
             assert "Codex 最短路径" in payload["quick_start"]
-            assert "不要输入 `/super-dev`" in payload["quick_start"]
+            assert "$super-dev" in payload["quick_start"]
+            assert "Skill 列表入口" in payload["quick_start"]
         finally:
             os.chdir(original_cwd)
 
@@ -3442,6 +3450,49 @@ class TestCLIPipeline:
             assert runtime_payload["ui_alignment_summary"]["navigation_shell"]["passed"] is True
         finally:
             os.chdir(original_cwd)
+
+    def test_frontend_runtime_fails_fast_when_preview_contains_emoji(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        frontend_dir = output_dir / "frontend"
+        frontend_dir.mkdir(parents=True, exist_ok=True)
+        (frontend_dir / "index.html").write_text(
+            "<!doctype html><html><body><button>✨ 保存</button></body></html>",
+            encoding="utf-8",
+        )
+        (frontend_dir / "styles.css").write_text("body { color: var(--color-primary); }", encoding="utf-8")
+        (frontend_dir / "app.js").write_text("console.log('preview');", encoding="utf-8")
+        (output_dir / "emoji-demo-ui-contract.json").write_text(
+            json.dumps(
+                {
+                    "style_direction": "Editorial workspace",
+                    "typography_preset": {"heading": "Space Grotesk", "body": "Inter"},
+                    "icon_system": "lucide-react",
+                    "emoji_policy": {
+                        "allowed_in_ui": False,
+                        "allowed_as_icon": False,
+                        "allowed_during_development": False,
+                    },
+                    "ui_library_preference": {"final_selected": "shadcn/ui + Radix + Tailwind"},
+                    "design_tokens": {"css_variables": ":root { --color-primary: #0f172a; }"},
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (frontend_dir / "design-tokens.css").write_text(":root { --color-primary: #0f172a; }\n", encoding="utf-8")
+
+        cli = SuperDevCLI()
+        payload = cli._write_frontend_runtime_validation(
+            project_dir=temp_project_dir,
+            output_dir=output_dir,
+            project_name="emoji-demo",
+        )
+
+        assert payload["ui_alignment_available"] is False
+        assert payload["checks"]["ui_banned_patterns"] is False
+        assert payload["passed"] is False
+        assert "✨" in payload["ui_banned_pattern_probe"]["emoji_hits"]
 
     def test_direct_requirement_supports_pipeline_flags(self, temp_project_dir: Path, monkeypatch):
         original_cwd = os.getcwd()

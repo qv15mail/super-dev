@@ -19,11 +19,77 @@
 
 ## Version
 
-Current version: `2.2.0`
+Current version: `2.3.0`
 
 ---
 
-## What's New in 2.2.0
+## What's New in 2.3.0
+
+### Pipeline Intelligence
+
+- **Pipeline state file**: Each phase auto-writes `.super-dev/pipeline-state.json` so the host can read current progress.
+- **Pipeline cost tracking**: Per-phase duration and file counts recorded to `.super-dev/metrics/pipeline-cost.json`, with finally-protection for crash safety.
+- **State change events**: phase_started / phase_completed / phase_failed / pipeline_completed auto-trigger SessionBrief updates and memory extraction.
+
+### CLAUDE.md @include Knowledge References
+
+- Generated `.claude/CLAUDE.md` now includes `@./knowledge/...` references automatically.
+- Host natively processes @include to load technology-stack knowledge files.
+- Frontend support: Next.js / React / Vue / Nuxt / Angular / Svelte.
+- Backend support: FastAPI / Django / NestJS / Express / Spring Boot.
+- Database support: PostgreSQL / MySQL / MongoDB / Redis.
+
+### Conditional Rules System
+
+- New module `super_dev/rules/` supporting `.super-dev/rules/*.md` conditional rules.
+- Rules can specify `paths: ["src/**/*.tsx"]` in frontmatter to target specific files.
+- Supports exclusion patterns like `!test/**`.
+
+### User Experience Enhancements
+
+- **First-use onboarding**: 3-step quick-start panel, auto-hidden after 4 displays.
+- **Tips system**: Stage-aware contextual tips during pipeline execution.
+- **Project templates**: `super-dev init --template ecommerce/saas/dashboard/mobile/api/blog/miniapp`.
+- **`doctor --fix`**: Auto-repair detected installation issues.
+- **Shell completion**: `super-dev completion bash/zsh/fish`.
+- **Version update check**: PyPI 24h cache, prompts upgrade when a new version is available.
+- **`super-dev feedback`**: Quick-open GitHub Issues for feedback.
+- **`super-dev migrate`**: One-command migration from 2.2.0 to 2.3.0.
+
+### Validation Script Enhancements
+
+- **Multi-level output**: Level 1 (blocking) / Level 2 (warning) / Level 3 (suggestion).
+- **New checks**: console.log / hardcoded localhost / TODO-FIXME / large files / package.json scripts.
+- **Emoji hooks**: Reports specific emoji characters found and file types.
+
+### Enforcement System
+
+- `super-dev enforce install` — auto-configure host hooks (emoji checks, etc.).
+- `super-dev enforce validate` — run constraint validation scripts.
+- `super-dev enforce status` — view enforcement configuration status.
+
+### Memory System
+
+- 4 memory types: user, feedback, project, reference.
+- `super-dev memory list / show / forget / consolidate` commands.
+- Dream consolidator: 4-phase background memory merge (dedup, aggregate, summarize, write-back).
+
+### Code Generators
+
+- `super-dev generate scaffold --frontend next` — Next.js App Router scaffold (16 files).
+- `super-dev generate components` — UI component scaffold (Button/Card/Input/Modal/Nav/Layout).
+- `super-dev generate types` — shared TypeScript types from architecture docs.
+
+### Bug Fixes
+
+- `detect --auto` now actually installs files (previously only generated reports).
+- `detect` and `doctor` now use unified detection logic (no more contradictory results).
+- SKILL.md: `config show` corrected to `config list`.
+- Repository URL corrected to `shangyankeji/super-dev`.
+
+---
+
+## What Was New in 2.2.0
 
 ### Knowledge-Driven Governance
 
@@ -398,13 +464,13 @@ This generates `.super-dev/WORKFLOW.md` and `output/*-bootstrap.md` to lock down
 ### 3. Pin a specific version
 
 ```bash
-pip install super-dev==2.2.0
+pip install super-dev==2.3.0
 ```
 
 ### 4. Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.2.0
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.3.0
 ```
 
 ### 5. Source install for development
@@ -476,7 +542,7 @@ Super Dev officially documents 20 unified onboarding hosts plus 1 manual plugin 
 | Host | Trigger | Onboard Command |
 |------|---------|-----------------|
 | Claude Code | `/super-dev your requirement` | `super-dev onboard --host claude-code` |
-| Codex | `super-dev: your requirement` | `super-dev onboard --host codex-cli` |
+| Codex | `super-dev: your requirement` / `$super-dev` | `super-dev onboard --host codex-cli` |
 | Gemini CLI | `/super-dev your requirement` | `super-dev onboard --host gemini-cli` |
 | OpenCode | `/super-dev your requirement` | `super-dev onboard --host opencode` |
 | Kiro CLI | `super-dev: your requirement` | `super-dev onboard --host kiro-cli` |
@@ -550,9 +616,12 @@ Trigger command: `super-dev: your requirement`
 Restart required after onboarding: Yes.
 
 Notes:
-1. Uses `super-dev: your requirement` as the primary trigger.
-2. Relies on `AGENTS.md` and the user-level Skill at `~/.agents/skills/super-dev-core/SKILL.md`.
-3. If a previous session did not load the new Skill, restart `codex` and try again.
+1. The most stable trigger remains `super-dev: your requirement`.
+2. If you want to invoke the official Skill explicitly, use `$super-dev`.
+3. In the Codex desktop/app, if `super-dev` appears in the `/` list, that is the enabled Skill entry, not a project-level custom slash command.
+4. The actual integration surfaces are project `AGENTS.md`, project `.agents/skills/super-dev/SKILL.md`, global `CODEX_HOME/AGENTS.md` (default `~/.codex/AGENTS.md`), and the official user-level Skill at `~/.agents/skills/super-dev/SKILL.md`.
+5. `super-dev-core` is still installed as a compatibility alias for older setups.
+6. If a previous session did not load the new surfaces, restart `codex` and try again.
 
 **Gemini CLI**
 

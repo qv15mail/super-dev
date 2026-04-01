@@ -10,7 +10,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 // usePathname removed - no longer needed after handleGetStarted removal
-import { Github, Menu, X, Star, Users } from 'lucide-react';
+import { Github, Menu, X, Star, Users, Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { LocaleSwitch } from '@/components/ui/LocaleSwitch';
@@ -31,8 +31,8 @@ const COPY = {
       { label: '文档', href: '/docs' },
       { label: '更新', href: '/changelog' },
     ],
-    start: '官方交流群',
-    qrTitle: '扫码加入 Super Dev 官方交流群',
+    start: '联系开发者',
+    qrTitle: '联系 Super Dev 开发者',
     mobileOpen: '打开菜单',
     mobileClose: '关闭菜单',
     ariaHome: 'Super Dev 首页',
@@ -47,8 +47,8 @@ const COPY = {
       { label: 'Docs', href: '/docs' },
       { label: 'Changelog', href: '/changelog' },
     ],
-    start: 'Community',
-    qrTitle: 'Scan to join the Super Dev community group',
+    start: 'Contact',
+    qrTitle: 'Contact the Super Dev Developer',
     mobileOpen: 'Open menu',
     mobileClose: 'Close menu',
     ariaHome: 'Super Dev home',
@@ -61,6 +61,7 @@ export function Nav({ locale = 'zh' }: NavProps) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const stars = useGithubStars();
   const copy = COPY[locale];
   const navLinks = copy.nav.map((link) => ({ ...link, href: localizedPath(locale, link.href) }));
@@ -241,16 +242,37 @@ export function Nav({ locale = 'zh' }: NavProps) {
                 <span className="text-sm text-accent-blue font-medium">{copy.start}</span>
               </div>
               <h3 className="text-lg font-bold text-text-primary mb-2">{copy.qrTitle}</h3>
+              <div className="flex items-center justify-center gap-2 mt-3 mb-4">
+                <span className="text-base text-text-primary font-mono bg-bg-secondary px-3 py-1.5 rounded-lg border border-border-default">
+                  Excellent_We
+                </span>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText('Excellent_We');
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className={cn(
+                    'flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-150',
+                    copied
+                      ? 'bg-green-500/10 text-green-500 border border-green-500/20'
+                      : 'bg-accent-blue/10 text-accent-blue border border-accent-blue/20 hover:bg-accent-blue/20'
+                  )}
+                >
+                  {copied ? <Check size={14} /> : <Copy size={14} />}
+                  {copied ? (locale === 'zh' ? '已复制' : 'Copied') : (locale === 'zh' ? '复制' : 'Copy')}
+                </button>
+              </div>
               <Image
-                src={assetPath('/qun.png')}
-                alt="WeChat Group QR Code"
-                width={240}
-                height={240}
-                className="w-60 h-60 rounded-xl border border-border-default mx-auto mt-4 object-cover"
+                src={assetPath('/wx.png')}
+                alt="Developer WeChat QR Code"
+                width={200}
+                height={200}
+                className="w-48 h-48 rounded-xl border border-border-default mx-auto object-cover"
                 unoptimized
               />
               <p className="text-xs text-text-muted mt-4">
-                {locale === 'zh' ? '微信扫码，和开发者一起交流' : 'Scan with WeChat to join'}
+                {locale === 'zh' ? '扫码或搜索微信号添加开发者' : 'Scan or search WeChat ID to contact developer'}
               </p>
             </div>
           </div>

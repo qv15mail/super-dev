@@ -88,14 +88,14 @@ super-dev next
 | Roo Code | IDE | Compatible | 支持 | 在 Roo Code 面板中输入 `/super-dev 你的需求`（由 `.roo/commands/super-dev.md` + `.roo/rules/super-dev.md` / `~/.roo/commands/` + `~/.roo/rules/` 生效） | 否 |
 | VS Code Copilot | IDE | Experimental | 不支持 | 在 Copilot Chat 中输入 `super-dev: 你的需求` 或 `super-dev：你的需求`（由 `.github/copilot-instructions.md` + `AGENTS.md` 生效） | 否 |
 | Windsurf | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求`（由 `.windsurf/rules/super-dev.md` + `.windsurf/workflows/super-dev.md` + `.windsurf/skills/` / `~/.codeium/windsurf/skills/` 生效） | 否 |
-| Codex | CLI | Certified | 不支持 | 重启 Codex 后输入 `super-dev: 你的需求`，由 `AGENTS.md` + 官方 `~/.agents/skills/` 生效 | 是 |
+| Codex | CLI | Certified | 不支持 | 重启 Codex 后输入 `super-dev: 你的需求` 或显式调用 `$super-dev`，由 `AGENTS.md` + `.agents/skills/` + `CODEX_HOME/AGENTS.md` + 官方 `~/.agents/skills/` 生效 | 是 |
 | Trae | IDE | Compatible | 不支持 | 在 Trae Agent Chat 中输入 `super-dev: 你的需求`（由 `.trae/project_rules.md` + `~/.trae/user_rules.md` 生效；同时兼容写入 `.trae/rules.md` + `~/.trae/rules.md`，若检测到兼容 Skill `~/.trae/skills/super-dev-core/SKILL.md` 会额外增强） | 是 |
 
 ### 最简判断
 
 1. 如果你的宿主在表格里标记为“支持”，直接用 `/super-dev 你的需求`。
 2. 优先选择 `Certified` 宿主，其次是 `Compatible`。
-3. 如果是 `Codex`，不要试 `/super-dev`，重启 Codex 后输入 `super-dev: 你的需求`。
+3. 如果是 `Codex`，不要把 `/super-dev` 当成项目自定义 slash；重启 Codex 后优先输入 `super-dev: 你的需求`，也可以显式调用 `$super-dev`。
 4. 如果是 `Trae`，不要试 `/super-dev`，直接在 Trae Agent Chat 输入 `super-dev: 你的需求`。
 5. 如果是 `Kiro IDE`、`Trae` 或 `VS Code Copilot`，优先用 `super-dev: 你的需求` 或 `super-dev：你的需求`。
 
@@ -487,9 +487,12 @@ super-dev: 你的需求
 接入后是否需要重启：是
 
 补充说明：
-1. 不要输入 `/super-dev`，Codex 当前不走自定义 slash。
-2. 实际依赖 `AGENTS.md` 和 `~/.agents/skills/super-dev-core/SKILL.md`。
-3. 如果旧会话没加载新 Skill，重启 `codex` 再试。
+1. 最稳妥的主触发方式仍是 `super-dev: 你的需求`。
+2. 如果想显式调用官方 Skill，可输入 `$super-dev`。
+3. Codex 桌面端若在 `/` 列表里出现 `super-dev`，那是启用 Skill 的官方入口，不是项目级自定义 slash 文件。
+4. 实际依赖项目 `AGENTS.md`、全局 `CODEX_HOME/AGENTS.md`（默认 `~/.codex/AGENTS.md`）和官方用户级 Skill `~/.agents/skills/super-dev/SKILL.md`。
+5. 为兼容旧安装，仍会保留 `super-dev-core` 作为兼容别名。
+6. 如果旧会话没加载新 Skill，重启 `codex` 再试。
 
 #### 15. Trae
 

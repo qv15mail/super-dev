@@ -348,6 +348,7 @@ export function App() {
             (
                 "{\n"
                 '  "icon_system": "Lucide Icons",\n'
+                '  "emoji_policy": {"allowed_in_ui": false, "allowed_as_icon": false, "allowed_during_development": false},\n'
                 '  "typography_preset": {"heading": "Space Grotesk", "body": "Inter"},\n'
                 '  "ui_library_preference": {"final_selected": "shadcn/ui + Radix UI + Tailwind CSS"},\n'
                 '  "design_tokens": {"css_variables": ":root { --color-primary: #0F172A; --font-heading: \\"Space Grotesk\\"; }"}\n'
@@ -401,6 +402,7 @@ export function App() {
             (
                 "{\n"
                 '  "icon_system": "Lucide Icons",\n'
+                '  "emoji_policy": {"allowed_in_ui": false, "allowed_as_icon": false, "allowed_during_development": false},\n'
                 '  "typography_preset": {"heading": "Sora", "body": "Inter"},\n'
                 '  "ui_library_preference": {"final_selected": "Magic UI + Tailwind CSS"},\n'
                 '  "design_tokens": {"css_variables": ":root { --color-primary: #111827; --font-heading: \\"Sora\\"; }"}\n'
@@ -454,6 +456,7 @@ export function App() {
             (
                 "{\n"
                 '  "icon_system": "Lucide Icons",\n'
+                '  "emoji_policy": {"allowed_in_ui": false, "allowed_as_icon": false, "allowed_during_development": false},\n'
                 '  "typography_preset": {"heading": "IBM Plex Sans", "body": "Public Sans"},\n'
                 '  "ui_library_preference": {"final_selected": "shadcn/ui + Radix UI + Tailwind CSS"},\n'
                 '  "design_tokens": {"css_variables": ":root { --color-primary: #2563EB; }"}\n'
@@ -509,6 +512,7 @@ export function App() {
             (
                 "{\n"
                 '  "icon_system": "Lucide Icons",\n'
+                '  "emoji_policy": {"allowed_in_ui": false, "allowed_as_icon": false, "allowed_during_development": false},\n'
                 '  "typography_preset": {"heading": "IBM Plex Sans", "body": "Public Sans"},\n'
                 '  "ui_library_preference": {"final_selected": "shadcn/ui + Radix UI + Tailwind CSS"},\n'
                 '  "design_tokens": {"css_variables": ":root { --color-primary: #2563EB; }"}\n'

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -10,10 +11,66 @@ from .config import ConfigManager
 
 
 class CliDeployRuntimeMixin:
+    _RUNTIME_UI_EMOJI_RE = re.compile(r"[\u2600-\u27BF\U0001F300-\U0001FAFF]")
+    _RUNTIME_UI_CHAT_SHELL_RE = re.compile(
+        r"(anthropic|claude|chat-sidebar|conversation-list|thread-list|assistant-message|model-selector|conversation-shell|chat-shell)",
+        re.IGNORECASE,
+    )
+
     def _frontend_runtime_report_paths(self, output_dir: Path, project_name: str) -> dict[str, Path]:
         return {
             "markdown": output_dir / f"{project_name}-frontend-runtime.md",
             "json": output_dir / f"{project_name}-frontend-runtime.json",
+        }
+
+    def _runtime_ui_probe_files(self, *, project_dir: Path, frontend_dir: Path, preview_file: Path) -> list[Path]:
+        allowed_suffixes = {".tsx", ".ts", ".jsx", ".js", ".vue", ".svelte", ".css", ".scss", ".less", ".html"}
+        excluded_dirs = {"node_modules", ".git", ".venv", "venv", "dist", "build", ".next", "coverage"}
+        candidates: list[Path] = []
+        for candidate in (
+            preview_file,
+            frontend_dir / "index.html",
+            frontend_dir / "styles.css",
+            frontend_dir / "app.js",
+            project_dir / "frontend",
+            project_dir / "src",
+        ):
+            if candidate.is_file() and candidate not in candidates:
+                candidates.append(candidate)
+            elif candidate.is_dir():
+                for path in candidate.rglob("*"):
+                    if not path.is_file() or path.suffix.lower() not in allowed_suffixes:
+                        continue
+                    if any(part in excluded_dirs for part in path.parts):
+                        continue
+                    if path not in candidates:
+                        candidates.append(path)
+        return candidates[:80]
+
+    def _probe_runtime_ui_banned_patterns(
+        self,
+        *,
+        project_dir: Path,
+        frontend_dir: Path,
+        preview_file: Path,
+    ) -> dict[str, Any]:
+        combined = "\n".join(
+            path.read_text(encoding="utf-8", errors="ignore")
+            for path in self._runtime_ui_probe_files(
+                project_dir=project_dir,
+                frontend_dir=frontend_dir,
+                preview_file=preview_file,
+            )
+            if path.exists()
+        )
+        emoji_hits = sorted({item for item in self._RUNTIME_UI_EMOJI_RE.findall(combined)})[:10]
+        chat_shell_hits = sorted({item for item in self._RUNTIME_UI_CHAT_SHELL_RE.findall(combined)})[:10]
+        observed = [*emoji_hits, *chat_shell_hits]
+        return {
+            "passed": len(observed) == 0,
+            "emoji_hits": emoji_hits,
+            "chat_shell_hits": chat_shell_hits,
+            "observed": observed[:10],
         }
 
     def _load_frontend_runtime_validation(self, *, output_dir: Path, project_name: str) -> dict[str, Any]:
@@ -78,9 +135,19 @@ class CliDeployRuntimeMixin:
             "ui_component_imports": "component_imports",
             "ui_banned_patterns": "banned_patterns",
         }
+        banned_pattern_probe = self._probe_runtime_ui_banned_patterns(
+            project_dir=project_dir,
+            frontend_dir=frontend_dir,
+            preview_file=preview_file,
+        )
         for check_name, alignment_key in key_alignment_checks.items():
             item = ui_alignment_summary.get(alignment_key)
-            checks[check_name] = bool(item.get("passed", False)) if isinstance(item, dict) else True
+            if isinstance(item, dict):
+                checks[check_name] = bool(item.get("passed", False))
+            elif check_name == "ui_banned_patterns":
+                checks[check_name] = bool(banned_pattern_probe.get("passed", False))
+            else:
+                checks[check_name] = True
         passed = all(checks.values())
         ui_contract: dict[str, Any] = {}
         if ui_contract_file.exists():
@@ -105,6 +172,7 @@ class CliDeployRuntimeMixin:
             "ui_contract_summary": {
                 "style_direction": ui_contract.get("style_direction", ""),
                 "icon_system": icon_system,
+                "emoji_policy": ui_contract.get("emoji_policy", {}),
                 "selected_library": (
                     ui_contract.get("ui_library_preference", {}).get("final_selected", "")
                     if isinstance(ui_contract.get("ui_library_preference"), dict)
@@ -117,6 +185,7 @@ class CliDeployRuntimeMixin:
                 for key, value in ui_alignment_summary.items()
                 if key in {"theme_entry", "navigation_shell", "component_imports", "banned_patterns"}
             },
+            "ui_banned_pattern_probe": banned_pattern_probe,
         }
         report_paths = self._frontend_runtime_report_paths(output_dir=output_dir, project_name=project_name)
         report_paths["json"].write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -148,6 +217,12 @@ class CliDeployRuntimeMixin:
                     f"- Style direction: {ui_contract.get('style_direction', '-')}",
                     f"- Icon system: {icon_system or '-'}",
                     (
+                        "- Emoji policy: "
+                        f"{ui_contract.get('emoji_policy', {}).get('rule', '-')}"
+                        if isinstance(ui_contract.get("emoji_policy"), dict)
+                        else "- Emoji policy: -"
+                    ),
+                    (
                         "- Selected library: "
                         f"{ui_contract.get('ui_library_preference', {}).get('final_selected', '-')}"
                         if isinstance(ui_contract.get("ui_library_preference"), dict)
@@ -173,6 +248,16 @@ class CliDeployRuntimeMixin:
                     lines.append(
                         f"- {value.get('label', key)}: {'ok' if value.get('passed') else 'gap'}"
                     )
+        if banned_pattern_probe.get("observed"):
+            lines.extend(
+                [
+                    "",
+                    "## Runtime Banned Pattern Probe",
+                    "",
+                    f"- passed: {'yes' if banned_pattern_probe.get('passed') else 'no'}",
+                    f"- observed: {', '.join(str(item) for item in banned_pattern_probe.get('observed', []))}",
+                ]
+            )
         report_paths["markdown"].write_text("\n".join(lines) + "\n", encoding="utf-8")
         report["report_files"] = {name: str(path) for name, path in report_paths.items()}
         return report

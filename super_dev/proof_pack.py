@@ -607,6 +607,7 @@ class ProofPackBuilder:
                 path=str(file_path),
             )
         component_stack = payload.get("component_stack", {}) if isinstance(payload.get("component_stack"), dict) else {}
+        emoji_policy = payload.get("emoji_policy") if isinstance(payload.get("emoji_policy"), dict) else {}
         icon_system = payload.get("icon_system") or component_stack.get("icon") or component_stack.get("icons") or ""
         required_sections = {
             "style_direction": bool(payload.get("style_direction")),
@@ -615,13 +616,19 @@ class ProofPackBuilder:
                 or (isinstance(payload.get("typography_preset"), dict) and bool(payload.get("typography_preset")))
             ),
             "icon_system": bool(icon_system),
+            "emoji_policy": (
+                bool(emoji_policy)
+                and emoji_policy.get("allowed_in_ui") is False
+                and emoji_policy.get("allowed_as_icon") is False
+                and emoji_policy.get("allowed_during_development") is False
+            ),
             "ui_library_preference": isinstance(payload.get("ui_library_preference"), dict)
             and bool(payload.get("ui_library_preference")),
             "design_tokens": isinstance(payload.get("design_tokens"), dict) and bool(payload.get("design_tokens")),
         }
         ready = all(required_sections.values())
         summary = (
-            "UI contract frozen with style, typography, icon system, library preference and design tokens"
+            "UI contract frozen with style, typography, icon system, emoji policy, library preference and design tokens"
             if ready
             else "UI contract missing required frozen decision sections"
         )
