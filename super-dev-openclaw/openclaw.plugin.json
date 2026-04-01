@@ -2,7 +2,7 @@
   "id": "super-dev",
   "name": "Super Dev Pipeline",
   "description": "AI development orchestration - research-first, commercial-grade delivery pipeline with 10 expert roles",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "skills": ["./skills"],
   "configSchema": {
     "type": "object",
