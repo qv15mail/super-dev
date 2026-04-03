@@ -5,10 +5,6 @@
 测试对象: super_dev.proof_pack
 """
 
-import json
-from pathlib import Path
-
-import pytest
 from super_dev.proof_pack import ProofPackArtifact, ProofPackReport
 
 

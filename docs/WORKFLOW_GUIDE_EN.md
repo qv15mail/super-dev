@@ -16,7 +16,10 @@ This is the practical handbook for running Super Dev in real projects. It covers
 The preferred path is to trigger Super Dev inside the host session:
 
 ```text
-/super-dev Build an enterprise project management platform with auth, RBAC, projects, tasks, and analytics
+Native slash hosts: /super-dev Build an enterprise project management platform with auth, RBAC, projects, tasks, and analytics
+Codex App/Desktop: choose super-dev from the / list
+Codex CLI: $super-dev
+Natural-language fallback: super-dev: Build an enterprise project management platform with auth, RBAC, projects, tasks, and analytics
 ```
 
 If you are unsure which host to use on the current machine, run:
@@ -166,7 +169,10 @@ host_profile_enforce_selected: true
 ### Core orchestration
 
 ```text
-/super-dev <requirement>             # recommended inside the host session
+Native slash hosts: /super-dev <requirement>
+Codex App/Desktop: choose super-dev from the / list
+Codex CLI: $super-dev
+Natural-language fallback: super-dev: <requirement>
 ```
 
 ### Explicit bootstrap

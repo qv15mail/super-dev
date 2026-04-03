@@ -44,6 +44,7 @@ class HostAdapterProfile:
     notes: str
     usage_mode: str
     trigger_command: str
+    entry_variants: list[dict[str, str]]
     trigger_context: str
     usage_location: str
     requires_restart_after_onboard: bool
@@ -80,8 +81,9 @@ class IntegrationManager(IntegrationManagerContentMixin):
     CODEX_AGENTS_END = "<!-- END SUPER DEV CODEX -->"
     OPENCODE_AGENTS_BEGIN = "<!-- BEGIN SUPER DEV OPENCODE -->"
     OPENCODE_AGENTS_END = "<!-- END SUPER DEV OPENCODE -->"
+    CLAUDE_RULES_BEGIN = "<!-- BEGIN SUPER DEV CLAUDE -->"
+    CLAUDE_RULES_END = "<!-- END SUPER DEV CLAUDE -->"
     NO_SKILL_TARGETS: set[str] = {
-        "claude-code",
         "cline",
         "kilo-code",
         "vscode-copilot",
@@ -117,10 +119,11 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "接入后建议新开一个 Antigravity Chat，使 GEMINI 上下文、slash 与 Skill 一起生效。",
         ],
         "claude-code": [
-            "推荐作为首选 CLI 宿主。",
-            "接入后可先执行 super-dev doctor --host claude-code 确认 slash 已生效。",
-            "Claude Code 官方已公开 `.claude/commands/` 与 `.claude/agents/`；自定义命令能力已并入 Skills 体系，但现有 commands 目录仍是官方支持面。",
-            "Super Dev 会生成项目级 `.claude/commands/super-dev.md` 与 subagent 协议文件，并补充用户级 `~/.claude/commands/`。",
+            "推荐作为首选 CLI 宿主之一。",
+            "接入后可先执行 super-dev doctor --host claude-code，确认根 `CLAUDE.md`、`.claude/skills/`、兼容 slash 与可选 plugin enhancement 一起生效。",
+            "Claude Code 当前更接近 skills-first：项目根 `CLAUDE.md`、项目级 `.claude/skills/` 与用户级 `~/.claude/skills/` 是正式主面。",
+            "`.claude/commands/` 与 `.claude/agents/` 仍保留为兼容增强面，不再作为唯一主接入面。",
+            "仓库内还会额外生成可选的 repo plugin enhancement：`.claude-plugin/marketplace.json` + `plugins/super-dev-claude/.claude-plugin/plugin.json`。",
         ],
         "cline": [
             "Cline 优先使用 `.clinerules/` 规则目录，并补充项目级 `.cline/skills/` 让宿主在当前工作区内直接理解 Super Dev 协议。",
@@ -138,8 +141,9 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "官方文档已公开 `.codebuddy/commands/`、`.codebuddy/agents/`、`.codebuddy/skills/` 与 `~/.codebuddy/agents/`、`~/.codebuddy/skills/`。",
         ],
         "codex-cli": [
-            "Codex 官方不走自定义项目 slash；桌面端若在 `/` 列表中看到 `super-dev`，那是启用 Skill 的展示入口。",
+            "Codex 官方不走自定义项目 slash；桌面端请从 `/` 列表选择 `super-dev`，那是启用 Skill 的展示入口。",
             "实际依赖项目根 AGENTS.md、项目级 .agents/skills/super-dev/SKILL.md、全局 CODEX_HOME/AGENTS.md（默认 ~/.codex/AGENTS.md），以及官方用户级技能目录 ~/.agents/skills/super-dev/SKILL.md。",
+            "仓库内还会额外生成 `.agents/plugins/marketplace.json` 与 `plugins/super-dev-codex/`，作为 Codex App/Desktop 的可选 repo plugin 增强层。",
             "保留 super-dev-core 作为兼容别名，避免旧安装和旧文档失效。",
             "如果旧会话没加载新 Skill，重启 codex 再试。",
         ],
@@ -300,7 +304,19 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "claude-code": IntegrationTarget(
             name="claude-code",
             description="Claude Code CLI 深度集成",
-            files=[".claude/CLAUDE.md", ".claude/agents/super-dev-core.md"],
+            files=[
+                "CLAUDE.md",
+                ".claude/CLAUDE.md",
+                ".claude/skills/super-dev/SKILL.md",
+                ".claude/agents/super-dev-core.md",
+                ".claude-plugin/marketplace.json",
+                "plugins/super-dev-claude/.claude-plugin/plugin.json",
+                "plugins/super-dev-claude/README.md",
+                "plugins/super-dev-claude/skills/super-dev/SKILL.md",
+                "plugins/super-dev-claude/skills/super-dev-core/SKILL.md",
+                "plugins/super-dev-claude/commands/super-dev.md",
+                "plugins/super-dev-claude/agents/super-dev-core.md",
+            ],
         ),
         "cline": IntegrationTarget(
             name="cline",
@@ -324,7 +340,15 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "codex-cli": IntegrationTarget(
             name="codex-cli",
             description="Codex 项目上下文注入",
-            files=["AGENTS.md", ".agents/skills/super-dev/SKILL.md"],
+            files=[
+                "AGENTS.md",
+                ".agents/skills/super-dev/SKILL.md",
+                ".agents/plugins/marketplace.json",
+                "plugins/super-dev-codex/.codex-plugin/plugin.json",
+                "plugins/super-dev-codex/README.md",
+                "plugins/super-dev-codex/skills/super-dev/SKILL.md",
+                "plugins/super-dev-codex/skills/super-dev-core/SKILL.md",
+            ],
         ),
         "copilot-cli": IntegrationTarget(
             name="copilot-cli",
@@ -419,6 +443,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
     }
     GLOBAL_SLASH_COMMAND_FILES: dict[str, str] = {
         "antigravity": ".gemini/commands/super-dev.md",
+        "claude-code": ".claude/commands/super-dev.md",
         "opencode": ".config/opencode/commands/super-dev.md",
     }
     NO_SLASH_TARGETS: set[str] = {
@@ -435,7 +460,9 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "antigravity": ("https://antigravity.im/documentation",),
         "claude-code": (
             "https://docs.anthropic.com/en/docs/claude-code/slash-commands",
-            "https://docs.anthropic.com/en/docs/claude-code/sub-agents",
+            "https://docs.anthropic.com/en/docs/claude-code/hooks",
+            "https://docs.anthropic.com/en/docs/claude-code/sdk",
+            "https://docs.anthropic.com/en/docs/claude-code/settings#claude-md-memory",
         ),
         "cline": ("https://docs.cline.bot/customization/cline-rules",),
         "codebuddy-cli": (
@@ -537,19 +564,20 @@ class IntegrationManager(IntegrationManagerContentMixin):
         },
         "claude-code": {
             "level": "certified",
-            "reason": "原生 slash 命令、宿主文档明确、项目规则与 slash 安装路径已做运行级适配。",
+            "reason": "已收敛到 Claude Code 的新主模型：项目根 CLAUDE.md + project/user skills，并叠加兼容 commands/agents 与 repo plugin enhancement。",
             "evidence": [
-                "官方文档明确支持 slash commands、custom commands 与 sub-agents",
-                "Super Dev 已内置 `.claude/commands/` + `.claude/agents/` 接入",
-                "当前项目已针对该宿主做过多轮实际验证",
+                "泄露代码确认 `.claude/skills` 为一等面，`/commands` 已被当作 legacy surface 兼容加载",
+                "泄露代码的 onboarding 明确检查项目根 `CLAUDE.md`，而不是只看 `.claude/CLAUDE.md`",
+                "Super Dev 已补齐 `CLAUDE.md + .claude/skills + ~/.claude/skills + optional repo plugin enhancement`",
             ],
         },
         "codex-cli": {
             "level": "certified",
-            "reason": "已按 Codex 的真实能力改成 AGENTS.md + Skill 模式，不再误判为 slash 宿主。",
+            "reason": "已按 Codex 的真实能力改成 AGENTS.md + Skills 主面，并增加 repo plugin enhancement，不再误判为项目 slash 宿主。",
             "evidence": [
                 "官方文档明确仓库与用户级 skills 目录为 .agents/skills 与 ~/.agents/skills",
-                "Super Dev 已为 Codex 修正成 AGENTS.md + 官方 Skills 接入路径",
+                "官方文档明确 repo / personal marketplace 与 .codex-plugin/plugin.json 的插件结构",
+                "Super Dev 已为 Codex 修正成 AGENTS.md + 官方 Skills 接入路径，并补充 repo plugin enhancement",
                 "接入后需要重启的行为已被显式建模与测试覆盖",
             ],
         },
@@ -771,7 +799,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
     def _first_response_contract_zh(self) -> str:
         return (
             "## 首轮响应契约（首次触发必须执行）\n"
-            "- 当用户输入 `/super-dev ...`、`super-dev: ...` 或 `super-dev：...` 后，第一轮回复必须明确：已进入 Super Dev 流水线，而不是普通聊天。\n"
+            "- 当用户通过宿主支持的 Super Dev 入口触发（例如 `/super-dev ...`、`$super-dev`、`super-dev: ...` 或 `super-dev：...`）后，第一轮回复必须明确：已进入 Super Dev 流水线，而不是普通聊天。\n"
             "- 如果仓库里已经存在 `super-dev.yaml`、`.super-dev/WORKFLOW.md`、`output/*`、`.super-dev/review-state/*` 或未完成的 run state，新会话里的第一次自然语言需求也必须默认继续 Super Dev 流程，而不是退回普通聊天。\n"
             "- 第一轮回复前，优先读取 `.super-dev/WORKFLOW.md` 与 `output/*-bootstrap.md`（若存在），把其中的初始化契约视为当前仓库的显式 bootstrap 规则。\n"
             "- 第一轮回复必须明确当前阶段是 `research`，会先读取 `knowledge/` 与 `output/knowledge-cache/*-knowledge-bundle.json`（若存在），再用宿主原生联网研究同类产品。\n"
@@ -782,7 +810,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
     def _first_response_contract_en(self) -> str:
         return (
             "## First-Response Contract\n"
-            "- On the first reply after `/super-dev ...`, `super-dev: ...`, or `super-dev：...`, explicitly state that Super Dev pipeline mode is now active rather than normal chat mode.\n"
+            "- On the first reply after a host-supported Super Dev entry (for example `/super-dev ...`, `$super-dev`, `super-dev: ...`, or `super-dev：...`), explicitly state that Super Dev pipeline mode is now active rather than normal chat mode.\n"
             "- If the repository already contains `super-dev.yaml`, `.super-dev/WORKFLOW.md`, `output/*`, `.super-dev/review-state/*`, or an unfinished run state, the first natural-language requirement in a new host session must also default to continuing Super Dev rather than plain chat.\n"
             "- Before the first reply, read `.super-dev/WORKFLOW.md` and `output/*-bootstrap.md` when present, and treat them as the explicit bootstrap contract for this repository.\n"
             "- The first reply must explicitly state that the current phase is `research`, and that you will read `knowledge/` plus `output/knowledge-cache/*-knowledge-bundle.json` first when available before similar-product research.\n"
@@ -860,6 +888,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
             notes=usage["notes"],
             usage_mode=usage["usage_mode"],
             trigger_command=usage["trigger_command"],
+            entry_variants=list(usage.get("entry_variants", [])),
             trigger_context=usage["trigger_context"],
             usage_location=usage["usage_location"],
             requires_restart_after_onboard=usage["requires_restart_after_onboard"],
@@ -1208,7 +1237,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
     @classmethod
     def resolve_global_protocol_path(cls, target: str) -> Path | None:
         mapping = {
-            "claude-code": Path.home() / ".claude" / "agents" / "super-dev-core.md",
+            "claude-code": Path.home() / ".claude" / "CLAUDE.md",
             "codebuddy": Path.home() / ".codebuddy" / "agents" / "super-dev-core.md",
             "codex-cli": cls._codex_home_dir() / "AGENTS.md",
             "kiro": Path.home() / ".kiro" / "steering" / "AGENTS.md",
@@ -1295,6 +1324,21 @@ class IntegrationManager(IntegrationManagerContentMixin):
         flow_group = groups[4]
 
         normalized = surface_path.as_posix()
+
+        if normalized.endswith("/plugins/marketplace.json") or normalized.endswith(
+            "/.codex-plugin/plugin.json"
+        ) or normalized.endswith("/.claude-plugin/plugin.json") or normalized.endswith(
+            "/.claude-plugin/marketplace.json"
+        ):
+            return []
+
+        if normalized.endswith("/plugins/super-dev-codex/README.md") or normalized.endswith(
+            "/plugins/super-dev-claude/README.md"
+        ):
+            return []
+
+        if "/plugins/super-dev-codex/skills/" in normalized or "/plugins/super-dev-claude/skills/" in normalized:
+            return []
 
         if surface_key.startswith("project-slash:") or surface_key.startswith("global-slash:"):
             return [trigger_group, documents_group, confirmation_group, flow_group]
@@ -1404,6 +1448,14 @@ class IntegrationManager(IntegrationManagerContentMixin):
                         if self._remove_managed_block(file_path=path, begin=begin, end=end):
                             removed.append(path)
                             continue
+                    if target == "claude-code" and path.name == "CLAUDE.md":
+                        if self._remove_managed_block(
+                            file_path=path,
+                            begin=self.CLAUDE_RULES_BEGIN,
+                            end=self.CLAUDE_RULES_END,
+                        ):
+                            removed.append(path)
+                            continue
                     path.unlink()
                     removed.append(path)
                     # 清理空父目录
@@ -1430,19 +1482,81 @@ class IntegrationManager(IntegrationManagerContentMixin):
         if target == "codex-cli":
             return {
                 "usage_mode": "agents-and-skill",
-                "primary_entry": "在 Codex 会话输入 `super-dev: <需求描述>`，或显式提及 `$super-dev`；Codex 桌面端若在 `/` 列表中看到 `super-dev`，那是启用 Skill 的官方入口（由项目根 AGENTS.md + 项目级 .agents/skills/super-dev + ~/.codex/AGENTS.md + ~/.agents/skills/super-dev/SKILL.md 生效）",
+                "primary_entry": "Codex App/Desktop 优先从 `/` 列表选择 `super-dev`；Codex CLI 优先显式输入 `$super-dev`；两端都可用 `super-dev: <需求描述>` 作为 AGENTS 驱动的自然语言回退入口。",
                 "trigger_command": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
+                "entry_variants": [
+                    {
+                        "surface": "app",
+                        "label": "Codex App/Desktop",
+                        "entry": "/super-dev",
+                        "mode": "enabled-skill-slash-entry",
+                        "priority": "preferred",
+                        "notes": "在 `/` 列表中直接选择 `super-dev`；这是已启用 Skill 的官方入口，不是项目自定义 slash 文件。",
+                    },
+                    {
+                        "surface": "cli",
+                        "label": "Codex CLI",
+                        "entry": "$super-dev",
+                        "mode": "explicit-skill",
+                        "priority": "preferred",
+                        "notes": "CLI 中官方显式调用 Skill 的方式，最符合 Codex Skills 文档。",
+                    },
+                    {
+                        "surface": "all",
+                        "label": "Codex App/Desktop + CLI",
+                        "entry": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
+                        "mode": "agents-natural-language-fallback",
+                        "priority": "fallback",
+                        "notes": "由项目 AGENTS.md 与全局 AGENTS.md 驱动的自然语言入口，适合作为统一回退方式。",
+                    },
+                ],
                 "trigger_context": "Codex 当前会话",
                 "usage_location": usage_location,
                 "requires_restart_after_onboard": True,
                 "post_onboard_steps": [
-                    "完成接入后重启 codex，使项目根 AGENTS.md、项目级 .agents/skills/super-dev、全局 CODEX_HOME/AGENTS.md（默认 ~/.codex/AGENTS.md）与 ~/.agents/skills/super-dev/SKILL.md 生效。",
-                    "最稳妥的触发方式仍是 `super-dev: <需求描述>`。",
-                    "如果你想显式调 Skill，可输入 `$super-dev`。",
-                    "如果 Codex 桌面端的 `/` 列表里出现 `super-dev`，可以直接选它；那是 Skill 列表入口，不是自定义项目 slash 文件。",
+                    "完成接入后重启 codex，使项目根 AGENTS.md、项目级 .agents/skills/super-dev、repo marketplace `.agents/plugins/marketplace.json`、repo plugin `plugins/super-dev-codex/`、全局 CODEX_HOME/AGENTS.md（默认 ~/.codex/AGENTS.md）与 ~/.agents/skills/super-dev/SKILL.md 生效。",
+                    "Codex App/Desktop 优先从 `/` 列表选择 `super-dev` skill。",
+                    "Codex CLI 优先显式输入 `$super-dev`。",
+                    "如果你已经在自然语言上下文里继续当前流程，也可以直接说 `super-dev: <需求描述>`。",
                 ],
                 "usage_notes": usage_notes,
-                "notes": "Codex 官方最佳接入面是项目根 AGENTS.md + 项目级 .agents/skills + 全局 CODEX_HOME/AGENTS.md（默认 ~/.codex/AGENTS.md）+ 官方用户 skills 目录 ~/.agents/skills。桌面端的 / 能展示已启用 Skill，但这不等于支持任意自定义项目 slash 命令文件。",
+                "notes": "Codex 官方最佳接入面是项目根 AGENTS.md + 分层 `.agents/skills` + 全局 CODEX_HOME/AGENTS.md（默认 ~/.codex/AGENTS.md）+ 官方用户 skills 目录 ~/.agents/skills；repo 级 `.agents/plugins/marketplace.json` + `plugins/super-dev-codex/.codex-plugin/plugin.json` 作为 Codex App/Desktop 的可选 plugin enhancement 一并提供。Codex App/Desktop 的 `/super-dev` 是已启用 Skill 的官方入口；Codex CLI 的官方显式入口是 `$super-dev`；`super-dev:` 作为 AGENTS 驱动的自然语言回退入口保留。",
+            }
+        if target == "claude-code":
+            return {
+                "usage_mode": "native-slash-and-skill",
+                "primary_entry": "在 Claude Code 当前项目会话里优先使用 `/super-dev \"<需求描述>\"`；底层由项目根 `CLAUDE.md`、项目级 `.claude/skills/super-dev/`、用户级 `~/.claude/skills/` 驱动，`.claude/commands/` 与 `.claude/agents/` 作为兼容增强面保留。",
+                "trigger_command": '/super-dev "<需求描述>"',
+                "entry_variants": [
+                    {
+                        "surface": "app_cli",
+                        "label": "Claude Code",
+                        "entry": "/super-dev",
+                        "mode": "native-slash",
+                        "priority": "preferred",
+                        "notes": "Slash 仍是用户最直接的触发入口，但其底层应汇入根 `CLAUDE.md` + skills-first 的同一条 Super Dev 流程。",
+                    },
+                    {
+                        "surface": "all",
+                        "label": "Fallback",
+                        "entry": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
+                        "mode": "rules-natural-language-fallback",
+                        "priority": "fallback",
+                        "notes": "自然语言回退入口仍保留，用于当前会话已在项目上下文中继续当前 Super Dev 流程。",
+                    },
+                ],
+                "trigger_context": "Claude Code 当前项目会话",
+                "usage_location": usage_location,
+                "requires_restart_after_onboard": False,
+                "post_onboard_steps": [
+                    "确认项目根 `CLAUDE.md` 与兼容 `.claude/CLAUDE.md` 都已写入 Super Dev 规则块。",
+                    "确认项目级 `.claude/skills/super-dev/SKILL.md` 与用户级 `~/.claude/skills/super-dev/SKILL.md` 已存在。",
+                    "确认兼容 `.claude/commands/super-dev.md`、`.claude/agents/super-dev-core.md` 也已生成。",
+                    "若要启用增强层，确认 `.claude-plugin/marketplace.json` 与 `plugins/super-dev-claude/.claude-plugin/plugin.json` 已存在。",
+                    '在 Claude Code 当前项目会话里输入 `/super-dev "<需求描述>"` 触发完整流程。',
+                ],
+                "usage_notes": usage_notes,
+                "notes": "Claude Code 当前最佳接入面是项目根 `CLAUDE.md` + 项目级 `.claude/skills/super-dev/` + 用户级 `~/.claude/skills/`；`.claude/commands/` 与 `.claude/agents/` 保留为兼容增强面；repo 级 `.claude-plugin/marketplace.json` + `plugins/super-dev-claude/.claude-plugin/plugin.json` 作为可选 plugin enhancement 一并提供。",
             }
         if target == "antigravity":
             return {
@@ -1558,6 +1672,16 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "usage_mode": "rules-only",
             "primary_entry": "输入 `super-dev: <需求描述>`（由项目规则生效）",
             "trigger_command": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
+            "entry_variants": [
+                {
+                    "surface": "default",
+                    "label": "Default",
+                    "entry": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
+                    "mode": "rules-natural-language",
+                    "priority": "preferred",
+                    "notes": "由项目规则文件驱动的标准入口。",
+                }
+            ],
             "trigger_context": "宿主当前会话",
             "usage_location": usage_location or "在宿主当前项目会话里触发。",
             "requires_restart_after_onboard": False,
@@ -1677,8 +1801,8 @@ class IntegrationManager(IntegrationManagerContentMixin):
     def _protocol_profile(self, *, target: str) -> dict[str, str]:
         mapping = {
             "claude-code": {
-                "mode": "official-subagent",
-                "summary": "官方 commands + subagents",
+                "mode": "official-skill",
+                "summary": "官方 CLAUDE.md + Skills + optional repo plugin enhancement",
             },
             "antigravity": {
                 "mode": "official-workflow",
@@ -1730,7 +1854,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
             },
             "codex-cli": {
                 "mode": "official-skill",
-                "summary": "官方 AGENTS.md + 官方 Skills",
+                "summary": "官方 AGENTS.md + 官方 Skills + optional repo plugin enhancement",
             },
             "copilot-cli": {
                 "mode": "official-context",
@@ -1767,15 +1891,23 @@ class IntegrationManager(IntegrationManagerContentMixin):
         by_target: dict[str, dict[str, list[str]]] = {
             "claude-code": {
                 "official_project_surfaces": [
+                    "CLAUDE.md",
                     ".claude/CLAUDE.md",
+                    ".claude/skills/super-dev/SKILL.md",
                     ".claude/commands/super-dev.md",
                     ".claude/agents/super-dev-core.md",
+                    ".claude-plugin/marketplace.json",
+                    "plugins/super-dev-claude/.claude-plugin/plugin.json",
                 ],
                 "official_user_surfaces": [
+                    "~/.claude/CLAUDE.md",
+                    "~/.claude/skills/super-dev/SKILL.md",
                     "~/.claude/commands/super-dev.md",
+                ],
+                "observed_compatibility_surfaces": [
+                    "~/.claude/skills/super-dev-core/SKILL.md",
                     "~/.claude/agents/super-dev-core.md",
                 ],
-                "observed_compatibility_surfaces": [],
             },
             "antigravity": {
                 "official_project_surfaces": [
@@ -1847,7 +1979,12 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "observed_compatibility_surfaces": [],
             },
             "codex-cli": {
-                "official_project_surfaces": ["AGENTS.md", ".agents/skills/super-dev/SKILL.md"],
+                "official_project_surfaces": [
+                    "AGENTS.md",
+                    ".agents/skills/super-dev/SKILL.md",
+                    ".agents/plugins/marketplace.json",
+                    "plugins/super-dev-codex/.codex-plugin/plugin.json",
+                ],
                 "official_user_surfaces": [
                     "~/.codex/AGENTS.md",
                     "~/.agents/skills/super-dev/SKILL.md",
@@ -2016,6 +2153,20 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 if updated:
                     written_files.append(file_path)
                 continue
+            if target == "claude-code" and relative in {"CLAUDE.md", ".claude/CLAUDE.md"}:
+                block_content = self._append_flow_contract(
+                    content=self._build_file_content(target=target, relative=relative),
+                    relative=relative,
+                )
+                updated = self._upsert_managed_block(
+                    file_path=file_path,
+                    begin=self.CLAUDE_RULES_BEGIN,
+                    end=self.CLAUDE_RULES_END,
+                    block_content=block_content,
+                )
+                if updated:
+                    written_files.append(file_path)
+                continue
             if file_path.exists() and not force:
                 continue
             file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2055,17 +2206,17 @@ class IntegrationManager(IntegrationManagerContentMixin):
             return protocol_file if updated or protocol_file.exists() else None
 
         if target == "claude-code" and protocol_file is not None:
-            if protocol_file.exists() and not force:
-                return None
-            protocol_file.parent.mkdir(parents=True, exist_ok=True)
-            protocol_file.write_text(
-                self._append_flow_contract(
-                    content=self._build_claude_agent_content(),
-                    relative=protocol_file.as_posix(),
-                ),
-                encoding="utf-8",
+            block_content = self._append_flow_contract(
+                content=self._build_file_content(target=target, relative=protocol_file.name),
+                relative=protocol_file.as_posix(),
             )
-            return protocol_file
+            updated = self._upsert_managed_block(
+                file_path=protocol_file,
+                begin=self.CLAUDE_RULES_BEGIN,
+                end=self.CLAUDE_RULES_END,
+                block_content=block_content,
+            )
+            return protocol_file if updated or protocol_file.exists() else None
 
         if target == "codebuddy" and protocol_file is not None:
             if protocol_file.exists() and not force:

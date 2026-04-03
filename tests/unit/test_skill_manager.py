@@ -17,10 +17,12 @@ class TestSkillManager:
 
     def test_target_path_kind_distinguishes_official_and_observed(self):
         assert SkillManager.target_path_kind("antigravity") == "official-user-surface"
+        assert SkillManager.target_path_kind("claude-code") == "official-user-surface"
         assert SkillManager.target_path_kind("cline") == "official-user-surface"
         assert SkillManager.target_path_kind("qoder-cli") == "official-user-surface"
         assert SkillManager.target_path_kind("trae") == "observed-compatibility-surface"
         assert SkillManager.TARGET_PATHS["antigravity"] == "~/.gemini/skills"
+        assert SkillManager.TARGET_PATHS["claude-code"] == "~/.claude/skills"
         assert SkillManager.TARGET_PATHS["cline"] == "~/.cline/skills"
         assert SkillManager.TARGET_PATHS["codex-cli"] == "~/.agents/skills"
         assert SkillManager.COMPATIBILITY_MIRROR_PATHS["codex-cli"] == ["~/.codex/skills"]
@@ -108,6 +110,8 @@ class TestSkillManager:
         assert primary_content == compatibility_content
         assert "interface:" in metadata_content
         assert 'display_name: "Super Dev"' in metadata_content
+        assert "$super-dev" in metadata_content
+        assert "slash skill list" in metadata_content
         assert "allow_implicit_invocation: true" in metadata_content
         assert {"super-dev", "super-dev-core"}.issubset(set(manager.list_installed("codex-cli")))
 

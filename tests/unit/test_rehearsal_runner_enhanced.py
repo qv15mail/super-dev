@@ -5,11 +5,6 @@
 测试对象: super_dev.deployers.rehearsal_runner
 """
 
-import json
-import textwrap
-from pathlib import Path
-
-import pytest
 from super_dev.deployers.rehearsal_runner import RehearsalCheck, RehearsalResult
 
 

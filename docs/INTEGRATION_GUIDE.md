@@ -64,8 +64,8 @@ super-dev integrate matrix --json
 super-dev integrate setup --all --force
 
 # 给主推平台安装内置 Skill
-super-dev skill install super-dev --target claude-code --name super-dev-core --force
-super-dev skill install super-dev --target codex-cli --name super-dev-core --force
+super-dev skill install super-dev --target claude-code --name super-dev --force
+super-dev skill install super-dev --target codex-cli --name super-dev --force
 super-dev skill install super-dev --target gemini-cli --name super-dev-core --force
 super-dev skill install super-dev --target kiro-cli --name super-dev-core --force
 super-dev skill install super-dev --target qoder-cli --name super-dev-core --force
@@ -80,8 +80,8 @@ super-dev skill install super-dev --target opencode --name super-dev-core --forc
 
 | 平台 | 集成规则文件 |
 |:---|:---|
-| claude-code | `.claude/CLAUDE.md` |
-| codex-cli | `AGENTS.md` |
+| claude-code | `CLAUDE.md` + `.claude/CLAUDE.md` + `.claude/skills/super-dev/SKILL.md` + `.claude-plugin/marketplace.json`（可选 repo plugin 增强） |
+| codex-cli | `AGENTS.md` + `.agents/skills/super-dev/SKILL.md` + `CODEX_HOME/AGENTS.md`（默认 `~/.codex/AGENTS.md`） |
 | gemini-cli | `GEMINI.md` |
 | kiro-cli | `.kiro/steering/super-dev.md` + `.kiro/skills/super-dev-core/SKILL.md` |
 | cursor-cli | `.cursor/rules/super-dev.mdc` |

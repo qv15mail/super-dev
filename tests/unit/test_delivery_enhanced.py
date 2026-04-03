@@ -119,7 +119,7 @@ class TestDeliveryPackagerInit:
 
     def test_default_version(self, tmp_path):
         packager = DeliveryPackager(tmp_path, "test")
-        assert packager.version == "2.3.0"
+        assert packager.version == "2.3.1"
 
     def test_custom_version(self, tmp_path):
         packager = DeliveryPackager(tmp_path, "test", version="3.0.0")
@@ -512,7 +512,7 @@ class TestPackageEdgeCases:
 
     def test_package_creates_output_delivery_dir(self, tmp_path):
         packager = DeliveryPackager(tmp_path, "test")
-        result = packager.package()
+        packager.package()
         delivery_dir = tmp_path / "output" / "delivery"
         assert delivery_dir.exists()
 

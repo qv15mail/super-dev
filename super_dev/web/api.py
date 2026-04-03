@@ -93,6 +93,9 @@ from super_dev.review_state import (
 )
 from super_dev.skills import SkillManager
 from super_dev.workflow_state import (
+    build_host_entry_prompts,
+    build_host_flow_contract,
+    build_host_flow_probe,
     detect_pipeline_summary,
     workflow_continuity_rules,
     workflow_mode_label,
@@ -613,9 +616,15 @@ def _sanitize_project_name(name: str) -> str:
     return sanitized.lower() or "my-project"
 
 
+def _display_final_trigger(profile) -> str:
+    if getattr(profile, "host", "") == "codex-cli":
+        return "App/Desktop: /super-dev | CLI: $super-dev | 回退: super-dev: 你的需求"
+    return str(profile.trigger_command).replace("<需求描述>", "你的需求")
+
+
 def _default_host_commands(host_id: str, *, supports_slash: bool) -> dict[str, str]:
     profile = IntegrationManager(Path.cwd()).get_adapter_profile(host_id)
-    trigger = str(profile.trigger_command).replace("<需求描述>", "你的需求")
+    trigger = _display_final_trigger(profile)
     skill_name = (
         SkillManager.default_skill_name(host_id)
         if IntegrationManager.requires_skill(host_id)
@@ -631,9 +640,9 @@ def _default_host_commands(host_id: str, *, supports_slash: bool) -> dict[str, s
         "run": 'super-dev "你的需求"',
         "slash": '/super-dev "你的需求"' if supports_slash else "",
         "skill_slash": "/super-dev" if host_id == "codex-cli" else "",
+        "skill": "$super-dev" if host_id == "codex-cli" else skill_name,
         "trigger": trigger,
     }
-    commands["skill"] = skill_name
     return commands
 
 
@@ -644,7 +653,7 @@ def _build_host_tool_catalog_payload() -> list[dict[str, Any]]:
         target = IntegrationManager.TARGETS.get(host_id)
         supports_slash = IntegrationManager.supports_slash(host_id)
         profile = IntegrationManager(Path.cwd()).get_adapter_profile(host_id)
-        final_trigger = str(profile.trigger_command).replace("<需求描述>", "你的需求")
+        final_trigger = _display_final_trigger(profile)
         payload.append(
             {
                 "id": host_id,
@@ -671,6 +680,7 @@ def _build_host_tool_catalog_payload() -> list[dict[str, Any]]:
                 "usage_mode": profile.usage_mode,
                 "primary_entry": profile.primary_entry,
                 "final_trigger": final_trigger,
+                "entry_variants": list(profile.entry_variants),
                 "trigger_context": profile.trigger_context,
                 "usage_location": profile.usage_location,
                 "requires_restart_after_onboard": profile.requires_restart_after_onboard,
@@ -682,10 +692,12 @@ def _build_host_tool_catalog_payload() -> list[dict[str, Any]]:
                 "supports_skill_slash_entry": host_id == "codex-cli",
                 "skill_slash_entry_command": "/super-dev" if host_id == "codex-cli" else "",
                 "skill_slash_entry_note": (
-                    "Only indicates the enabled Skill entry shown in the Codex slash list, not a project-level custom slash command."
+                    "Indicates the enabled Skill entry shown in the Codex app slash list, not a project-level custom slash command."
                     if host_id == "codex-cli"
                     else ""
                 ),
+                "flow_contract": build_host_flow_contract(host_id),
+                "flow_probe": build_host_flow_probe(host_id),
                 "notes": profile.notes,
                 "commands": _default_host_commands(host_id, supports_slash=supports_slash),
             }
@@ -772,19 +784,31 @@ def _project_has_super_dev_context(project_dir: Path) -> bool:
     )
 
 
-def _build_resume_probe_prompt(project_dir: Path, target: str, usage: dict[str, Any]) -> str:
+def _build_resume_probe_instruction(project_dir: Path) -> str:
     if not _project_has_super_dev_context(project_dir):
         return ""
-    trigger = str(usage.get("trigger_command", "")).strip()
-    instruction = (
+    return (
         "继续当前项目的 Super Dev 流程，不要当作普通聊天。"
         "先读取 .super-dev/SESSION_BRIEF.md、.super-dev/workflow-state.json、.super-dev/WORKFLOW.md、output/*、.super-dev/review-state/* 和最近的 tasks.md。"
     )
-    if target in {"codex-cli", "trae"}:
-        return f"super-dev: {instruction}"
-    if "/super-dev" in trigger:
-        escaped = instruction.replace('"', '\\"')
-        return f'/super-dev "{escaped}"'
+
+
+def _build_resume_probe_prompt(project_dir: Path, target: str, usage: dict[str, Any]) -> str:
+    instruction = _build_resume_probe_instruction(project_dir)
+    if not instruction:
+        return ""
+    trigger = str(usage.get("trigger_command", "")).strip()
+    entry_bundle = build_host_entry_prompts(
+        target=target,
+        instruction=instruction,
+        supports_slash=bool("/super-dev" in trigger),
+    )
+    preferred_entry = str(entry_bundle.get("preferred_entry", "")).strip()
+    prompts = entry_bundle.get("entry_prompts", {})
+    if isinstance(prompts, dict) and preferred_entry:
+        prompt = str(prompts.get(preferred_entry, "")).strip()
+        if prompt:
+            return prompt
     return f"super-dev: {instruction}"
 
 
@@ -802,6 +826,7 @@ def _build_session_resume_card(
     project_dir: Path, target: str, usage: dict[str, Any]
 ) -> dict[str, Any]:
     host_first_sentence = _build_resume_probe_prompt(project_dir, target, usage)
+    instruction = _build_resume_probe_instruction(project_dir)
     enabled = bool(host_first_sentence)
     workflow_mode = ""
     workflow_mode_display = ""
@@ -809,8 +834,25 @@ def _build_session_resume_card(
     action_examples: list[str] = []
     rules: list[str] = []
     recommended_workflow_command = ""
+    entry_prompts: dict[str, str] = {}
+    preferred_entry = ""
+    preferred_entry_label = ""
     summary: dict[str, Any] = {}
     if enabled:
+        entry_bundle = build_host_entry_prompts(
+            target=target,
+            instruction=instruction,
+            supports_slash=bool("/super-dev" in str(usage.get("trigger_command", "")).strip()),
+        )
+        raw_entry_prompts = entry_bundle.get("entry_prompts", {})
+        if isinstance(raw_entry_prompts, dict):
+            entry_prompts = {
+                str(key): str(value).strip()
+                for key, value in raw_entry_prompts.items()
+                if str(value).strip()
+            }
+        preferred_entry = str(entry_bundle.get("preferred_entry", "")).strip()
+        preferred_entry_label = str(entry_bundle.get("preferred_entry_label", "")).strip()
         summary = _detect_pipeline_summary(project_dir)
         recommended_workflow_command = (
             str(summary.get("recommended_command", "")).strip() or "super-dev run --resume"
@@ -885,6 +927,9 @@ def _build_session_resume_card(
     return {
         "enabled": enabled,
         "host_first_sentence": host_first_sentence,
+        "preferred_entry": preferred_entry if enabled else "",
+        "preferred_entry_label": preferred_entry_label if enabled else "",
+        "entry_prompts": entry_prompts if enabled else {},
         "session_brief_path": session_brief_path,
         "workflow_state_path": workflow_state_path,
         "workflow_mode": workflow_mode if enabled else "",
@@ -1005,7 +1050,11 @@ def _build_detected_host_decision_card(
     first_action = (
         f"重开后第一句直接复制 {session_resume_card.get('host_first_sentence')}"
         if session_resume_card.get("enabled")
-        else f"先在 {usage['host']} 里输入 {str(selected_profile.trigger_command).replace('<需求描述>', '你的需求')}"
+        else (
+            "先在 Codex App/Desktop 的 `/` 列表里选择 `super-dev`，或在 Codex CLI 输入 `$super-dev`；自然语言回退是 `super-dev: 你的需求`"
+            if selected_host == "codex-cli"
+            else f"先在 {usage['host']} 里输入 {str(selected_profile.trigger_command).replace('<需求描述>', '你的需求')}"
+        )
     )
     workflow_mode = "continue" if session_resume_card.get("enabled") else "start"
     action_title = (
@@ -1046,7 +1095,11 @@ def _build_detected_host_decision_card(
                 "reasons": _explain_detection_details({target: detected_meta.get(target, [])}).get(
                     target, []
                 ),
-                "trigger": str(profile.trigger_command).replace("<需求描述>", "你的需求"),
+                "trigger": (
+                    "Codex App/Desktop: `/super-dev`；Codex CLI: `$super-dev`；回退: `super-dev: 你的需求`"
+                    if target == "codex-cli"
+                    else str(profile.trigger_command).replace("<需求描述>", "你的需求")
+                ),
                 "path_override": host_path_override_guide(target),
             }
         )
@@ -1266,6 +1319,43 @@ def _collect_host_diagnostics(
                     f"super-dev skill install super-dev --target {target} --name {skill_name} --force"
                 )
 
+        if target == "codex-cli":
+            plugin_marketplace = project_dir / ".agents" / "plugins" / "marketplace.json"
+            plugin_manifest = (
+                project_dir / "plugins" / "super-dev-codex" / ".codex-plugin" / "plugin.json"
+            )
+            plugin_ok = plugin_marketplace.exists() and plugin_manifest.exists()
+            host_report["checks"]["plugin_enhancement"] = {
+                "ok": plugin_ok,
+                "marketplace_file": str(plugin_marketplace),
+                "plugin_manifest": str(plugin_manifest),
+                "mode": "repo-marketplace-plugin",
+            }
+            if not plugin_ok:
+                host_report["ready"] = False
+                host_report["missing"].append("plugin_enhancement")
+                host_report["suggestions"].append(
+                    f"super-dev onboard --host {target} --force --yes"
+                )
+        if target == "claude-code":
+            plugin_marketplace = project_dir / ".claude-plugin" / "marketplace.json"
+            plugin_manifest = (
+                project_dir / "plugins" / "super-dev-claude" / ".claude-plugin" / "plugin.json"
+            )
+            plugin_ok = plugin_marketplace.exists() and plugin_manifest.exists()
+            host_report["checks"]["plugin_enhancement"] = {
+                "ok": plugin_ok,
+                "marketplace_file": str(plugin_marketplace),
+                "plugin_manifest": str(plugin_manifest),
+                "mode": "repo-marketplace-plugin",
+            }
+            if not plugin_ok:
+                host_report["ready"] = False
+                host_report["missing"].append("plugin_enhancement")
+                host_report["suggestions"].append(
+                    f"super-dev onboard --host {target} --force --yes"
+                )
+
         if check_slash:
             if IntegrationManager.supports_slash(target):
                 project_slash_file = IntegrationManager.resolve_slash_command_path(
@@ -1345,7 +1435,7 @@ def _serialize_host_usage_profile(
     target: str,
 ) -> dict[str, Any]:
     profile = integration_manager.get_adapter_profile(target)
-    final_trigger = str(profile.trigger_command).replace("<需求描述>", "你的需求")
+    final_trigger = _display_final_trigger(profile)
     return {
         "host": profile.host,
         "category": profile.category,
@@ -1362,6 +1452,7 @@ def _serialize_host_usage_profile(
         "primary_entry": profile.primary_entry,
         "trigger_command": profile.trigger_command,
         "final_trigger": final_trigger,
+        "entry_variants": list(profile.entry_variants),
         "trigger_context": profile.trigger_context,
         "usage_location": profile.usage_location,
         "requires_restart_after_onboard": profile.requires_restart_after_onboard,
@@ -1374,10 +1465,12 @@ def _serialize_host_usage_profile(
         "supports_skill_slash_entry": target == "codex-cli",
         "skill_slash_entry_command": "/super-dev" if target == "codex-cli" else "",
         "skill_slash_entry_note": (
-            "Only indicates the enabled Skill entry shown in the Codex slash list, not a project-level custom slash command."
+            "Indicates the enabled Skill entry shown in the Codex app slash list, not a project-level custom slash command."
             if target == "codex-cli"
             else ""
         ),
+        "flow_contract": build_host_flow_contract(target),
+        "flow_probe": build_host_flow_probe(target),
         "path_override": host_path_override_guide(target),
         "precondition_status": profile.precondition_status,
         "precondition_label": profile.precondition_label,
@@ -1508,6 +1601,17 @@ def _build_host_runtime_validation_payload(
         entries.append(
             {
                 "host": target,
+                "checks": host.get("checks", {}) if isinstance(host.get("checks", {}), dict) else {},
+                "missing": (
+                    host.get("missing", [])
+                    if isinstance(host.get("missing", []), list)
+                    else []
+                ),
+                "suggestions": (
+                    host.get("suggestions", [])
+                    if isinstance(host.get("suggestions", []), list)
+                    else []
+                ),
                 "surface_ready": surface_ready,
                 "ready_for_delivery": surface_ready and runtime_status == "passed",
                 "blocking_reason": blocking_reason,
@@ -1530,6 +1634,7 @@ def _build_host_runtime_validation_payload(
                 "smoke_success_signal": usage.get("smoke_success_signal", ""),
                 "runtime_checklist": _host_runtime_checklist(target, usage),
                 "pass_criteria": _host_runtime_pass_criteria(target),
+                "flow_probe": build_host_flow_probe(target),
                 "resume_probe_prompt": _build_resume_probe_prompt(project_dir, target, usage),
                 "resume_checklist": _host_resume_checklist(target),
             }

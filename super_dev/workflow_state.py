@@ -64,6 +64,87 @@ WORKFLOW_STATUS_CONTINUITY_RULES: dict[str, list[str]] = {
 }
 
 
+def build_host_entry_prompts(
+    *,
+    target: str,
+    instruction: str,
+    supports_slash: bool = False,
+) -> dict[str, Any]:
+    escaped = instruction.replace('"', '\\"')
+    fallback = f"super-dev: {instruction}"
+    if target == "codex-cli":
+        return {
+            "preferred_entry": "app_desktop",
+            "preferred_entry_label": "App/Desktop",
+            "entry_prompts": {
+                "app_desktop": f'/super-dev "{escaped}"',
+                "cli": f'$super-dev "{escaped}"',
+                "fallback": fallback,
+            },
+        }
+    if supports_slash:
+        return {
+            "preferred_entry": "slash",
+            "preferred_entry_label": "Slash",
+            "entry_prompts": {
+                "slash": f'/super-dev "{escaped}"',
+                "fallback": fallback,
+            },
+        }
+    return {
+        "preferred_entry": "fallback",
+        "preferred_entry_label": "Text",
+        "entry_prompts": {"fallback": fallback},
+    }
+
+
+def build_host_flow_contract(target: str) -> dict[str, Any]:
+    if target == "codex-cli":
+        return {
+            "consistent_flow_required": True,
+            "summary": "无论使用 Codex App/Desktop 的 `/super-dev`、Codex CLI 的 `$super-dev`，还是 `super-dev:` 回退入口，都必须进入同一条 Super Dev 流程。",
+            "preferred_entry_order": ["app_desktop", "cli", "fallback"],
+            "preferred_entry_labels": {
+                "app_desktop": "App/Desktop",
+                "cli": "CLI",
+                "fallback": "Fallback",
+            },
+            "continuity_rule": "长流程里继续修改、补充、确认或恢复时，优先沿用当前入口面，不要切回普通聊天。",
+            "restart_rule": "接入或更新后必须彻底重开 Codex，新会话才会重新加载 AGENTS、Skills 和 repo plugin enhancement。",
+        }
+    return {
+        "consistent_flow_required": True,
+        "summary": "宿主支持的触发入口必须持续汇入同一条 Super Dev 流程，而不是在修改、确认或恢复时退回普通聊天。",
+        "preferred_entry_order": [],
+        "preferred_entry_labels": {},
+        "continuity_rule": "长流程里继续修改、补充、确认或恢复时，保持在当前 Super Dev 流程。",
+        "restart_rule": "",
+    }
+
+
+def build_host_flow_probe(target: str) -> dict[str, Any]:
+    if target == "codex-cli":
+        return {
+            "enabled": True,
+            "title": "Codex 三入口同流程验收",
+            "summary": "分别用 App/Desktop、CLI、fallback 入口触发一次，确认它们都进入同一条 Super Dev 流程，并在后续修改/确认时不掉回普通聊天。",
+            "steps": [
+                "在 Codex App/Desktop 里从 `/` 列表选择 `super-dev`，确认第一轮直接进入 Super Dev 流程。",
+                "在 Codex CLI 里输入 `$super-dev`，确认它进入的是同一条流程，而不是另一套独立上下文。",
+                "在已有自然语言上下文里输入 `super-dev: 继续当前项目的 Super Dev 流程`，确认仍汇入同一条流程。",
+                "继续说“改一下 / 补充 / 确认 / 通过”，确认三种入口后续都不会退回普通聊天。",
+            ],
+            "success_signal": "三种入口最终都进入同一条 Super Dev 流程，并且多轮修改、确认和恢复时保持在流程内。",
+        }
+    return {
+        "enabled": False,
+        "title": "",
+        "summary": "",
+        "steps": [],
+        "success_signal": "",
+    }
+
+
 def workflow_mode_label(workflow_mode: str) -> str:
     normalized = str(workflow_mode).strip().lower()
     return WORKFLOW_MODE_LABELS.get(normalized, normalized or "继续当前流程")

@@ -1807,7 +1807,7 @@ class CliParserMixin:
         subparsers.add_parser(
             "migrate",
             help="迁移项目到最新版本",
-            description="将 2.2.0 项目配置迁移到 2.3.0（更新配置、规则文件与 hooks）",
+            description="将 2.2.0 项目配置迁移到 2.3.1（更新配置、规则文件与 hooks）",
         )
 
         return parser

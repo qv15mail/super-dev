@@ -39,6 +39,7 @@ class SkillManager:
     # Official user-level skill paths confirmed by vendor docs.
     OFFICIAL_TARGET_PATHS = {
         "antigravity": "~/.gemini/skills",
+        "claude-code": "~/.claude/skills",
         "cline": "~/.cline/skills",
         "codebuddy-cli": "~/.codebuddy/skills",
         "codebuddy": "~/.codebuddy/skills",
@@ -57,7 +58,6 @@ class SkillManager:
     # Observed compatibility paths used when a host exposes a local skill loader
     # but the vendor docs do not yet publish a stable user-level install path.
     OBSERVED_TARGET_PATHS = {
-        "claude-code": "~/.claude/skills",
         "cursor-cli": "~/.cursor/skills",
         "cursor": "~/.cursor/skills",
         "gemini-cli": "~/.gemini/skills",
@@ -365,8 +365,9 @@ class SkillManager:
                 '  display_name: "Super Dev"\n'
                 '  short_description: "Research-first governed'
                 ' delivery pipeline for Codex."\n'
-                '  default_prompt: "Continue with the Super Dev'
-                ' pipeline for the current request."\n'
+                '  default_prompt: "In Codex CLI use $super-dev.'
+                ' In Codex app choose super-dev from the slash skill list.'
+                ' Continue the Super Dev pipeline for the current request."\n'
                 "policy:\n"
                 "  allow_implicit_invocation: true\n"
             )

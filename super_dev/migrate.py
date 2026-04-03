@@ -8,7 +8,7 @@ import yaml
 
 
 def migrate_project(project_dir: Path) -> list[str]:
-    """将 2.2.0 项目迁移到 2.3.0。
+    """将 2.2.0 项目迁移到 2.3.1。
 
     返回变更描述列表。
     """
@@ -21,13 +21,13 @@ def migrate_project(project_dir: Path) -> list[str]:
             text = config_path.read_text(encoding="utf-8")
             data = yaml.safe_load(text) or {}
             old_version = data.get("version", "")
-            if old_version != "2.3.0":
-                data["version"] = "2.3.0"
+            if old_version != "2.3.1":
+                data["version"] = "2.3.1"
                 config_path.write_text(
                     yaml.dump(data, allow_unicode=True, default_flow_style=False),
                     encoding="utf-8",
                 )
-                changes.append(f"super-dev.yaml 版本号 {old_version} -> 2.3.0")
+                changes.append(f"super-dev.yaml 版本号 {old_version} -> 2.3.1")
         except Exception as exc:
             changes.append(f"super-dev.yaml 更新失败: {exc}")
 
@@ -40,7 +40,7 @@ def migrate_project(project_dir: Path) -> list[str]:
             mgr = IntegrationManager(project_dir=project_dir)
             written = mgr.setup(target="claude-code", force=True)
             if written:
-                changes.append("已重新生成 .claude/CLAUDE.md（含 2.3.0 编码约束）")
+                changes.append("已重新生成 .claude/CLAUDE.md（含 2.3.1 编码约束）")
         except Exception as exc:
             changes.append(f".claude/CLAUDE.md 重新生成失败: {exc}")
 
@@ -56,7 +56,7 @@ def migrate_project(project_dir: Path) -> list[str]:
 
             sm = SkillManager(project_dir=project_dir)
             sm.install(source="super-dev", target="claude-code", force=True)
-            changes.append("已重新生成 SKILL.md（含 2.3.0 内容）")
+            changes.append("已重新生成 SKILL.md（含 2.3.1 内容）")
         except Exception as exc:
             changes.append(f"SKILL.md 重新生成失败: {exc}")
 

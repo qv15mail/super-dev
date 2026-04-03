@@ -5,9 +5,6 @@
 测试对象: super_dev.specs.models
 """
 
-from datetime import datetime, timezone
-
-import pytest
 from super_dev.specs.models import (
     Change,
     ChangeStatus,

@@ -6,8 +6,6 @@
 """
 
 import json
-import textwrap
-from pathlib import Path
 
 import pytest
 from super_dev.release_readiness import ReleaseReadinessEvaluator

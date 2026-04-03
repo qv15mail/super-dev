@@ -55,6 +55,7 @@ from .cli_parser_mixin import CliParserMixin
 from .cli_release_quality_mixin import CliReleaseQualityMixin
 from .cli_spec_mixin import CliSpecMixin
 from .config import ConfigManager, ProjectConfig, get_config_manager
+from .error_handler import handle_cli_error
 from .review_state import (
     architecture_revision_file,
     docs_confirmation_file,
@@ -77,9 +78,9 @@ from .review_state import (
 from .terminal import (
     create_console,
 )
-from .error_handler import handle_cli_error
 from .utils import get_logger
 from .workflow_state import (
+    build_host_entry_prompts,
     detect_pipeline_summary,
     workflow_continuity_rules,
     workflow_mode_label,
@@ -114,6 +115,12 @@ class SuperDevCLI(
     CliGovernanceMixin,
 ):
     """Super Dev 命令行接口"""
+
+    @staticmethod
+    def _display_final_trigger(profile) -> str:
+        if getattr(profile, "host", "") == "codex-cli":
+            return "App/Desktop: /super-dev | CLI: $super-dev | 回退: super-dev: 你的需求"
+        return str(profile.trigger_command).replace("<需求描述>", "你的需求")
 
     def __init__(self):
         self.console = create_console()
@@ -180,16 +187,16 @@ class SuperDevCLI(
         parsed_args = self.parser.parse_args(argv)
 
         if parsed_args.command is None:
-            # 终端无参数：始终显示安装引导或状态面板
-            # resume 由宿主通过 SKILL.md 触发，不在终端 CLI 做
-            pass
+            project_dir = Path.cwd()
+            if self._project_has_super_dev_context(project_dir):
+                resume_args = argparse.Namespace(json=False)
+                return self._cmd_resume(resume_args)
 
             # Onboarding: show first-run guide if applicable
             try:
                 from .onboarding import OnboardingGuide
 
                 guide = OnboardingGuide()
-                project_dir = Path.cwd()
                 if guide.should_show(project_dir):
                     guide.show(self.console)
                     guide.mark_seen(project_dir)
@@ -651,9 +658,30 @@ class SuperDevCLI(
                 f"  你现在可以直接说: {' / '.join(str(item) for item in user_action_shortcuts[:4])}"
             )
         preferred_host_name = str(payload.get("preferred_host_name", "")).strip()
+        preferred_host = str(payload.get("preferred_host", "")).strip()
         host_continue_prompt = str(payload.get("host_continue_prompt", "")).strip()
         if preferred_host_name and host_continue_prompt:
             self.console.print(f"  宿主第一句 ({preferred_host_name}): {host_continue_prompt}")
+        host_entry_prompts = (
+            payload.get("host_continue_entry_prompts")
+            if isinstance(payload.get("host_continue_entry_prompts"), dict)
+            else {}
+        )
+        if preferred_host == "codex-cli" and host_entry_prompts:
+            preferred_entry_label = str(
+                payload.get("host_continue_preferred_entry_label", "")
+            ).strip()
+            if preferred_entry_label:
+                self.console.print(f"  推荐入口: {preferred_entry_label}")
+            app_prompt = str(host_entry_prompts.get("app_desktop", "")).strip()
+            cli_prompt = str(host_entry_prompts.get("cli", "")).strip()
+            fallback_prompt = str(host_entry_prompts.get("fallback", "")).strip()
+            if app_prompt:
+                self.console.print(f"  App/Desktop 恢复入口: {app_prompt}")
+            if cli_prompt:
+                self.console.print(f"  CLI 恢复入口: {cli_prompt}")
+            if fallback_prompt:
+                self.console.print(f"  回退恢复入口: {fallback_prompt}")
         self.console.print(f"  机器侧动作: {payload.get('recommended_command', '-')}")
         examples = (
             action_card.get("examples") if isinstance(action_card.get("examples"), list) else []
@@ -1371,6 +1399,29 @@ class SuperDevCLI(
         target: str,
         next_payload: dict[str, Any] | None = None,
     ) -> str:
+        instruction = self._build_host_continue_instruction(
+            project_dir=project_dir,
+            next_payload=next_payload,
+        )
+        entry_prompts = build_host_entry_prompts(
+            target=target,
+            instruction=instruction,
+            supports_slash=self._supports_slash_for_prompt(target),
+        )
+        preferred_entry = str(entry_prompts.get("preferred_entry", "")).strip()
+        prompts = entry_prompts.get("entry_prompts", {})
+        if isinstance(prompts, dict) and preferred_entry:
+            prompt = str(prompts.get(preferred_entry, "")).strip()
+            if prompt:
+                return prompt
+        return self._build_host_trigger_example(target=target, idea=instruction)
+
+    def _build_host_continue_instruction(
+        self,
+        *,
+        project_dir: Path,
+        next_payload: dict[str, Any] | None = None,
+    ) -> str:
         next_payload = dict(next_payload or {})
         status = str(next_payload.get("status", "")).strip()
         current_step_label = str(next_payload.get("current_step_label", "")).strip()
@@ -1386,12 +1437,12 @@ class SuperDevCLI(
                 f"{continuity_clause}"
             )
         else:
-            instruction = (
+            return (
                 "继续当前项目的 Super Dev 流程，不要当作普通聊天。"
                 "先读取 .super-dev/SESSION_BRIEF.md、.super-dev/workflow-state.json、.super-dev/WORKFLOW.md、output/*、.super-dev/review-state/* 和最近的 tasks.md。"
                 f"{continuity_clause}"
             )
-        return self._build_host_trigger_example(target=target, idea=instruction)
+        return instruction
 
     def _build_host_start_prompt(self, *, project_dir: Path, target: str) -> str:
         description = self._current_workflow_description(project_dir)
@@ -1406,6 +1457,11 @@ class SuperDevCLI(
                 "先做 research，再产出 PRD、Architecture、UIUX 三文档，完成后停下来等我确认。"
             )
         return self._build_host_trigger_example(target=target, idea=instruction)
+
+    def _supports_slash_for_prompt(self, target: str) -> bool:
+        from .integrations import IntegrationManager
+
+        return IntegrationManager.supports_slash(target)
 
     def _build_workflow_session_hint(self, *, project_dir: Path, target: str) -> dict[str, Any]:
         if not self._project_has_super_dev_context(project_dir):
@@ -1425,6 +1481,10 @@ class SuperDevCLI(
         )
         return {
             "session_mode": "continue_super_dev",
+            "continue_instruction": self._build_host_continue_instruction(
+                project_dir=project_dir,
+                next_payload=next_payload,
+            ),
             "continue_prompt": self._build_host_continue_prompt(
                 project_dir=project_dir, target=target, next_payload=next_payload
             ),
@@ -1584,6 +1644,14 @@ class SuperDevCLI(
                 recommended_command=str(payload.get("recommended_command", "")).strip(),
             )
         if self._project_has_super_dev_context(project_dir):
+            continue_instruction = self._build_host_continue_instruction(
+                project_dir=project_dir,
+                next_payload={
+                    **payload,
+                    "current_step_label": current_step_label,
+                    "user_next_action": user_next_action,
+                },
+            )
             host_continue_prompt = self._build_host_continue_prompt(
                 project_dir=project_dir,
                 target=preferred_host,
@@ -1594,9 +1662,15 @@ class SuperDevCLI(
                 },
             )
         else:
+            continue_instruction = ""
             host_continue_prompt = self._build_host_start_prompt(
                 project_dir=project_dir, target=preferred_host
             )
+        host_entry_bundle = build_host_entry_prompts(
+            target=preferred_host,
+            instruction=continue_instruction or host_continue_prompt,
+            supports_slash=self._supports_slash_for_prompt(preferred_host),
+        )
         enriched = dict(payload)
         enriched.update(
             {
@@ -1605,6 +1679,17 @@ class SuperDevCLI(
                 "preferred_host": preferred_host,
                 "preferred_host_name": preferred_host_name,
                 "host_continue_prompt": host_continue_prompt,
+                "host_continue_entry_prompts": (
+                    host_entry_bundle.get("entry_prompts", {})
+                    if isinstance(host_entry_bundle.get("entry_prompts", {}), dict)
+                    else {}
+                ),
+                "host_continue_preferred_entry": str(
+                    host_entry_bundle.get("preferred_entry", "")
+                ).strip(),
+                "host_continue_preferred_entry_label": str(
+                    host_entry_bundle.get("preferred_entry_label", "")
+                ).strip(),
                 "session_brief_path": str(self._session_brief_path(project_dir)),
                 "workflow_state_path": str(self._workflow_state_path(project_dir)),
                 "continuity_rules": self._build_session_continuity_rules(
@@ -4000,9 +4085,7 @@ class SuperDevCLI(
                 payload = [
                     {
                         "host": profile.host,
-                        "final_trigger": str(profile.trigger_command).replace(
-                            "<需求描述>", "你的需求"
-                        ),
+                        "final_trigger": self._display_final_trigger(profile),
                         "smoke_test_prompt": profile.smoke_test_prompt,
                         "smoke_test_steps": list(profile.smoke_test_steps),
                         "smoke_success_signal": profile.smoke_success_signal,
@@ -4015,9 +4098,7 @@ class SuperDevCLI(
             self.console.print("[cyan]Super Dev 宿主 Smoke 验收[/cyan]")
             for profile in profiles:
                 self.console.print(f"[cyan]- {profile.host}[/cyan]")
-                self.console.print(
-                    f"  最终输入: {str(profile.trigger_command).replace('<需求描述>', '你的需求')}"
-                )
+                self.console.print(f"  最终输入: {self._display_final_trigger(profile)}")
                 self.console.print(f"  验收语句: {profile.smoke_test_prompt}")
                 self.console.print("  验收步骤:")
                 for step in profile.smoke_test_steps:

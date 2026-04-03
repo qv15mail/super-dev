@@ -1,4 +1,4 @@
-# Super Dev 宿主使用指南（2.1.6）
+# Super Dev 宿主使用指南（2.3.1）
 
 ## 目标
 
@@ -88,14 +88,14 @@ super-dev next
 | Roo Code | IDE | Compatible | 支持 | 在 Roo Code 面板中输入 `/super-dev 你的需求`（由 `.roo/commands/super-dev.md` + `.roo/rules/super-dev.md` / `~/.roo/commands/` + `~/.roo/rules/` 生效） | 否 |
 | VS Code Copilot | IDE | Experimental | 不支持 | 在 Copilot Chat 中输入 `super-dev: 你的需求` 或 `super-dev：你的需求`（由 `.github/copilot-instructions.md` + `AGENTS.md` 生效） | 否 |
 | Windsurf | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求`（由 `.windsurf/rules/super-dev.md` + `.windsurf/workflows/super-dev.md` + `.windsurf/skills/` / `~/.codeium/windsurf/skills/` 生效） | 否 |
-| Codex | CLI | Certified | 不支持 | 重启 Codex 后输入 `super-dev: 你的需求` 或显式调用 `$super-dev`，由 `AGENTS.md` + `.agents/skills/` + `CODEX_HOME/AGENTS.md` + 官方 `~/.agents/skills/` 生效 | 是 |
+| Codex | CLI | Certified | App/Desktop 支持 skill `/super-dev` 入口；项目级自定义 slash 不支持 | App/Desktop 优先从 `/` 列表选择 `super-dev`，CLI 优先输入 `$super-dev`，回退入口是 `super-dev: 你的需求`；由 `AGENTS.md` + 分层 `.agents/skills/` + `CODEX_HOME/AGENTS.md` + 官方 `~/.agents/skills/` 生效 | 是 |
 | Trae | IDE | Compatible | 不支持 | 在 Trae Agent Chat 中输入 `super-dev: 你的需求`（由 `.trae/project_rules.md` + `~/.trae/user_rules.md` 生效；同时兼容写入 `.trae/rules.md` + `~/.trae/rules.md`，若检测到兼容 Skill `~/.trae/skills/super-dev-core/SKILL.md` 会额外增强） | 是 |
 
 ### 最简判断
 
 1. 如果你的宿主在表格里标记为“支持”，直接用 `/super-dev 你的需求`。
 2. 优先选择 `Certified` 宿主，其次是 `Compatible`。
-3. 如果是 `Codex`，不要把 `/super-dev` 当成项目自定义 slash；重启 Codex 后优先输入 `super-dev: 你的需求`，也可以显式调用 `$super-dev`。
+3. 如果是 `Codex`，不要把 `/super-dev` 理解成项目自定义 slash 文件；App/Desktop 优先从 `/` 列表选择 `super-dev`，CLI 优先用 `$super-dev`，`super-dev: 你的需求` 作为自然语言回退入口。
 4. 如果是 `Trae`，不要试 `/super-dev`，直接在 Trae Agent Chat 输入 `super-dev: 你的需求`。
 5. 如果是 `Kiro IDE`、`Trae` 或 `VS Code Copilot`，优先用 `super-dev: 你的需求` 或 `super-dev：你的需求`。
 
@@ -205,8 +205,9 @@ super-dev onboard --host claude-code --force --yes
 
 补充说明：
 1. 推荐作为首选 CLI 宿主。
-2. 接入后可先执行 `super-dev doctor --host claude-code` 确认 slash 已生效。
-3. Claude Code 官方已公开 `.claude/agents/` 与 `~/.claude/agents/`，Super Dev 会同步生成 `super-dev-core` subagent。
+2. 接入后可先执行 `super-dev doctor --host claude-code`，确认项目根 `CLAUDE.md`、项目级 `.claude/skills/super-dev/`、用户级 `~/.claude/skills/`、兼容 slash 与可选 plugin enhancement 一起生效。
+3. Claude Code 当前按 skills-first 收敛：主面是 `CLAUDE.md + .claude/skills + ~/.claude/skills`，`.claude/commands/` 与 `.claude/agents/` 仅作为兼容增强面保留。
+4. 如需增强层，Super Dev 还会补齐 `.claude-plugin/marketplace.json` 与 `plugins/super-dev-claude/.claude-plugin/plugin.json`。
 
 #### 2. CodeBuddy CLI
 
@@ -481,18 +482,22 @@ super-dev onboard --host codex-cli --force --yes
 
 触发命令：
 ```text
-super-dev: 你的需求
+Codex App/Desktop: 在 `/` 列表里选择 super-dev
+Codex CLI: $super-dev
+回退入口: super-dev: 你的需求
 ```
 
 接入后是否需要重启：是
 
 补充说明：
-1. 最稳妥的主触发方式仍是 `super-dev: 你的需求`。
-2. 如果想显式调用官方 Skill，可输入 `$super-dev`。
-3. Codex 桌面端若在 `/` 列表里出现 `super-dev`，那是启用 Skill 的官方入口，不是项目级自定义 slash 文件。
-4. 实际依赖项目 `AGENTS.md`、全局 `CODEX_HOME/AGENTS.md`（默认 `~/.codex/AGENTS.md`）和官方用户级 Skill `~/.agents/skills/super-dev/SKILL.md`。
-5. 为兼容旧安装，仍会保留 `super-dev-core` 作为兼容别名。
-6. 如果旧会话没加载新 Skill，重启 `codex` 再试。
+1. Codex App/Desktop 优先从 `/` 列表里直接选择 `super-dev`；这是已启用 Skill 的官方入口，不是项目级自定义 slash 文件。
+2. Codex CLI 优先显式输入 `$super-dev`。
+3. 如果当前已经在自然语言上下文里继续流程，也可以直接输入 `super-dev: 你的需求`。
+4. 基础接入面是项目 `AGENTS.md`、项目 `.agents/skills/super-dev/SKILL.md`、全局 `CODEX_HOME/AGENTS.md`（默认 `~/.codex/AGENTS.md`）和官方用户级 Skill `~/.agents/skills/super-dev/SKILL.md`。
+5. 同时会额外生成可选的 repo plugin 增强层：`.agents/plugins/marketplace.json` + `plugins/super-dev-codex/.codex-plugin/plugin.json`，让 Codex App/Desktop 在 AGENTS + Skills 之外还能看到更完整的本地 plugin 面。
+6. 为兼容旧安装，仍会保留 `super-dev-core` 作为兼容别名。
+7. 如果旧会话没加载新 Skill，重启 `codex` 再试。
+8. 无论使用 `/super-dev`、`$super-dev` 还是 `super-dev:`，都必须进入同一条 Super Dev 流程；长流程里继续修改、补充、确认或恢复时，优先沿用当前入口面。
 
 #### 15. Trae
 

@@ -5,8 +5,6 @@
 测试对象: super_dev.creators.frontend_builder.FrontendScaffoldBuilder
 """
 
-from pathlib import Path
-
 import pytest
 from super_dev.creators.frontend_builder import FrontendScaffoldBuilder
 

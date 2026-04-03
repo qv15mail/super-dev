@@ -1286,10 +1286,21 @@ class TestCLISkillAndIntegrate:
             cli = SuperDevCLI()
             result = cli.run(["onboard", "--host", "claude-code", "--force", "--yes"])
             assert result == 0
+            assert (temp_project_dir / "CLAUDE.md").exists()
             assert (temp_project_dir / ".claude" / "CLAUDE.md").exists()
+            assert (temp_project_dir / ".claude" / "skills" / "super-dev" / "SKILL.md").exists()
             assert (temp_project_dir / ".claude" / "agents" / "super-dev-core.md").exists()
-            assert (fake_home / ".claude" / "agents" / "super-dev-core.md").exists()
+            assert (fake_home / ".claude" / "CLAUDE.md").exists()
+            assert (fake_home / ".claude" / "skills" / "super-dev" / "SKILL.md").exists()
             assert (temp_project_dir / ".claude" / "commands" / "super-dev.md").exists()
+            assert (temp_project_dir / ".claude-plugin" / "marketplace.json").exists()
+            assert (
+                temp_project_dir
+                / "plugins"
+                / "super-dev-claude"
+                / ".claude-plugin"
+                / "plugin.json"
+            ).exists()
         finally:
             os.chdir(original_cwd)
 
@@ -1397,6 +1408,14 @@ class TestCLISkillAndIntegrate:
             result = cli.run(["onboard", "--host", "codex-cli", "--force", "--yes"])
             assert result == 0
             assert (temp_project_dir / "AGENTS.md").exists()
+            assert (temp_project_dir / ".agents" / "plugins" / "marketplace.json").exists()
+            assert (
+                temp_project_dir
+                / "plugins"
+                / "super-dev-codex"
+                / ".codex-plugin"
+                / "plugin.json"
+            ).exists()
             assert (fake_home / ".codex" / "AGENTS.md").exists()
             assert (fake_home / ".agents" / "skills" / "super-dev" / "SKILL.md").exists()
             assert (fake_home / ".agents" / "skills" / "super-dev-core" / "SKILL.md").exists()
@@ -1466,9 +1485,9 @@ class TestCLISkillAndIntegrate:
             result = cli.run(["onboard", "--host", "claude-code", "--force", "--yes"])
             assert result == 0
             output = capsys.readouterr().out
-            assert "集成规则: 2 项" in output
-            assert "需要看完整落点与逐项步骤时，可加 --detail" in output
+            assert "集成规则:" in output
             assert "集成规则: /" not in output
+            assert str(temp_project_dir / "CLAUDE.md") not in output
         finally:
             os.chdir(original_cwd)
 
@@ -1484,7 +1503,8 @@ class TestCLISkillAndIntegrate:
             assert result == 0
             output = capsys.readouterr().out
             assert "集成规则:" in output
-            assert str(temp_project_dir / ".claude" / "agents" / "super-dev-core.md") in output
+            assert str(temp_project_dir / "CLAUDE.md") in output
+            assert str(temp_project_dir / ".claude" / "skills" / "super-dev" / "SKILL.md") in output
         finally:
             os.chdir(original_cwd)
 
@@ -1498,7 +1518,10 @@ class TestCLISkillAndIntegrate:
             assert (temp_project_dir / "GEMINI.md").exists()
             assert (temp_project_dir / ".agent" / "workflows" / "super-dev.md").exists()
             assert (temp_project_dir / ".gemini" / "commands" / "super-dev.md").exists()
+            assert (temp_project_dir / "CLAUDE.md").exists()
             assert (temp_project_dir / ".claude" / "CLAUDE.md").exists()
+            assert (temp_project_dir / ".claude" / "skills" / "super-dev" / "SKILL.md").exists()
+            assert (temp_project_dir / ".claude-plugin" / "marketplace.json").exists()
             assert (temp_project_dir / "AGENTS.md").exists()
             assert (temp_project_dir / ".qoder" / "rules" / "super-dev.md").exists()
             assert (temp_project_dir / ".qoder" / "skills" / "super-dev-core" / "SKILL.md").exists()
@@ -1610,9 +1633,11 @@ class TestCLISkillAndIntegrate:
             assert "Smoke 验收语句" in output
             assert "SMOKE_OK" in output
             assert "现在可以直接这样开始" in output
-            assert "Codex: 重开后第一句直接复制 super-dev:" in output
+            assert 'Codex: 重开后第一句直接复制 /super-dev "' in output
             assert "如果你是在继续已有流程" in output
-            assert "宿主第一句: super-dev:" in output
+            assert '宿主第一句: /super-dev "' in output
+            assert "App/Desktop 恢复入口:" in output
+            assert "CLI 恢复入口:" in output
             assert "流程状态卡: " in output
             assert "机器侧动作: super-dev review docs --status confirmed --comment \"三文档已确认\"" in output
         finally:
@@ -1903,9 +1928,21 @@ class TestCLISkillAndIntegrate:
             assert payload["usage_profiles"]["codex-cli"]["certification_label"] == "Certified"
             assert payload["usage_profiles"]["codex-cli"]["path_override"]["env_key"] == "SUPER_DEV_HOST_PATH_CODEX_CLI"
             assert payload["usage_profiles"]["codex-cli"]["trigger_command"] == "super-dev: <需求描述>"
-            assert payload["usage_profiles"]["codex-cli"]["final_trigger"] == "super-dev: 你的需求"
+            assert payload["usage_profiles"]["codex-cli"]["final_trigger"] == "App/Desktop: /super-dev | CLI: $super-dev | 回退: super-dev: 你的需求"
+            assert payload["usage_profiles"]["codex-cli"]["entry_variants"][0]["entry"] == "/super-dev"
+            assert any(
+                item["entry"] == "$super-dev"
+                for item in payload["usage_profiles"]["codex-cli"]["entry_variants"]
+            )
             assert payload["usage_profiles"]["codex-cli"]["host_protocol_mode"] == "official-skill"
-            assert payload["usage_profiles"]["codex-cli"]["host_protocol_summary"] == "官方 AGENTS.md + 官方 Skills"
+            assert payload["usage_profiles"]["codex-cli"]["host_protocol_summary"] == "官方 AGENTS.md + 官方 Skills + optional repo plugin enhancement"
+            assert payload["usage_profiles"]["codex-cli"]["flow_contract"]["consistent_flow_required"] is True
+            assert payload["usage_profiles"]["codex-cli"]["flow_contract"]["preferred_entry_order"] == ["app_desktop", "cli", "fallback"]
+            assert "同一条 Super Dev 流程" in payload["usage_profiles"]["codex-cli"]["flow_contract"]["summary"]
+            assert payload["usage_profiles"]["codex-cli"]["flow_probe"]["enabled"] is True
+            assert len(payload["usage_profiles"]["codex-cli"]["flow_probe"]["steps"]) >= 4
+            assert ".agents/plugins/marketplace.json" in payload["usage_profiles"]["codex-cli"]["official_project_surfaces"]
+            assert "plugins/super-dev-codex/.codex-plugin/plugin.json" in payload["usage_profiles"]["codex-cli"]["official_project_surfaces"]
             assert "SMOKE_OK" in payload["usage_profiles"]["codex-cli"]["smoke_test_prompt"]
             assert payload["usage_profiles"]["codex-cli"]["smoke_test_steps"]
             assert payload["session_resume_cards"]["codex-cli"]["enabled"] is False
@@ -2012,7 +2049,7 @@ class TestCLISkillAndIntegrate:
             output = capsys.readouterr().out
             assert "已检测到宿主" in output
             assert "主入口" in output
-            assert "宿主协议: 官方 AGENTS.md + 官方 Skills (official-skill)" in output
+            assert "官方 AGENTS.md + 官方 Skills + optional repo plugin enhancement" in output
             assert "触发命令: super-dev: <需求描述>" in output
             assert "触发位置" in output
             assert "接入后重启: 是" in output
@@ -2044,7 +2081,12 @@ class TestCLISkillAndIntegrate:
             assert resume_card["workflow_mode_label"] == "返工/补充当前流程"
             assert "这里补一下" in resume_card["action_examples"]
             assert "这里补一下" in resume_card["user_action_shortcuts"]
-            assert "super-dev:" in resume_card["host_first_sentence"]
+            assert resume_card["preferred_entry"] == "app_desktop"
+            assert resume_card["preferred_entry_label"] == "App/Desktop"
+            assert resume_card["host_first_sentence"].startswith('/super-dev "')
+            assert resume_card["entry_prompts"]["app_desktop"].startswith('/super-dev "')
+            assert resume_card["entry_prompts"]["cli"].startswith('$super-dev "')
+            assert resume_card["entry_prompts"]["fallback"].startswith("super-dev:")
             assert ".super-dev/SESSION_BRIEF.md" in resume_card["session_brief_path"]
             assert ".super-dev/workflow-state.json" in resume_card["workflow_state_path"]
             assert resume_card["recommended_workflow_command"]
@@ -2064,7 +2106,9 @@ class TestCLISkillAndIntegrate:
             assert "Super Dev 宿主 Smoke 验收" in output
             assert "codex-cli" in output
             assert "SMOKE_OK" in output
-            assert "最终输入: super-dev: 你的需求" in output
+            assert "最终输入:" in output
+            assert "App/Desktop: /super-dev" in output
+            assert "$super-dev" in output
         finally:
             os.chdir(original_cwd)
 
@@ -2110,7 +2154,7 @@ class TestCLISkillAndIntegrate:
             payload = json.loads(capsys.readouterr().out)
             assert payload["report"]["overall_ready"] is True
             assert payload["compatibility"]["hosts"]["codex-cli"]["ready"] is True
-            assert payload["usage_profiles"]["codex-cli"]["final_trigger"] == "super-dev: 你的需求"
+            assert payload["usage_profiles"]["codex-cli"]["final_trigger"] == "App/Desktop: /super-dev | CLI: $super-dev | 回退: super-dev: 你的需求"
             assert payload["report_files"]["json"].endswith("-host-surface-audit.json")
             assert Path(payload["report_files"]["json"]).exists()
             assert Path(payload["report_files"]["markdown"]).exists()
@@ -2169,18 +2213,24 @@ class TestCLISkillAndIntegrate:
             host = payload["hosts"][0]
             assert host["host"] == "codex-cli"
             assert host["surface_ready"] is True
-            assert host["final_trigger"] == "super-dev: 你的需求"
-            assert host["host_protocol_summary"] == "官方 AGENTS.md + 官方 Skills"
+            assert host["final_trigger"] == "App/Desktop: /super-dev | CLI: $super-dev | 回退: super-dev: 你的需求"
+            assert host["host_protocol_summary"] == "官方 AGENTS.md + 官方 Skills + optional repo plugin enhancement"
             assert host["manual_runtime_status"] == "pending"
             assert host["runtime_checklist"]
             assert host["pass_criteria"]
+            assert host["checks"]["plugin_enhancement"]["ok"] is True
             assert any("重开 codex" in item for item in host["runtime_checklist"])
             assert any(".agents/skills/super-dev" in item for item in host["runtime_checklist"])
-            assert any("当前终端就在目标项目目录" in item for item in host["runtime_checklist"])
+            assert any(".agents/plugins/marketplace.json" in item for item in host["runtime_checklist"])
+            assert any("Codex CLI 当前终端就在目标项目目录" in item for item in host["runtime_checklist"])
+            assert any("/` 列表里出现 `super-dev`" in item for item in host["runtime_checklist"])
             assert any("$super-dev" in item for item in host["runtime_checklist"])
             assert any(".agents/skills/super-dev" in item for item in host["pass_criteria"])
             assert any("官方 Skills" in item for item in host["pass_criteria"])
             assert any("$super-dev" in item for item in host["pass_criteria"])
+            assert host["flow_probe"]["enabled"] is True
+            assert any("/` 列表选择 `super-dev`" in item for item in host["flow_probe"]["steps"])
+            assert any("$super-dev" in item for item in host["flow_probe"]["steps"])
             assert host["resume_probe_prompt"] == ""
             assert host["resume_checklist"]
         finally:
@@ -2207,7 +2257,7 @@ class TestCLISkillAndIntegrate:
             assert cli.run(["integrate", "validate", "--target", "codex-cli", "--json"]) == 0
             host = json.loads(capsys.readouterr().out)["hosts"][0]
             assert ".super-dev/SESSION_BRIEF.md" in host["resume_probe_prompt"]
-            assert "super-dev:" in host["resume_probe_prompt"]
+            assert host["resume_probe_prompt"].startswith('/super-dev "')
             assert any("新会话里恢复" in item for item in host["resume_checklist"])
             assert any("同一条 Super Dev 流程" in item for item in host["resume_checklist"])
         finally:
@@ -2385,8 +2435,8 @@ class TestCLISkillAndIntegrate:
             assert payload["decision_card"]["candidates"][0]["path_override"]["env_key"] == "SUPER_DEV_HOST_PATH_CLAUDE_CODE"
             assert len(payload["decision_card"]["candidates"]) >= 2
             assert payload["usage_profile"]["certification_level"] == "certified"
-            assert payload["usage_profile"]["host_protocol_mode"] == "official-subagent"
-            assert payload["usage_profile"]["host_protocol_summary"] == "官方 commands + subagents"
+            assert payload["usage_profile"]["host_protocol_mode"] == "official-skill"
+            assert payload["usage_profile"]["host_protocol_summary"] == "官方 CLAUDE.md + Skills + optional repo plugin enhancement"
             assert payload["usage_profile"]["final_trigger"] == '/super-dev "你的需求"'
             assert payload["recommended_trigger"].startswith('/super-dev "')
 
@@ -3161,7 +3211,7 @@ class TestCLIPipeline:
             assert payload["selected_host_name"] == "Codex"
             assert "Codex 最短路径" in payload["quick_start"]
             assert "$super-dev" in payload["quick_start"]
-            assert "Skill 列表入口" in payload["quick_start"]
+            assert "/` 列表" in payload["quick_start"] or "App/Desktop 从 `/` 列表选 super-dev" in payload["quick_start"]
         finally:
             os.chdir(original_cwd)
 
@@ -3208,7 +3258,8 @@ class TestCLIPipeline:
             assert "Super Dev 流程" in payload["continue_prompt"]
             assert payload["recommended_workflow_command"]
             assert payload["session_resume_card"]["enabled"] is True
-            assert "super-dev:" in payload["session_resume_card"]["host_first_sentence"]
+            assert payload["session_resume_card"]["preferred_entry"] == "app_desktop"
+            assert payload["session_resume_card"]["host_first_sentence"].startswith('/super-dev "')
             assert ".super-dev/SESSION_BRIEF.md" in payload["session_resume_card"]["session_brief_path"]
             assert ".super-dev/workflow-state.json" in payload["session_resume_card"]["workflow_state_path"]
             assert "继续仓库里已有的 Super Dev 流程" in payload["quick_start"]
@@ -3234,7 +3285,7 @@ class TestCLIPipeline:
             assert cli.run(["onboard", "--host", "codex", "--force", "--yes"]) == 0
             output = capsys.readouterr().out
             assert "接下来这样用" in output
-            assert "重开后第一句直接复制 super-dev:" in output
+            assert '重开后第一句直接复制 /super-dev "' in output
             assert "如果你是在继续已有流程" in output
             assert "流程状态卡: " in output
             assert "继续规则: 用户说“改一下 / 补充 / 继续改 / 确认 / 通过”时" in output
@@ -3254,7 +3305,7 @@ class TestCLIPipeline:
             assert payload["current_step_label"] == "等待三文档确认"
             assert payload["preferred_host"] == "codex-cli"
             assert payload["preferred_host_name"] == "Codex"
-            assert "super-dev:" in payload["host_continue_prompt"]
+            assert payload["host_continue_prompt"].startswith('/super-dev "')
             assert ".super-dev/SESSION_BRIEF.md" in payload["host_continue_prompt"]
             assert ".super-dev/workflow-state.json" in payload["host_continue_prompt"]
             assert ".super-dev/workflow-state.json" in payload["workflow_state_path"]
@@ -3320,7 +3371,9 @@ class TestCLIPipeline:
             assert "动作类型: 返工/补充当前流程" in output
             assert "当前步骤: 等待三文档确认" in output
             assert "你现在可以直接说:" in output
-            assert "宿主第一句 (Codex): super-dev:" in output
+            assert '宿主第一句 (Codex): /super-dev "' in output
+            assert "App/Desktop 恢复入口:" in output
+            assert "CLI 恢复入口:" in output
             assert "自然语言示例: 这里补一下" in output
             assert "流程状态卡:" in output
             assert "机器侧动作: super-dev review docs --status confirmed --comment \"三文档已确认\"" in output

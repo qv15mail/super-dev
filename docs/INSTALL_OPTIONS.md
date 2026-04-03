@@ -1,4 +1,4 @@
-# Super Dev 安装方式（2.1.1）
+# Super Dev 安装方式（2.3.1）
 
 宿主详细试用方式请看：
 
@@ -32,7 +32,7 @@ pip install -U super-dev
 super-dev
 ```
 
-默认会进入交互式宿主安装引导。当前版本默认主推 `16` 个宿主适配配置：
+默认会进入交互式宿主安装引导。当前版本默认提供 `20` 个统一接入宿主，外加 `OpenClaw` 手动插件宿主：
 
 1. 顶部显示 `Super Dev` 安装入口
 2. `↑ / ↓` 选择宿主
@@ -45,13 +45,15 @@ super-dev
 
 安装完成后，终端会直接输出该宿主的最终触发方式：
 
-1. slash 宿主：`/super-dev 你的需求`
-2. 非 slash 宿主：`super-dev: 你的需求` 或 `super-dev：你的需求`
+1. 原生 slash 宿主：`/super-dev 你的需求`
+2. Codex App/Desktop：从 `/` 列表选择 `super-dev`
+3. Codex CLI：`$super-dev`
+4. 非 slash 宿主：`super-dev: 你的需求` 或 `super-dev：你的需求`
 
 ## 方式 3：安装指定版本（复现/回滚）
 
 ```bash
-pip install super-dev==2.1.1
+pip install super-dev==2.3.1
 ```
 
 适用：需要稳定复现、灰度回滚。
@@ -59,7 +61,7 @@ pip install super-dev==2.1.1
 ## 方式 4：GitHub 直装（Tag）
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.1.1
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.3.1
 ```
 
 适用：希望直接基于 GitHub Tag 安装。
@@ -94,10 +96,10 @@ super-dev
 
 如果已接入宿主，推荐在宿主内验证：
 
-1. 支持原生映射的 CLI 宿主：`/super-dev 你的需求`
-2. 非 slash CLI 宿主（如 Codex CLI）：在会话内输入 `super-dev: 你的需求` 或 `super-dev：你的需求`
-3. IDE 宿主：在 Agent Chat 中执行 `/super-dev 你的需求`
-4. 非 slash 宿主：输入 `super-dev: 你的需求`
+1. 支持原生映射的宿主：`/super-dev 你的需求`
+2. Codex App/Desktop：从 `/` 列表选择 `super-dev`
+3. Codex CLI：在会话内输入 `$super-dev`
+4. 自然语言回退宿主：输入 `super-dev: 你的需求`
 5. 如果宿主是 Trae，接入会写入项目规则 `.trae/project_rules.md`、`.trae/rules.md`，以及用户规则 `~/.trae/user_rules.md`、`~/.trae/rules.md`，并在检测到兼容技能目录时增强安装 `~/.trae/skills/super-dev-core/SKILL.md`
 
 默认流程不是直接编码，而是：
@@ -116,15 +118,15 @@ super-dev integrate smoke --target <host_id>
 
 它会输出该宿主的验收语句、验收步骤和通过标准。
 
-## 升级到 2.1.1
+## 升级到 2.3.1
 
 ```bash
 # uv 方式
 uv tool upgrade super-dev
 
 # GitHub 方式
-pip install --upgrade "git+https://github.com/shangyankeji/super-dev.git@v2.1.1"
+pip install --upgrade "git+https://github.com/shangyankeji/super-dev.git@v2.3.1"
 
 # PyPI 方式
-pip install --upgrade "super-dev==2.1.1"
+pip install --upgrade "super-dev==2.3.1"
 ```

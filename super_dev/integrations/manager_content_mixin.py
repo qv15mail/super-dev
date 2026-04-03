@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+
+from .. import __version__
+from ..skills.skill_template import SkillTemplate
 
 
 class IntegrationManagerContentMixin:
@@ -157,6 +161,39 @@ class IntegrationManagerContentMixin:
         if target == "codex-cli" and relative == "AGENTS.md":
             return self._build_codex_agents_content()
 
+        if target == "claude-code" and relative in {"CLAUDE.md", ".claude/CLAUDE.md"}:
+            return self._claude_rules()
+
+        if target == "claude-code" and relative == ".claude-plugin/marketplace.json":
+            return self._build_claude_repo_marketplace_content()
+
+        if target == "claude-code" and relative == "plugins/super-dev-claude/.claude-plugin/plugin.json":
+            return self._build_claude_plugin_manifest_content()
+
+        if target == "claude-code" and relative == "plugins/super-dev-claude/README.md":
+            return self._build_claude_plugin_readme_content()
+
+        if target == "claude-code" and relative == "plugins/super-dev-claude/commands/super-dev.md":
+            return self._build_slash_command_content("claude-code")
+
+        if target == "claude-code" and relative.endswith("plugins/super-dev-claude/agents/super-dev-core.md"):
+            return self._build_claude_agent_content()
+
+        if target == "codex-cli" and relative == ".agents/plugins/marketplace.json":
+            return self._build_codex_repo_marketplace_content()
+
+        if target == "codex-cli" and relative == "plugins/super-dev-codex/.codex-plugin/plugin.json":
+            return self._build_codex_plugin_manifest_content()
+
+        if target == "codex-cli" and relative == "plugins/super-dev-codex/README.md":
+            return self._build_codex_plugin_readme_content()
+
+        if target == "codex-cli" and relative == "plugins/super-dev-codex/skills/super-dev/SKILL.md":
+            return self._build_codex_plugin_skill_content(skill_name="super-dev")
+
+        if target == "codex-cli" and relative == "plugins/super-dev-codex/skills/super-dev-core/SKILL.md":
+            return self._build_codex_plugin_skill_content(skill_name="super-dev-core")
+
         if target == "claude-code" and relative.endswith(".claude/agents/super-dev-core.md"):
             return self._build_claude_agent_content()
 
@@ -166,8 +203,8 @@ class IntegrationManagerContentMixin:
         if target == "trae":
             return self._trae_rules()
 
-        if relative.endswith("/skills/super-dev-core/SKILL.md"):
-            return self._build_embedded_skill_content()
+        if relative.endswith("/skills/super-dev-core/SKILL.md") or relative.endswith("/skills/super-dev/SKILL.md"):
+            return self._build_embedded_skill_content(target=target, relative=relative)
 
         if target in {"cursor", "cursor-cli"}:
             rules_body = (
@@ -256,12 +293,16 @@ class IntegrationManagerContentMixin:
     def _build_codex_agents_content(self) -> str:
         return (
             "# Super Dev for Codex CLI\n\n"
-            "When a user message starts with `super-dev:` or `super-dev：`, enter Super Dev pipeline mode immediately.\n\n"
+            "Treat Codex App/Desktop selecting `super-dev` from the `/` list, Codex CLI explicit `$super-dev`, and natural-language `super-dev:` / `super-dev：` messages as valid Super Dev entry points.\n\n"
             "If the repository already contains active Super Dev workflow context, the first natural-language requirement in a new session must also continue Super Dev rather than normal chat.\n\n"
             "## Direct Activation Rule\n"
             "- Do not spend a turn saying you will read the skill first, explain the skill, or decide whether to enter the workflow.\n"
             "- Treat the current trigger as already authorized to execute the full Super Dev pipeline.\n"
             "- If a compatibility skill under `~/.codex/skills/` is loaded, treat it as the same Super Dev contract, not a fallback mode.\n\n"
+            "## Preferred official entry order\n"
+            "- Codex App/Desktop: prefer selecting `super-dev` from the `/` list. This is the enabled Skill entry, not a custom project slash command file.\n"
+            "- Codex CLI: prefer explicit `$super-dev`.\n"
+            "- Natural-language fallback for both surfaces: `super-dev: <需求描述>` or `super-dev：<需求描述>` through AGENTS.md.\n\n"
             "## Required execution\n"
             "1. First reply: state that Super Dev pipeline mode is active and the current phase is `research`.\n"
             "2. Read `knowledge/` and `output/knowledge-cache/*-knowledge-bundle.json` when available.\n"
@@ -270,7 +311,7 @@ class IntegrationManagerContentMixin:
             "5. Stop after the three core documents, summarize them, and wait for explicit confirmation.\n"
             "6. Only after confirmation, create `.super-dev/changes/*/proposal.md` and `.super-dev/changes/*/tasks.md`, then continue with frontend-first implementation.\n\n"
             "## Constraints\n"
-            "- Do not start coding directly after `super-dev:` or `super-dev：`.\n"
+            "- Do not start coding directly after `/super-dev` skill entry, `$super-dev`, `super-dev:`, or `super-dev：`.\n"
             "- Do not create Spec before document confirmation.\n"
             "- If the user requests architecture changes, first update `output/*-architecture.md`, then realign Spec/tasks and implementation.\n"
             "- If the user requests quality or security remediation, first fix the issues, rerun quality gate and `super-dev release proof-pack`, and only then continue.\n"
@@ -289,6 +330,186 @@ class IntegrationManagerContentMixin:
             "- DOC_CONFIRM_GATE: required\n"
             "- PREVIEW_CONFIRM_GATE: required\n"
             "- HOST_PARITY: required\n"
+        )
+
+    def _build_codex_repo_marketplace_content(self) -> str:
+        payload = {
+            "name": "super-dev-local",
+            "interface": {
+                "displayName": "Super Dev Local Plugins",
+            },
+            "plugins": [
+                {
+                    "name": "super-dev-codex",
+                    "source": {
+                        "source": "local",
+                        "path": "./plugins/super-dev-codex",
+                    },
+                    "policy": {
+                        "installation": "AVAILABLE",
+                        "authentication": "ON_INSTALL",
+                    },
+                    "category": "Productivity",
+                }
+            ],
+        }
+        return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+
+    def _build_codex_plugin_manifest_content(self) -> str:
+        payload = {
+            "name": "super-dev-codex",
+            "version": __version__,
+            "description": "Codex App/Desktop enhancement bundle for the full Super Dev pipeline.",
+            "author": {
+                "name": "Shangyan Technology",
+                "email": "11964948@qq.com",
+                "url": "https://github.com/shangyankeji/super-dev",
+            },
+            "homepage": "https://github.com/shangyankeji/super-dev",
+            "repository": "https://github.com/shangyankeji/super-dev",
+            "license": "MIT",
+            "keywords": ["codex", "super-dev", "workflow", "skills", "agents"],
+            "skills": "./skills/",
+            "interface": {
+                "displayName": "Super Dev for Codex",
+                "shortDescription": "Research-first governed delivery pipeline for Codex App/Desktop.",
+                "longDescription": "Adds a repo-local Codex plugin surface for Super Dev so Codex App/Desktop can expose the same governed research -> docs -> confirmation -> implementation flow more consistently alongside AGENTS.md and Skills.",
+                "developerName": "Shangyan Technology",
+                "category": "Productivity",
+                "capabilities": ["Interactive", "Write"],
+                "websiteURL": "https://github.com/shangyankeji/super-dev",
+                "privacyPolicyURL": "https://github.com/shangyankeji/super-dev/blob/main/README_EN.md",
+                "termsOfServiceURL": "https://github.com/shangyankeji/super-dev/blob/main/README_EN.md",
+                "defaultPrompt": [
+                    "Use Super Dev to research and design this product before coding.",
+                    "Continue the current Super Dev workflow from the active gate.",
+                    "Review the current repository and resume the Super Dev pipeline.",
+                ],
+                "brandColor": "#2563EB",
+            },
+        }
+        return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+
+    def _build_codex_plugin_readme_content(self) -> str:
+        return (
+            "# Super Dev Codex Plugin\n\n"
+            "This is an optional local Codex plugin scaffold for repositories that want a richer Codex App/Desktop surface than `AGENTS.md + Skills` alone.\n\n"
+            "It does not replace the official Super Dev Codex integration surfaces:\n\n"
+            "- `AGENTS.md`\n"
+            "- `.agents/skills/super-dev/SKILL.md`\n"
+            "- `CODEX_HOME/AGENTS.md` (default `~/.codex/AGENTS.md`)\n"
+            "- `~/.agents/skills/super-dev/SKILL.md`\n\n"
+            "Use this plugin scaffold as an advanced Codex App/Desktop enhancement when you want the repository to expose a repo-local plugin entry in addition to the official AGENTS/Skills model.\n\n"
+            "Plugin root:\n\n"
+            "- `.codex-plugin/plugin.json`\n"
+            "- `skills/super-dev/SKILL.md`\n"
+            "- `skills/super-dev-core/SKILL.md`\n\n"
+            "Marketplace entry:\n\n"
+            "- `.agents/plugins/marketplace.json`\n\n"
+            "The plugin skill should behave exactly like the main Codex Super Dev workflow:\n\n"
+            "- App/Desktop slash list entry: `super-dev`\n"
+            "- CLI explicit skill mention: `$super-dev`\n"
+            "- AGENTS fallback: `super-dev: <需求描述>`\n"
+        )
+
+    def _build_codex_plugin_skill_content(self, *, skill_name: str) -> str:
+        if skill_name == "super-dev-core":
+            return (
+                "---\n"
+                "name: super-dev-core\n"
+                "description: Compatibility alias for the Super Dev Codex plugin skill.\n"
+                "when_to_use: Use when legacy Codex environments still surface super-dev-core instead of super-dev.\n"
+                f"version: {__version__}\n"
+                "---\n\n"
+                "# Super Dev Core Compatibility Alias\n\n"
+                "Treat this skill as the same contract as `super-dev`.\n\n"
+                "- Enter the full Super Dev pipeline immediately.\n"
+                "- Read `AGENTS.md` and `.super-dev/SESSION_BRIEF.md` before replying when present.\n"
+                "- Follow the exact same research -> docs -> confirmation -> implementation flow.\n"
+                "- Do not explain the alias; execute the workflow.\n"
+            )
+        return (
+            "---\n"
+            "name: super-dev\n"
+            "description: Super Dev Codex App/Desktop plugin entry.\n"
+            "when_to_use: Use when the user wants to enter or resume the Super Dev pipeline inside Codex App/Desktop.\n"
+            f"version: {__version__}\n"
+            "---\n\n"
+            "# Super Dev for Codex Plugin\n\n"
+            "## Activation Contract\n\n"
+            "- If this plugin skill is invoked, Super Dev pipeline mode is already active.\n"
+            "- Do not explain the skill or summarize what it is before acting.\n"
+            "- Treat the Codex App/Desktop `/`-list entry `super-dev` as equivalent to Codex CLI `$super-dev`.\n"
+            "- If `AGENTS.md` or `.super-dev/SESSION_BRIEF.md` exists, read them before replying.\n\n"
+            "## Required First Reply\n\n"
+            "- State that Super Dev pipeline mode is active.\n"
+            "- State that the current phase is `research`, unless `.super-dev/SESSION_BRIEF.md` shows an active confirmation or revision gate.\n"
+            "- Promise to stop after research + PRD + architecture + UIUX for explicit confirmation before implementation.\n\n"
+            "## Required Workflow\n\n"
+            "1. Read `knowledge/` and `output/knowledge-cache/*-knowledge-bundle.json` when present.\n"
+            "2. Produce `output/*-research.md`.\n"
+            "3. Produce `output/*-prd.md`, `output/*-architecture.md`, and `output/*-uiux.md`.\n"
+            "4. Wait for explicit confirmation.\n"
+            "5. Only then create `.super-dev/changes/*/proposal.md` and `.super-dev/changes/*/tasks.md`.\n"
+            "6. Implement frontend first, then backend, then quality and delivery.\n\n"
+            "## Continuity Rules\n\n"
+            "- If the workflow is already waiting for docs confirmation, preview confirmation, UI revision, architecture revision, or quality revision, stay inside the current Super Dev gate.\n"
+            "- User replies like `修改`, `补充`, `继续改`, `确认`, `通过`, `继续` remain inside the current gate.\n"
+            "- Do not silently fall back to ordinary chat.\n\n"
+            "## UI Rules\n\n"
+            "- Lock icon library, typography, design token system, component ecosystem, and page skeleton from `output/*-uiux.md` before any UI implementation.\n"
+            "- Do not use emoji as functional icons or placeholders.\n"
+            "- For non-conversational AI products, avoid Claude / ChatGPT-style chat shells unless the UI plan explicitly justifies them.\n"
+        )
+
+    def _build_claude_repo_marketplace_content(self) -> str:
+        payload = {
+            "name": "super-dev-local",
+            "plugins": [
+                {
+                    "name": "super-dev-claude",
+                    "source": "./plugins/super-dev-claude",
+                    "version": __version__,
+                }
+            ],
+        }
+        return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+
+    def _build_claude_plugin_manifest_content(self) -> str:
+        payload = {
+            "name": "super-dev-claude",
+            "version": __version__,
+            "description": "Claude Code enhancement bundle for the full Super Dev pipeline.",
+            "author": {
+                "name": "Shangyan Technology",
+                "email": "11964948@qq.com",
+            },
+            "homepage": "https://github.com/shangyankeji/super-dev",
+            "repository": "https://github.com/shangyankeji/super-dev",
+            "license": "MIT",
+        }
+        return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+
+    def _build_claude_plugin_readme_content(self) -> str:
+        return (
+            "# Super Dev Claude Plugin\n\n"
+            "This is an optional repo-local Claude Code plugin enhancement.\n\n"
+            "Primary Claude integration surfaces remain:\n\n"
+            "- `CLAUDE.md`\n"
+            "- `.claude/CLAUDE.md` (compatibility mirror)\n"
+            "- `.claude/skills/super-dev/SKILL.md`\n"
+            "- `~/.claude/CLAUDE.md`\n"
+            "- `~/.claude/skills/super-dev/SKILL.md`\n\n"
+            "Compatibility enhancement surfaces remain available:\n\n"
+            "- `.claude/commands/super-dev.md`\n"
+            "- `.claude/agents/super-dev-core.md`\n\n"
+            "This plugin enhancement adds a repo-local Claude plugin surface through:\n\n"
+            "- `.claude-plugin/marketplace.json`\n"
+            "- `plugins/super-dev-claude/.claude-plugin/plugin.json`\n"
+            "- `plugins/super-dev-claude/commands/super-dev.md`\n"
+            "- `plugins/super-dev-claude/agents/super-dev-core.md`\n"
+            "- `plugins/super-dev-claude/skills/super-dev/SKILL.md`\n"
+            "- `plugins/super-dev-claude/skills/super-dev-core/SKILL.md`\n"
         )
 
     def _build_claude_agent_content(self) -> str:
@@ -378,43 +599,10 @@ class IntegrationManagerContentMixin:
             "- Prefer repository-local rules, commands, and this agent file as the source of project-specific context.\n"
         )
 
-    def _build_embedded_skill_content(self) -> str:
-        return (
-            "---\n"
-            "name: super-dev-core\n"
-            "description: Super Dev pipeline governance for research-first, commercial-grade AI coding delivery\n"
-            "---\n"
-            "# super-dev-core - Super Dev AI Coding Skill\n\n"
-            "## 定位边界（强制）\n"
-            "- 当前宿主负责调用模型、工具、终端与实际代码修改。\n"
-            "- Super Dev 不是大模型平台，也不提供自己的代码生成 API。\n"
-            "- 你的职责是利用宿主现有能力，严格执行 Super Dev 的流程规范、设计约束、质量门禁与交付标准。\n\n"
-            "## 触发方式（强制）\n"
-            "- 支持 slash 的宿主：`/super-dev <需求描述>`。\n"
-            "- 非 slash 宿主：`super-dev: <需求描述>` 与 `super-dev：<需求描述>` 等效。\n\n"
-            "## 首轮响应契约（强制）\n"
-            "- 第一轮回复必须明确说明当前阶段是 `research`。\n"
-            "- 如果仓库里已经存在 Super Dev 上下文，新会话里的第一次自然语言需求也必须继续当前流程，而不是退回普通聊天。\n"
-            "- 第一轮回复必须说明会先读取 `knowledge/` 与 `output/knowledge-cache/*-knowledge-bundle.json`。\n"
-            "- 三份核心文档完成后会暂停等待用户确认；未经确认不得创建 `.super-dev/changes/*` 或开始编码。\n\n"
-            "## 本地知识库契约（强制）\n"
-            "- 先读 `knowledge/`。\n"
-            "- 若存在 `output/knowledge-cache/*-knowledge-bundle.json`，必须先读取并把命中的本地知识带入三文档、Spec 与实现。\n"
-            "- research、PRD、架构、UIUX、Spec、质量报告等要求中的产物，必须真实写入项目文件，不能只在聊天里口头描述。\n"
-            "- 用户要求 UI 改版时，先更新 `output/*-uiux.md`，再重做前端并重新执行 frontend runtime 与 UI review。\n"
-            "- 用户要求架构返工时，先更新 `output/*-architecture.md`，再同步调整 Spec / tasks 与实现方案。\n"
-            "- 用户要求质量整改时，先修复问题，再重新执行 quality gate 与 `super-dev release proof-pack`。\n"
-            "- 若当前项目启用了 policy / 强治理策略，不得默认建议关闭红队、降低质量阈值或跳过门禁；只有在用户明确要求降级治理强度时，才可说明风险后调整 policy。\n"
-            "- 完成每轮代码修改后，必须先做一次最小 diff review，再汇报“已完成”。\n"
-            "- 必须运行项目原生 build / compile / type-check / test / runtime smoke；若不存在某项，要说明原因。\n"
-            "- 本轮新增函数、方法、字段、模块、日志埋点必须接入真实调用链；未接入则删除，不允许只定义不使用。\n"
-            "- 不允许留下新增 unused code、只定义不调用的 helper、无效日志或无效兜底分支。\n\n"
-            "## 会话连续性契约（强制）\n"
-            "- 若存在 `.super-dev/SESSION_BRIEF.md`，每次继续前必须先读取，并把它视为当前流程状态真源。\n"
-            "- 当前流程停在确认门或返工门时，用户说“改一下”“补充”“继续改”“确认”“通过”“继续”等，都属于当前流程内动作，不得退回普通聊天。\n"
-            "- 每次按用户意见修改后，必须留在当前门里，重新总结变化，并再次等待明确确认。\n"
-            "- 只有用户明确说取消当前流程、重新开始、或切回普通聊天时，才允许离开当前 Super Dev 流程。\n\n"
-        )
+    def _build_embedded_skill_content(self, target: str, relative: str) -> str:
+        skill_name = "super-dev" if "/skills/super-dev/SKILL.md" in relative else "super-dev-core"
+        template = SkillTemplate.for_builtin(skill_name, target)
+        return template.render(target)
 
     def _build_slash_command_content(self, target: str) -> str:
         if target == "windsurf":
@@ -534,7 +722,16 @@ class IntegrationManagerContentMixin:
         )
 
     def _generic_cli_rules(self, target: str) -> str:
-        if self.supports_slash(target):
+        if target == "codex-cli":
+            trigger_lines = (
+                "## Trigger\n"
+                "- Codex App/Desktop preferred: choose `super-dev` from the `/` list. This is the enabled Skill entry rather than a project custom slash file.\n"
+                "- Codex CLI preferred: `$super-dev`.\n"
+                '- AGENTS-driven natural-language fallback: `super-dev: <需求描述>` or `super-dev：<需求描述>`.\n'
+                '- Local orchestration fallback: `super-dev "<需求描述>"`\n'
+                "- The terminal entry does not directly talk to the live Codex host session.\n\n"
+            )
+        elif self.supports_slash(target):
             trigger_lines = (
                 "## Trigger\n"
                 '- Preferred: `/super-dev "<需求描述>"`\n'
@@ -726,7 +923,10 @@ class IntegrationManagerContentMixin:
             "- Claude Code remains the execution host for coding capability.\n"
             "- Super Dev provides governance: protocol, gates, and audit artifacts.\n\n"
             "## Runtime Contract\n"
-            "- Treat Super Dev as the local Python workflow tool plus Claude Code command/rule integration.\n"
+            "- Treat Super Dev as the local Python workflow tool plus Claude Code `CLAUDE.md + Skills` integration.\n"
+            "- Primary surfaces are project-root `CLAUDE.md`, compatibility mirror `.claude/CLAUDE.md`, project-level `.claude/skills/super-dev/`, and user-level `~/.claude/skills/super-dev/`.\n"
+            "- Compatibility surfaces `.claude/commands/super-dev.md` and `.claude/agents/super-dev-core.md` remain installed so older Claude Code builds still converge onto the same Super Dev workflow.\n"
+            "- Optional repo enhancement surfaces `.claude-plugin/marketplace.json` and `plugins/super-dev-claude/.claude-plugin/plugin.json` can expose a richer Claude-native plugin layer without replacing the base `CLAUDE.md + Skills` contract.\n"
             "- When the user triggers `/super-dev`, `super-dev:`, or `super-dev：`, enter the Super Dev pipeline immediately rather than handling it like casual chat.\n"
             "- Use Claude Code browse/search for research and Claude Code terminal/editing for implementation.\n"
             "- Use local `super-dev` commands whenever you need to generate/update docs, spec artifacts, quality reports, and delivery outputs.\n\n"
@@ -776,16 +976,19 @@ class IntegrationManagerContentMixin:
             "- Run `super-dev quality` after completing a feature.\n"
             "- Run `super-dev review --state ui` after frontend is done.\n"
             "- Run `super-dev release proof-pack` before final delivery.\n\n"
-            "## Three-Layer Governance Model\n\n"
-            "Super Dev governance operates at three layers:\n\n"
+            "## Four-Layer Governance Model\n\n"
+            "Super Dev governance operates at four layers:\n\n"
             "**Layer 1 — CLAUDE.md (Persistent Rules)**\n"
-            "These rules are ALWAYS in context. They override default behavior.\n\n"
-            "**Layer 2 — Hooks (Runtime Enforcement)**\n"
+            "Project-root `CLAUDE.md` is the canonical persistent memory surface. `.claude/CLAUDE.md` is kept as a compatibility mirror for builds that still read nested memory files.\n\n"
+            "**Layer 2 — Skills (Primary Execution Contract)**\n"
+            "Project-level `.claude/skills/super-dev/` and user-level `~/.claude/skills/super-dev/` carry the primary Super Dev execution contract. Compatibility aliases such as `super-dev-core` may coexist, but they must still converge onto the same workflow.\n\n"
+            "**Layer 3 — Hooks (Runtime Enforcement)**\n"
             "PreToolUse hooks validate every file write. PostToolUse hooks audit results.\n"
             "Hooks are auto-registered when /super-dev is invoked.\n\n"
-            "**Layer 3 — CLI Commands (On-Demand Checks)**\n"
+            "**Layer 4 — CLI Commands & Optional Plugin Enhancement (On-Demand Checks)**\n"
             "Run `super-dev enforce validate` / `super-dev quality` for deeper checks.\n"
             "These are triggered at key milestones, not every turn.\n"
+            "If Claude Code surfaces repo plugins, `.claude-plugin/marketplace.json` + `plugins/super-dev-claude/.claude-plugin/plugin.json` should enhance the same Super Dev flow rather than fork it.\n"
         )
 
     def _antigravity_workflow_rules(self) -> str:

@@ -230,14 +230,15 @@ HOST_RUNTIME_VALIDATION_OVERRIDES: dict[str, dict[str, list[str]]] = {
     "claude-code": {
         "runtime_checklist": [
             "确认当前 Claude Code 会话就在目标项目目录中，不是在其他工作区触发。",
-            "确认 `/super-dev` 直接进入 Super Dev，而不是普通聊天或旁路子代理。",
+            "确认项目根 `CLAUDE.md`、兼容 `.claude/CLAUDE.md`、项目级 `.claude/skills/super-dev/` 与用户级 `~/.claude/skills/` 已被当前会话重新加载。",
+            "确认 `/super-dev` 直接进入 Super Dev，而不是普通聊天或旁路兼容命令面。",
             "确认改文档、补充、继续修改等自然语言仍留在当前 Super Dev 流程内。",
         ],
         "pass_criteria": [
-            "Claude Code 在文档修改和确认门阶段没有静默退出 Super Dev 模式。",
+            "Claude Code 在 `CLAUDE.md + skills` 主模型下进入并保持同一条 Super Dev 流程，兼容 commands/agents 与可选 plugin enhancement 不会造成分叉。",
         ],
         "resume_checklist": [
-            "Claude Code 恢复时不能绕过当前确认门或返工门。",
+            "Claude Code 恢复时不能绕过当前确认门或返工门，并要确认重新打开的会话再次读取了 `CLAUDE.md + skills`。",
         ],
     },
     "cline": {
@@ -283,17 +284,19 @@ HOST_RUNTIME_VALIDATION_OVERRIDES: dict[str, dict[str, list[str]]] = {
         "runtime_checklist": [
             "确认接入完成后已经彻底重开 codex，新会话会重新加载 AGENTS.md 与官方 Skills。",
             "确认项目根 `AGENTS.md`、项目级 `.agents/skills/super-dev/`、全局 `CODEX_HOME/AGENTS.md`（默认 `~/.codex/AGENTS.md`）与官方用户级 Skills 一起生效。",
-            "确认当前终端就在目标项目目录里，优先输入 `super-dev:` 触发；如果想显式调 Skill，可输入 `$super-dev`。",
-            "如果 Codex 桌面端 `/` 列表里出现 `super-dev`，确认它被当作已启用 Skill 入口，而不是项目自定义 slash 文件。",
+            "确认 repo plugin enhancement 已落地：`.agents/plugins/marketplace.json` 与 `plugins/super-dev-codex/.codex-plugin/plugin.json` 存在，并且 Codex App/Desktop 能看到本地 plugin 面。",
+            "确认 Codex CLI 当前终端就在目标项目目录里，并优先使用 `$super-dev` 显式调用 Skill。",
+            "确认 Codex App/Desktop 若在 `/` 列表里出现 `super-dev`，它被当作已启用 Skill 入口，而不是项目自定义 slash 文件。",
+            "确认 `super-dev:` 仍可作为 AGENTS 驱动的自然语言回退入口，但不是 Codex 官方主触发面。",
             "确认会话没有先解释 skill 或退回普通聊天，而是直接进入 Super Dev 流程。",
         ],
         "pass_criteria": [
-            "重开 codex 后的新会话确实加载了项目 AGENTS.md、项目级 `.agents/skills/super-dev/`、全局 AGENTS 与官方 Skills。",
-            "无论使用 `super-dev:`、`$super-dev`，还是桌面端 Skill 列表入口，都会进入同一条 Super Dev 流程。",
+            "重开 codex 后的新会话确实加载了项目 AGENTS.md、项目级 `.agents/skills/super-dev/`、全局 AGENTS 与官方 Skills，并识别 repo plugin enhancement。",
+            "无论使用 Codex App/Desktop 的 `/super-dev` Skill 入口、CLI 的 `$super-dev`，还是 `super-dev:` 回退入口，都会进入同一条 Super Dev 流程。",
         ],
         "resume_checklist": [
-            "Codex 必须在新会话里恢复，不能复用接入前的旧会话。",
-            "恢复时优先继续使用 `super-dev:`；如果当前会话明确以 Skill 入口运行，也要保持同一条 Super Dev 流程，不要切回普通聊天。",
+            "Codex 必须在新会话里恢复，不能复用接入前的旧会话；若 App/Desktop 没看到本地 plugin 面，先确认 repo marketplace 已被当前项目加载。",
+            "恢复时优先沿用当前会话表面：App/Desktop 继续从 `/` 列表选 `super-dev`，CLI 继续用 `$super-dev`；如果当前是在自然语言上下文中恢复，也要保持同一条 Super Dev 流程。",
         ],
     },
     "copilot-cli": {

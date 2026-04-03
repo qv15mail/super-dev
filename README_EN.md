@@ -19,9 +19,31 @@
 
 ## Version
 
-Current version: `2.3.0`
+Current version: `2.3.1`
 
 ---
+
+## What's New in 2.3.1
+
+### Codex Deep Adaptation
+
+- Codex now follows the official `AGENTS.md + Skills + repo plugin enhancement` model instead of a shallow skill-only approximation.
+- Codex App/Desktop and Codex CLI now converge into the same Super Dev workflow with explicit entry guidance.
+- Onboarding, doctor, detect, and runtime validation now reflect the actual Codex entry model instead of the old slash-vs-text simplification.
+
+### Claude Code Deep Adaptation
+
+- Claude Code now follows a `CLAUDE.md + .claude/skills + ~/.claude/skills + optional plugin enhancement` model instead of the older commands-first approximation.
+- Root `CLAUDE.md`, the compatibility `.claude/CLAUDE.md`, project/user skills, and optional repo plugin enhancement now share one consistent onboarding, doctor, runtime, and documentation contract.
+
+### Workflow and UI Governance Hardening
+
+- Workflow recovery semantics were unified further across CLI, onboarding, doctor, validate, and Web API action cards.
+- UI contract enforcement, emoji blocking, runtime alignment, quality gates, and release readiness were tightened so drift is caught earlier.
+
+### Documentation and Website Alignment
+
+- Version sources, bilingual READMEs, homepage, changelog, and release history are now aligned to `2.3.1`.
 
 ## What's New in 2.3.0
 
@@ -33,7 +55,7 @@ Current version: `2.3.0`
 
 ### CLAUDE.md include directive Knowledge References
 
-- Generated `.claude/CLAUDE.md` now includes `@./knowledge/...` references automatically.
+- Generated project-root `CLAUDE.md` and the compatibility mirror `.claude/CLAUDE.md` now include `@./knowledge/...` references automatically.
 - Host natively processes include directive to load technology-stack knowledge files.
 - Frontend support: Next.js / React / Vue / Nuxt / Angular / Svelte.
 - Backend support: FastAPI / Django / NestJS / Express / Spring Boot.
@@ -410,7 +432,7 @@ Configurable via `super-dev.yaml` policy section.
 
 1. User runs `super-dev` or `super-dev init` in the project directory.
 2. The onboarding wizard connects Super Dev to the target host.
-3. User types `/super-dev requirement` or `super-dev: requirement` inside the host.
+3. User triggers Super Dev using the host's supported entry, such as `/super-dev requirement`, `super-dev: requirement`, Codex App/Desktop selecting `super-dev` from the `/` list, or Codex CLI typing `$super-dev`.
 4. The host enters the Super Dev pipeline; 11 expert agents are injected by stage.
 5. The host handles web research, inference, coding, execution, and file modifications.
 6. Super Dev handles workflow, documents, gates, audit, and delivery standards.
@@ -423,7 +445,7 @@ New features follow the full pipeline. Bug fixes follow a lightweight patch path
 
 - `Super Dev` is a local Python CLI tool plus host-side rule files / Skills / slash mappings.
 - The host handles inference, research, coding, and execution. `Super Dev` handles pipeline flow, gates, and audit.
-- When the user types `/super-dev requirement` or `super-dev: requirement`, the host switches to pipeline mode.
+- When the user uses the host-supported Super Dev entry (`/super-dev`, `super-dev:`, Codex App/Desktop `/`-list skill entry, or Codex CLI `$super-dev`), the host switches to pipeline mode.
 - If a `knowledge/` directory exists, the host reads relevant knowledge files before drafting documents.
 - If `output/knowledge-cache/*-knowledge-bundle.json` exists, its knowledge hits are inherited into all later stages.
 
@@ -464,13 +486,13 @@ This generates `.super-dev/WORKFLOW.md` and `output/*-bootstrap.md` to lock down
 ### 3. Pin a specific version
 
 ```bash
-pip install super-dev==2.3.0
+pip install super-dev==2.3.1
 ```
 
 ### 4. Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.3.0
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.3.1
 ```
 
 ### 5. Source install for development
@@ -542,7 +564,7 @@ Super Dev officially documents 20 unified onboarding hosts plus 1 manual plugin 
 | Host | Trigger | Onboard Command |
 |------|---------|-----------------|
 | Claude Code | `/super-dev your requirement` | `super-dev onboard --host claude-code` |
-| Codex | `super-dev: your requirement` / `$super-dev` | `super-dev onboard --host codex-cli` |
+| Codex | App/Desktop: `/super-dev` (skill entry) / CLI: `$super-dev` / fallback: `super-dev: your requirement` | `super-dev onboard --host codex-cli` |
 | Gemini CLI | `/super-dev your requirement` | `super-dev onboard --host gemini-cli` |
 | OpenCode | `/super-dev your requirement` | `super-dev onboard --host opencode` |
 | Kiro CLI | `super-dev: your requirement` | `super-dev onboard --host kiro-cli` |
@@ -602,8 +624,9 @@ Restart required after onboarding: No.
 
 Notes:
 1. Recommended as the primary CLI host.
-2. Run `super-dev doctor --host claude-code` after onboarding to confirm slash activation.
-3. Claude Code supports `.claude/agents/` and `~/.claude/agents/`; Super Dev generates a `super-dev-core` subagent.
+2. Run `super-dev doctor --host claude-code` after onboarding to confirm project-root `CLAUDE.md`, project `.claude/skills/super-dev/`, user `~/.claude/skills/`, the compatibility slash surface, and the optional plugin enhancement are all active.
+3. Claude Code is now modeled skills-first: the primary surfaces are `CLAUDE.md + .claude/skills + ~/.claude/skills`; `.claude/commands/` and `.claude/agents/` remain compatibility enhancements only.
+4. Super Dev can also install `.claude-plugin/marketplace.json` plus `plugins/super-dev-claude/.claude-plugin/plugin.json` as an optional repo-local Claude plugin enhancement.
 
 **Codex**
 
@@ -612,16 +635,20 @@ super-dev onboard --host codex-cli --force --yes
 ```
 
 Trigger location: after onboarding, restart `codex`, then trigger in the new session.
-Trigger command: `super-dev: your requirement`
+Trigger command:
+`Codex App/Desktop: choose super-dev from the / list`
+`Codex CLI: $super-dev`
+`Fallback: super-dev: your requirement`
 Restart required after onboarding: Yes.
 
 Notes:
-1. The most stable trigger remains `super-dev: your requirement`.
-2. If you want to invoke the official Skill explicitly, use `$super-dev`.
-3. In the Codex desktop/app, if `super-dev` appears in the `/` list, that is the enabled Skill entry, not a project-level custom slash command.
-4. The actual integration surfaces are project `AGENTS.md`, project `.agents/skills/super-dev/SKILL.md`, global `CODEX_HOME/AGENTS.md` (default `~/.codex/AGENTS.md`), and the official user-level Skill at `~/.agents/skills/super-dev/SKILL.md`.
-5. `super-dev-core` is still installed as a compatibility alias for older setups.
-6. If a previous session did not load the new surfaces, restart `codex` and try again.
+1. In Codex app/desktop, prefer selecting `super-dev` directly from the `/` list; that is the enabled Skill entry, not a project-level custom slash command.
+2. In Codex CLI, prefer explicit `$super-dev`.
+3. If you are already continuing inside natural-language context, you can still use `super-dev: your requirement` as the AGENTS-driven fallback.
+4. The base integration surfaces are project `AGENTS.md`, project `.agents/skills/super-dev/SKILL.md`, global `CODEX_HOME/AGENTS.md` (default `~/.codex/AGENTS.md`), and the official user-level Skill at `~/.agents/skills/super-dev/SKILL.md`.
+5. Super Dev also installs an optional repo-local Codex plugin enhancement at `.agents/plugins/marketplace.json` + `plugins/super-dev-codex/.codex-plugin/plugin.json` so Codex App/Desktop can expose a richer local plugin surface alongside AGENTS + Skills.
+6. `super-dev-core` is still installed as a compatibility alias for older setups.
+7. If a previous session did not load the new surfaces, restart `codex` and try again.
 
 **Gemini CLI**
 

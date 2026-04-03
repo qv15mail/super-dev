@@ -110,9 +110,11 @@ class CliAnalysisMixin:
             pass
 
         self.console.print("\n[dim]下一步:[/dim]")
-        self.console.print("  在宿主中输入以下任一方式开始:")
-        self.console.print("    /super-dev <你的需求>        (支持 / 命令的宿主)")
-        self.console.print("    super-dev: <你的需求>        (所有宿主通用)")
+        self.console.print("  在宿主中按宿主模型触发 Super Dev:")
+        self.console.print("    /super-dev <你的需求>        (原生 slash 宿主)")
+        self.console.print("    Codex App/Desktop: 从 / 列表选 super-dev")
+        self.console.print("    Codex CLI: $super-dev")
+        self.console.print("    super-dev: <你的需求>        (自然语言回退入口)")
 
         return 0
 
@@ -148,7 +150,7 @@ class CliAnalysisMixin:
         self.console.print("")
         self.console.print("[cyan]下一步:[/cyan]")
         self.console.print('  1. 运行 super-dev start --idea "你的需求"')
-        self.console.print("  2. 或直接在已接入宿主中触发 /super-dev / super-dev:")
+        self.console.print("  2. 或直接在已接入宿主中按宿主模型触发（Codex App/Desktop 用 / 列表，Codex CLI 用 $super-dev，其余宿主按 /super-dev 或 super-dev:）")
         return 0
 
     def _bootstrap_project_contract(self, project_dir: Path, config) -> tuple[Path, Path]:
@@ -217,8 +219,10 @@ The following surfaces are now the project bootstrap contract:
 
 ## Trigger Rules
 
-- Slash hosts: `/super-dev <需求描述>`
-- Text-trigger hosts: `super-dev: <需求描述>` or `super-dev：<需求描述>`
+- Native slash hosts: `/super-dev <需求描述>`
+- Codex App/Desktop: choose `super-dev` from the `/` list
+- Codex CLI: `$super-dev`
+- Text-trigger fallback hosts: `super-dev: <需求描述>` or `super-dev：<需求描述>`
 
 ## Bootstrap Guidance
 
@@ -236,9 +240,12 @@ Fill `.super-dev/project.md` with domain constraints, architecture notes, delive
 
         # Detect installed host surfaces
         installed_items: list[str] = []
+        claude_root_md = project_dir / "CLAUDE.md"
+        if claude_root_md.exists():
+            installed_items.append("`CLAUDE.md` — Claude Code 主规则面")
         claude_md = project_dir / ".claude" / "CLAUDE.md"
         if claude_md.exists():
-            installed_items.append("`.claude/CLAUDE.md` — 编码约束规则")
+            installed_items.append("`.claude/CLAUDE.md` — Claude Code 兼容规则镜像")
         settings_json = project_dir / ".claude" / "settings.local.json"
         if settings_json.exists():
             installed_items.append("`.claude/settings.local.json` — enforcement hooks")
@@ -274,7 +281,7 @@ Fill `.super-dev/project.md` with domain constraints, architecture notes, delive
 
 ## 下一步
 
-1. 在宿主中输入: `/super-dev 你的需求` 或 `super-dev: 你的需求`
+1. 在宿主中按宿主模型触发：原生 slash 宿主用 `/super-dev 你的需求`，Codex App/Desktop 从 `/` 列表选 `super-dev`，Codex CLI 用 `$super-dev`，自然语言回退用 `super-dev: 你的需求`
 2. Super Dev 会依次执行: 研究 -> 文档 -> 确认 -> Spec -> 编码 -> 质量 -> 交付
 3. 每个阶段都有对应的专家主导
 {installed_section}

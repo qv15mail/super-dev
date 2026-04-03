@@ -17,6 +17,7 @@ from super_dev.cli import SuperDevCLI
 from super_dev.integrations import IntegrationManager
 from super_dev.orchestrator import Phase, PhaseResult
 from super_dev.review_state import save_docs_confirmation, save_ui_revision
+from super_dev.skills import SkillManager
 from super_dev.specs.generator import SpecGenerator
 
 
@@ -1713,9 +1714,11 @@ class TestWebAPI:
         assert antigravity_host["commands"]["trigger"].startswith("/super-dev")
         claude_host = next(item for item in payload["host_tools"] if item["id"] == "claude-code")
         assert claude_host["category"] == "cli"
+        assert "CLAUDE.md" in claude_host["integration_files"]
         assert ".claude/CLAUDE.md" in claude_host["integration_files"]
+        assert ".claude/skills/super-dev/SKILL.md" in claude_host["integration_files"]
         assert claude_host["slash_command_file"] == ".claude/commands/super-dev.md"
-        assert claude_host["usage_mode"] == "native-slash"
+        assert claude_host["usage_mode"] == "native-slash-and-skill"
         assert claude_host["commands"]["trigger"].startswith("/super-dev")
         assert claude_host["commands"]["setup"].startswith("super-dev setup --host claude-code")
         assert claude_host["commands"]["audit"] == "super-dev integrate audit --target claude-code"
@@ -1756,7 +1759,7 @@ class TestWebAPI:
         assert isinstance(payload["primary_repair_action"]["secondary_actions"], list)
         assert payload["decision_card"]["selected_host"] == "claude-code"
         assert payload["decision_card"]["selected_path_override"]["env_key"] == "SUPER_DEV_HOST_PATH_CLAUDE_CODE"
-        assert payload["usage_profiles"]["claude-code"]["usage_mode"] == "native-slash"
+        assert payload["usage_profiles"]["claude-code"]["usage_mode"] == "native-slash-and-skill"
         assert payload["usage_profiles"]["claude-code"]["certification_level"] == "certified"
         assert payload["usage_profiles"]["claude-code"]["path_override"]["env_key"] == "SUPER_DEV_HOST_PATH_CLAUDE_CODE"
         assert payload["usage_profiles"]["claude-code"]["trigger_command"].startswith("/super-dev")
@@ -1764,11 +1767,11 @@ class TestWebAPI:
         assert "SMOKE_OK" in payload["usage_profiles"]["claude-code"]["smoke_test_prompt"]
         host = payload["report"]["hosts"]["claude-code"]
         assert host["ready"] is False
-        assert {"integrate", "slash"}.issubset(set(host["missing"]))
+        assert {"integrate", "skill", "slash", "plugin_enhancement"}.issubset(set(host["missing"]))
         assert host["checks"]["contract"]["ok"] is True
         assert host["checks"]["contract"]["surfaces"]
         assert host["checks"]["contract"]["invalid_surfaces"] == {}
-        assert host["usage_profile"]["usage_mode"] == "native-slash"
+        assert host["usage_profile"]["usage_mode"] == "native-slash-and-skill"
         assert host["usage_profile"]["certification_label"] == "Certified"
         assert host["usage_profile"]["requires_restart_after_onboard"] is False
 
@@ -2060,25 +2063,34 @@ class TestWebAPI:
         assert codex_host["certification_label"] == "Certified"
         assert codex_host["usage_mode"] == "agents-and-skill"
         assert codex_host["host_protocol_mode"] == "official-skill"
-        assert codex_host["host_protocol_summary"] == "官方 AGENTS.md + 官方 Skills"
-        assert "super-dev: <需求描述>" in codex_host["primary_entry"]
+        assert codex_host["host_protocol_summary"] == "官方 AGENTS.md + 官方 Skills + optional repo plugin enhancement"
+        assert "/` 列表选择 `super-dev`" in codex_host["primary_entry"]
+        assert any(item["entry"] == "/super-dev" for item in codex_host["entry_variants"])
+        assert any(item["entry"] == "$super-dev" for item in codex_host["entry_variants"])
         assert codex_host["usage_location"]
         assert codex_host["usage_notes"]
         assert codex_host["requires_restart_after_onboard"] is True
         assert any("重启 codex" in step for step in codex_host["post_onboard_steps"])
         assert codex_host["commands"]["slash"] == ""
         assert codex_host["commands"]["skill_slash"] == "/super-dev"
-        assert codex_host["commands"]["skill"] == "super-dev"
+        assert codex_host["commands"]["skill"] == "$super-dev"
         assert codex_host["supports_skill_slash_entry"] is True
         assert codex_host["skill_slash_entry_command"] == "/super-dev"
+        assert codex_host["flow_contract"]["consistent_flow_required"] is True
+        assert codex_host["flow_contract"]["preferred_entry_order"] == ["app_desktop", "cli", "fallback"]
+        assert "同一条 Super Dev 流程" in codex_host["flow_contract"]["summary"]
+        assert codex_host["flow_probe"]["enabled"] is True
+        assert len(codex_host["flow_probe"]["steps"]) >= 4
         assert ".agents/skills/super-dev/SKILL.md" in codex_host["official_project_surfaces"]
+        assert ".agents/plugins/marketplace.json" in codex_host["official_project_surfaces"]
+        assert "plugins/super-dev-codex/.codex-plugin/plugin.json" in codex_host["official_project_surfaces"]
         assert "~/.codex/AGENTS.md" in codex_host["official_user_surfaces"]
         assert "~/.agents/skills/super-dev/SKILL.md" in codex_host["official_user_surfaces"]
         assert "~/.agents/skills/super-dev-core/SKILL.md" in codex_host["observed_compatibility_surfaces"]
         assert "~/.codex/skills/super-dev/SKILL.md" in codex_host["observed_compatibility_surfaces"]
         assert "~/.codex/skills/super-dev-core/SKILL.md" in codex_host["observed_compatibility_surfaces"]
-        assert codex_host["commands"]["trigger"] == "super-dev: 你的需求"
-        assert codex_host["final_trigger"] == "super-dev: 你的需求"
+        assert codex_host["commands"]["trigger"] == "App/Desktop: /super-dev | CLI: $super-dev | 回退: super-dev: 你的需求"
+        assert codex_host["final_trigger"] == "App/Desktop: /super-dev | CLI: $super-dev | 回退: super-dev: 你的需求"
         assert "SMOKE_OK" in codex_host["smoke_test_prompt"]
 
     def test_claude_host_catalog_uses_official_subagent_surfaces(self):
@@ -2088,13 +2100,21 @@ class TestWebAPI:
         payload = resp.json()
         claude_host = next(item for item in payload["host_tools"] if item["id"] == "claude-code")
         assert claude_host["supports_slash"] is True
-        assert claude_host["host_protocol_mode"] == "official-subagent"
-        assert claude_host["host_protocol_summary"] == "官方 commands + subagents"
+        assert claude_host["host_protocol_mode"] == "official-skill"
+        assert claude_host["host_protocol_summary"] == "官方 CLAUDE.md + Skills + optional repo plugin enhancement"
+        assert "CLAUDE.md" in claude_host["official_project_surfaces"]
+        assert ".claude/CLAUDE.md" in claude_host["official_project_surfaces"]
+        assert ".claude/skills/super-dev/SKILL.md" in claude_host["official_project_surfaces"]
         assert ".claude/commands/super-dev.md" in claude_host["official_project_surfaces"]
         assert ".claude/agents/super-dev-core.md" in claude_host["official_project_surfaces"]
+        assert ".claude-plugin/marketplace.json" in claude_host["official_project_surfaces"]
+        assert "plugins/super-dev-claude/.claude-plugin/plugin.json" in claude_host["official_project_surfaces"]
+        assert "~/.claude/CLAUDE.md" in claude_host["official_user_surfaces"]
+        assert "~/.claude/skills/super-dev/SKILL.md" in claude_host["official_user_surfaces"]
         assert "~/.claude/commands/super-dev.md" in claude_host["official_user_surfaces"]
-        assert "~/.claude/agents/super-dev-core.md" in claude_host["official_user_surfaces"]
-        assert claude_host["commands"]["skill"] == ""
+        assert "~/.claude/skills/super-dev-core/SKILL.md" in claude_host["observed_compatibility_surfaces"]
+        assert "~/.claude/agents/super-dev-core.md" in claude_host["observed_compatibility_surfaces"]
+        assert claude_host["commands"]["skill"] == "super-dev"
 
     def test_qoder_host_catalog_is_native_slash(self):
         client = TestClient(web_api.app)
@@ -2212,11 +2232,16 @@ class TestWebAPI:
         assert ".kiro/skills/super-dev-core/SKILL.md" in host["official_project_surfaces"]
         assert "~/.kiro/skills/super-dev-core/SKILL.md" in host["official_user_surfaces"]
 
-    def test_hosts_doctor_endpoint_ready_after_files_present(self, temp_project_dir: Path):
+    def test_hosts_doctor_endpoint_ready_after_files_present(self, temp_project_dir: Path, monkeypatch):
         client = TestClient(web_api.app)
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
         manager = IntegrationManager(temp_project_dir)
         manager.setup("claude-code", force=True)
+        manager.setup_global_protocol("claude-code", force=True)
         manager.setup_slash_command("claude-code", force=True)
+        SkillManager(temp_project_dir).install("super-dev", "claude-code", name="super-dev", force=True)
 
         resp = client.get(
             "/api/hosts/doctor",
@@ -2231,11 +2256,16 @@ class TestWebAPI:
         assert payload["report"]["hosts"]["claude-code"]["checks"]["contract"]["ok"] is True
         assert payload["compatibility"]["hosts"]["claude-code"]["score"] == 100.0
 
-    def test_hosts_doctor_endpoint_flags_stale_contract(self, temp_project_dir: Path):
+    def test_hosts_doctor_endpoint_flags_stale_contract(self, temp_project_dir: Path, monkeypatch):
         client = TestClient(web_api.app)
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
         manager = IntegrationManager(temp_project_dir)
         manager.setup("claude-code", force=True)
+        manager.setup_global_protocol("claude-code", force=True)
         manager.setup_slash_command("claude-code", force=True)
+        SkillManager(temp_project_dir).install("super-dev", "claude-code", name="super-dev", force=True)
         stale_file = temp_project_dir / ".claude" / "commands" / "super-dev.md"
         stale_file.write_text("# stale\n/super-dev\n", encoding="utf-8")
 
@@ -2656,12 +2686,17 @@ class TestWebAPI:
         )
         assert resp.status_code == 200
         host = resp.json()["report"]["hosts"][0]
+        assert host["checks"]["plugin_enhancement"]["ok"] is True
         assert any("重开 codex" in item for item in host["runtime_checklist"])
         assert any(".agents/skills/super-dev" in item for item in host["runtime_checklist"])
+        assert any(".agents/plugins/marketplace.json" in item for item in host["runtime_checklist"])
         assert any("当前终端就在目标项目目录" in item for item in host["runtime_checklist"])
         assert any(".agents/skills/super-dev" in item for item in host["pass_criteria"])
         assert any("官方 Skills" in item for item in host["pass_criteria"])
         assert any("$super-dev" in item for item in host["pass_criteria"])
+        assert host["flow_probe"]["enabled"] is True
+        assert any("/` 列表选择 `super-dev`" in item for item in host["flow_probe"]["steps"])
+        assert any("$super-dev" in item for item in host["flow_probe"]["steps"])
 
     def test_hosts_validate_opencode_uses_host_specific_runtime_checklist(self, temp_project_dir: Path, monkeypatch):
         fake_home = temp_project_dir / "fake-home"
@@ -2749,7 +2784,12 @@ class TestWebAPI:
         assert card["action_title"]
         assert card["action_examples"]
         assert card["user_action_shortcuts"]
-        assert "super-dev:" in card["host_first_sentence"]
+        assert card["preferred_entry"] == "app_desktop"
+        assert card["preferred_entry_label"] == "App/Desktop"
+        assert card["host_first_sentence"].startswith('/super-dev "')
+        assert card["entry_prompts"]["app_desktop"].startswith('/super-dev "')
+        assert card["entry_prompts"]["cli"].startswith('$super-dev "')
+        assert card["entry_prompts"]["fallback"].startswith("super-dev:")
         assert ".super-dev/SESSION_BRIEF.md" in card["session_brief_path"]
         assert card["recommended_workflow_command"]
         assert resp.json()["decision_card"]["selection_source"] == "explicit"

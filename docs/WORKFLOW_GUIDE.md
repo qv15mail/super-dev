@@ -18,7 +18,10 @@
 默认推荐先在宿主内触发 `Super Dev`：
 
 ```text
-/super-dev 你的功能需求
+原生 slash 宿主: /super-dev 你的功能需求
+Codex App/Desktop: 从 / 列表选择 super-dev
+Codex CLI: $super-dev
+自然语言回退: super-dev: 你的功能需求
 ```
 
 如果你不确定当前机器该用哪个宿主，先运行：
@@ -287,7 +290,10 @@ python scripts/audit_ai_kb.py
 ### 3.1 核心流水线
 
 ```text
-/super-dev 需求描述                    # 推荐：在宿主会话中触发
+原生 slash 宿主: /super-dev 需求描述
+Codex App/Desktop: 从 / 列表选择 super-dev
+Codex CLI: $super-dev
+自然语言回退: super-dev: 需求描述
 ```
 
 ```bash

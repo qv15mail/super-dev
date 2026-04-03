@@ -1,4 +1,4 @@
-# Super Dev 宿主能力审计（2.1.6）
+# Super Dev 宿主能力审计（2.3.1）
 
 这份文档记录当前宿主矩阵的能力依据，只回答四件事：
 
@@ -12,7 +12,7 @@
 | 宿主 | 当前接入模型 | 用户触发方式 | 官方依据 | 当前结论 |
 | --- | --- | --- | --- | --- |
 | Antigravity | native slash + GEMINI.md/workflow + official skills | `/super-dev 你的需求` | [Antigravity documentation](https://antigravity.im/documentation) | 当前按 `GEMINI.md + .gemini/commands + .agent/workflows + ~/.gemini/skills` 接入，本机安装面已验证，仍需更多公开定制文档支撑 |
-| Claude Code | native slash + official commands/subagents | `/super-dev 你的需求` | [Claude Code slash commands](https://docs.anthropic.com/en/docs/claude-code/slash-commands) / [Claude Code subagents](https://docs.anthropic.com/en/docs/claude-code/sub-agents) | slash 模式成立，`.claude/commands/` 与 `.claude/agents/` 都是官方接入面 |
+| Claude Code | native slash + official `CLAUDE.md` + official skills + optional repo plugin enhancement | `/super-dev 你的需求` | [Claude Code slash commands](https://docs.anthropic.com/en/docs/claude-code/slash-commands) / [Claude Code memory](https://docs.anthropic.com/en/docs/claude-code/settings#claude-md-memory) / [Claude Code hooks](https://docs.anthropic.com/en/docs/claude-code/hooks) | 当前按项目根 `CLAUDE.md` + `.claude/skills/` + `~/.claude/skills/` 收敛，`.claude/commands/` 与 `.claude/agents/` 作为兼容增强面保留，repo plugin enhancement 作为可选增强层 |
 | Cline | official rules + official skills + AGENTS compatibility | `super-dev: 你的需求` | [Cline documentation](https://docs.cline.bot/) | 当前按 `.clinerules/super-dev.md` + `.cline/skills/` / `~/.cline/skills/` 建模，`AGENTS.md` 作为兼容增强面保留 |
 | CodeBuddy CLI | native slash + official skills | `/super-dev 你的需求` | [CodeBuddy CLI slash commands](https://www.codebuddy.ai/docs/cli/slash-commands) / [CodeBuddy skills](https://www.codebuddy.ai/docs/cli/skills) | slash 触发 + `.codebuddy/skills` / `~/.codebuddy/skills` 已公开 |
 | CodeBuddy IDE | native slash + official commands/subagents/skills | `/super-dev 你的需求` | [CodeBuddy IDE integrations](https://www.codebuddy.ai/docs/cli/ide-integrations) / [CodeBuddy Subagents](https://www.codebuddy.ai/docs/ide/Features/Subagents) / [CodeBuddy skills](https://www.codebuddy.ai/docs/cli/skills) | IDE 命令映射可用，`.codebuddy/agents/` 与 `.codebuddy/skills/` 已公开 |

@@ -1,4 +1,4 @@
-# 发布指南（2.3.0）
+# 发布指南（2.3.1）
 
 > 面向 Super Dev 2.x 的标准发布流程。
 
@@ -65,8 +65,8 @@ export PYPI_API_TOKEN="<your-token>"
 
 ```bash
 ./scripts/release.sh --skip-publish --github-release \
-  --notes-file docs/releases/2.3.0.md \
-  --title "v2.3.0 - Super Dev" \
+  --notes-file docs/releases/2.3.1.md \
+  --title "v2.3.1 - Super Dev" \
   --yes
 ```
 
@@ -75,11 +75,11 @@ export PYPI_API_TOKEN="<your-token>"
 ## 4. 发布后验证
 
 ```bash
-uv tool install super-dev==2.3.0
+uv tool install super-dev==2.3.1
 super-dev --help
 
 # 或 pip
-pip install --no-cache-dir super-dev==2.3.0
+pip install --no-cache-dir super-dev==2.3.1
 super-dev --help
 super-dev "构建一个包含登录和订单的系统"
 ```

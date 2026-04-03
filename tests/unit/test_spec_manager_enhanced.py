@@ -509,7 +509,7 @@ class TestChangeManagerCompleteness:
         assert len(loaded.spec_deltas) == 1
 
     def test_normalize_datetime_naive(self, change_manager):
-        from datetime import datetime, timezone
+        from datetime import datetime
         result = change_manager._normalize_datetime(datetime(2026, 1, 1))
         assert result.tzinfo is not None
 

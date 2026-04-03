@@ -5,8 +5,6 @@
 测试对象: super_dev.integrations.manager
 """
 
-from pathlib import Path
-
 import pytest
 from super_dev.integrations.manager import IntegrationManager
 

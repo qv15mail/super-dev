@@ -57,7 +57,14 @@ class TestIntegrationManager:
         manager = IntegrationManager(temp_project_dir)
         files = manager.setup("codex-cli", force=True)
 
-        assert {item.resolve() for item in files} == {agents.resolve(), project_skill.resolve()}
+        plugin_marketplace = temp_project_dir / ".agents" / "plugins" / "marketplace.json"
+        plugin_manifest = (
+            temp_project_dir / "plugins" / "super-dev-codex" / ".codex-plugin" / "plugin.json"
+        )
+        plugin_skill = temp_project_dir / "plugins" / "super-dev-codex" / "skills" / "super-dev" / "SKILL.md"
+        assert {agents.resolve(), project_skill.resolve(), plugin_marketplace.resolve(), plugin_manifest.resolve(), plugin_skill.resolve()} <= {
+            item.resolve() for item in files
+        }
         content = agents.read_text(encoding="utf-8")
         assert "# Existing Project Rules" in content
         assert "BEGIN SUPER DEV CODEX" in content
@@ -83,6 +90,7 @@ class TestIntegrationManager:
         assert "BEGIN SUPER DEV CODEX" in content
         assert "super-dev:" in content
         assert "$super-dev" in content
+        assert "/` list" in content or "`/` list" in content
 
     def test_codex_global_protocol_and_skill_paths_follow_codex_home(self, temp_project_dir: Path, monkeypatch):
         fake_home = temp_project_dir / "fake-home"
@@ -143,19 +151,26 @@ class TestIntegrationManager:
         assert codex.usage_mode == "agents-and-skill"
         assert codex.requires_restart_after_onboard is True
         assert codex.trigger_command == "super-dev: <需求描述>"
+        assert codex.entry_variants
+        assert codex.entry_variants[0]["entry"] == "/super-dev"
+        assert any(item["entry"] == "$super-dev" for item in codex.entry_variants)
         assert "重启 codex" in codex.usage_location
         assert any("重启 codex" in step for step in codex.post_onboard_steps)
-        assert any("官方不走自定义项目 slash" in note for note in codex.usage_notes)
+        assert any("Codex 官方不走自定义项目 slash" in note for note in codex.usage_notes)
         assert codex.host_protocol_mode == "official-skill"
-        assert codex.host_protocol_summary == "官方 AGENTS.md + 官方 Skills"
+        assert codex.host_protocol_summary == "官方 AGENTS.md + 官方 Skills + optional repo plugin enhancement"
         assert codex.capability_labels["slash"] == "skill-list"
         assert ".agents/skills/super-dev/SKILL.md" in codex.official_project_surfaces
+        assert ".agents/plugins/marketplace.json" in codex.official_project_surfaces
+        assert "plugins/super-dev-codex/.codex-plugin/plugin.json" in codex.official_project_surfaces
         assert "~/.codex/AGENTS.md" in codex.official_user_surfaces
         assert "~/.agents/skills/super-dev/SKILL.md" in codex.official_user_surfaces
         assert "~/.agents/skills/super-dev-core/SKILL.md" in codex.observed_compatibility_surfaces
         assert "~/.codex/skills/super-dev/SKILL.md" in codex.observed_compatibility_surfaces
         assert "~/.codex/skills/super-dev-core/SKILL.md" in codex.observed_compatibility_surfaces
-        assert "Skill" in codex.primary_entry or "AGENTS" in codex.notes
+        assert "/` 列表选择 `super-dev`" in codex.primary_entry
+        assert "$super-dev" in codex.primary_entry
+        assert "从 `/` 列表选择 `super-dev`" in codex.usage_notes[0]
 
         qoder = by_host["qoder"]
         assert qoder.category == "ide"
@@ -187,13 +202,21 @@ class TestIntegrationManager:
         assert ".codebuddy/AGENTS.md" in codebuddy_cli.observed_compatibility_surfaces
 
         claude = by_host["claude-code"]
-        assert claude.host_protocol_mode == "official-subagent"
-        assert claude.host_protocol_summary == "官方 commands + subagents"
+        assert claude.host_protocol_mode == "official-skill"
+        assert claude.host_protocol_summary == "官方 CLAUDE.md + Skills + optional repo plugin enhancement"
+        assert "CLAUDE.md" in claude.official_project_surfaces
+        assert ".claude/CLAUDE.md" in claude.official_project_surfaces
+        assert ".claude/skills/super-dev/SKILL.md" in claude.official_project_surfaces
         assert ".claude/agents/super-dev-core.md" in claude.official_project_surfaces
         assert ".claude/commands/super-dev.md" in claude.official_project_surfaces
+        assert ".claude-plugin/marketplace.json" in claude.official_project_surfaces
+        assert "plugins/super-dev-claude/.claude-plugin/plugin.json" in claude.official_project_surfaces
+        assert "~/.claude/CLAUDE.md" in claude.official_user_surfaces
+        assert "~/.claude/skills/super-dev/SKILL.md" in claude.official_user_surfaces
         assert "~/.claude/commands/super-dev.md" in claude.official_user_surfaces
-        assert "~/.claude/agents/super-dev-core.md" in claude.official_user_surfaces
-        assert claude.skill_dir == ""
+        assert "~/.claude/skills/super-dev-core/SKILL.md" in claude.observed_compatibility_surfaces
+        assert "~/.claude/agents/super-dev-core.md" in claude.observed_compatibility_surfaces
+        assert claude.skill_dir.startswith("~/.claude/skills")
 
         gemini = by_host["gemini-cli"]
         assert gemini.host_protocol_mode == "official-context"
@@ -263,7 +286,7 @@ class TestIntegrationManager:
 
         assert len(claude.official_docs_references) >= 2
         assert claude.capability_labels["slash"] == "native"
-        assert claude.capability_labels["skills"] == "none"
+        assert claude.capability_labels["skills"] == "official"
         assert claude.capability_labels["trigger"] == "slash"
 
         assert codex.capability_labels["slash"] == "skill-list"
@@ -453,15 +476,18 @@ class TestIntegrationManager:
     def test_embedded_skill_and_host_specific_surfaces_require_written_artifacts(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)
 
-        embedded = manager._build_embedded_skill_content()
+        embedded = manager._build_embedded_skill_content(
+            "codex-cli", ".agents/skills/super-dev/SKILL.md"
+        )
         antigravity = manager._build_antigravity_context_content()
         claude_agent = manager._build_claude_agent_content()
         codebuddy_agent = manager._build_codebuddy_agent_content()
         workflow = manager._antigravity_workflow_rules()
 
-        assert "super-dev：" in embedded
+        assert "super-dev:" in embedded or "super-dev：" in embedded
         assert "必须真实写入项目文件" in embedded
-        assert "第一次自然语言需求也必须继续当前流程" in embedded
+        assert "继续当前流程" in embedded
+        assert "SESSION_BRIEF" in embedded
         assert "Chat-only summaries do not count" in antigravity
         assert "write them as project files" in antigravity
         assert "workspace files" in claude_agent

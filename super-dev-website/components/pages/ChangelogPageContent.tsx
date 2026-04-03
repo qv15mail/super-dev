@@ -5,6 +5,14 @@ import type { SiteLocale } from '@/lib/site-locale';
 
 const CHANGELOG = {
   zh: [
+    { version: '2.3.1', date: '2026-04-03', type: 'patch' as const, changes: [
+      'Codex 深度适配升级为 AGENTS.md + Skills + repo plugin 双层模型，App/Desktop 与 CLI 统一进入同一条 Super Dev 流程',
+      'Claude Code 深度适配升级为 CLAUDE.md + .claude/skills + ~/.claude/skills + optional plugin enhancement，并与安装引导、doctor、runtime 口径统一',
+      '安装引导、Onboard、Doctor、Detect、Validate 改成当前真实宿主入口模型，不再用过期 slash/非 slash 二分法误导 Codex',
+      '工作流动作卡、恢复链、Web API 决策卡继续统一，resume / next / continue / doctor / validate 语义进一步收口',
+      'UI 契约、emoji 禁用、runtime 对齐、quality gate、release readiness 与 proof-pack 继续加固',
+      '官网首页、更新历史、发布文档、安装文档与版本真源统一到 2.3.1',
+    ] },
     { version: '2.3.0', date: '2026-04-01', type: 'major' as const, changes: [
       '治理模式升级：从 Advisory（建议）到 Enforcement（执行），SKILL.md frontmatter hooks 自动注册 emoji 检查',
       '三层治理模型：CLAUDE.md 持久规则 + Hooks 运行时执行 + CLI 按需检查',
@@ -18,7 +26,7 @@ const CHANGELOG = {
       '对抗性验证专家 + 三 Agent 并行审查',
       '12 位 Markdown 专家 + 条件规则 + Pipeline 状态/成本追踪',
       '命令路由：所有命令在宿主内输入，终端只需 pip install + super-dev',
-      '21 个宿主全部深度适配 + 项目模板 + Shell 补全',
+      '支持 21 个宿主：20 个统一接入宿主 + 1 个 OpenClaw 手动插件宿主，并持续完善项目模板与 Shell 补全',
       '统一错误处理 + E2E 测试 + 1671 单元测试通过',
     ] },
     { version: '2.2.0', date: '2026-03-29', type: 'major' as const, changes: [
@@ -79,6 +87,14 @@ const CHANGELOG = {
     { version: '1.0.0', date: '2025-12-29', type: 'major' as const, changes: ['首次发布', '基础流水线框架（research / documents / spec / implement）', 'Spec-Driven Development 模块', '支持 Claude Code、Cursor、Windsurf 宿主', 'PyPI 正式发布'] },
   ],
   en: [
+    { version: '2.3.1', date: '2026-04-03', type: 'patch' as const, changes: [
+      'Codex deep adaptation upgraded to the official AGENTS.md + Skills + repo plugin dual-layer model, with App/Desktop and CLI converging into one Super Dev flow',
+      'Claude Code deep adaptation now follows a CLAUDE.md + .claude/skills + ~/.claude/skills + optional plugin enhancement model with unified onboarding, doctor, and runtime semantics',
+      'Onboarding, doctor, detect, and validate now reflect the real host entry model instead of the old slash-vs-text simplification for Codex',
+      'Workflow action cards, recovery chain, and Web API decision cards were unified further across resume / next / continue / doctor / validate',
+      'UI contract enforcement, emoji blocking, runtime alignment, quality gate, release readiness, and proof-pack were hardened again',
+      'Homepage, changelog, publishing docs, install docs, and version sources were aligned to 2.3.1',
+    ] },
     { version: '2.3.0', date: '2026-04-01', type: 'major' as const, changes: [
       'Governance upgrade: Advisory → Enforcement mode with SKILL.md frontmatter hooks',
       'Three-layer governance: CLAUDE.md persistent rules + Hooks runtime enforcement + CLI on-demand checks',
@@ -92,7 +108,7 @@ const CHANGELOG = {
       'Adversarial verification agent + 4-way parallel review (reuse/quality/efficiency/security)',
       '12 Markdown expert definitions + conditional rules + pipeline state/cost tracking',
       'Command routing: all commands via /super-dev in host, terminal only for pip install + super-dev',
-      '21 hosts fully adapted + project templates + shell completion',
+      'Support for 21 hosts: 20 unified integration hosts plus 1 manual OpenClaw plugin host, with continued improvements to project templates and shell completion',
       'Unified error handling + 22 E2E tests + 1671 unit tests passing',
     ] },
     { version: '2.2.0', date: '2026-03-29', type: 'major' as const, changes: [

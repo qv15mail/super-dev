@@ -5,8 +5,6 @@
 测试对象: super_dev.creators.document_generator.DocumentGenerator
 """
 
-from pathlib import Path
-
 import pytest
 from super_dev.creators.document_generator import DocumentGenerator
 

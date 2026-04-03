@@ -27,7 +27,7 @@ class ProjectConfig:
 
     name: str
     description: str = ""
-    version: str = "2.3.0"
+    version: str = "2.3.1"
     author: str = ""
     license: str = "MIT"
 
@@ -81,7 +81,7 @@ class ConfigManager:
     DEFAULT_CONFIG: dict[str, Any] = {
         "name": "my-project",
         "description": "A Super Dev project",
-        "version": "2.3.0",
+        "version": "2.3.1",
         "platform": "web",
         "frontend": "next",  # 默认使用 Next.js
         "backend": "node",
@@ -531,7 +531,7 @@ class ConfigManager:
         },
     ]
 
-    def migrate_config(self, target_version: str = "2.3.0") -> tuple[bool, list[str]]:
+    def migrate_config(self, target_version: str = "2.3.1") -> tuple[bool, list[str]]:
         """
         将配置文件从当前版本迁移到目标版本。
 

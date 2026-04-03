@@ -5,8 +5,6 @@
 测试对象: super_dev.skills.manager
 """
 
-from pathlib import Path
-
 import pytest
 from super_dev.skills.manager import SkillManager
 

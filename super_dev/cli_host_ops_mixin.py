@@ -44,9 +44,20 @@ from .review_state import (
     save_host_runtime_validation,
 )
 from .terminal import normalize_terminal_text, output_mode_label, output_mode_reason
+from .workflow_state import (
+    build_host_entry_prompts,
+    build_host_flow_contract,
+    build_host_flow_probe,
+)
 
 
 class CliHostOpsMixin:
+    @staticmethod
+    def _display_final_trigger_for_profile(profile) -> str:
+        if getattr(profile, "host", "") == "codex-cli":
+            return "App/Desktop: /super-dev | CLI: $super-dev | 回退: super-dev: 你的需求"
+        return str(profile.trigger_command).replace("<需求描述>", "你的需求")
+
     def _is_manual_install_host(self, target: str | None) -> bool:
         return bool(target) and target in SPECIAL_INSTALL_HOST_TOOL_IDS
 
@@ -540,19 +551,35 @@ class CliHostOpsMixin:
         from .integrations import IntegrationManager
 
         integration_manager = IntegrationManager(Path.cwd())
+        codex_hosts = [target for target in available_targets if target == "codex-cli"]
         slash_hosts = [
-            target for target in available_targets if integration_manager.supports_slash(target)
+            target
+            for target in available_targets
+            if integration_manager.supports_slash(target) and target not in codex_hosts
         ]
         text_hosts = [
-            target for target in available_targets if not integration_manager.supports_slash(target)
+            target
+            for target in available_targets
+            if not integration_manager.supports_slash(target) and target not in codex_hosts
         ]
-        return (
-            f"slash 宿主 ({len(slash_hosts)}): "
-            + ", ".join(self._host_label(target) for target in slash_hosts)
-            + "\n"
-            + f"text 宿主 ({len(text_hosts)}): "
-            + ", ".join(self._host_label(target) for target in text_hosts)
-        )
+        parts: list[str] = []
+        if slash_hosts:
+            parts.append(
+                f"slash 宿主 ({len(slash_hosts)}): "
+                + ", ".join(self._host_label(target) for target in slash_hosts)
+            )
+        if codex_hosts:
+            parts.append(
+                f"Codex skill 宿主 ({len(codex_hosts)}): "
+                + ", ".join(self._host_label(target) for target in codex_hosts)
+                + "（App/Desktop 用 `/super-dev`，CLI 用 `$super-dev`）"
+            )
+        if text_hosts:
+            parts.append(
+                f"text 宿主 ({len(text_hosts)}): "
+                + ", ".join(self._host_label(target) for target in text_hosts)
+            )
+        return "\n".join(parts)
 
     def _render_host_selection_guide(self, *, available_targets: list[str]) -> None:
         from .integrations import IntegrationManager
@@ -568,8 +595,9 @@ class CliHostOpsMixin:
         detected_targets, _ = self._detect_host_targets(available_targets=available_targets)
         intro = (
             "安装后直接在宿主里触发。\n"
-            "支持 slash 的宿主使用 `/super-dev 你的需求`。\n"
-            f"不支持 slash 的宿主使用 `super-dev: 你的需求` 或 `super-dev：你的需求`。\n"
+            "大多数 slash 宿主使用 `/super-dev 你的需求`。\n"
+            "Codex App/Desktop 从 `/` 列表选择 `super-dev`，Codex CLI 输入 `$super-dev`。\n"
+            "非 slash 宿主使用 `super-dev: 你的需求` 或 `super-dev：你的需求`。\n"
             f"当前版本内置 {len(available_targets)} 个宿主适配配置。"
         )
         self.console.print(Panel(intro, title="Super Dev 安装向导", padding=(1, 2), expand=True))
@@ -584,7 +612,10 @@ class CliHostOpsMixin:
 
         for idx, target in enumerate(available_targets, 1):
             profile = integration_manager.get_adapter_profile(target)
-            trigger = "/super-dev" if integration_manager.supports_slash(target) else "super-dev:"
+            if target == "codex-cli":
+                trigger = "App: /super-dev | CLI: $super-dev"
+            else:
+                trigger = "/super-dev" if integration_manager.supports_slash(target) else "super-dev:"
             detected = "已检测" if target in detected_targets else ""
             table.add_row(
                 str(idx),
@@ -605,7 +636,7 @@ class CliHostOpsMixin:
             self.console.print("[cyan]Super Dev 安装入口[/cyan]")
             self.console.print("宿主负责编码与模型调用；Super Dev 负责流程、门禁、审计与交付标准。")
             self.console.print(
-                "slash 宿主输入 /super-dev；非 slash 宿主输入 super-dev: 或 super-dev："
+                "slash 宿主输入 /super-dev；Codex App/Desktop 用 /super-dev，Codex CLI 用 $super-dev；非 slash 宿主输入 super-dev: 或 super-dev："
             )
             if not runtime_health.get("healthy", False):
                 self.console.print(
@@ -618,7 +649,7 @@ class CliHostOpsMixin:
         lines = [
             "宿主负责编码、工具调用和模型能力。",
             "Super Dev 负责 research → 三文档 → 确认门 → Spec → 前端优先 → 质量门禁 → 交付。",
-            "slash 宿主输入 `/super-dev 你的需求`，非 slash 宿主输入 `super-dev: 你的需求` 或 `super-dev：你的需求`。",
+            "大多数 slash 宿主输入 `/super-dev 你的需求`；Codex App/Desktop 从 `/` 列表选择 `super-dev`，Codex CLI 输入 `$super-dev`；非 slash 宿主输入 `super-dev: 你的需求` 或 `super-dev：你的需求`。",
             "",
             self._build_install_summary(available_targets=available_targets),
             "",
@@ -908,6 +939,43 @@ class CliHostOpsMixin:
                     host_report["missing"].append("skill")
                     host_report["suggestions"].append(
                         f"super-dev skill install super-dev --target {target} --name {skill_name} --force"
+                    )
+
+            if target == "codex-cli":
+                plugin_marketplace = project_dir / ".agents" / "plugins" / "marketplace.json"
+                plugin_manifest = (
+                    project_dir / "plugins" / "super-dev-codex" / ".codex-plugin" / "plugin.json"
+                )
+                plugin_ok = plugin_marketplace.exists() and plugin_manifest.exists()
+                host_report["checks"]["plugin_enhancement"] = {
+                    "ok": plugin_ok,
+                    "marketplace_file": str(plugin_marketplace),
+                    "plugin_manifest": str(plugin_manifest),
+                    "mode": "repo-marketplace-plugin",
+                }
+                if not plugin_ok:
+                    host_report["ready"] = False
+                    host_report["missing"].append("plugin_enhancement")
+                    host_report["suggestions"].append(
+                        f"super-dev onboard --host {target} --force --yes"
+                    )
+            if target == "claude-code":
+                plugin_marketplace = project_dir / ".claude-plugin" / "marketplace.json"
+                plugin_manifest = (
+                    project_dir / "plugins" / "super-dev-claude" / ".claude-plugin" / "plugin.json"
+                )
+                plugin_ok = plugin_marketplace.exists() and plugin_manifest.exists()
+                host_report["checks"]["plugin_enhancement"] = {
+                    "ok": plugin_ok,
+                    "marketplace_file": str(plugin_marketplace),
+                    "plugin_manifest": str(plugin_manifest),
+                    "mode": "repo-marketplace-plugin",
+                }
+                if not plugin_ok:
+                    host_report["ready"] = False
+                    host_report["missing"].append("plugin_enhancement")
+                    host_report["suggestions"].append(
+                        f"super-dev onboard --host {target} --force --yes"
                     )
 
             if check_slash:
@@ -1849,7 +1917,7 @@ class CliHostOpsMixin:
             Panel(
                 f"[bold green]Onboard 完成[/bold green]\n\n"
                 f"[bold]接下来这样用:[/bold]\n\n{steps_text}{resume_text}\n\n"
-                f"[dim]提示: 请在宿主中输入 /super-dev init 初始化项目，然后 /super-dev <需求> 开始开发[/dim]\n"
+                f"[dim]提示: 进入宿主后直接按当前入口触发 Super Dev；多数 slash 宿主使用 /super-dev，Codex App/Desktop 用 /super-dev，Codex CLI 用 $super-dev，文本宿主使用 super-dev: 你的需求[/dim]\n"
                 f"[dim]所有命令都在宿主内输入，无需回到终端[/dim]",
                 border_style="green",
                 expand=True,
@@ -2082,14 +2150,12 @@ class CliHostOpsMixin:
             fix_actions: list[str] = []
             claude_code_missing = False
             skill_missing = False
-            hooks_missing = False
             for target, host_report in report.get("hosts", {}).items():
                 checks = host_report.get("checks", {})
                 if not checks.get("integrate", {}).get("ok", True):
                     claude_code_missing = True
                 if not checks.get("skill", {}).get("ok", True):
                     skill_missing = True
-            enforce_status = report.get("hosts", {})
             if claude_code_missing or skill_missing:
                 try:
                     setup_args = argparse.Namespace(
@@ -3308,7 +3374,11 @@ class CliHostOpsMixin:
         first_action = (
             f"重开后第一句直接复制 {session_resume_card.get('host_first_sentence')}"
             if session_resume_card.get("enabled")
-            else f"先在 {self._host_label(selected_host)} 里输入 {str(selected_profile.trigger_command).replace('<需求描述>', '你的需求')}"
+            else (
+                "先在 Codex App/Desktop 的 `/` 列表里选择 `super-dev`，或在 Codex CLI 输入 `$super-dev`；自然语言回退是 `super-dev: 你的需求`"
+                if selected_host == "codex-cli"
+                else f"先在 {self._host_label(selected_host)} 里输入 {str(selected_profile.trigger_command).replace('<需求描述>', '你的需求')}"
+            )
         )
         secondary_actions = [
             "如果当前是重开宿主后的第一轮输入，先不要普通聊天起手，直接用建议入口。",
@@ -3335,7 +3405,11 @@ class CliHostOpsMixin:
         if session_resume_card.get("enabled"):
             lines.append(f"继续当前流程第一句: {session_resume_card.get('host_first_sentence')}")
         elif candidates:
-            lines.append(f"第一句建议: {candidates[0]['trigger']}")
+            lines.append(
+                "第一句建议: Codex App/Desktop: `/super-dev`；Codex CLI: `$super-dev`；回退: `super-dev: 你的需求`"
+                if selected_host == "codex-cli"
+                else f"第一句建议: {candidates[0]['trigger']}"
+            )
         return {
             "scenario": scenario,
             "selection_source": selection_source,
@@ -3469,7 +3543,7 @@ class CliHostOpsMixin:
             if continue_mode and continue_prompt:
                 line = f"{self._host_label(target)}: 重开后第一句直接复制 {continue_prompt}"
             elif target == "codex-cli":
-                line = "Codex: 重开 codex 后，直接输入 super-dev: 你的需求"
+                line = "Codex: App/Desktop 从 `/` 列表选 super-dev；CLI 输入 $super-dev；自然语言回退是 super-dev: 你的需求"
             elif target == "opencode":
                 line = 'OpenCode: 在当前会话里输入 /super-dev "你的需求"'
             else:
@@ -3482,6 +3556,7 @@ class CliHostOpsMixin:
     def _build_session_resume_card_lines(self, *, project_dir: Path, target: str) -> list[str]:
         session_hint = self._build_workflow_session_hint(project_dir=project_dir, target=target)
         continue_prompt = str(session_hint.get("continue_prompt", "") or "").strip()
+        continue_instruction = str(session_hint.get("continue_instruction", "") or "").strip()
         continue_mode = str(session_hint.get("session_mode", "") or "") == "continue_super_dev"
         if not continue_mode or not continue_prompt:
             return []
@@ -3539,6 +3614,29 @@ class CliHostOpsMixin:
                 3 if user_action_shortcuts else 2,
                 f"自然语言示例: {', '.join(str(item) for item in action_examples[:3])}",
             )
+        entry_bundle = build_host_entry_prompts(
+            target=target,
+            instruction=continue_instruction or continue_prompt,
+            supports_slash=self._supports_slash_for_prompt(target),
+        )
+        entry_prompts = (
+            entry_bundle.get("entry_prompts", {})
+            if isinstance(entry_bundle.get("entry_prompts", {}), dict)
+            else {}
+        )
+        preferred_entry_label = str(entry_bundle.get("preferred_entry_label", "")).strip()
+        if target == "codex-cli" and entry_prompts:
+            if preferred_entry_label:
+                lines.append(f"推荐入口: {preferred_entry_label}")
+            app_prompt = str(entry_prompts.get("app_desktop", "")).strip()
+            cli_prompt = str(entry_prompts.get("cli", "")).strip()
+            fallback_prompt = str(entry_prompts.get("fallback", "")).strip()
+            if app_prompt:
+                lines.append(f"App/Desktop 恢复入口: {app_prompt}")
+            if cli_prompt:
+                lines.append(f"CLI 恢复入口: {cli_prompt}")
+            if fallback_prompt:
+                lines.append(f"回退恢复入口: {fallback_prompt}")
         if recommended_workflow_command:
             lines.append(f"机器侧动作: {recommended_workflow_command}")
         return [line for line in lines if line]
@@ -3546,6 +3644,7 @@ class CliHostOpsMixin:
     def _build_session_resume_card(self, *, project_dir: Path, target: str) -> dict[str, Any]:
         session_hint = self._build_workflow_session_hint(project_dir=project_dir, target=target)
         continue_prompt = str(session_hint.get("continue_prompt", "") or "").strip()
+        continue_instruction = str(session_hint.get("continue_instruction", "") or "").strip()
         continue_mode = str(session_hint.get("session_mode", "") or "") == "continue_super_dev"
         enabled = bool(continue_mode and continue_prompt)
         recommended_workflow_command = str(
@@ -3573,6 +3672,22 @@ class CliHostOpsMixin:
             *[str(item).strip() for item in specific_rules if str(item).strip()],
             "只有用户明确说取消当前流程、重新开始或切回普通聊天，才允许离开流程。",
         ]
+        entry_prompt_bundle = build_host_entry_prompts(
+            target=target,
+            instruction=continue_instruction or continue_prompt,
+            supports_slash=self._supports_slash_for_prompt(target),
+        )
+        entry_prompts = (
+            entry_prompt_bundle.get("entry_prompts", {})
+            if isinstance(entry_prompt_bundle.get("entry_prompts", {}), dict)
+            else {}
+        )
+        preferred_entry = str(entry_prompt_bundle.get("preferred_entry", "")).strip()
+        preferred_entry_label = str(entry_prompt_bundle.get("preferred_entry_label", "")).strip()
+        if enabled and preferred_entry:
+            preferred_prompt = str(entry_prompts.get(preferred_entry, "")).strip()
+            if preferred_prompt:
+                continue_prompt = preferred_prompt
         return {
             "enabled": enabled,
             "workflow_mode": workflow_mode if enabled else "",
@@ -3583,6 +3698,9 @@ class CliHostOpsMixin:
             "action_examples": action_examples if enabled else [],
             "user_action_shortcuts": user_action_shortcuts if enabled else [],
             "host_first_sentence": continue_prompt,
+            "preferred_entry": preferred_entry if enabled else "",
+            "preferred_entry_label": preferred_entry_label if enabled else "",
+            "entry_prompts": entry_prompts if enabled else {},
             "session_brief_path": str(self._session_brief_path(project_dir)) if enabled else "",
             "workflow_state_path": str(self._workflow_state_path(project_dir)) if enabled else "",
             "rules": rules if enabled else [],
@@ -3604,6 +3722,8 @@ class CliHostOpsMixin:
             trigger_text = str(
                 host_profile.get("final_trigger", "") or host_profile.get("primary_entry", "-")
             )
+        if host_id == "codex-cli":
+            trigger_text = "App/Desktop 从 `/` 列表选 super-dev；CLI 输入 `$super-dev`；自然语言回退是 `super-dev: 你的需求`"
         session_hint = session_hint or {}
         continue_prompt = str(session_hint.get("continue_prompt", "") or "").strip()
         continue_mode = str(session_hint.get("session_mode", "") or "") == "continue_super_dev"
@@ -3613,6 +3733,21 @@ class CliHostOpsMixin:
         ).strip()
 
         if host_id in {"codex-cli", "opencode"}:
+            entry_variants = host_profile.get("entry_variants", [])
+            variant_lines: list[str] = []
+            if host_id == "codex-cli" and isinstance(entry_variants, list):
+                for item in entry_variants:
+                    if not isinstance(item, dict):
+                        continue
+                    label = str(item.get("label", "")).strip()
+                    entry = str(item.get("entry", "")).strip()
+                    notes = str(item.get("notes", "")).strip()
+                    if not label or not entry:
+                        continue
+                    line = f"{label}: {entry}"
+                    if notes:
+                        line += f"；{notes}"
+                    variant_lines.append(line)
             lines = [
                 f"{host_name} 最短路径",
                 "",
@@ -3629,6 +3764,9 @@ class CliHostOpsMixin:
                     else f"第一句直接输入：{trigger_text}"
                 ),
             ]
+            if variant_lines:
+                lines.extend(["", "官方入口"])
+                lines.extend(f"- {line}" for line in variant_lines)
             if continue_mode:
                 lines.extend(
                     [
@@ -3727,9 +3865,9 @@ class CliHostOpsMixin:
     def _build_host_priority_notes(self, *, host_id: str) -> list[str]:
         if host_id == "codex-cli":
             return [
-                "最稳妥的方式仍是直接输入 `super-dev: 你的需求`。",
-                "如果你想显式调用官方 Skill，可输入 `$super-dev`。",
-                "Codex 桌面端如果在 `/` 列表里出现 `super-dev`，可以直接选择；那是 Skill 列表入口，不是项目自定义 slash 文件。",
+                "Codex App/Desktop 优先从 `/` 列表选择 `super-dev`；这是已启用 Skill 的官方入口。",
+                "Codex CLI 优先显式输入 `$super-dev`。",
+                "如果你已经在自然语言上下文里继续当前流程，也可以直接输入 `super-dev: 你的需求`。",
                 "接入完成后必须彻底重开 `codex`，旧会话不会重新加载 AGENTS.md 和 Skill。",
                 "先确认当前终端就在目标项目目录里，再开始新会话。",
             ]
@@ -3748,7 +3886,7 @@ class CliHostOpsMixin:
         target: str,
     ) -> dict[str, Any]:
         profile = integration_manager.get_adapter_profile(target)
-        final_trigger = str(profile.trigger_command).replace("<需求描述>", "你的需求")
+        final_trigger = self._display_final_trigger_for_profile(profile)
         return {
             "host": self._host_label(profile.host),
             "host_id": profile.host,
@@ -3771,6 +3909,7 @@ class CliHostOpsMixin:
             "primary_entry": profile.primary_entry,
             "trigger_command": profile.trigger_command,
             "final_trigger": final_trigger,
+            "entry_variants": list(profile.entry_variants),
             "trigger_context": profile.trigger_context,
             "usage_location": profile.usage_location,
             "requires_restart_after_onboard": profile.requires_restart_after_onboard,
@@ -3783,10 +3922,12 @@ class CliHostOpsMixin:
             "supports_skill_slash_entry": profile.host == "codex-cli",
             "skill_slash_entry_command": "/super-dev" if profile.host == "codex-cli" else "",
             "skill_slash_entry_note": (
-                "仅表示 Codex 桌面端 `/` 列表里的已启用 Skill 入口，不代表项目支持自定义 slash 文件。"
+                "表示 Codex App/Desktop `/` 列表里的已启用 Skill 入口，不代表项目支持自定义 slash 文件。"
                 if profile.host == "codex-cli"
                 else ""
             ),
+            "flow_contract": build_host_flow_contract(profile.host),
+            "flow_probe": build_host_flow_probe(profile.host),
             "path_override": host_path_override_guide(target),
             "precondition_status": profile.precondition_status,
             "precondition_label": profile.precondition_label,
@@ -4175,8 +4316,10 @@ class CliHostOpsMixin:
                     ),
                     "smoke_test_prompt": usage.get("smoke_test_prompt", ""),
                     "smoke_success_signal": usage.get("smoke_success_signal", ""),
+                    "checks": host.get("checks", {}) if isinstance(host.get("checks", {}), dict) else {},
                     "runtime_checklist": self._host_runtime_checklist(target=target, usage=usage),
                     "pass_criteria": self._host_runtime_pass_criteria(target=target),
+                    "flow_probe": build_host_flow_probe(target),
                     "resume_probe_prompt": self._host_resume_probe_prompt(
                         project_dir=project_dir, target=target
                     ),

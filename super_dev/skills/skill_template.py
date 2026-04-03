@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-SUPER_DEV_VERSION = "2.3.0"
+SUPER_DEV_VERSION = "2.3.1"
 
 
 @dataclass
@@ -176,7 +176,7 @@ class SuperDevSkillContent:
             "## 触发方式（强制）\n"
             "\n"
             "- Treat `super-dev: <需求描述>` and `super-dev：<需求描述>`"
-            " as the Super Dev entry point.\n"
+            " as the AGENTS-driven natural-language fallback entry point.\n"
             "- Treat `$super-dev` as the explicit official Skill mention"
             " when the Codex host exposes skills by name.\n"
             "- In Codex desktop/app, if the slash list shows this enabled skill,"
@@ -195,8 +195,9 @@ class SuperDevSkillContent:
             "  1. 当前项目内的本地 Python CLI 工具\n"
             "  2. 当前宿主里的规则/Skill/命令映射\n"
             "- 当前宿主负责调用模型、联网、终端、编辑器与实际代码修改。\n"
-            "- 当用户触发 `super-dev: ...` 或 `super-dev：...` 时，"
-            "意味着你必须进入 Super Dev 流水线。\n"
+            "- 当用户通过 Codex App/Desktop 的 `/super-dev` skill 入口、"
+            "Codex CLI 的 `$super-dev`，或 `super-dev: ...` / `super-dev：...`"
+            " 回退入口触发时，都意味着你必须进入 Super Dev 流水线。\n"
             "- 需要研究、设计、编码、运行、调试时，"
             "优先使用 Codex 自身的 web/search/terminal/edit 能力。\n"
             "- 需要做治理动作时，才使用本地 `super-dev` CLI。"

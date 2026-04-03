@@ -5,7 +5,6 @@
 测试对象: super_dev.catalogs
 """
 
-import pytest
 from super_dev.catalogs import (
     FULL_FRONTEND_TEMPLATE_IDS,
     HOST_TOOL_IDS,
@@ -138,7 +137,7 @@ class TestHostToolIDs:
 class TestCrossCatalogConsistency:
     def test_all_catalogs_are_tuples_or_lists(self):
         for catalog in [PLATFORM_IDS, PIPELINE_BACKEND_IDS, FULL_FRONTEND_TEMPLATE_IDS, HOST_TOOL_IDS]:
-            assert isinstance(catalog, (list, tuple, set, frozenset))
+            assert isinstance(catalog, list | tuple | set | frozenset)
 
     def test_all_catalogs_non_empty(self):
         for catalog in [PLATFORM_IDS, PIPELINE_BACKEND_IDS, FULL_FRONTEND_TEMPLATE_IDS, HOST_TOOL_IDS]:

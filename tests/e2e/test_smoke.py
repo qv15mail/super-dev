@@ -84,4 +84,4 @@ def test_full_init_to_status_flow():
             timeout=10,
         )
         assert result.returncode == 0
-        assert "2.3.0" in result.stdout
+        assert "2.3.1" in result.stdout
