@@ -11,7 +11,6 @@ const CHANGELOG = {
       '安装引导、Onboard、Doctor、Detect、Validate 改成当前真实宿主入口模型，不再用过期 slash/非 slash 二分法误导 Codex',
       '工作流动作卡、恢复链、Web API 决策卡继续统一，resume / next / continue / doctor / validate 语义进一步收口',
       'UI 契约、emoji 禁用、runtime 对齐、quality gate、release readiness 与 proof-pack 继续加固',
-      '官网首页、更新历史、发布文档、安装文档与版本真源统一到 2.3.1',
     ] },
     { version: '2.3.0', date: '2026-04-01', type: 'major' as const, changes: [
       '治理模式升级：从 Advisory（建议）到 Enforcement（执行），SKILL.md frontmatter hooks 自动注册 emoji 检查',
@@ -93,7 +92,6 @@ const CHANGELOG = {
       'Onboarding, doctor, detect, and validate now reflect the real host entry model instead of the old slash-vs-text simplification for Codex',
       'Workflow action cards, recovery chain, and Web API decision cards were unified further across resume / next / continue / doctor / validate',
       'UI contract enforcement, emoji blocking, runtime alignment, quality gate, release readiness, and proof-pack were hardened again',
-      'Homepage, changelog, publishing docs, install docs, and version sources were aligned to 2.3.1',
     ] },
     { version: '2.3.0', date: '2026-04-01', type: 'major' as const, changes: [
       'Governance upgrade: Advisory → Enforcement mode with SKILL.md frontmatter hooks',
