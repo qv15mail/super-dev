@@ -905,12 +905,19 @@ class SuperDevCLI(
         ui_state = self._get_ui_revision_state(project_dir)
         architecture_state = self._get_architecture_revision_state(project_dir)
         quality_state = self._get_quality_revision_state(project_dir)
+        effective_status = self._effective_run_status(
+            run_state=run_state,
+            docs_state=docs_state,
+            ui_state=ui_state,
+            architecture_state=architecture_state,
+            quality_state=quality_state,
+        )
         phase_confirmations = {}
         if isinstance(run_state.get("phase_confirmations"), dict):
             phase_confirmations = dict(run_state.get("phase_confirmations") or {})
         payload = {
             "run_state_exists": bool(run_state),
-            "status": str(run_state.get("status", "")).strip() or "unknown",
+            "status": effective_status,
             "description": str(
                 (run_state.get("pipeline_args") or {}).get("description", "")
             ).strip(),
@@ -1047,6 +1054,8 @@ class SuperDevCLI(
         phase_confirmations = run_state.get("phase_confirmations")
         if not isinstance(phase_confirmations, dict):
             phase_confirmations = {}
+        if not str(run_state.get("status", "")).strip():
+            run_state["status"] = "running"
         phase_confirmations[normalized] = {
             "status": "confirmed",
             "comment": comment or f"{normalized} 阶段确认通过",
@@ -1204,6 +1213,34 @@ class SuperDevCLI(
         self.console.print(f"[cyan]将从第 {stage_number} 阶段继续执行...[/cyan]")
         return self._cmd_run_resume(argparse.Namespace(resume=True))
 
+    def _effective_run_status(
+        self,
+        *,
+        run_state: dict[str, Any],
+        docs_state: dict[str, Any],
+        ui_state: dict[str, Any],
+        architecture_state: dict[str, Any],
+        quality_state: dict[str, Any],
+    ) -> str:
+        explicit_status = str(run_state.get("status", "")).strip().lower()
+        if explicit_status:
+            return explicit_status
+
+        normalized_status = str(run_state.get("status_normalized", "")).strip().lower()
+        if normalized_status and normalized_status != "unknown":
+            return normalized_status
+
+        phase_confirmations = run_state.get("phase_confirmations")
+        has_phase_confirmations = isinstance(phase_confirmations, dict) and bool(phase_confirmations)
+        review_states = (docs_state, ui_state, architecture_state, quality_state)
+        has_review_evidence = any(
+            bool(state.get("exists")) or str(state.get("status", "")).strip() not in {"", "pending_review"}
+            for state in review_states
+        )
+        if has_phase_confirmations or has_review_evidence:
+            return "running"
+        return "unknown"
+
     def _run_status_recommendation(
         self,
         *,
@@ -1224,9 +1261,15 @@ class SuperDevCLI(
             return 'super-dev review architecture --status confirmed --comment "架构返工已通过"'
         if quality_state.get("status") == "revision_requested":
             return 'super-dev review quality --status confirmed --comment "质量返工已通过"'
-        status = str(run_state.get("status", "")).strip().lower()
+        status = self._effective_run_status(
+            run_state=run_state,
+            docs_state=docs_state,
+            ui_state=ui_state,
+            architecture_state=architecture_state,
+            quality_state=quality_state,
+        )
         skipped_gates = list(run_state.get("skipped_gates") or [])
-        scope_status = str(run_state.get("scope_coverage_status", "")).strip().lower()
+        scope_status = str(run_state.get("scope_coverage_status", "")).strip().lower() or "unknown"
         high_priority_scope_gaps = int(run_state.get("scope_high_priority_gap_count", 0) or 0)
         if scope_status in {"partial", "unknown"} or high_priority_scope_gaps > 0:
             return "super-dev feature-checklist"
