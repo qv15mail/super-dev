@@ -21,17 +21,8 @@
 
 Current version: `2.3.2`
 
----
-
-## What's New in 2.3.2
-
-- Host product scope was hardened again: `20` unified integration hosts plus `1` manual OpenClaw plugin host, with install scripts, README, website docs, capability audit, and host matrices finally sharing one accurate model.
-- Claude Code and Codex moved further toward their official host contracts: `CLAUDE.md + skills + optional plugin enhancement` and `AGENTS.md + skills + repo plugin enhancement`, instead of the older commands-first / skill-only approximations.
-- Kiro, Qoder, Cursor, Trae, and CodeBuddy family hosts were deepened around their real surfaces so the code, onboarding, docs, and website no longer drift from one another.
-- Recovery UX became more productized: `resume / next / continue / doctor / validate / Web API` now expose scenario cards, and `SESSION_BRIEF` explicitly tells users what to do for “come back tomorrow”, “just tell me the next step”, and “resume an interrupted pipeline”.
-- Workflow governance was hardened again: workflow history, semantic events, hook history, workflow/framework/hook/operational harnesses, and the recent operational timeline now all feed proof-pack and release readiness.
-- Cross-platform support deepened: `uni-app / Taro / React Native / Flutter / Desktop Web Shell` framework playbooks now drive scaffolds, runtime checks, quality gates, release readiness, and proof-pack rather than living only in UI docs.
-- The UI system was tightened further: emoji are systemically banned as functional icons, and UI contracts, design tokens, icon libraries, component ecosystems, navigation shells, theme entry points, and framework harness checks now all participate in delivery gates.
+- Release notes: [v2.3.2](docs/releases/2.3.2.md)
+- Website changelog: [superdev.goder.ai/changelog](https://superdev.goder.ai/changelog)
 
 ## What's New in 2.3.0
 

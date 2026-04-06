@@ -21,6 +21,9 @@
 
 当前版本：`2.3.2`
 
+- 发布说明：[v2.3.2 更新内容](docs/releases/2.3.2.md)
+- 官网更新历史：[superdev.goder.ai/changelog](https://superdev.goder.ai/changelog)
+
 ---
 
 ## 演示视频
@@ -1209,14 +1212,3 @@ super-dev: 你的需求
 ## License
 
 [MIT](LICENSE)
-## 2.3.2 更新重点
-
-- 21 个宿主口径继续收正：`20` 个统一接入宿主 + `1` 个 OpenClaw 手动插件宿主，安装脚本、README、官网 Docs、能力审计页和站点矩阵统一到同一套真实模型。
-- Claude Code / Codex 继续深适配到官方协议：`CLAUDE.md + skills + optional plugin enhancement`、`AGENTS.md + skills + repo plugin enhancement`，不再停留在旧的 commands-first / skill-only 近似模型。
-- Kiro / Qoder / Cursor / Trae / CodeBuddy 等 IDE 宿主继续按真实 surface 深适配，避免“代码一套、官网一套、安装引导又一套”的漂移。
-- 恢复链继续产品化：`resume / next / continue / doctor / validate / Web API` 统一带现实场景卡，`SESSION_BRIEF` 直接告诉用户“第二天回来继续开发 / 只想知道下一步 / 本地流程中断后恢复”该怎么做。
-- 工作流治理继续加固：`workflow history`、语义事件、hook history、workflow/framework/hook/operational harness、recent operational timeline 现在已经一起进入 proof-pack 和 release readiness。
-- 跨平台框架支持继续深化：`uni-app / Taro / React Native / Flutter / Desktop Web Shell` 的 framework playbook 现在不只进 UI 契约，也进入脚手架、runtime、quality gate、release readiness 和 proof-pack。
-- UI 系统继续强化：emoji 作为功能图标被系统级禁止，UI 契约、token、图标库、组件生态、导航骨架、主题入口、framework harness 一起纳入交付门禁。
-
----
