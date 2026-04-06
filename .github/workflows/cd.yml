@@ -4,13 +4,32 @@ on:
   push:
     branches: [main, develop]
   workflow_dispatch:
+    inputs:
+      deploy_development:
+        description: Deploy to the development environment
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      deploy_production:
+        description: Deploy to the production environment
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 jobs:
   # ========== 部署到开发环境 ==========
   deploy-dev:
     name: Deploy to Development
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop'
+    if: >
+      (github.event_name == 'workflow_dispatch' && inputs.deploy_development == 'true') ||
+      (github.ref == 'refs/heads/develop' && vars.ENABLE_DEVELOPMENT_DEPLOY == 'true')
     environment:
       name: development
       url: https://dev.super-dev.example.com
@@ -36,7 +55,9 @@ jobs:
   deploy-prod:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: >
+      (github.event_name == 'workflow_dispatch' && inputs.deploy_production == 'true') ||
+      (github.ref == 'refs/heads/main' && vars.ENABLE_PRODUCTION_DEPLOY == 'true')
     environment:
       name: production
       url: https://super-dev.example.com
