@@ -51,6 +51,41 @@ class ImplementationScaffoldBuilder:
         quoted = [f"'{font}'" if " " in font and font != "sans-serif" else font for font in fonts]
         return ",".join(quoted)
 
+    def _framework_playbook(self) -> dict:
+        playbook = self.ui_contract.get("framework_playbook")
+        return playbook if isinstance(playbook, dict) else {}
+
+    def _render_framework_playbook_markdown(self) -> str:
+        playbook = self._framework_playbook()
+        if not playbook:
+            return ""
+        sections = [
+            "# Framework Playbook",
+            "",
+            f"- Framework: {playbook.get('framework', 'Unknown')}",
+            "",
+            "## Implementation Modules",
+        ]
+        for item in playbook.get("implementation_modules", []):
+            sections.append(f"- {item}")
+        sections.extend(["", "## Platform Constraints"])
+        for item in playbook.get("platform_constraints", []):
+            sections.append(f"- {item}")
+        sections.extend(["", "## Execution Guardrails"])
+        for item in playbook.get("execution_guardrails", []):
+            sections.append(f"- {item}")
+        sections.extend(["", "## Native Capabilities"])
+        for item in playbook.get("native_capabilities", []):
+            sections.append(f"- {item}")
+        sections.extend(["", "## Validation Surfaces"])
+        for item in playbook.get("validation_surfaces", []):
+            sections.append(f"- {item}")
+        sections.extend(["", "## Delivery Evidence"])
+        for item in playbook.get("delivery_evidence", []):
+            sections.append(f"- {item}")
+        sections.append("")
+        return "\n".join(sections)
+
     def generate(self, requirements: list[dict]) -> dict:
         """生成前后端实现骨架"""
         module_requirements = self._build_module_requirements(requirements)
@@ -130,18 +165,39 @@ class ImplementationScaffoldBuilder:
             )
 
         readme_file = frontend_dir / "README.md"
-        readme_file.write_text(
-            (
-                "# Frontend Scaffold\n\n"
-                "## Run\n\n"
-                "```bash\n"
-                "npm install\n"
-                "npm run dev\n"
-                "```\n"
-            ),
-            encoding="utf-8",
-        )
+        readme_sections = [
+            "# Frontend Scaffold",
+            "",
+            "## Run",
+            "",
+            "```bash",
+            "npm install",
+            "npm run dev",
+            "```",
+            "",
+        ]
+        playbook = self._framework_playbook()
+        if playbook:
+            readme_sections.extend(
+                [
+                    "## Framework Playbook",
+                    "",
+                    f"- Framework: {playbook.get('framework', 'Unknown')}",
+                    f"- Native capabilities: {', '.join(playbook.get('native_capabilities', [])[:3]) or 'n/a'}",
+                    f"- Validation surfaces: {', '.join(playbook.get('validation_surfaces', [])[:3]) or 'n/a'}",
+                    "",
+                    "Implement the frontend against `FRAMEWORK_PLAYBOOK.md` before expanding business modules.",
+                    "",
+                ]
+            )
+        readme_file.write_text("\n".join(readme_sections), encoding="utf-8")
         files.append(str(readme_file))
+
+        playbook_content = self._render_framework_playbook_markdown()
+        if playbook_content:
+            playbook_file = frontend_dir / "FRAMEWORK_PLAYBOOK.md"
+            playbook_file.write_text(playbook_content, encoding="utf-8")
+            files.append(str(playbook_file))
 
         return files
 

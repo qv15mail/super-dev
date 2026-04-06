@@ -22,10 +22,16 @@ class IntegrationManagerContentMixin:
 
     def _build_kiro_global_steering_content(self) -> str:
         return (
+            "---\n"
+            "inclusion: manual\n"
+            "name: super-dev\n"
+            "description: Super Dev global steering for research-first commercial-grade delivery\n"
+            "---\n\n"
             "# Super Dev Global Steering\n\n"
             "This global steering file activates Super Dev governance for Kiro workspaces that opt into the pipeline.\n\n"
             "## Activation\n"
-            "- When the user types `super-dev: ...`, enter the Super Dev workflow immediately.\n"
+            '- Prefer `/super-dev "<需求描述>"` when Kiro exposes the steering slash entry.\n'
+            "- If the current Kiro session only accepts natural language, treat `super-dev: ...` as the fallback and enter the Super Dev workflow immediately.\n"
             "- Treat project-local `.kiro/steering/super-dev.md` as the project-specific source of truth.\n\n"
             "## Required Sequence\n"
             "1. Research first\n"
@@ -36,6 +42,36 @@ class IntegrationManagerContentMixin:
             "## Boundary\n"
             "- Kiro remains the execution host.\n"
             "- Super Dev is the governance layer and local Python tooling, not a separate model platform.\n"
+        )
+
+    def _build_kiro_steering_content(self, target: str) -> str:
+        frontmatter = (
+            "---\n"
+            "inclusion: auto\n"
+            "name: super-dev\n"
+            "description: Super Dev pipeline governance for research-first commercial-grade delivery\n"
+            "---\n\n"
+        )
+        input_block = (
+            "## Slash Input\n"
+            "- Requirement: `$ARGUMENTS`\n"
+            "- If slash arguments are empty, ask the user to restate the requirement and stay inside Super Dev mode.\n\n"
+            "## Local Orchestration Fallback\n"
+            "```bash\n"
+            "super-dev create \"$ARGUMENTS\"\n"
+            "super-dev spec list\n"
+            "```\n\n"
+        )
+        rules = self._generic_cli_rules(target) if target == "kiro-cli" else self._generic_ide_rules(target)
+        return frontmatter + input_block + rules
+
+    def _build_codebuddy_rule_content(self) -> str:
+        return (
+            "---\n"
+            'description: "Super Dev pipeline governance for CodeBuddy IDE. Activate on /super-dev or super-dev:"\n'
+            "alwaysApply: true\n"
+            "---\n\n"
+            f"{self._generic_ide_rules('codebuddy')}"
         )
 
     def setup_all(self, force: bool = False) -> dict[str, list[Path]]:
@@ -197,6 +233,9 @@ class IntegrationManagerContentMixin:
         if target == "claude-code" and relative.endswith(".claude/agents/super-dev-core.md"):
             return self._build_claude_agent_content()
 
+        if target == "codebuddy" and relative.endswith(".codebuddy/rules/super-dev/RULE.mdc"):
+            return self._build_codebuddy_rule_content()
+
         if target == "codebuddy" and relative.endswith(".codebuddy/agents/super-dev-core.md"):
             return self._build_codebuddy_agent_content()
 
@@ -239,15 +278,8 @@ class IntegrationManagerContentMixin:
                 f"{rules_body}"
             )
 
-        if target == "kiro" and relative.endswith("steering/super-dev.md"):
-            frontmatter = (
-                "---\n"
-                "inclusion: always\n"
-                "name: super-dev\n"
-                "description: Super Dev pipeline governance for research-first commercial-grade delivery\n"
-                "---\n\n"
-            )
-            return frontmatter + self._generic_ide_rules(target)
+        if target in {"kiro", "kiro-cli"} and relative.endswith("steering/super-dev.md"):
+            return self._build_kiro_steering_content(target)
 
         if target == "antigravity":
             if relative.endswith(".agent/workflows/super-dev.md"):
@@ -638,30 +670,8 @@ class IntegrationManagerContentMixin:
                 "```\n"
             )
 
-        if target == "kiro":
-            return (
-                "---\n"
-                "inclusion: manual\n"
-                "---\n\n"
-                "# super-dev\n\n"
-                "在 Kiro 手动触发 `/super-dev` 时执行以下流程：\n\n"
-                "定位边界：宿主负责编码与工具调用，Super Dev 负责流程和质量治理。\n\n"
-                "本地知识库要求：\n"
-                "- 先读取当前项目 `knowledge/` 下与需求相关的知识文件\n"
-                "- 若存在 `output/knowledge-cache/*-knowledge-bundle.json`，必须先读取其中命中的本地知识与研究摘要\n"
-                "- 命中的规范、清单、反模式默认视为项目硬约束\n\n"
-                "1. 先使用宿主原生联网 / browse / search 研究同类产品，沉淀 `output/*-research.md`\n"
-                "2. 再生成 `output/*-prd.md`、`output/*-architecture.md`、`output/*-uiux.md`\n"
-                "3. 三份文档完成后，先停下来向用户汇报并等待确认；未经确认不得创建 Spec 或开始编码\n"
-                "4. 用户确认后，再创建 `.super-dev/changes/*/proposal.md` 与 `tasks.md`\n"
-                "5. 先实现并运行前端，再进入后端、联调、测试与交付\n\n"
-                "研究阶段至少输出：同类产品名单、共性功能、关键页面结构、交互模式、差异化建议。\n\n"
-                "执行命令：\n"
-                "```bash\n"
-                "super-dev create \"$ARGUMENTS\"\n"
-                "super-dev spec list\n"
-                "```\n"
-            )
+        if target in {"kiro", "kiro-cli"}:
+            return self._build_kiro_steering_content(target)
 
         return (
             f"# /super-dev ({target})\n\n"

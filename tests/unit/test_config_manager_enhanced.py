@@ -19,7 +19,7 @@ class TestProjectConfig:
         config = ProjectConfig(name="test")
         assert config.name == "test"
         assert config.description == ""
-        assert config.version == "2.3.1"
+        assert config.version == "2.3.2"
         assert config.platform == "web"
         assert config.frontend == "next"
         assert config.backend == "node"

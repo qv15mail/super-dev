@@ -14,9 +14,10 @@ import super_dev.web.api as web_api
 from super_dev import __version__ as _super_dev_version
 from super_dev.catalogs import PRIMARY_HOST_TOOL_IDS
 from super_dev.cli import SuperDevCLI
+from super_dev.hooks.manager import HookManager
 from super_dev.integrations import IntegrationManager
 from super_dev.orchestrator import Phase, PhaseResult
-from super_dev.review_state import save_docs_confirmation, save_ui_revision
+from super_dev.review_state import save_docs_confirmation, save_ui_revision, save_workflow_state
 from super_dev.skills import SkillManager
 from super_dev.specs.generator import SpecGenerator
 
@@ -36,6 +37,45 @@ def _prepare_workflow_context(project_dir: Path) -> None:
     (project_dir / "output" / f"{project_dir.name}-prd.md").write_text("# prd\n", encoding="utf-8")
     (project_dir / "output" / f"{project_dir.name}-architecture.md").write_text("# arch\n", encoding="utf-8")
     (project_dir / "output" / f"{project_dir.name}-uiux.md").write_text("# uiux\n", encoding="utf-8")
+    (project_dir / "output" / f"{project_dir.name}-ui-contract.json").write_text(
+        json.dumps(
+            {
+                "framework_playbook": {
+                    "framework": "uni-app",
+                    "implementation_modules": ["自定义导航栏高度、状态栏占位、胶囊按钮区域必须独立建模"],
+                    "platform_constraints": ["自定义导航启用后必须显式处理 status bar 与安全区"],
+                    "execution_guardrails": ["先冻结 pages.json / navigationStyle / provider 配置，再开始页面实现"],
+                    "native_capabilities": ["登录/支付/分享 provider 必须按端隔离并显式验收"],
+                    "validation_surfaces": ["微信小程序导航/支付/触控与包体策略"],
+                    "delivery_evidence": ["三端差异说明与条件编译点清单"],
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    hook_history = HookManager.hook_history_file(project_dir)
+    hook_history.parent.mkdir(parents=True, exist_ok=True)
+    hook_history.write_text(
+        json.dumps(
+            {
+                "hook_name": "python3 scripts/check.py",
+                "event": "WorkflowEvent",
+                "success": True,
+                "output": "",
+                "error": "",
+                "duration_ms": 11.2,
+                "blocked": False,
+                "phase": "docs_confirmation_saved",
+                "source": "config",
+                "timestamp": "2026-04-06T01:02:03+00:00",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def _prepare_release_ready_project(project_dir: Path) -> None:
@@ -1767,10 +1807,14 @@ class TestWebAPI:
         assert "SMOKE_OK" in payload["usage_profiles"]["claude-code"]["smoke_test_prompt"]
         host = payload["report"]["hosts"]["claude-code"]
         assert host["ready"] is False
-        assert {"integrate", "skill", "slash", "plugin_enhancement"}.issubset(set(host["missing"]))
+        assert {"integrate", "skill", "user_surfaces"}.issubset(set(host["missing"]))
+        assert "slash" not in host["missing"]
+        assert "plugin_enhancement" in host["optional_missing"]
         assert host["checks"]["contract"]["ok"] is True
         assert host["checks"]["contract"]["surfaces"]
         assert host["checks"]["contract"]["invalid_surfaces"] == {}
+        assert host["checks"]["slash"]["scope"] == "not-required"
+        assert host["checks"]["slash"]["ok"] is True
         assert host["usage_profile"]["usage_mode"] == "native-slash-and-skill"
         assert host["usage_profile"]["certification_label"] == "Certified"
         assert host["usage_profile"]["requires_restart_after_onboard"] is False
@@ -1987,7 +2031,7 @@ class TestWebAPI:
         assert decision_card["candidates"][0]["recommended"] is True
         assert decision_card["lines"]
 
-    def test_hosts_doctor_trae_requires_host_skill_and_skips_slash(self, temp_project_dir: Path, monkeypatch):
+    def test_hosts_doctor_trae_uses_compat_skill_and_skips_slash(self, temp_project_dir: Path, monkeypatch):
         fake_home = temp_project_dir / "fake-home"
         fake_home.mkdir(parents=True, exist_ok=True)
         (fake_home / ".trae").mkdir(parents=True, exist_ok=True)
@@ -2011,17 +2055,23 @@ class TestWebAPI:
         host = payload["report"]["hosts"]["trae"]
         assert host["ready"] is False
         assert "contract" in host["missing"]
-        assert "skill" in host["missing"]
+        assert "skill" not in host["missing"]
         assert "slash" not in host["missing"]
         assert host["checks"]["slash"]["ok"] is True
         assert host["checks"]["slash"]["mode"] == "rules-only"
         assert host["checks"]["contract"]["ok"] is False
+        assert host["checks"]["skill"]["ok"] is True
+        assert host["checks"]["skill"]["mode"] == "compatibility-surface-unavailable"
         assert payload["usage_profiles"]["trae"]["usage_mode"] == "rules-and-skill"
         assert payload["usage_profiles"]["trae"]["certification_level"] == "compatible"
         assert host["usage_profile"]["trigger_command"] == "super-dev: <需求描述>"
         assert str(fake_home / ".trae" / "skills") in host["checks"]["skill"]["file"]
         assert str((temp_project_dir / ".trae" / "project_rules.md").resolve()) in host["checks"]["integrate"]["files"]
-        assert str((temp_project_dir / ".trae" / "rules.md").resolve()) in host["checks"]["integrate"]["files"]
+        assert str((temp_project_dir / ".trae" / "rules.md").resolve()) not in host["checks"]["integrate"]["files"]
+        assert any(
+            item == ".trae/rules.md" or item.endswith("/.trae/rules.md")
+            for item in payload["usage_profiles"]["trae"]["observed_compatibility_surfaces"]
+        )
         assert payload["usage_profiles"]["trae"]["usage_location"]
         assert payload["usage_profiles"]["trae"]["usage_notes"]
 
@@ -2082,10 +2132,10 @@ class TestWebAPI:
         assert codex_host["flow_probe"]["enabled"] is True
         assert len(codex_host["flow_probe"]["steps"]) >= 4
         assert ".agents/skills/super-dev/SKILL.md" in codex_host["official_project_surfaces"]
-        assert ".agents/plugins/marketplace.json" in codex_host["official_project_surfaces"]
-        assert "plugins/super-dev-codex/.codex-plugin/plugin.json" in codex_host["official_project_surfaces"]
         assert "~/.codex/AGENTS.md" in codex_host["official_user_surfaces"]
         assert "~/.agents/skills/super-dev/SKILL.md" in codex_host["official_user_surfaces"]
+        assert ".agents/plugins/marketplace.json" in codex_host["optional_project_surfaces"]
+        assert "plugins/super-dev-codex/.codex-plugin/plugin.json" in codex_host["optional_project_surfaces"]
         assert "~/.agents/skills/super-dev-core/SKILL.md" in codex_host["observed_compatibility_surfaces"]
         assert "~/.codex/skills/super-dev/SKILL.md" in codex_host["observed_compatibility_surfaces"]
         assert "~/.codex/skills/super-dev-core/SKILL.md" in codex_host["observed_compatibility_surfaces"]
@@ -2103,15 +2153,15 @@ class TestWebAPI:
         assert claude_host["host_protocol_mode"] == "official-skill"
         assert claude_host["host_protocol_summary"] == "官方 CLAUDE.md + Skills + optional repo plugin enhancement"
         assert "CLAUDE.md" in claude_host["official_project_surfaces"]
-        assert ".claude/CLAUDE.md" in claude_host["official_project_surfaces"]
         assert ".claude/skills/super-dev/SKILL.md" in claude_host["official_project_surfaces"]
-        assert ".claude/commands/super-dev.md" in claude_host["official_project_surfaces"]
-        assert ".claude/agents/super-dev-core.md" in claude_host["official_project_surfaces"]
-        assert ".claude-plugin/marketplace.json" in claude_host["official_project_surfaces"]
-        assert "plugins/super-dev-claude/.claude-plugin/plugin.json" in claude_host["official_project_surfaces"]
         assert "~/.claude/CLAUDE.md" in claude_host["official_user_surfaces"]
         assert "~/.claude/skills/super-dev/SKILL.md" in claude_host["official_user_surfaces"]
-        assert "~/.claude/commands/super-dev.md" in claude_host["official_user_surfaces"]
+        assert ".claude/CLAUDE.md" in claude_host["optional_project_surfaces"]
+        assert ".claude/commands/super-dev.md" in claude_host["optional_project_surfaces"]
+        assert ".claude/agents/super-dev-core.md" in claude_host["optional_project_surfaces"]
+        assert ".claude-plugin/marketplace.json" in claude_host["optional_project_surfaces"]
+        assert "plugins/super-dev-claude/.claude-plugin/plugin.json" in claude_host["optional_project_surfaces"]
+        assert "~/.claude/commands/super-dev.md" in claude_host["optional_user_surfaces"]
         assert "~/.claude/skills/super-dev-core/SKILL.md" in claude_host["observed_compatibility_surfaces"]
         assert "~/.claude/agents/super-dev-core.md" in claude_host["observed_compatibility_surfaces"]
         assert claude_host["commands"]["skill"] == "super-dev"
@@ -2129,13 +2179,16 @@ class TestWebAPI:
         assert qoder_host["commands"]["slash"] == '/super-dev "你的需求"'
         assert qoder_host["commands"]["trigger"] == '/super-dev "你的需求"'
         assert qoder_host["final_trigger"] == '/super-dev "你的需求"'
+        assert "AGENTS.md" in qoder_host["integration_files"]
+        assert "AGENTS.md" in qoder_host["official_project_surfaces"]
         assert ".qoder/rules/super-dev.md" in qoder_host["integration_files"]
         assert ".qoder/commands/super-dev.md" in qoder_host["official_project_surfaces"]
         assert ".qoder/rules/super-dev.md" in qoder_host["official_project_surfaces"]
+        assert "~/.qoder/AGENTS.md" in qoder_host["official_user_surfaces"]
         assert "~/.qoder/commands/super-dev.md" in qoder_host["official_user_surfaces"]
         assert ".qoder/skills/super-dev-core/SKILL.md" in qoder_host["official_project_surfaces"]
         assert "~/.qoder/skills/super-dev-core/SKILL.md" in qoder_host["official_user_surfaces"]
-        assert "AGENTS.md" in qoder_host["observed_compatibility_surfaces"]
+        assert qoder_host["observed_compatibility_surfaces"] == []
 
     def test_cursor_host_catalog_exposes_agents_compatibility(self):
         client = TestClient(web_api.app)
@@ -2181,12 +2234,18 @@ class TestWebAPI:
         assert resp.status_code == 200
         payload = resp.json()
         kiro_host = next(item for item in payload["host_tools"] if item["id"] == "kiro")
-        assert kiro_host["supports_slash"] is False
+        assert kiro_host["supports_slash"] is True
+        assert kiro_host["usage_mode"] == "native-slash"
         assert kiro_host["host_protocol_mode"] == "official-steering"
+        assert kiro_host["host_protocol_summary"] == "官方 steering + slash entry + skills"
+        assert kiro_host["slash_command_file"] == ".kiro/steering/super-dev.md"
+        assert kiro_host["commands"]["trigger"] == '/super-dev "你的需求"'
+        assert kiro_host["final_trigger"] == '/super-dev "你的需求"'
         assert ".kiro/steering/super-dev.md" in kiro_host["official_project_surfaces"]
         assert ".kiro/skills/super-dev-core/SKILL.md" in kiro_host["official_project_surfaces"]
-        assert "~/.kiro/steering/AGENTS.md" in kiro_host["official_user_surfaces"]
+        assert "~/.kiro/steering/super-dev.md" in kiro_host["official_user_surfaces"]
         assert "~/.kiro/skills/super-dev-core/SKILL.md" in kiro_host["official_user_surfaces"]
+        assert "~/.kiro/steering/AGENTS.md" in kiro_host["observed_compatibility_surfaces"]
 
     @pytest.mark.parametrize(
         ("host_id", "slash_file"),
@@ -2194,6 +2253,8 @@ class TestWebAPI:
             ("antigravity", ".gemini/commands/super-dev.md"),
             ("codebuddy", ".codebuddy/commands/super-dev.md"),
             ("cursor", ".cursor/commands/super-dev.md"),
+            ("kiro", ".kiro/steering/super-dev.md"),
+            ("kiro-cli", ".kiro/steering/super-dev.md"),
             ("windsurf", ".windsurf/workflows/super-dev.md"),
             ("gemini-cli", ".gemini/commands/super-dev.md"),
             ("opencode", ".opencode/commands/super-dev.md"),
@@ -2217,19 +2278,21 @@ class TestWebAPI:
         assert host["commands"]["trigger"] == '/super-dev "你的需求"'
         assert host["final_trigger"] == '/super-dev "你的需求"'
 
-    def test_kiro_cli_catalog_is_text_trigger_with_steering_and_skills(self):
+    def test_kiro_cli_catalog_uses_slash_trigger_with_steering_and_skills(self):
         client = TestClient(web_api.app)
         resp = client.get("/api/catalogs")
         assert resp.status_code == 200
         payload = resp.json()
         host = next(item for item in payload["host_tools"] if item["id"] == "kiro-cli")
-        assert host["supports_slash"] is False
-        assert host["usage_mode"] == "rules-and-skill"
+        assert host["supports_slash"] is True
+        assert host["usage_mode"] == "native-slash"
         assert host["host_protocol_mode"] == "official-steering"
-        assert host["host_protocol_summary"] == "官方 steering + skills"
-        assert host["final_trigger"] == "super-dev: 你的需求"
+        assert host["host_protocol_summary"] == "官方 steering + slash entry + skills"
+        assert host["slash_command_file"] == ".kiro/steering/super-dev.md"
+        assert host["final_trigger"] == '/super-dev "你的需求"'
         assert ".kiro/steering/super-dev.md" in host["official_project_surfaces"]
         assert ".kiro/skills/super-dev-core/SKILL.md" in host["official_project_surfaces"]
+        assert "~/.kiro/steering/super-dev.md" in host["official_user_surfaces"]
         assert "~/.kiro/skills/super-dev-core/SKILL.md" in host["official_user_surfaces"]
 
     def test_hosts_doctor_endpoint_ready_after_files_present(self, temp_project_dir: Path, monkeypatch):
@@ -2279,10 +2342,11 @@ class TestWebAPI:
         assert resp.status_code == 200
         payload = resp.json()
         host = payload["report"]["hosts"]["claude-code"]
-        assert host["ready"] is False
-        assert "contract" in host["missing"]
-        assert host["checks"]["contract"]["ok"] is False
-        invalid_surfaces = host["checks"]["contract"]["invalid_surfaces"]
+        assert host["ready"] is True
+        assert "contract" not in host["missing"]
+        assert "contract_optional_surfaces" in host["optional_missing"]
+        assert host["checks"]["contract"]["ok"] is True
+        invalid_surfaces = host["checks"]["contract"]["invalid_optional_surfaces"]
         assert invalid_surfaces
         assert any(
             ".claude/commands/super-dev.md" in str(item.get("path", ""))
@@ -2747,6 +2811,13 @@ class TestWebAPI:
         assert ".super-dev/SESSION_BRIEF.md" in host["resume_probe_prompt"]
         assert '/super-dev "' in host["resume_probe_prompt"]
         assert any("当前项目会话里恢复" in item for item in host["resume_checklist"])
+        assert host["framework_playbook"]["framework"] == "uni-app"
+        assert any("provider" in item for item in host["framework_playbook"]["native_capabilities"])
+        assert any("uni-app playbook" in item for item in host["runtime_checklist"])
+        assert any("框架专项原生能力面" in item for item in host["runtime_checklist"])
+        assert any("框架专项必验场景" in item for item in host["runtime_checklist"])
+        assert any("跨平台框架专项能力" in item for item in host["pass_criteria"])
+        assert any("uni-app 的专项 playbook" in item for item in host["resume_checklist"])
         assert payload["session_resume_cards"]["opencode"]["enabled"] is True
         assert payload["session_resume_cards"]["opencode"]["workflow_mode"] == "revise"
         assert payload["session_resume_cards"]["opencode"]["workflow_mode_label"] == "返工/补充当前流程"
@@ -2790,8 +2861,40 @@ class TestWebAPI:
         assert card["entry_prompts"]["app_desktop"].startswith('/super-dev "')
         assert card["entry_prompts"]["cli"].startswith('$super-dev "')
         assert card["entry_prompts"]["fallback"].startswith("super-dev:")
+        assert card["workflow_event_log_path"].endswith(".super-dev/workflow-events.jsonl")
+        assert card["hook_history_path"].endswith(".super-dev/hook-history.jsonl")
+        assert card["operational_harnesses"]
+        assert card["operational_focus"]["status"] == "needs_attention"
+        assert card["operational_focus"]["kind"] == "framework"
+        assert [item["id"] for item in card["scenario_cards"][:3]] == [
+            "resume_workday",
+            "know_next",
+            "current_gate_or_stage",
+        ]
+        assert any(item["cli_command"] == "super-dev run --resume" for item in card["scenario_cards"])
+        assert {item["kind"] for item in card["operational_harnesses"]} == {
+            "workflow",
+            "framework",
+            "hooks",
+        }
+        assert card["recent_snapshots"]
+        assert card["recent_events"]
+        assert card["recent_hook_events"]
+        assert card["recent_timeline"]
+        assert card["recent_snapshots"][0]["current_step_label"] == "等待三文档确认"
+        assert any("真实场景: 第二天回来继续开发 -> super-dev resume" == line for line in card["lines"])
+        assert any("最近一次:" in line for line in card["lines"])
+        assert any("最近事件:" in line for line in card["lines"])
+        assert any("最近 Hook:" in line for line in card["lines"])
+        assert any("关键时间线:" in line for line in card["lines"])
+        assert any("Workflow Continuity:" in line for line in card["lines"])
+        assert any("当前治理焦点:" in line for line in card["lines"])
+        assert any("建议先做:" in line for line in card["lines"])
         assert ".super-dev/SESSION_BRIEF.md" in card["session_brief_path"]
         assert card["recommended_workflow_command"]
+        assert card["framework_playbook"]["framework"] == "uni-app"
+        assert any("provider" in item for item in card["framework_playbook"]["native_capabilities"])
+        assert any("框架专项: uni-app" in line for line in card["lines"])
         assert resp.json()["decision_card"]["selection_source"] == "explicit"
 
     @pytest.mark.parametrize(
@@ -2881,3 +2984,172 @@ class TestWebAPI:
         assert host["manual_runtime_status"] == "passed"
         assert host["manual_runtime_status_label"] == "已真人通过"
         assert host["manual_runtime_comment"] == "首轮先进入 research，三文档已真实落盘"
+
+    def test_hooks_history_endpoint_returns_recent_results(self, temp_project_dir: Path) -> None:
+        marker = temp_project_dir / "hook-history-marker.txt"
+        (temp_project_dir / "super-dev.yaml").write_text(
+            "\n".join(
+                [
+                    "hooks:",
+                    "  WorkflowEvent:",
+                    '    - matcher: "docs_confirmation_saved"',
+                    "      type: command",
+                    f"      command: \"python3 -c \\\"from pathlib import Path; Path(r'{marker}').write_text('ok', encoding='utf-8')\\\"\"",
+                    "      blocking: false",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        save_docs_confirmation(
+            temp_project_dir,
+            {
+                "status": "confirmed",
+                "current_step_label": "三文档已确认",
+            },
+        )
+
+        client = TestClient(web_api.app)
+        resp = client.get(
+            "/api/hooks/history",
+            params={"project_dir": str(temp_project_dir), "limit": 5},
+        )
+        assert resp.status_code == 200
+        payload = resp.json()["data"]
+        assert payload
+        assert payload[0]["event"] == "WorkflowEvent"
+        assert payload[0]["phase"] == "docs_confirmation_saved"
+        assert payload[0]["source"] == "config"
+        assert HookManager.hook_history_file(temp_project_dir).exists()
+
+    def test_governance_harness_endpoints(self, temp_project_dir: Path) -> None:
+        _prepare_workflow_context(temp_project_dir)
+        save_workflow_state(
+            temp_project_dir,
+            {
+                "status": "waiting_docs_confirmation",
+                "workflow_mode": "revise",
+                "current_step_label": "等待三文档确认",
+                "recommended_command": "super-dev review docs --status confirmed",
+            },
+        )
+        save_docs_confirmation(
+            temp_project_dir,
+            {
+                "status": "confirmed",
+                "current_step_label": "三文档已确认",
+            },
+        )
+        (temp_project_dir / "output" / f"{temp_project_dir.name}-frontend-runtime.json").write_text(
+            json.dumps(
+                {
+                    "passed": True,
+                    "checks": {
+                        "ui_framework_playbook": True,
+                        "ui_framework_execution": True,
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (temp_project_dir / "output" / f"{temp_project_dir.name}-ui-contract-alignment.json").write_text(
+            json.dumps(
+                {
+                    "framework_execution": {
+                        "label": "框架 Playbook 执行",
+                        "passed": True,
+                    }
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        HookManager.hook_history_file(temp_project_dir).parent.mkdir(parents=True, exist_ok=True)
+        HookManager.hook_history_file(temp_project_dir).write_text(
+            json.dumps(
+                {
+                    "hook_name": "python3 scripts/check.py",
+                    "event": "WorkflowEvent",
+                    "success": True,
+                    "output": "",
+                    "error": "",
+                    "duration_ms": 6.0,
+                    "blocked": False,
+                    "phase": "docs_confirmation_saved",
+                    "source": "config",
+                    "timestamp": "2026-04-06T01:02:03+00:00",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        client = TestClient(web_api.app)
+
+        workflow_resp = client.get(
+            "/api/governance/workflow-harness",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert workflow_resp.status_code == 200
+        assert workflow_resp.json()["enabled"] is True
+        assert "json_file" in workflow_resp.json()
+
+        framework_resp = client.get(
+            "/api/governance/framework-harness",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert framework_resp.status_code == 200
+        assert framework_resp.json()["enabled"] is True
+        assert framework_resp.json()["framework"] == "uni-app"
+
+        hook_resp = client.get(
+            "/api/governance/hook-harness",
+            params={"project_dir": str(temp_project_dir)},
+        )
+        assert hook_resp.status_code == 200
+        assert hook_resp.json()["enabled"] is True
+        assert hook_resp.json()["total_events"] >= 1
+
+        aggregate_resp = client.get(
+            "/api/governance/harnesses",
+            params={"project_dir": str(temp_project_dir), "hook_limit": 1},
+        )
+        assert aggregate_resp.status_code == 200
+        aggregate_payload = aggregate_resp.json()
+        assert aggregate_payload["enabled"] is True
+        assert aggregate_payload["json_file"].endswith("-operational-harness.json")
+        assert aggregate_payload["report_file"].endswith("-operational-harness.md")
+        assert set(aggregate_payload["harnesses"]) == {"workflow", "framework", "hooks"}
+        assert aggregate_payload["harnesses"]["workflow"]["label"] == "Workflow Continuity"
+        assert aggregate_payload["harnesses"]["framework"]["label"] == "Framework Harness"
+        assert aggregate_payload["harnesses"]["hooks"]["label"] == "Hook Audit Trail"
+        assert aggregate_payload["harnesses"]["hooks"]["total_events"] >= 1
+
+        operational_resp = client.get(
+            "/api/governance/operational-harness",
+            params={"project_dir": str(temp_project_dir), "hook_limit": 1},
+        )
+        assert operational_resp.status_code == 200
+        operational_payload = operational_resp.json()
+        assert operational_payload["enabled"] is True
+        assert operational_payload["passed"] is True
+        assert operational_payload["enabled_count"] == 3
+        assert operational_payload["passed_count"] == 3
+        assert set(operational_payload["harnesses"]) == {"workflow", "framework", "hooks"}
+        assert operational_payload["json_file"].endswith("-operational-harness.json")
+        assert operational_payload["report_file"].endswith("-operational-harness.md")
+
+        timeline_resp = client.get(
+            "/api/governance/timeline",
+            params={"project_dir": str(temp_project_dir), "limit": 5},
+        )
+        assert timeline_resp.status_code == 200
+        timeline_payload = timeline_resp.json()
+        assert timeline_payload["count"] >= 1
+        assert timeline_payload["timeline"]
+        assert timeline_payload["timeline"][0]["kind"] in {"workflow_snapshot", "workflow_event", "hook_event"}
+        assert timeline_payload["timeline"][0]["message"]

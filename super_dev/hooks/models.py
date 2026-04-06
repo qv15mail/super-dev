@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
@@ -39,7 +39,29 @@ class HookResult:
     error: str = ""
     duration_ms: float = 0.0
     blocked: bool = False  # 是否阻止了 pipeline 继续
+    phase: str = ""
+    source: str = ""
     timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize hook result for JSON/API/history logs."""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> HookResult:
+        """Restore hook result from persisted JSON data."""
+        return cls(
+            hook_name=str(data.get("hook_name", "")),
+            event=str(data.get("event", "")),
+            success=bool(data.get("success", False)),
+            output=str(data.get("output", "")),
+            error=str(data.get("error", "")),
+            duration_ms=float(data.get("duration_ms", 0.0) or 0.0),
+            blocked=bool(data.get("blocked", False)),
+            phase=str(data.get("phase", "")),
+            source=str(data.get("source", "")),
+            timestamp=str(data.get("timestamp", "")) or datetime.now(timezone.utc).isoformat(),
+        )
 
 
 @dataclass

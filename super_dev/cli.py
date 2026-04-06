@@ -56,14 +56,22 @@ from .cli_release_quality_mixin import CliReleaseQualityMixin
 from .cli_spec_mixin import CliSpecMixin
 from .config import ConfigManager, ProjectConfig, get_config_manager
 from .error_handler import handle_cli_error
+from .harness_registry import derive_operational_focus, summarize_operational_harnesses
+from .hooks.manager import HookManager
 from .review_state import (
     architecture_revision_file,
+    describe_workflow_event,
     docs_confirmation_file,
+    latest_workflow_snapshot_file,
     load_architecture_revision,
     load_docs_confirmation,
     load_preview_confirmation,
     load_quality_revision,
+    load_recent_operational_timeline,
+    load_recent_workflow_events,
+    load_recent_workflow_snapshots,
     load_ui_revision,
+    load_workflow_state,
     preview_confirmation_file,
     quality_revision_file,
     save_architecture_revision,
@@ -73,6 +81,7 @@ from .review_state import (
     save_ui_revision,
     save_workflow_state,
     ui_revision_file,
+    workflow_event_log_file,
     workflow_state_file,
 )
 from .terminal import (
@@ -82,6 +91,7 @@ from .utils import get_logger
 from .workflow_state import (
     build_host_entry_prompts,
     detect_pipeline_summary,
+    load_framework_playbook_summary,
     workflow_continuity_rules,
     workflow_mode_label,
     workflow_mode_shortcuts,
@@ -599,6 +609,8 @@ class SuperDevCLI(
         project_dir = Path.cwd()
         payload = self._build_next_step_payload(project_dir)
         self._write_session_brief(project_dir=project_dir, payload=payload)
+        payload = dict(payload)
+        payload["recent_snapshots"] = load_recent_workflow_snapshots(project_dir, limit=3)
         if getattr(args, "json", False):
             sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
             return 0
@@ -611,8 +623,9 @@ class SuperDevCLI(
         project_dir = Path.cwd()
         payload = self._build_next_step_payload(project_dir)
         self._write_session_brief(project_dir=project_dir, payload=payload)
+        payload = dict(payload)
+        payload["recent_snapshots"] = load_recent_workflow_snapshots(project_dir, limit=3)
         if getattr(args, "json", False):
-            payload = dict(payload)
             payload["entrypoint"] = "continue"
             sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
             return 0
@@ -625,8 +638,9 @@ class SuperDevCLI(
         project_dir = Path.cwd()
         payload = self._build_next_step_payload(project_dir)
         self._write_session_brief(project_dir=project_dir, payload=payload)
+        payload = dict(payload)
+        payload["recent_snapshots"] = load_recent_workflow_snapshots(project_dir, limit=3)
         if getattr(args, "json", False):
-            payload = dict(payload)
             payload["entrypoint"] = "resume"
             sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
             return 0
@@ -688,10 +702,32 @@ class SuperDevCLI(
         )
         if examples:
             self.console.print(f"  自然语言示例: {', '.join(str(item) for item in examples[:3])}")
+        scenario_cards = (
+            payload.get("scenario_cards") if isinstance(payload.get("scenario_cards"), list) else []
+        )
+        for item in scenario_cards[:4]:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title", "")).strip()
+            command = str(item.get("cli_command", "")).strip()
+            if title and command:
+                self.console.print(f"  真实场景: {title} -> {command}")
         self.console.print(f"  当前状态: {payload.get('status', '-')}")
         self.console.print(f"  原因: {payload.get('reason', '-')}")
         if payload.get("session_brief_path"):
             self.console.print(f"  流程状态卡: {payload.get('session_brief_path')}")
+        recent_snapshots = (
+            payload.get("recent_snapshots")
+            if isinstance(payload.get("recent_snapshots"), list)
+            else []
+        )
+        if recent_snapshots and isinstance(recent_snapshots[0], dict):
+            first = recent_snapshots[0]
+            step = str(first.get("current_step_label", "")).strip() or str(
+                first.get("status", "")
+            ).strip()
+            updated_at = str(first.get("updated_at", "")).strip() or "-"
+            self.console.print(f"  最近快照: {updated_at} · {step}")
         if payload.get("evidence"):
             self.console.print(f"  依据: {payload['evidence']}")
 
@@ -881,20 +917,78 @@ class SuperDevCLI(
         if not run_state:
             try:
                 cfg = get_config_manager(project_dir).config
+                recent_snapshots = load_recent_workflow_snapshots(project_dir, limit=3)
+                if not recent_snapshots:
+                    current_snapshot = load_workflow_state(project_dir)
+                    if isinstance(current_snapshot, dict) and current_snapshot:
+                        recent_snapshots = [current_snapshot]
+                if not recent_snapshots:
+                    pipeline_summary = detect_pipeline_summary(project_dir)
+                    if isinstance(pipeline_summary, dict) and pipeline_summary:
+                        recent_snapshots = [pipeline_summary]
+                recent_events = load_recent_workflow_events(project_dir, limit=3)
+                if not recent_events and recent_snapshots:
+                    first_snapshot = recent_snapshots[0] if isinstance(recent_snapshots[0], dict) else {}
+                    recent_events = [
+                        {
+                            "event": "workflow_context_detected",
+                            "phase": str(first_snapshot.get("workflow_mode", "")).strip() or "continue",
+                            "timestamp": str(first_snapshot.get("updated_at", "")).strip() or datetime.now(timezone.utc).isoformat(),
+                            "status": str(first_snapshot.get("status", "")).strip() or "initialized_waiting",
+                            "current_step_label": str(first_snapshot.get("current_step_label", "")).strip(),
+                        }
+                    ]
+                initialized_payload = {
+                    "status": "initialized_waiting",
+                    "project": cfg.name or project_dir.name,
+                    "frontend": cfg.frontend or "-",
+                    "backend": cfg.backend or "-",
+                    "recommended_next": "在宿主中输入 /super-dev <你的需求> 开始",
+                    "framework_playbook": load_framework_playbook_summary(project_dir),
+                    "recent_snapshots": recent_snapshots,
+                    "recent_events": recent_events,
+                    "recent_hook_events": [
+                        item.to_dict() for item in HookManager.load_recent_history(project_dir, limit=3)
+                    ],
+                    "operational_harnesses": summarize_operational_harnesses(
+                        project_dir, write_reports=False
+                    ),
+                    "operational_focus": derive_operational_focus(project_dir),
+                }
                 if getattr(args, "json", False):
-                    payload = {
-                        "status": "initialized_waiting",
-                        "project": cfg.name or project_dir.name,
-                        "frontend": cfg.frontend or "-",
-                        "backend": cfg.backend or "-",
-                        "recommended_next": "在宿主中输入 /super-dev <你的需求> 开始",
-                    }
-                    self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
+                    sys.stdout.write(json.dumps(initialized_payload, ensure_ascii=False, indent=2) + "\n")
                     return 0
                 self.console.print("[cyan]Super Dev 流程状态: 已初始化，等待开始[/cyan]")
-                self.console.print(f"  项目: {cfg.name or project_dir.name}")
-                self.console.print(f"  前端: {cfg.frontend or '-'}")
-                self.console.print(f"  后端: {cfg.backend or '-'}")
+                self.console.print(f"  项目: {initialized_payload['project']}")
+                self.console.print(f"  前端: {initialized_payload['frontend']}")
+                self.console.print(f"  后端: {initialized_payload['backend']}")
+                framework_playbook = initialized_payload.get("framework_playbook", {})
+                if isinstance(framework_playbook, dict) and framework_playbook:
+                    self.console.print(f"  跨平台框架: {framework_playbook.get('framework', '-')}")
+                recent_snapshots = initialized_payload.get("recent_snapshots", [])
+                if isinstance(recent_snapshots, list) and recent_snapshots:
+                    first = recent_snapshots[0] if isinstance(recent_snapshots[0], dict) else {}
+                    step = str(first.get("current_step_label", "")).strip() or str(
+                        first.get("status", "")
+                    ).strip()
+                    updated_at = str(first.get("updated_at", "")).strip() or "-"
+                    self.console.print(f"  最近快照: {updated_at} · {step}")
+                harnesses = initialized_payload.get("operational_harnesses", [])
+                if isinstance(harnesses, list) and harnesses:
+                    self.console.print("  运行时 Harness:")
+                    for item in harnesses[:3]:
+                        if not isinstance(item, dict):
+                            continue
+                        label = str(item.get("label", "")).strip() or str(item.get("kind", "")).strip()
+                        passed = bool(item.get("all_passed", False))
+                        blocker = str(item.get("first_blocker", "")).strip()
+                        line = f"    - {label}: {'ok' if passed else 'needs attention'}"
+                        if blocker:
+                            line += f" · {blocker}"
+                        self.console.print(line)
+                focus = initialized_payload.get("operational_focus", {})
+                if isinstance(focus, dict) and str(focus.get("summary", "")).strip():
+                    self.console.print(f"  当前治理焦点: {focus.get('summary')}")
                 self.console.print("")
                 self.console.print("  下一步: 在宿主中输入 /super-dev <你的需求> 开始")
                 return 0
@@ -946,6 +1040,16 @@ class SuperDevCLI(
                 architecture_state=architecture_state,
                 quality_state=quality_state,
             ),
+            "framework_playbook": load_framework_playbook_summary(project_dir),
+            "recent_snapshots": load_recent_workflow_snapshots(project_dir, limit=3),
+            "recent_events": load_recent_workflow_events(project_dir, limit=3),
+            "recent_hook_events": [
+                item.to_dict() for item in HookManager.load_recent_history(project_dir, limit=3)
+            ],
+            "operational_harnesses": summarize_operational_harnesses(
+                project_dir, write_reports=False
+            ),
+            "operational_focus": derive_operational_focus(project_dir),
         }
         if getattr(args, "json", False):
             self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -978,12 +1082,66 @@ class SuperDevCLI(
         self.console.print(
             f"  质量返工: {self._review_status_label(quality_state['status'], review_type='quality')}"
         )
+        framework_playbook = payload.get("framework_playbook", {})
+        if isinstance(framework_playbook, dict) and framework_playbook:
+            self.console.print(f"  跨平台框架: {framework_playbook.get('framework', '-')}")
+            native = framework_playbook.get("native_capabilities", [])
+            validation = framework_playbook.get("validation_surfaces", [])
+            if native:
+                self.console.print(f"  原生能力面: {' / '.join(str(item) for item in native[:3])}")
+            if validation:
+                self.console.print(f"  必验场景: {' / '.join(str(item) for item in validation[:3])}")
         if phase_confirmations:
             self.console.print("  阶段确认:")
             for phase, item in sorted(phase_confirmations.items()):
                 status = str((item or {}).get("status", "")).strip() or "pending_review"
                 actor = str((item or {}).get("actor", "")).strip() or "-"
                 self.console.print(f"    - {phase}: {self._review_status_label(status)} | {actor}")
+        focus = payload.get("operational_focus", {})
+        if isinstance(focus, dict) and str(focus.get("summary", "")).strip():
+            self.console.print(f"  当前治理焦点: {focus.get('summary')}")
+            action = str(focus.get("recommended_action", "")).strip()
+            if action:
+                self.console.print(f"  建议先做: {action}")
+        recent_snapshots = payload.get("recent_snapshots", [])
+        if isinstance(recent_snapshots, list) and recent_snapshots:
+            first = recent_snapshots[0] if isinstance(recent_snapshots[0], dict) else {}
+            step = str(first.get("current_step_label", "")).strip() or str(
+                first.get("status", "")
+            ).strip()
+            updated_at = str(first.get("updated_at", "")).strip() or "-"
+            self.console.print(f"  最近快照: {updated_at} · {step}")
+        recent_events = payload.get("recent_events", [])
+        if isinstance(recent_events, list) and recent_events:
+            first_event = recent_events[0] if isinstance(recent_events[0], dict) else {}
+            event_time = str(first_event.get("timestamp", "")).strip() or "-"
+            self.console.print(f"  最近事件: {event_time} · {describe_workflow_event(first_event)}")
+        recent_hook_events = payload.get("recent_hook_events", [])
+        if isinstance(recent_hook_events, list) and recent_hook_events:
+            first_hook = recent_hook_events[0] if isinstance(recent_hook_events[0], dict) else {}
+            blocked = bool(first_hook.get("blocked", False))
+            success = bool(first_hook.get("success", False))
+            hook_status = "blocked" if blocked else ("ok" if success else "failed")
+            self.console.print(
+                "  最近 Hook: "
+                f"{str(first_hook.get('timestamp', '')).strip() or '-'} · "
+                f"{str(first_hook.get('event', '')).strip() or '-'} / "
+                f"{str(first_hook.get('phase', '')).strip() or '-'} / "
+                f"{str(first_hook.get('hook_name', '')).strip() or '-'} / {hook_status}"
+            )
+        harnesses = payload.get("operational_harnesses", [])
+        if isinstance(harnesses, list) and harnesses:
+            self.console.print("  运行时 Harness:")
+            for item in harnesses[:3]:
+                if not isinstance(item, dict):
+                    continue
+                label = str(item.get("label", "")).strip() or str(item.get("kind", "")).strip()
+                status = "pass" if item.get("passed") else "fail"
+                line = f"    - {label}: {status}"
+                blocker = str(item.get("first_blocker", "")).strip()
+                if blocker:
+                    line += f" | {blocker}"
+                self.console.print(line)
         self.console.print(f"  下一步: {payload['recommended_next']}")
         return 0
 
@@ -1322,6 +1480,7 @@ class SuperDevCLI(
             "preferred_host_name": str(payload.get("preferred_host_name", "")).strip(),
             "host_continue_prompt": str(payload.get("host_continue_prompt", "")).strip(),
             "session_brief_path": str(self._session_brief_path(project_dir)),
+            "framework_playbook": load_framework_playbook_summary(project_dir),
             "continuity_rules": list(payload.get("continuity_rules") or []),
             "gates": {
                 "docs_confirmation": {
@@ -1393,7 +1552,35 @@ class SuperDevCLI(
             f"- 机器侧动作: {payload.get('recommended_command', '-')}",
             f"- 推荐宿主: {preferred_host_name or '-'}",
             f"- 工作流状态 JSON: {self._workflow_state_path(project_dir)}",
+            f"- 最新历史快照: {latest_workflow_snapshot_file(project_dir)}",
+            f"- 事件日志: {workflow_event_log_file(project_dir)}",
+            f"- Hook 审计日志: {HookManager.hook_history_file(project_dir)}",
         ]
+        recent_snapshots = (
+            payload.get("recent_snapshots")
+            if isinstance(payload.get("recent_snapshots"), list)
+            else []
+        )
+        framework_playbook = load_framework_playbook_summary(project_dir)
+        if framework_playbook:
+            lines.append(f"- 跨平台框架: {framework_playbook.get('framework', '-')}")
+            native = framework_playbook.get("native_capabilities", [])
+            validation = framework_playbook.get("validation_surfaces", [])
+            if native:
+                lines.append(f"- 原生能力面: {' / '.join(str(item) for item in native[:3])}")
+            if validation:
+                lines.append(f"- 必验场景: {' / '.join(str(item) for item in validation[:3])}")
+        harness_summaries = summarize_operational_harnesses(project_dir, write_reports=False)
+        if harness_summaries:
+            lines.extend(["", "## 运行时 Harness 摘要"])
+            for item in harness_summaries[:3]:
+                label = str(item.get("label", "")).strip() or str(item.get("kind", "")).strip()
+                status = "pass" if item.get("passed") else "fail"
+                line = f"- {label}: {status}"
+                blocker = str(item.get("first_blocker", "")).strip()
+                if blocker:
+                    line += f" · {blocker}"
+                lines.append(line)
         user_action_shortcuts = (
             payload.get("user_action_shortcuts")
             if isinstance(payload.get("user_action_shortcuts"), list)
@@ -1408,6 +1595,22 @@ class SuperDevCLI(
         )
         if action_examples:
             lines.append(f"- 自然语言示例: {', '.join(str(item) for item in action_examples[:3])}")
+        scenario_cards = (
+            payload.get("scenario_cards") if isinstance(payload.get("scenario_cards"), list) else []
+        )
+        if scenario_cards:
+            lines.extend(["", "## 现实场景怎么做"])
+            for item in scenario_cards[:4]:
+                if not isinstance(item, dict):
+                    continue
+                title = str(item.get("title", "")).strip()
+                command = str(item.get("cli_command", "")).strip()
+                description = str(item.get("description", "")).strip()
+                if title and command:
+                    line = f"- {title}: `{command}`"
+                    if description:
+                        line += f" · {description}"
+                    lines.append(line)
         if host_prompt:
             lines.append(f"- 宿主第一句: {host_prompt}")
         if payload.get("reason"):
@@ -1418,6 +1621,41 @@ class SuperDevCLI(
             lines.extend(["", "## 会话连续性规则"])
             for item in continuity_rules:
                 lines.append(f"- {item}")
+        self._write_workflow_state(project_dir=project_dir, payload=payload)
+        if not recent_snapshots:
+            recent_snapshots = load_recent_workflow_snapshots(project_dir, limit=3)
+        if recent_snapshots:
+            lines.extend(["", "## 最近流程快照"])
+            for item in recent_snapshots[:3]:
+                if not isinstance(item, dict):
+                    continue
+                step = str(item.get("current_step_label", "")).strip() or str(
+                    item.get("status", "")
+                ).strip()
+                updated_at = str(item.get("updated_at", "")).strip() or "-"
+                lines.append(f"- {updated_at} · {step}")
+        recent_events = load_recent_workflow_events(project_dir, limit=3)
+        if recent_events:
+            lines.extend(["", "## 最近状态事件"])
+            for item in recent_events:
+                updated_at = str(item.get("timestamp", "")).strip() or "-"
+                lines.append(f"- {updated_at} · {describe_workflow_event(item)}")
+        recent_hook_events = HookManager.load_recent_history(project_dir, limit=3)
+        if recent_hook_events:
+            lines.extend(["", "## 最近 Hook 事件"])
+            for item in recent_hook_events:
+                status = "blocked" if item.blocked else ("ok" if item.success else "failed")
+                lines.append(
+                    f"- {item.timestamp} · {item.event} / {item.phase or '-'} / {item.hook_name} / {status}"
+                )
+        recent_timeline = load_recent_operational_timeline(project_dir, limit=5)
+        if recent_timeline:
+            lines.extend(["", "## 最近关键时间线"])
+            for item in recent_timeline:
+                title = str(item.get("title", "")).strip() or str(item.get("kind", "")).strip()
+                message = str(item.get("message", "")).strip() or "-"
+                updated_at = str(item.get("timestamp", "")).strip() or "-"
+                lines.append(f"- {updated_at} · {title} · {message}")
         lines.extend(
             [
                 "",
@@ -1432,7 +1670,6 @@ class SuperDevCLI(
             ]
         )
         brief_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        self._write_workflow_state(project_dir=project_dir, payload=payload)
         return brief_path
 
     def _build_host_continue_prompt(
@@ -1541,9 +1778,11 @@ class SuperDevCLI(
             or str(next_payload.get("current_step_label", "")).strip(),
             "action_examples": list(action_card.get("examples") or []),
             "user_action_shortcuts": list(next_payload.get("user_action_shortcuts") or []),
+            "scenario_cards": list(next_payload.get("scenario_cards") or []),
             "continuity_rules": list(
                 next_payload.get("continuity_rules") or action_card.get("continuity_rules") or []
             ),
+            "framework_playbook": load_framework_playbook_summary(project_dir),
         }
 
     def _project_has_super_dev_context(self, project_dir: Path) -> bool:
@@ -1748,6 +1987,7 @@ class SuperDevCLI(
                     or "continue",
                     action_card=action_card,
                 ),
+                "recent_snapshots": load_recent_workflow_snapshots(project_dir, limit=3),
             }
         )
         return enriched
@@ -1786,6 +2026,7 @@ class SuperDevCLI(
                     "evidence": evidence or f"workflow_status={checkpoint_status}",
                     "workflow_mode": str(summary.get("workflow_mode", "")).strip(),
                     "action_card": summary.get("action_card"),
+                    "scenario_cards": summary.get("scenario_cards"),
                 },
             )
 
@@ -1856,6 +2097,7 @@ class SuperDevCLI(
                 "evidence": evidence or "未检测到更高优先级阻断项",
                 "workflow_mode": str(summary.get("workflow_mode", "")).strip(),
                 "action_card": summary.get("action_card"),
+                "scenario_cards": summary.get("scenario_cards"),
             },
         )
 
@@ -3016,7 +3258,6 @@ class SuperDevCLI(
                 # 保存质量门禁报告
                 gate_file = project_dir / "output" / f"{project_name}-quality-gate.md"
                 gate_file.parent.mkdir(parents=True, exist_ok=True)
-                gate_file.write_text(gate_result.to_markdown(), encoding="utf-8")
                 if gate_checker.latest_ui_review_report is not None:
                     ui_review_file = project_dir / "output" / f"{project_name}-ui-review.md"
                     ui_review_json_file = project_dir / "output" / f"{project_name}-ui-review.json"
@@ -3057,6 +3298,8 @@ class SuperDevCLI(
                             output_dir=output_dir,
                             project_name=project_name,
                         )
+                    gate_result = gate_checker.check(redteam_report)
+                gate_file.write_text(gate_result.to_markdown(), encoding="utf-8")
 
                 status = "[green]通过[/green]" if gate_result.passed else "[red]未通过[/red]"
                 self.console.print(f"  {status} 总分: {gate_result.total_score}/100")
@@ -4510,6 +4753,23 @@ class SuperDevCLI(
                     self.console.print(
                         f"    - 流程状态卡: {self._session_brief_path(Path(payload.get('project_dir', Path.cwd())))}"
                     )
+                framework_playbook = host.get("framework_playbook", {})
+                if isinstance(framework_playbook, dict) and framework_playbook:
+                    self.console.print(
+                        f"  跨平台框架专项: {framework_playbook.get('framework', '跨平台框架')}"
+                    )
+                    native_capabilities = framework_playbook.get("native_capabilities", [])
+                    if isinstance(native_capabilities, list) and native_capabilities:
+                        self.console.print(
+                            "    - 原生能力面: "
+                            + "；".join(str(item) for item in native_capabilities[:3])
+                        )
+                    validation_surfaces = framework_playbook.get("validation_surfaces", [])
+                    if isinstance(validation_surfaces, list) and validation_surfaces:
+                        self.console.print(
+                            "    - 必验场景: "
+                            + "；".join(str(item) for item in validation_surfaces[:3])
+                        )
                 if host.get("blocking_reason"):
                     self.console.print(f"  阻塞原因: {host.get('blocking_reason')}")
                 if host.get("recommended_action"):
@@ -4603,6 +4863,7 @@ class SuperDevCLI(
         "knowledge",
         "memory",
         "hooks",
+        "harness",
         "experts",
         "compact",
         "enforce",

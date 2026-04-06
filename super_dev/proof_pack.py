@@ -16,6 +16,11 @@ from pathlib import Path
 from typing import Any
 
 from .analyzer import FeatureChecklistBuilder
+from .framework_harness import FrameworkHarnessBuilder
+from .frameworks import framework_playbook_complete, is_cross_platform_frontend
+from .harness_registry import derive_operational_focus
+from .hook_harness import HookHarnessBuilder
+from .operational_harness import OperationalHarnessBuilder
 from .release_readiness import ReleaseReadinessEvaluator
 from .review_state import (
     load_architecture_revision,
@@ -25,6 +30,7 @@ from .review_state import (
 )
 from .reviewers.redteam import load_redteam_evidence
 from .specs import SpecValidator
+from .workflow_harness import WorkflowHarnessBuilder
 
 _logger = logging.getLogger("super_dev.proof_pack")
 
@@ -86,6 +92,10 @@ class ProofPackReport:
             "Task Execution",
             "UI Contract",
             "UI Contract Alignment",
+            "Operational Harness",
+            "Framework Harness",
+            "Hook Audit Trail",
+            "Workflow Continuity",
             "Frontend Runtime",
             "UI Review",
             "Delivery Manifest",
@@ -119,10 +129,47 @@ class ProofPackReport:
             actions.append("先完成 UI 改版闭环：更新 UIUX 文档、重做前端、重新执行 frontend runtime 与 UI review。")
         ui_contract = artifact_names.get("UI Contract")
         if ui_contract and ui_contract.status != "ready":
-            actions.append("先补齐并冻结 output/*-ui-contract.json，确认 UI 库选择、字体、图标系统和 design tokens 已写成正式契约。")
+            required_sections = (
+                ui_contract.details.get("required_sections", {})
+                if isinstance(ui_contract.details, dict)
+                else {}
+            )
+            if isinstance(required_sections, dict) and required_sections.get("framework_playbook") is False:
+                actions.append(
+                    "先补齐并冻结 output/*-ui-contract.json 中的跨平台框架 playbook，确认 implementation modules、native capabilities、validation surfaces 与 delivery evidence 已写成正式契约。"
+                )
+            else:
+                actions.append("先补齐并冻结 output/*-ui-contract.json，确认 UI 库选择、字体、图标系统和 design tokens 已写成正式契约。")
         ui_contract_alignment = artifact_names.get("UI Contract Alignment")
         if ui_contract_alignment and ui_contract_alignment.status != "ready":
             actions.append("重新执行 `super-dev review ui` 或 quality gate，补齐 output/*-ui-contract-alignment.json，确认源码已接入冻结后的图标、字体、组件生态和 design tokens。")
+        framework_harness = artifact_names.get("Framework Harness")
+        if framework_harness and framework_harness.status != "ready":
+            actions.append("补齐跨平台 framework harness：确认 framework playbook 已冻结，frontend runtime 已证明专项执行完成，并重新生成 framework harness 证据。")
+        operational_harness = artifact_names.get("Operational Harness")
+        if operational_harness and operational_harness.status != "ready":
+            focus = (
+                operational_harness.details.get("operational_focus")
+                if isinstance(operational_harness.details, dict)
+                else {}
+            )
+            if not isinstance(focus, dict):
+                focus = (
+                    operational_harness.details.get("focus", {})
+                    if isinstance(operational_harness.details, dict)
+                    else {}
+                )
+            focus_action = str(focus.get("recommended_action", "")).strip()
+            if focus_action:
+                actions.append(focus_action)
+            else:
+                actions.append("补齐 operational harness：确认 workflow / framework / hook 三类 harness 都已生成并通过，再重新生成 proof-pack。")
+        hook_audit = artifact_names.get("Hook Audit Trail")
+        if hook_audit and hook_audit.status != "ready":
+            actions.append("检查最近 hook 审计历史，修复失败/阻断的 hook 命令后重新执行相关阶段并重新生成 proof-pack。")
+        workflow_continuity = artifact_names.get("Workflow Continuity")
+        if workflow_continuity and workflow_continuity.status != "ready":
+            actions.append("补齐 workflow continuity：确认 .super-dev/workflow-state.json、workflow-history 快照和 workflow-events.jsonl 都已落盘，再重新生成 proof-pack。")
         quality_revision = artifact_names.get("Quality Revision State")
         if quality_revision and quality_revision.status != "ready":
             actions.append("先修复质量返工项并确认 quality review 状态，再重新生成交付证据。")
@@ -163,21 +210,49 @@ class ProofPackReport:
         return [a for a in self.artifacts if a.name in governance_names]
 
     @property
+    def operational_harnesses(self) -> list[ProofPackArtifact]:
+        harness_names = {
+            "Operational Harness",
+            "Framework Harness",
+            "Hook Audit Trail",
+            "Workflow Continuity",
+        }
+        return [artifact for artifact in self.artifacts if artifact.name in harness_names]
+
+    @property
     def executive_summary(self) -> str:
         gov = self.governance_artifacts
         gov_text = ""
         if gov:
             gov_text = f"治理证据 {len(gov)} 项已纳入（" + "、".join(a.name for a in gov) + "）。"
+        harnesses = self.operational_harnesses
+        harness_text = ""
+        if harnesses:
+            harness_text = (
+                f"运行时/恢复类 harness {len(harnesses)} 项已纳入（"
+                + "、".join(a.name for a in harnesses)
+                + "）。"
+            )
+        operational_focus_text = ""
+        operational_harness = next((a for a in harnesses if a.name == "Operational Harness"), None)
+        if operational_harness and isinstance(operational_harness.details, dict):
+            focus = operational_harness.details.get("operational_focus")
+            if not isinstance(focus, dict):
+                focus = operational_harness.details.get("focus", {})
+            if isinstance(focus, dict):
+                focus_summary = str(focus.get("summary", "")).strip()
+                if focus_summary:
+                    operational_focus_text = f"当前治理焦点：{focus_summary}。"
         if self.status == "ready":
             return (
                 f"当前交付证据包已完成，{self.ready_count}/{self.total_count} 项关键证据就绪，"
-                f"可以作为当前 run 的正式交付证明。{gov_text}"
+                f"可以作为当前 run 的正式交付证明。{gov_text}{harness_text}{operational_focus_text}"
             )
         missing = [artifact.name for artifact in self.blockers[:3]]
         missing_text = "、".join(missing) if missing else "关键交付证据"
         return (
             f"当前交付证据包尚未完成，已就绪 {self.ready_count}/{self.total_count} 项。"
-            f"优先补齐：{missing_text}。{gov_text}"
+            f"优先补齐：{missing_text}。{gov_text}{harness_text}{operational_focus_text}"
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -239,6 +314,29 @@ class ProofPackReport:
         )
         for artifact in self.key_artifacts:
             lines.append(f"- **{artifact.name}**: {artifact.summary} ({artifact.status})")
+        harnesses = self.operational_harnesses
+        if harnesses:
+            lines.extend(
+                [
+                    "",
+                    "## Operational Harnesses",
+                    "",
+                ]
+            )
+            for artifact in harnesses:
+                lines.append(f"- **{artifact.name}**: {artifact.summary} ({artifact.status})")
+            operational_harness = next((a for a in harnesses if a.name == "Operational Harness"), None)
+            if operational_harness and isinstance(operational_harness.details, dict):
+                focus = operational_harness.details.get("operational_focus")
+                if not isinstance(focus, dict):
+                    focus = operational_harness.details.get("focus", {})
+                if isinstance(focus, dict):
+                    focus_summary = str(focus.get("summary", "")).strip()
+                    focus_action = str(focus.get("recommended_action", "")).strip()
+                    if focus_summary:
+                        lines.append(f"- 当前治理焦点: {focus_summary}")
+                    if focus_action:
+                        lines.append(f"- 建议先做: {focus_action}")
         gov = self.governance_artifacts
         if gov:
             lines.extend(
@@ -267,6 +365,7 @@ class ProofPackReport:
         return "\n".join(lines)
 
     def to_executive_markdown(self) -> str:
+        artifact_names = {artifact.name: artifact for artifact in self.artifacts}
         lines = [
             "# Delivery Evidence Pack Summary",
             "",
@@ -288,6 +387,44 @@ class ProofPackReport:
         lines.extend(["", "## Recommended Next Actions", ""])
         for action in self.next_actions:
             lines.append(f"- {action}")
+        operational_artifacts = [
+            artifact_names.get("Operational Harness"),
+            artifact_names.get("Workflow Continuity"),
+            artifact_names.get("Framework Harness"),
+            artifact_names.get("Hook Audit Trail"),
+        ]
+        visible_operational = [item for item in operational_artifacts if item is not None]
+        if visible_operational:
+            lines.extend(["", "## Operational Continuity", ""])
+            for artifact in visible_operational:
+                lines.append(
+                    f"- **{artifact.name}**: {artifact.summary} ({artifact.status})"
+                )
+            operational_harness = artifact_names.get("Operational Harness")
+            if operational_harness is not None and isinstance(operational_harness.details, dict):
+                focus = operational_harness.details.get("operational_focus")
+                if not isinstance(focus, dict):
+                    focus = operational_harness.details.get("focus", {})
+                if isinstance(focus, dict):
+                    focus_summary = str(focus.get("summary", "")).strip()
+                    focus_action = str(focus.get("recommended_action", "")).strip()
+                    if focus_summary:
+                        lines.append(f"- Current operational focus: {focus_summary}")
+                    if focus_action:
+                        lines.append(f"- Do first: {focus_action}")
+            workflow_artifact = artifact_names.get("Workflow Continuity")
+            if workflow_artifact is not None:
+                details = workflow_artifact.details if isinstance(workflow_artifact.details, dict) else {}
+                recent_timeline = details.get("recent_timeline")
+                if isinstance(recent_timeline, list) and recent_timeline:
+                    lines.extend(["", "## Recent Operational Timeline", ""])
+                    for item in recent_timeline[:5]:
+                        if not isinstance(item, dict):
+                            continue
+                        timestamp = str(item.get("timestamp", "")).strip() or "-"
+                        title = str(item.get("title", "")).strip() or str(item.get("kind", "")).strip()
+                        message = str(item.get("message", "")).strip() or "-"
+                        lines.append(f"- {timestamp} · {title} · {message}")
         lines.append("")
         return "\n".join(lines)
 
@@ -322,6 +459,8 @@ class ProofPackBuilder:
                 self._ui_contract_alignment_artifact(),
                 self._redteam_artifact(),
                 self._task_execution_artifact(),
+                self._operational_harness_artifact(),
+                self._workflow_continuity_artifact(),
                 self._frontend_runtime_artifact(),
                 self._ui_review_artifact(),
                 self._quality_gate_artifact(),
@@ -330,6 +469,12 @@ class ProofPackBuilder:
                 self._release_readiness_artifact(verify_tests=verify_tests),
             ]
         )
+        framework_harness = self._framework_harness_artifact()
+        if framework_harness is not None:
+            report.artifacts.append(framework_harness)
+        hook_audit = self._hook_audit_artifact()
+        if hook_audit is not None:
+            report.artifacts.append(hook_audit)
 
         # 新增：治理证据（增量添加，文件不存在则跳过）
         report.artifacts.extend(self._governance_artifacts())
@@ -571,15 +716,23 @@ class ProofPackBuilder:
         checks = payload.get("checks", {}) if isinstance(payload, dict) else {}
         passed = bool(payload.get("passed", False)) if isinstance(payload, dict) else False
         contract_aligned = not isinstance(checks, dict) or (
-            bool(checks.get("ui_contract_json", False)) and bool(checks.get("output_frontend_design_tokens", False))
+            bool(checks.get("ui_contract_json", False))
+            and bool(checks.get("output_frontend_design_tokens", False))
+            and bool(checks.get("ui_contract_alignment", False))
+            and bool(checks.get("ui_theme_entry", False))
+            and bool(checks.get("ui_navigation_shell", False))
+            and bool(checks.get("ui_component_imports", False))
+            and bool(checks.get("ui_banned_patterns", False))
+            and bool(checks.get("ui_framework_playbook", True))
+            and bool(checks.get("ui_framework_execution", True))
         )
         return ProofPackArtifact(
             name="Frontend Runtime",
             status="ready" if passed and contract_aligned else "pending",
             summary=(
-                "frontend runtime passed and UI contract tokens are wired"
+                "frontend runtime passed and UI contract / framework playbook are wired"
                 if passed and contract_aligned
-                else "frontend runtime not passed or UI contract assets are missing"
+                else "frontend runtime not passed or UI contract / framework evidence is incomplete"
             ),
             path=str(file_path),
             details=payload if isinstance(payload, dict) else {},
@@ -608,6 +761,10 @@ class ProofPackBuilder:
             )
         component_stack = payload.get("component_stack", {}) if isinstance(payload.get("component_stack"), dict) else {}
         emoji_policy = payload.get("emoji_policy") if isinstance(payload.get("emoji_policy"), dict) else {}
+        analysis = payload.get("analysis", {}) if isinstance(payload.get("analysis"), dict) else {}
+        frontend_value = str(analysis.get("frontend") or "").lower().strip()
+        cross_platform_frontend = is_cross_platform_frontend(frontend_value)
+        framework_playbook = payload.get("framework_playbook") if isinstance(payload.get("framework_playbook"), dict) else {}
         icon_system = payload.get("icon_system") or component_stack.get("icon") or component_stack.get("icons") or ""
         required_sections = {
             "style_direction": bool(payload.get("style_direction")),
@@ -626,12 +783,26 @@ class ProofPackBuilder:
             and bool(payload.get("ui_library_preference")),
             "design_tokens": isinstance(payload.get("design_tokens"), dict) and bool(payload.get("design_tokens")),
         }
+        if cross_platform_frontend:
+            required_sections["framework_playbook"] = framework_playbook_complete(framework_playbook)
         ready = all(required_sections.values())
-        summary = (
-            "UI contract frozen with style, typography, icon system, emoji policy, library preference and design tokens"
-            if ready
-            else "UI contract missing required frozen decision sections"
-        )
+        if ready:
+            if cross_platform_frontend:
+                summary = (
+                    f"UI contract frozen with {framework_playbook.get('framework', 'cross-platform')} playbook, style, typography, icon system, emoji policy and design tokens"
+                )
+            else:
+                summary = (
+                    "UI contract frozen with style, typography, icon system, emoji policy, library preference and design tokens"
+                )
+        else:
+            missing_sections = [name for name, present in required_sections.items() if not present]
+            if cross_platform_frontend and "framework_playbook" in missing_sections:
+                summary = (
+                    f"UI contract missing {frontend_value or 'cross-platform'} framework playbook sections"
+                )
+            else:
+                summary = "UI contract missing required frozen decision sections"
         return ProofPackArtifact(
             name="UI Contract",
             status="ready" if ready else "pending",
@@ -681,6 +852,79 @@ class ProofPackBuilder:
             details=payload,
         )
 
+    def _framework_harness_artifact(self) -> ProofPackArtifact | None:
+        builder = FrameworkHarnessBuilder(self.project_dir)
+        report = builder.build()
+        if not report.enabled:
+            return None
+        report_files = builder.write(report)
+        summary = (
+            f"{report.framework} framework harness verified across playbook, runtime execution and alignment"
+            if report.passed
+            else (
+                f"{report.framework} framework harness gaps: "
+                + "；".join(report.blockers[:3])
+            )
+        )
+        return ProofPackArtifact(
+            name="Framework Harness",
+            status="ready" if report.passed else "pending",
+            summary=summary,
+            path=str(report_files["json"]),
+            details={
+                "markdown": str(report_files["markdown"]),
+                "checks": report.checks,
+                "next_actions": report.next_actions,
+                "framework": report.framework,
+            },
+        )
+
+    def _operational_harness_artifact(self) -> ProofPackArtifact:
+        builder = OperationalHarnessBuilder(self.project_dir)
+        report = builder.build()
+        report_files = builder.write(report)
+        focus = derive_operational_focus(self.project_dir)
+        summary = (
+            f"operational harness verified across {report.passed_count}/{report.enabled_count} enabled harnesses"
+            if report.passed
+            else str(focus.get("summary", "")).strip()
+            or "operational harness contains workflow / framework / hook blockers"
+        )
+        return ProofPackArtifact(
+            name="Operational Harness",
+            status="ready" if report.passed else "pending",
+            summary=summary,
+            path=str(report_files["json"]),
+            details={
+                "markdown": str(report_files["markdown"]),
+                "operational_focus": focus,
+                "focus": focus,
+                **report.to_dict(),
+            },
+        )
+
+    def _hook_audit_artifact(self) -> ProofPackArtifact | None:
+        builder = HookHarnessBuilder(self.project_dir)
+        report = builder.build()
+        if not report.enabled:
+            return None
+        report_files = builder.write(report)
+        summary = (
+            f"recent hook execution history is clean across {report.total_events} recorded events"
+            if report.passed
+            else "hook execution history contains failed or blocked events"
+        )
+        return ProofPackArtifact(
+            name="Hook Audit Trail",
+            status="ready" if report.passed else "pending",
+            summary=summary,
+            path=str(report_files["json"]),
+            details={
+                "markdown": str(report_files["markdown"]),
+                **report.to_dict(),
+            },
+        )
+
     def _redteam_artifact(self) -> ProofPackArtifact:
         evidence = load_redteam_evidence(self.project_dir, self.project_name)
         if evidence is None:
@@ -721,6 +965,33 @@ class ProofPackBuilder:
             details={
                 "has_validation_summary": has_validation,
                 "has_delivery_self_review": has_self_review,
+            },
+        )
+
+    def _workflow_continuity_artifact(self) -> ProofPackArtifact:
+        builder = WorkflowHarnessBuilder(self.project_dir)
+        report = builder.build()
+        if not report.enabled:
+            return ProofPackArtifact(
+                name="Workflow Continuity",
+                status="ready",
+                summary="no active workflow continuity trail recorded",
+                details=report.to_dict(),
+            )
+        report_files = builder.write(report)
+        summary = (
+            f"workflow continuity trail captured at {report.updated_at or 'unknown'} · {report.current_step_label or report.workflow_status or 'unknown'}"
+            if report.passed
+            else "workflow continuity trail is incomplete"
+        )
+        return ProofPackArtifact(
+            name="Workflow Continuity",
+            status="ready" if report.passed else "pending",
+            summary=summary,
+            path=str(report_files["json"]),
+            details={
+                "markdown": str(report_files["markdown"]),
+                **report.to_dict(),
             },
         )
 

@@ -119,7 +119,7 @@ class TestDeliveryPackagerInit:
 
     def test_default_version(self, tmp_path):
         packager = DeliveryPackager(tmp_path, "test")
-        assert packager.version == "2.3.1"
+        assert packager.version == "2.3.2"
 
     def test_custom_version(self, tmp_path):
         packager = DeliveryPackager(tmp_path, "test", version="3.0.0")

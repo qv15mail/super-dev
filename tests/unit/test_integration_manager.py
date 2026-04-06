@@ -118,6 +118,31 @@ class TestIntegrationManager:
         assert any(item.endswith("/.codex/skills/super-dev/SKILL.md") for item in normalized)
         assert any(item.endswith("/.codex/skills/super-dev-core/SKILL.md") for item in normalized)
 
+    def test_readiness_surface_sets_distinguish_official_optional_and_compatibility(self, temp_project_dir: Path):
+        manager = IntegrationManager(temp_project_dir)
+
+        claude_sets = manager.readiness_surface_sets(target="claude-code", skill_name="super-dev-core")
+        claude_optional = {path.as_posix() for path in claude_sets["optional_project"]}
+        claude_required_slash = {path.as_posix() for path in claude_sets["required_slash"]}
+        claude_optional_slash = {path.as_posix() for path in claude_sets["optional_slash"]}
+        claude_official_skill = {path.as_posix() for path in claude_sets["official_skill"]}
+        claude_compat_skill = {path.as_posix() for path in claude_sets["compatibility_skill"]}
+        assert any(item.endswith("/CLAUDE.md") for item in {path.as_posix() for path in claude_sets["official_project"]})
+        assert any(item.endswith("/.claude/skills/super-dev/SKILL.md") for item in claude_official_skill)
+        assert any(item.endswith("/.claude/commands/super-dev.md") for item in claude_optional)
+        assert not claude_required_slash
+        assert any(item.endswith("/.claude/commands/super-dev.md") for item in claude_optional_slash)
+        assert any(item.endswith("/.claude/skills/super-dev-core/SKILL.md") for item in claude_compat_skill)
+
+        codex_sets = manager.readiness_surface_sets(target="codex-cli", skill_name="super-dev-core")
+        codex_required_slash = {path.as_posix() for path in codex_sets["required_slash"]}
+        codex_official_skill = {path.as_posix() for path in codex_sets["official_skill"]}
+        codex_compat_skill = {path.as_posix() for path in codex_sets["compatibility_skill"]}
+        assert not codex_required_slash
+        assert any(item.endswith("/.agents/skills/super-dev/SKILL.md") for item in codex_official_skill)
+        assert any(item.endswith("/.agents/skills/super-dev-core/SKILL.md") for item in codex_compat_skill)
+        assert any(item.endswith("/.codex/skills/super-dev/SKILL.md") for item in codex_compat_skill)
+
     def test_adapter_profiles_cover_all_targets(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)
         profiles = manager.list_adapter_profiles()
@@ -161,10 +186,10 @@ class TestIntegrationManager:
         assert codex.host_protocol_summary == "官方 AGENTS.md + 官方 Skills + optional repo plugin enhancement"
         assert codex.capability_labels["slash"] == "skill-list"
         assert ".agents/skills/super-dev/SKILL.md" in codex.official_project_surfaces
-        assert ".agents/plugins/marketplace.json" in codex.official_project_surfaces
-        assert "plugins/super-dev-codex/.codex-plugin/plugin.json" in codex.official_project_surfaces
         assert "~/.codex/AGENTS.md" in codex.official_user_surfaces
         assert "~/.agents/skills/super-dev/SKILL.md" in codex.official_user_surfaces
+        assert ".agents/plugins/marketplace.json" in codex.optional_project_surfaces
+        assert "plugins/super-dev-codex/.codex-plugin/plugin.json" in codex.optional_project_surfaces
         assert "~/.agents/skills/super-dev-core/SKILL.md" in codex.observed_compatibility_surfaces
         assert "~/.codex/skills/super-dev/SKILL.md" in codex.observed_compatibility_surfaces
         assert "~/.codex/skills/super-dev-core/SKILL.md" in codex.observed_compatibility_surfaces
@@ -175,28 +200,37 @@ class TestIntegrationManager:
         qoder = by_host["qoder"]
         assert qoder.category == "ide"
         assert qoder.adapter_mode == "native-ide-rule-file"
-        assert qoder.integration_files[0] == ".qoder/rules/super-dev.md"
+        assert qoder.integration_files[0] == "AGENTS.md"
         assert qoder.docs_verified is True
         assert qoder.certification_level == "experimental"
         assert qoder.usage_mode == "native-slash"
         assert qoder.slash_command_file == ".qoder/commands/super-dev.md"
+        assert "AGENTS.md" in qoder.official_project_surfaces
         assert ".qoder/rules/super-dev.md" in qoder.official_project_surfaces
+        assert "~/.qoder/AGENTS.md" in qoder.official_user_surfaces
         assert "~/.qoder/commands/super-dev.md" in qoder.official_user_surfaces
         assert "~/.qoder/skills/super-dev-core/SKILL.md" in qoder.official_user_surfaces
         assert ".qoder/skills/super-dev-core/SKILL.md" in qoder.official_project_surfaces
-        assert "AGENTS.md" in qoder.observed_compatibility_surfaces
+        assert qoder.observed_compatibility_surfaces == []
 
         codebuddy = by_host["codebuddy"]
         assert codebuddy.host_protocol_mode == "official-subagent"
-        assert codebuddy.host_protocol_summary == "官方 commands + agents + skills"
+        assert codebuddy.host_protocol_summary == "官方 CODEBUDDY.md + rules + commands + agents + skills"
+        assert "CODEBUDDY.md" in codebuddy.integration_files
+        assert ".codebuddy/rules/super-dev/RULE.mdc" in codebuddy.integration_files
+        assert "CODEBUDDY.md" in codebuddy.official_project_surfaces
+        assert ".codebuddy/rules/super-dev/RULE.mdc" in codebuddy.official_project_surfaces
         assert ".codebuddy/agents/super-dev-core.md" in codebuddy.integration_files
-        assert ".codebuddy/agents/super-dev-core.md" in codebuddy.official_project_surfaces
+        assert "~/.codebuddy/CODEBUDDY.md" in codebuddy.official_user_surfaces
         assert "~/.codebuddy/agents/super-dev-core.md" in codebuddy.official_user_surfaces
         assert "~/.codebuddy/skills/super-dev-core/SKILL.md" in codebuddy.official_user_surfaces
-        assert ".codebuddy/rules.md" in codebuddy.observed_compatibility_surfaces
+        assert ".codebuddy/AGENTS.md" in codebuddy.observed_compatibility_surfaces
 
         codebuddy_cli = by_host["codebuddy-cli"]
-        assert codebuddy_cli.host_protocol_summary == "官方 commands + skills + AGENTS.md compatibility"
+        assert codebuddy_cli.host_protocol_summary == "官方 CODEBUDDY.md + commands + skills + AGENTS.md compatibility"
+        assert "CODEBUDDY.md" in codebuddy_cli.integration_files
+        assert "CODEBUDDY.md" in codebuddy_cli.official_project_surfaces
+        assert "~/.codebuddy/CODEBUDDY.md" in codebuddy_cli.official_user_surfaces
         assert ".codebuddy/skills/super-dev-core/SKILL.md" in codebuddy_cli.integration_files
         assert ".codebuddy/skills/super-dev-core/SKILL.md" in codebuddy_cli.official_project_surfaces
         assert ".codebuddy/AGENTS.md" in codebuddy_cli.observed_compatibility_surfaces
@@ -205,15 +239,15 @@ class TestIntegrationManager:
         assert claude.host_protocol_mode == "official-skill"
         assert claude.host_protocol_summary == "官方 CLAUDE.md + Skills + optional repo plugin enhancement"
         assert "CLAUDE.md" in claude.official_project_surfaces
-        assert ".claude/CLAUDE.md" in claude.official_project_surfaces
         assert ".claude/skills/super-dev/SKILL.md" in claude.official_project_surfaces
-        assert ".claude/agents/super-dev-core.md" in claude.official_project_surfaces
-        assert ".claude/commands/super-dev.md" in claude.official_project_surfaces
-        assert ".claude-plugin/marketplace.json" in claude.official_project_surfaces
-        assert "plugins/super-dev-claude/.claude-plugin/plugin.json" in claude.official_project_surfaces
         assert "~/.claude/CLAUDE.md" in claude.official_user_surfaces
         assert "~/.claude/skills/super-dev/SKILL.md" in claude.official_user_surfaces
-        assert "~/.claude/commands/super-dev.md" in claude.official_user_surfaces
+        assert ".claude/CLAUDE.md" in claude.optional_project_surfaces
+        assert ".claude/agents/super-dev-core.md" in claude.optional_project_surfaces
+        assert ".claude/commands/super-dev.md" in claude.optional_project_surfaces
+        assert ".claude-plugin/marketplace.json" in claude.optional_project_surfaces
+        assert "plugins/super-dev-claude/.claude-plugin/plugin.json" in claude.optional_project_surfaces
+        assert "~/.claude/commands/super-dev.md" in claude.optional_user_surfaces
         assert "~/.claude/skills/super-dev-core/SKILL.md" in claude.observed_compatibility_surfaces
         assert "~/.claude/agents/super-dev-core.md" in claude.observed_compatibility_surfaces
         assert claude.skill_dir.startswith("~/.claude/skills")
@@ -239,16 +273,22 @@ class TestIntegrationManager:
 
         kiro_cli = by_host["kiro-cli"]
         assert kiro_cli.host_protocol_mode == "official-steering"
-        assert kiro_cli.host_protocol_summary == "官方 steering + skills"
+        assert kiro_cli.host_protocol_summary == "官方 steering + slash entry + skills"
+        assert kiro_cli.usage_mode == "native-slash"
+        assert kiro_cli.trigger_command == '/super-dev "<需求描述>"'
         assert ".kiro/steering/super-dev.md" in kiro_cli.official_project_surfaces
         assert ".kiro/skills/super-dev-core/SKILL.md" in kiro_cli.official_project_surfaces
+        assert "~/.kiro/steering/super-dev.md" in kiro_cli.official_user_surfaces
         assert "~/.kiro/skills/super-dev-core/SKILL.md" in kiro_cli.official_user_surfaces
 
         kiro = by_host["kiro"]
         assert kiro.host_protocol_mode == "official-steering"
+        assert kiro.host_protocol_summary == "官方 steering + slash entry + skills"
+        assert kiro.usage_mode == "native-slash"
         assert ".kiro/steering/super-dev.md" in kiro.official_project_surfaces
-        assert "~/.kiro/steering/AGENTS.md" in kiro.official_user_surfaces
+        assert "~/.kiro/steering/super-dev.md" in kiro.official_user_surfaces
         assert "~/.kiro/skills/super-dev-core/SKILL.md" in kiro.official_user_surfaces
+        assert "~/.kiro/steering/AGENTS.md" in kiro.observed_compatibility_surfaces
 
         roo = by_host["roo-code"]
         assert roo.host_protocol_mode == "official-skill"
@@ -381,11 +421,13 @@ class TestIntegrationManager:
         manager = IntegrationManager(temp_project_dir)
         files = manager.setup("qoder", force=True)
 
-        assert len(files) == 2
+        assert len(files) == 3
+        agents_content = (temp_project_dir / "AGENTS.md").read_text(encoding="utf-8")
         rules_content = (temp_project_dir / ".qoder" / "rules" / "super-dev.md").read_text(encoding="utf-8")
         skill_content = (temp_project_dir / ".qoder" / "skills" / "super-dev-core" / "SKILL.md").read_text(
             encoding="utf-8"
         )
+        assert "Super Dev" in agents_content
         assert "Super Dev" in rules_content
         assert "super-dev：" in skill_content
 
@@ -682,17 +724,17 @@ class TestIntegrationManager:
     def test_skill_only_target_skips_slash_mapping(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)
         assert manager.supports_slash("codex-cli") is False
-        assert manager.supports_slash("kiro-cli") is False
+        assert manager.supports_slash("kiro-cli") is True
         assert manager.setup_slash_command(target="codex-cli", force=True) is None
-        assert manager.setup_slash_command(target="kiro-cli", force=True) is None
+        assert manager.setup_slash_command(target="kiro-cli", force=True) is not None
         assert manager.setup_global_slash_command(target="codex-cli", force=True) is None
-        assert manager.setup_global_slash_command(target="kiro-cli", force=True) is None
-        assert manager.supports_slash("kiro") is False
+        assert manager.setup_global_slash_command(target="kiro-cli", force=True) is not None
+        assert manager.supports_slash("kiro") is True
         assert manager.supports_slash("qoder") is True
         assert manager.supports_slash("trae") is False
         assert manager.supports_slash("antigravity") is True
         assert manager.requires_skill("codebuddy") is True
-        assert manager.setup_slash_command(target="kiro", force=True) is None
+        assert manager.setup_slash_command(target="kiro", force=True) is not None
         assert manager.setup_slash_command(target="qoder", force=True) is not None
         assert manager.setup_slash_command(target="antigravity", force=True) is not None
         assert manager.setup_slash_command(target="trae", force=True) is None
@@ -704,9 +746,12 @@ class TestIntegrationManager:
             ("antigravity", ".gemini/commands/super-dev.md"),
             ("codebuddy", ".codebuddy/commands/super-dev.md"),
             ("cursor", ".cursor/commands/super-dev.md"),
+            ("kiro", ".kiro/steering/super-dev.md"),
+            ("kiro-cli", ".kiro/steering/super-dev.md"),
             ("windsurf", ".windsurf/workflows/super-dev.md"),
             ("gemini-cli", ".gemini/commands/super-dev.md"),
             ("opencode", ".opencode/commands/super-dev.md"),
+            ("qoder", ".qoder/commands/super-dev.md"),
         ],
     )
     def test_verified_hosts_preserve_native_slash_model(

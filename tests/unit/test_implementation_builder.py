@@ -85,6 +85,43 @@ class TestImplementationScaffoldBuilder:
         assert (temp_project_dir / "frontend" / "vite.config.js").exists()
         assert (temp_project_dir / "backend" / "src" / "main.go").exists()
 
+    def test_generate_frontend_framework_playbook_file(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-ui-contract.json").write_text(
+            json.dumps(
+                {
+                    "framework_playbook": {
+                        "framework": "React Native",
+                        "implementation_modules": ["导航、权限、离线缓存先冻结后实现"],
+                        "platform_constraints": ["iOS 与 Android 权限弹窗节奏必须分别验收"],
+                        "execution_guardrails": ["先接原生能力边界，再扩业务组件"],
+                        "native_capabilities": ["push notification / deep link / camera 权限"],
+                        "validation_surfaces": ["iOS 真机导航与 Android 返回栈"],
+                        "delivery_evidence": ["真机截图与权限矩阵"],
+                    }
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        builder = ImplementationScaffoldBuilder(
+            project_dir=temp_project_dir,
+            name="demo",
+            frontend="react",
+            backend="node",
+        )
+
+        result = builder.generate(requirements=[{"spec_name": "mobile", "req_name": "workflow"}])
+
+        assert (temp_project_dir / "frontend" / "FRAMEWORK_PLAYBOOK.md").exists()
+        content = (temp_project_dir / "frontend" / "FRAMEWORK_PLAYBOOK.md").read_text(encoding="utf-8")
+        readme = (temp_project_dir / "frontend" / "README.md").read_text(encoding="utf-8")
+        assert "React Native" in content
+        assert "push notification" in content
+        assert "FRAMEWORK_PLAYBOOK.md" in readme
+        assert any(path.endswith("FRAMEWORK_PLAYBOOK.md") for path in result["frontend_files"])
+
     def test_package_names_are_sanitized(self, temp_project_dir: Path):
         builder = ImplementationScaffoldBuilder(
             project_dir=temp_project_dir,

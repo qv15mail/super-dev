@@ -65,13 +65,23 @@ from super_dev.experts import (
 from super_dev.experts import (
     list_experts as list_expert_catalog,
 )
+from super_dev.framework_harness import FrameworkHarnessBuilder
+from super_dev.harness_registry import (
+    build_operational_harness_payload,
+    derive_operational_focus,
+    summarize_operational_harnesses,
+)
+from super_dev.hook_harness import HookHarnessBuilder
+from super_dev.hooks.manager import HookManager
 from super_dev.integrations.manager import IntegrationManager
+from super_dev.operational_harness import OperationalHarnessBuilder
 from super_dev.orchestrator import Phase, WorkflowContext, WorkflowEngine
 from super_dev.policy import PipelinePolicy, PipelinePolicyManager
 from super_dev.proof_pack import ProofPackBuilder
 from super_dev.release_readiness import ReleaseReadinessEvaluator
 from super_dev.review_state import (
     architecture_revision_file,
+    describe_workflow_event,
     docs_confirmation_file,
     host_runtime_validation_file,
     load_architecture_revision,
@@ -79,6 +89,9 @@ from super_dev.review_state import (
     load_host_runtime_validation,
     load_preview_confirmation,
     load_quality_revision,
+    load_recent_operational_timeline,
+    load_recent_workflow_events,
+    load_recent_workflow_snapshots,
     load_ui_revision,
     preview_confirmation_file,
     quality_revision_file,
@@ -89,14 +102,17 @@ from super_dev.review_state import (
     save_quality_revision,
     save_ui_revision,
     ui_revision_file,
+    workflow_event_log_file,
     workflow_state_file,
 )
 from super_dev.skills import SkillManager
+from super_dev.workflow_harness import WorkflowHarnessBuilder
 from super_dev.workflow_state import (
     build_host_entry_prompts,
     build_host_flow_contract,
     build_host_flow_probe,
     detect_pipeline_summary,
+    load_framework_playbook_summary,
     workflow_continuity_rules,
     workflow_mode_label,
     workflow_mode_shortcuts,
@@ -670,6 +686,8 @@ def _build_host_tool_catalog_payload() -> list[dict[str, Any]]:
                 "integration_files": list(target.files) if target else [],
                 "official_project_surfaces": list(profile.official_project_surfaces),
                 "official_user_surfaces": list(profile.official_user_surfaces),
+                "optional_project_surfaces": list(profile.optional_project_surfaces),
+                "optional_user_surfaces": list(profile.optional_user_surfaces),
                 "observed_compatibility_surfaces": list(profile.observed_compatibility_surfaces),
                 "slash_command_file": (
                     IntegrationManager.SLASH_COMMAND_FILES.get(host_id, "")
@@ -746,7 +764,9 @@ def _explain_detection_details(detected_meta: dict[str, list[str]]) -> dict[str,
     }
 
 
-def _host_runtime_checklist(target: str, usage: dict[str, Any]) -> list[str]:
+def _host_runtime_checklist(
+    target: str, usage: dict[str, Any], project_dir: Path | None = None
+) -> list[str]:
     trigger = str(usage.get("final_trigger", "")).strip() or "-"
     common = [
         f"在宿主中使用最终触发命令进入 Super Dev 流水线：{trigger}",
@@ -755,17 +775,29 @@ def _host_runtime_checklist(target: str, usage: dict[str, Any]) -> list[str]:
         "确认三文档完成后暂停等待用户确认，而不是直接继续实现。",
         "确认文档确认后能继续进入 Spec、前端运行验证、后端与交付阶段。",
     ]
+    if project_dir is not None:
+        framework_playbook = load_framework_playbook_summary(project_dir)
+        if framework_playbook:
+            common.extend(
+                [
+                    f"确认当前项目按 {framework_playbook.get('framework', '跨平台框架')} playbook 执行，而不是按普通 Web 假设实现。",
+                    "确认宿主已落实框架专项原生能力面，而不是只完成通用页面实现。",
+                    "确认宿主已按框架专项必验场景完成真实验证，并沉淀交付证据。",
+                ]
+            )
     overrides = host_runtime_validation_overrides(target)
     return [*overrides.get("runtime_checklist", []), *common]
 
 
-def _host_runtime_pass_criteria(target: str) -> list[str]:
+def _host_runtime_pass_criteria(target: str, project_dir: Path | None = None) -> list[str]:
     common = [
         "首轮响应符合 Super Dev 首轮契约。",
         "关键文档真实落盘到项目目录。",
         "确认门真实生效。",
         "后续恢复路径可用。",
     ]
+    if project_dir is not None and load_framework_playbook_summary(project_dir):
+        common.append("跨平台框架专项能力、必验场景与交付证据均已通过真人验收。")
     overrides = host_runtime_validation_overrides(target)
     return [*overrides.get("pass_criteria", []), *common]
 
@@ -812,12 +844,18 @@ def _build_resume_probe_prompt(project_dir: Path, target: str, usage: dict[str, 
     return f"super-dev: {instruction}"
 
 
-def _host_resume_checklist(target: str) -> list[str]:
+def _host_resume_checklist(target: str, project_dir: Path | None = None) -> list[str]:
     common = [
         "重开宿主或新开会话后，使用恢复探针而不是普通闲聊进入当前流程。",
         "确认宿主先读取 `.super-dev/SESSION_BRIEF.md`，并继续当前流程而不是重新开始。",
         "确认用户继续说“改一下 / 补充 / 继续改 / 确认 / 通过”时，宿主仍然留在当前 Super Dev 流程内。",
     ]
+    if project_dir is not None:
+        framework_playbook = load_framework_playbook_summary(project_dir)
+        if framework_playbook:
+            common.append(
+                f"恢复后继续实现或返工时，仍然遵守 {framework_playbook.get('framework', '跨平台框架')} 的专项 playbook。"
+            )
     overrides = host_runtime_validation_overrides(target)
     return [*overrides.get("resume_checklist", []), *common]
 
@@ -888,6 +926,14 @@ def _build_session_resume_card(
         str((project_dir / ".super-dev" / "SESSION_BRIEF.md").resolve()) if enabled else ""
     )
     workflow_state_path = str(workflow_state_file(project_dir).resolve()) if enabled else ""
+    framework_playbook = load_framework_playbook_summary(project_dir) if enabled else {}
+    recent_snapshots = load_recent_workflow_snapshots(project_dir, limit=3) if enabled else []
+    recent_events = load_recent_workflow_events(project_dir, limit=3) if enabled else []
+    recent_hook_events = HookManager.load_recent_history(project_dir, limit=3) if enabled else []
+    recent_timeline = load_recent_operational_timeline(project_dir, limit=5) if enabled else []
+    harness_summaries = summarize_operational_harnesses(project_dir, write_reports=False) if enabled else []
+    operational_focus = derive_operational_focus(project_dir) if enabled else {}
+    scenario_cards = list(summary.get("scenario_cards") or []) if enabled else []
     lines = []
     if enabled:
         generic_continue_rule = (
@@ -915,12 +961,78 @@ def _build_session_resume_card(
                 else ""
             ),
         ]
+        if framework_playbook:
+            lines.append(f"框架专项: {framework_playbook.get('framework', '-')}")
+            native = framework_playbook.get("native_capabilities", [])
+            validation = framework_playbook.get("validation_surfaces", [])
+            if native:
+                lines.append(f"原生能力面: {' / '.join(str(item) for item in native[:3])}")
+            if validation:
+                lines.append(f"必验场景: {' / '.join(str(item) for item in validation[:3])}")
+        if recent_snapshots:
+            first = recent_snapshots[0]
+            step = str(first.get("current_step_label", "")).strip() or str(
+                first.get("status", "")
+            ).strip()
+            updated_at = str(first.get("updated_at", "")).strip() or "-"
+            lines.append(f"最近一次: {updated_at} · {step}")
+        if recent_events:
+            latest_event = recent_events[0]
+            event_time = str(latest_event.get("timestamp", "")).strip() or "-"
+            lines.append(f"最近事件: {event_time} · {describe_workflow_event(latest_event)}")
+        if recent_hook_events:
+            latest_hook = recent_hook_events[0]
+            hook_status = (
+                "blocked" if latest_hook.blocked else ("ok" if latest_hook.success else "failed")
+            )
+            lines.append(
+                f"最近 Hook: {latest_hook.timestamp} · {latest_hook.event} / {latest_hook.phase or '-'} / {latest_hook.hook_name} / {hook_status}"
+            )
+        if recent_timeline:
+            latest_timeline = recent_timeline[0]
+            timeline_time = str(latest_timeline.get("timestamp", "")).strip() or "-"
+            timeline_title = str(latest_timeline.get("title", "")).strip() or str(
+                latest_timeline.get("kind", "")
+            ).strip()
+            timeline_message = str(latest_timeline.get("message", "")).strip() or "-"
+            lines.append(f"关键时间线: {timeline_time} · {timeline_title} · {timeline_message}")
+        if harness_summaries:
+            for item in harness_summaries[:3]:
+                label = str(item.get("label", "")).strip() or str(item.get("kind", "")).strip()
+                status = "pass" if item.get("passed") else "fail"
+                line = f"{label}: {status}"
+                blocker = str(item.get("first_blocker", "")).strip()
+                if blocker:
+                    line += f" · {blocker}"
+                lines.append(line)
+        focus_summary = str(operational_focus.get("summary", "")).strip()
+        focus_action = str(operational_focus.get("recommended_action", "")).strip()
+        if focus_summary:
+            lines.append(f"当前治理焦点: {focus_summary}")
+        if focus_action:
+            lines.append(f"建议先做: {focus_action}")
         if user_action_shortcuts:
             lines.insert(2, f"你现在可以直接说: {' / '.join(user_action_shortcuts[:4])}")
         if action_examples:
             lines.insert(
                 3 if user_action_shortcuts else 2, f"自然语言示例: {', '.join(action_examples[:3])}"
             )
+        if scenario_cards:
+            insert_at = (
+                4
+                if user_action_shortcuts and action_examples
+                else 3 if (user_action_shortcuts or action_examples) else 2
+            )
+            scenario_lines = []
+            for item in scenario_cards[:4]:
+                if not isinstance(item, dict):
+                    continue
+                title = str(item.get("title", "")).strip()
+                command = str(item.get("cli_command", "")).strip()
+                if title and command:
+                    scenario_lines.append(f"真实场景: {title} -> {command}")
+            for offset, line in enumerate(scenario_lines):
+                lines.insert(insert_at + offset, line)
         if recommended_workflow_command:
             lines.append(f"机器侧动作: {recommended_workflow_command}")
         lines = [line for line in lines if line]
@@ -932,11 +1044,21 @@ def _build_session_resume_card(
         "entry_prompts": entry_prompts if enabled else {},
         "session_brief_path": session_brief_path,
         "workflow_state_path": workflow_state_path,
+        "workflow_event_log_path": str(workflow_event_log_file(project_dir).resolve()) if enabled else "",
+        "hook_history_path": str(HookManager.hook_history_file(project_dir).resolve()) if enabled else "",
+        "framework_playbook": framework_playbook if enabled else {},
+        "operational_harnesses": harness_summaries if enabled else [],
+        "operational_focus": operational_focus if enabled else {},
+        "recent_snapshots": recent_snapshots if enabled else [],
+        "recent_events": recent_events if enabled else [],
+        "recent_hook_events": [item.to_dict() for item in recent_hook_events] if enabled else [],
+        "recent_timeline": recent_timeline if enabled else [],
         "workflow_mode": workflow_mode if enabled else "",
         "workflow_mode_label": workflow_mode_display if enabled else "",
         "action_title": action_title if enabled else "",
         "action_examples": action_examples if enabled else [],
         "user_action_shortcuts": user_action_shortcuts if enabled else [],
+        "scenario_cards": scenario_cards if enabled else [],
         "rules": (
             [
                 generic_continue_rule,
@@ -1224,8 +1346,6 @@ def _collect_host_diagnostics(
     check_slash: bool,
 ) -> dict[str, Any]:
     integration_manager = IntegrationManager(project_dir)
-    integration_targets = IntegrationManager.TARGETS
-    skill_manager = SkillManager(project_dir)
 
     report: dict[str, Any] = {"hosts": {}, "overall_ready": True}
     for target in targets:
@@ -1233,18 +1353,30 @@ def _collect_host_diagnostics(
             "ready": True,
             "checks": {},
             "missing": [],
+            "optional_missing": [],
             "suggestions": [],
         }
+        surface_groups = integration_manager.readiness_surface_sets(
+            target=target,
+            skill_name=skill_name,
+        )
+        surface_classification = integration_manager.managed_surface_classification(
+            target=target,
+            skill_name=skill_name,
+        )
 
         surface_audit: dict[str, dict[str, Any]] = {}
         for surface_key, surface_path in integration_manager.collect_managed_surface_paths(
             target=target,
             skill_name=skill_name,
         ).items():
+            surface_meta = surface_classification.get(surface_key, {})
             exists = surface_path.exists()
             audit_entry: dict[str, Any] = {
                 "path": str(surface_path),
                 "exists": exists,
+                "group": str(surface_meta.get("group", "unclassified")),
+                "required": bool(surface_meta.get("required", False)),
                 "missing_markers": [],
             }
             if exists:
@@ -1262,32 +1394,39 @@ def _collect_host_diagnostics(
                     )
             surface_audit[surface_key] = audit_entry
 
-        invalid_surfaces = {
+        invalid_required_surfaces = {
             key: value
             for key, value in surface_audit.items()
-            if value.get("exists") and value.get("missing_markers")
+            if value.get("exists") and value.get("required") and value.get("missing_markers")
+        }
+        invalid_optional_surfaces = {
+            key: value
+            for key, value in surface_audit.items()
+            if value.get("exists")
+            and not value.get("required")
+            and value.get("missing_markers")
         }
         host_report["checks"]["contract"] = {
-            "ok": not invalid_surfaces,
+            "ok": not invalid_required_surfaces,
             "surfaces": surface_audit,
-            "invalid_surfaces": invalid_surfaces,
+            "invalid_surfaces": invalid_required_surfaces,
+            "invalid_optional_surfaces": invalid_optional_surfaces,
         }
-        if invalid_surfaces:
+        if invalid_required_surfaces:
             host_report["ready"] = False
             host_report["missing"].append("contract")
             host_report["suggestions"].append(f"super-dev onboard --host {target} --force --yes")
+        if invalid_optional_surfaces:
+            host_report["optional_missing"].append("contract_optional_surfaces")
 
         if check_integrate:
-            integration_target = integration_targets.get(target)
-            integrate_files = (
-                [project_dir / item for item in integration_target.files]
-                if integration_target
-                else []
-            )
+            integrate_files = surface_groups["official_project"]
+            optional_integrate_files = surface_groups["optional_project"]
             integrate_ok = all(path.exists() for path in integrate_files)
             host_report["checks"]["integrate"] = {
                 "ok": integrate_ok,
                 "files": [str(item) for item in integrate_files],
+                "optional_files": [str(item) for item in optional_integrate_files],
             }
             if not integrate_ok:
                 host_report["ready"] = False
@@ -1295,22 +1434,40 @@ def _collect_host_diagnostics(
                 host_report["suggestions"].append(
                     f"super-dev integrate setup --target {target} --force"
                 )
+            user_surface_files = surface_groups["official_user"]
+            optional_user_surface_files = surface_groups["optional_user"]
+            user_surfaces_ok = all(path.exists() for path in user_surface_files)
+            host_report["checks"]["user_surfaces"] = {
+                "ok": user_surfaces_ok,
+                "files": [str(item) for item in user_surface_files],
+                "optional_files": [str(item) for item in optional_user_surface_files],
+            }
+            if user_surface_files and not user_surfaces_ok:
+                host_report["ready"] = False
+                host_report["missing"].append("user_surfaces")
+                host_report["suggestions"].append(
+                    f"super-dev onboard --host {target} --force --yes"
+                )
 
         if check_skill and IntegrationManager.requires_skill(target):
-            skill_root = (
-                skill_manager._target_dir(target) if target in SkillManager.TARGET_PATHS else None
-            )
-            skill_file = skill_root / skill_name / "SKILL.md" if skill_root else None
+            skill_files = surface_groups["official_skill"]
+            optional_skill_files = surface_groups["optional_skill"]
+            compatibility_skill_files = surface_groups["compatibility_skill"]
+            all_skill_files = skill_files or optional_skill_files or compatibility_skill_files
+            skill_file = all_skill_files[0] if all_skill_files else None
             skill_path = str(skill_file) if skill_file else ""
-            surface_available = (
-                skill_manager.skill_surface_available(target) if skill_file else False
-            )
-            skill_ok = skill_file.exists() if (skill_file and surface_available) else True
+            surface_available = bool(skill_files)
+            skill_ok = all(path.exists() for path in skill_files) if surface_available else True
             host_report["checks"]["skill"] = {
                 "ok": skill_ok,
                 "file": skill_path,
+                "files": [str(item) for item in skill_files] if skill_files else ([skill_path] if skill_path else []),
+                "optional_files": [str(item) for item in optional_skill_files],
+                "compatibility_files": [str(item) for item in compatibility_skill_files],
                 "surface_available": surface_available,
-                "mode": "managed" if surface_available else "compatibility-surface-unavailable",
+                "mode": "official-project-and-user-skill-surface"
+                if surface_available
+                else "compatibility-surface-unavailable",
             }
             if surface_available and not skill_ok:
                 host_report["ready"] = False
@@ -1329,14 +1486,11 @@ def _collect_host_diagnostics(
                 "ok": plugin_ok,
                 "marketplace_file": str(plugin_marketplace),
                 "plugin_manifest": str(plugin_manifest),
-                "mode": "repo-marketplace-plugin",
+                "mode": "repo-marketplace-plugin-enhancement",
+                "required": False,
             }
             if not plugin_ok:
-                host_report["ready"] = False
-                host_report["missing"].append("plugin_enhancement")
-                host_report["suggestions"].append(
-                    f"super-dev onboard --host {target} --force --yes"
-                )
+                host_report["optional_missing"].append("plugin_enhancement")
         if target == "claude-code":
             plugin_marketplace = project_dir / ".claude-plugin" / "marketplace.json"
             plugin_manifest = (
@@ -1347,37 +1501,45 @@ def _collect_host_diagnostics(
                 "ok": plugin_ok,
                 "marketplace_file": str(plugin_marketplace),
                 "plugin_manifest": str(plugin_manifest),
-                "mode": "repo-marketplace-plugin",
+                "mode": "repo-marketplace-plugin-enhancement",
+                "required": False,
             }
             if not plugin_ok:
-                host_report["ready"] = False
-                host_report["missing"].append("plugin_enhancement")
-                host_report["suggestions"].append(
-                    f"super-dev onboard --host {target} --force --yes"
-                )
+                host_report["optional_missing"].append("plugin_enhancement")
 
         if check_slash:
-            if IntegrationManager.supports_slash(target):
-                project_slash_file = IntegrationManager.resolve_slash_command_path(
-                    target=target,
-                    scope="project",
-                    project_dir=project_dir,
+            required_slash_files = surface_groups["required_slash"]
+            optional_slash_files = surface_groups["optional_slash"]
+            compatibility_slash_files = surface_groups["compatibility_slash"]
+            tracked_slash_files = required_slash_files or optional_slash_files or compatibility_slash_files
+            if tracked_slash_files:
+                project_slash_file = next(
+                    (path for path in tracked_slash_files if str(path).startswith(str(project_dir))),
+                    None,
                 )
-                global_slash_file = IntegrationManager.resolve_slash_command_path(
-                    target=target,
-                    scope="global",
+                global_slash_file = next(
+                    (path for path in tracked_slash_files if not str(path).startswith(str(project_dir))),
+                    None,
                 )
-                project_ok = project_slash_file.exists() if project_slash_file else False
-                global_ok = global_slash_file.exists() if global_slash_file else False
-                slash_ok = project_ok or global_ok
-                scope = "project" if project_ok else ("global" if global_ok else "missing")
+                project_ok = bool(project_slash_file and project_slash_file.exists())
+                global_ok = bool(global_slash_file and global_slash_file.exists())
+                slash_ok = all(path.exists() for path in required_slash_files) if required_slash_files else True
+                if required_slash_files:
+                    scope = "project" if project_ok else ("global" if global_ok else "missing")
+                elif project_ok or global_ok:
+                    scope = "optional"
+                else:
+                    scope = "not-required"
                 host_report["checks"]["slash"] = {
                     "ok": slash_ok,
                     "scope": scope,
                     "project_file": str(project_slash_file) if project_slash_file else "",
                     "global_file": str(global_slash_file) if global_slash_file else "",
+                    "required_files": [str(item) for item in required_slash_files],
+                    "optional_files": [str(item) for item in optional_slash_files],
+                    "compatibility_files": [str(item) for item in compatibility_slash_files],
                 }
-                if not slash_ok:
+                if required_slash_files and not slash_ok:
                     host_report["ready"] = False
                     host_report["missing"].append("slash")
                     host_report["suggestions"].append(
@@ -1447,6 +1609,8 @@ def _serialize_host_usage_profile(
         "host_protocol_summary": profile.host_protocol_summary,
         "official_project_surfaces": list(profile.official_project_surfaces),
         "official_user_surfaces": list(profile.official_user_surfaces),
+        "optional_project_surfaces": list(profile.optional_project_surfaces),
+        "optional_user_surfaces": list(profile.optional_user_surfaces),
         "observed_compatibility_surfaces": list(profile.observed_compatibility_surfaces),
         "usage_mode": profile.usage_mode,
         "primary_entry": profile.primary_entry,
@@ -1632,11 +1796,16 @@ def _build_host_runtime_validation_payload(
                 ),
                 "smoke_test_prompt": usage.get("smoke_test_prompt", ""),
                 "smoke_success_signal": usage.get("smoke_success_signal", ""),
-                "runtime_checklist": _host_runtime_checklist(target, usage),
-                "pass_criteria": _host_runtime_pass_criteria(target),
+                "runtime_checklist": _host_runtime_checklist(
+                    target, usage, project_dir=project_dir
+                ),
+                "pass_criteria": _host_runtime_pass_criteria(
+                    target, project_dir=project_dir
+                ),
                 "flow_probe": build_host_flow_probe(target),
                 "resume_probe_prompt": _build_resume_probe_prompt(project_dir, target, usage),
-                "resume_checklist": _host_resume_checklist(target),
+                "resume_checklist": _host_resume_checklist(target, project_dir=project_dir),
+                "framework_playbook": load_framework_playbook_summary(project_dir),
             }
         )
 
@@ -3620,6 +3789,97 @@ async def get_release_proof_pack(
     return payload
 
 
+@app.get("/api/governance/workflow-harness")
+async def get_workflow_harness(project_dir: str = ".") -> dict[str, Any]:
+    project_dir_path = _validate_project_dir(project_dir)
+    builder = WorkflowHarnessBuilder(project_dir_path)
+    report = builder.build()
+    files = builder.write(report)
+    payload = report.to_dict()
+    payload["report_file"] = str(files["markdown"])
+    payload["json_file"] = str(files["json"])
+    return payload
+
+
+@app.get("/api/governance/harnesses")
+async def get_operational_harnesses(
+    project_dir: str = ".",
+    hook_limit: int = 20,
+) -> dict[str, Any]:
+    project_dir_path = _validate_project_dir(project_dir)
+    builder = OperationalHarnessBuilder(project_dir_path)
+    report = builder.build(hook_limit=max(hook_limit, 1))
+    files = builder.write(report)
+    payload = build_operational_harness_payload(
+        project_dir_path,
+        hook_limit=max(hook_limit, 1),
+        write_reports=True,
+    )
+    payload["enabled"] = report.enabled
+    payload["passed"] = report.passed
+    payload["enabled_count"] = report.enabled_count
+    payload["passed_count"] = report.passed_count
+    payload["blockers"] = list(report.blockers)
+    payload["next_actions"] = list(report.next_actions)
+    payload["recent_timeline"] = list(report.recent_timeline)
+    payload["report_file"] = str(files["markdown"])
+    payload["json_file"] = str(files["json"])
+    return payload
+
+
+@app.get("/api/governance/operational-harness")
+async def get_operational_harness(
+    project_dir: str = ".",
+    hook_limit: int = 20,
+) -> dict[str, Any]:
+    project_dir_path = _validate_project_dir(project_dir)
+    builder = OperationalHarnessBuilder(project_dir_path)
+    report = builder.build(hook_limit=max(hook_limit, 1))
+    files = builder.write(report)
+    payload = report.to_dict()
+    payload["report_file"] = str(files["markdown"])
+    payload["json_file"] = str(files["json"])
+    return payload
+
+
+@app.get("/api/governance/timeline")
+async def get_operational_timeline(
+    project_dir: str = ".",
+    limit: int = 10,
+) -> dict[str, Any]:
+    project_dir_path = _validate_project_dir(project_dir)
+    timeline = load_recent_operational_timeline(project_dir_path, limit=max(limit, 1))
+    return {
+        "project_dir": str(project_dir_path),
+        "count": len(timeline),
+        "timeline": timeline,
+    }
+
+
+@app.get("/api/governance/framework-harness")
+async def get_framework_harness(project_dir: str = ".") -> dict[str, Any]:
+    project_dir_path = _validate_project_dir(project_dir)
+    builder = FrameworkHarnessBuilder(project_dir_path)
+    report = builder.build()
+    files = builder.write(report)
+    payload = report.to_dict()
+    payload["report_file"] = str(files["markdown"])
+    payload["json_file"] = str(files["json"])
+    return payload
+
+
+@app.get("/api/governance/hook-harness")
+async def get_hook_harness(project_dir: str = ".", limit: int = 20) -> dict[str, Any]:
+    project_dir_path = _validate_project_dir(project_dir)
+    builder = HookHarnessBuilder(project_dir_path)
+    report = builder.build(limit=max(limit, 1))
+    files = builder.write(report)
+    payload = report.to_dict()
+    payload["report_file"] = str(files["markdown"])
+    payload["json_file"] = str(files["json"])
+    return payload
+
+
 @app.get("/api/analyze/repo-map")
 async def get_repo_map(project_dir: str = ".") -> dict[str, Any]:
     project_dir_path = _validate_project_dir(project_dir)
@@ -3821,6 +4081,24 @@ async def list_hooks(project_dir: str = ".") -> dict[str, Any]:
         hook_mgr = HookManager.from_yaml_config(yaml_config, project_dir=project_dir_path)
         configured = hook_mgr.list_configured_hooks()
         return {"status": "success", "data": configured}
+    except ImportError:
+        raise HTTPException(status_code=501, detail="hooks module not available")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/hooks/history")
+async def get_hook_history(project_dir: str = ".", limit: int = 20) -> dict[str, Any]:
+    """Return recent persisted hook execution history."""
+    try:
+        from super_dev.hooks.manager import HookManager
+
+        project_dir_path = _validate_project_dir(project_dir)
+        results = HookManager.load_recent_history(project_dir_path, limit=max(limit, 1))
+        return {
+            "status": "success",
+            "data": [result.to_dict() for result in results],
+        }
     except ImportError:
         raise HTTPException(status_code=501, detail="hooks module not available")
     except Exception as exc:

@@ -83,17 +83,17 @@ super-dev skill install super-dev --target opencode --name super-dev-core --forc
 | claude-code | `CLAUDE.md` + `.claude/CLAUDE.md` + `.claude/skills/super-dev/SKILL.md` + `.claude-plugin/marketplace.json`（可选 repo plugin 增强） |
 | codex-cli | `AGENTS.md` + `.agents/skills/super-dev/SKILL.md` + `CODEX_HOME/AGENTS.md`（默认 `~/.codex/AGENTS.md`） |
 | gemini-cli | `GEMINI.md` |
-| kiro-cli | `.kiro/steering/super-dev.md` + `.kiro/skills/super-dev-core/SKILL.md` |
+| kiro-cli | `.kiro/steering/super-dev.md` + `.kiro/skills/super-dev-core/SKILL.md` + `~/.kiro/steering/super-dev.md` |
 | cursor-cli | `.cursor/rules/super-dev.mdc` |
-| qoder-cli | `.qoder/rules/super-dev.md` + `.qoder/commands/super-dev.md` + `.qoder/skills/super-dev-core/SKILL.md` |
-| codebuddy-cli | `.codebuddy/commands/super-dev.md` + `.codebuddy/agents/super-dev-core.md` |
+| qoder-cli | `AGENTS.md` + `.qoder/rules/super-dev.md` + `.qoder/commands/super-dev.md` + `.qoder/skills/super-dev-core/SKILL.md` |
+| codebuddy-cli | `CODEBUDDY.md` + `.codebuddy/commands/super-dev.md` + `.codebuddy/skills/super-dev-core/SKILL.md` |
 | opencode | `AGENTS.md` + `.opencode/commands/super-dev.md` |
-| qoder | `.qoder/rules/super-dev.md` + `.qoder/commands/super-dev.md` + `.qoder/skills/super-dev-core/SKILL.md` |
+| qoder | `AGENTS.md` + `.qoder/rules/super-dev.md` + `.qoder/commands/super-dev.md` + `.qoder/skills/super-dev-core/SKILL.md` |
 | antigravity | `GEMINI.md` + `.gemini/commands/super-dev.md` + `.agent/workflows/super-dev.md` |
 | cursor | `.cursor/rules/super-dev.mdc` |
 | windsurf | `.windsurf/rules.md` + `.windsurf/workflows/super-dev.md` |
-| kiro | `.kiro/steering/super-dev.md` + `.kiro/skills/super-dev-core/SKILL.md` |
-| codebuddy | `.codebuddy/commands/super-dev.md` + `.codebuddy/agents/super-dev-core.md` |
+| kiro | `.kiro/steering/super-dev.md` + `.kiro/skills/super-dev-core/SKILL.md` + `~/.kiro/steering/super-dev.md` |
+| codebuddy | `CODEBUDDY.md` + `.codebuddy/rules/super-dev/RULE.mdc` + `.codebuddy/commands/super-dev.md` + `.codebuddy/agents/super-dev-core.md` |
 | trae | `.trae/project_rules.md` + `.trae/rules.md` |
 | vscode-copilot | `.github/copilot-instructions.md` + `AGENTS.md` |
 

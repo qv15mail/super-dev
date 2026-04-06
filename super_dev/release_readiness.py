@@ -20,7 +20,18 @@ from typing import Any
 from . import __version__
 from .analyzer import FeatureChecklistBuilder
 from .catalogs import HOST_TOOL_IDS
+from .framework_harness import FrameworkHarnessBuilder
+from .frameworks import framework_playbook_complete, is_cross_platform_frontend
+from .harness_registry import derive_operational_focus
+from .hooks.manager import HookManager
 from .integrations import IntegrationManager
+from .operational_harness import OperationalHarnessBuilder
+from .review_state import (
+    load_recent_operational_timeline,
+    load_recent_workflow_events,
+    load_recent_workflow_snapshots,
+    load_workflow_state,
+)
 from .reviewers.redteam import load_redteam_evidence
 from .skills import SkillManager
 from .specs import SpecValidator
@@ -50,6 +61,8 @@ class ReleaseReadinessReport:
     generated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     threshold: int = 85
     checks: list[ReleaseReadinessCheck] = field(default_factory=list)
+    recent_timeline: list[dict[str, Any]] = field(default_factory=list)
+    operational_focus: dict[str, Any] = field(default_factory=dict)
 
     def _weight(self, severity: str) -> int:
         mapping = {"critical": 4, "high": 3, "medium": 2, "low": 1}
@@ -81,6 +94,8 @@ class ReleaseReadinessReport:
             "threshold": self.threshold,
             "failed_checks": [item.name for item in self.failed_checks],
             "checks": [item.to_dict() for item in self.checks],
+            "recent_timeline": list(self.recent_timeline),
+            "operational_focus": dict(self.operational_focus),
         }
 
     def to_markdown(self) -> str:
@@ -120,6 +135,39 @@ class ReleaseReadinessReport:
             for gc in governance_checks:
                 marker = "PASS" if gc.passed else "FAIL"
                 lines.append(f"| {gc.name} | {marker} | {gc.detail} |")
+            lines.append("")
+
+        operational_checks = [
+            c
+            for c in self.checks
+            if c.name in {"Workflow Recovery Trail", "Framework Harness Trail", "Hook Audit Trail", "Operational Harness Trail"}
+        ]
+        if operational_checks:
+            lines.append("## Operational Continuity")
+            lines.append("")
+            lines.append("| Check | Result | Detail |")
+            lines.append("|:---|:---:|:---|")
+            for oc in operational_checks:
+                marker = "PASS" if oc.passed else "FAIL"
+                lines.append(f"| {oc.name} | {marker} | {oc.detail} |")
+            lines.append("")
+        focus_summary = str(self.operational_focus.get("summary", "")).strip()
+        focus_action = str(self.operational_focus.get("recommended_action", "")).strip()
+        if focus_summary:
+            lines.append("## Current Governance Focus")
+            lines.append("")
+            lines.append(f"- {focus_summary}")
+            if focus_action:
+                lines.append(f"- 建议先做: {focus_action}")
+            lines.append("")
+        if self.recent_timeline:
+            lines.append("## Recent Operational Timeline")
+            lines.append("")
+            for item in self.recent_timeline:
+                timestamp = str(item.get("timestamp", "")).strip() or "-"
+                title = str(item.get("title", "")).strip() or str(item.get("kind", "")).strip()
+                message = str(item.get("message", "")).strip() or "-"
+                lines.append(f"- {timestamp} · {title} · {message}")
             lines.append("")
 
         return "\n".join(lines)
@@ -166,6 +214,8 @@ class ReleaseReadinessEvaluator:
 
     def evaluate(self, verify_tests: bool = False) -> ReleaseReadinessReport:
         report = ReleaseReadinessReport(project_name=self.project_dir.name)
+        report.recent_timeline = load_recent_operational_timeline(self.project_dir, limit=5)
+        report.operational_focus = derive_operational_focus(self.project_dir)
         report.checks.extend(
             [
                 self._check_version_alignment(),
@@ -178,6 +228,10 @@ class ReleaseReadinessEvaluator:
                 self._check_spec_quality(),
                 self._check_scope_coverage(),
                 self._check_delivery_closure(),
+                self._check_workflow_recovery_trail(),
+                self._check_framework_harness_trail(),
+                self._check_hook_audit_trail(),
+                self._check_operational_harness_trail(),
             ]
         )
         # 治理能力检查（增量添加，不影响现有逻辑）
@@ -502,6 +556,18 @@ class ReleaseReadinessEvaluator:
                         if isinstance(ui_contract_payload.get("emoji_policy"), dict)
                         else {}
                     )
+                    analysis = (
+                        ui_contract_payload.get("analysis", {})
+                        if isinstance(ui_contract_payload.get("analysis"), dict)
+                        else {}
+                    )
+                    frontend_value = str(analysis.get("frontend") or "").lower().strip()
+                    cross_platform_frontend = is_cross_platform_frontend(frontend_value)
+                    framework_playbook = (
+                        ui_contract_payload.get("framework_playbook")
+                        if isinstance(ui_contract_payload.get("framework_playbook"), dict)
+                        else {}
+                    )
                     icon_system = (
                         ui_contract_payload.get("icon_system")
                         or component_stack.get("icon")
@@ -528,8 +594,17 @@ class ReleaseReadinessEvaluator:
                         isinstance(ui_contract_payload.get("design_tokens"), dict)
                         and bool(ui_contract_payload.get("design_tokens")),
                     )
+                    if cross_platform_frontend:
+                        framework_name = str(framework_playbook.get("framework") or frontend_value or "cross-platform").strip()
+                        required_sections = (
+                            *required_sections,
+                            framework_playbook_complete(framework_playbook),
+                        )
                     if not all(required_sections):
-                        blockers.append("ui contract incomplete")
+                        if cross_platform_frontend:
+                            blockers.append(f"{framework_name} ui contract playbook incomplete")
+                        else:
+                            blockers.append("ui contract incomplete")
 
         if not design_tokens_file.exists():
             blockers.append("design tokens missing")
@@ -549,6 +624,8 @@ class ReleaseReadinessEvaluator:
                     "ui_navigation_shell",
                     "ui_component_imports",
                     "ui_banned_patterns",
+                    "ui_framework_playbook",
+                    "ui_framework_execution",
                 )
                 runtime_ready = (
                     isinstance(frontend_runtime_payload, dict)
@@ -559,7 +636,13 @@ class ReleaseReadinessEvaluator:
                     and all(bool(checks.get(name, True)) for name in key_ui_checks)
                 )
                 if not runtime_ready:
-                    blockers.append("frontend runtime ui contract alignment missing")
+                    if cross_platform_frontend:
+                        framework_name = str(framework_playbook.get("framework") or frontend_value or "cross-platform").strip()
+                        blockers.append(
+                            f"{framework_name} frontend runtime framework execution missing"
+                        )
+                    else:
+                        blockers.append("frontend runtime ui contract alignment missing")
 
         passed = not blockers
         detail = "delivery closure evidence aligned" if passed else "; ".join(blockers)
@@ -571,6 +654,130 @@ class ReleaseReadinessEvaluator:
             recommendation=(
                 "先补齐 redteam / quality gate / task execution / product audit / ui contract / frontend runtime 证据，并确保它们指向同一轮交付。"
             ),
+        )
+
+    def _check_workflow_recovery_trail(self) -> ReleaseReadinessCheck:
+        state_payload = load_workflow_state(self.project_dir)
+        recent_snapshots = load_recent_workflow_snapshots(self.project_dir, limit=3)
+        recent_events = load_recent_workflow_events(self.project_dir, limit=5)
+
+        if state_payload is None and not recent_snapshots:
+            return ReleaseReadinessCheck(
+                name="Workflow Recovery Trail",
+                passed=True,
+                detail="no active workflow recovery trail recorded",
+                severity="low",
+                recommendation="如当前发布来自活跃 Super Dev 流程，建议补齐 workflow-state、history snapshots 与 workflow events。",
+            )
+
+        status = str((state_payload or {}).get("status", "") or (state_payload or {}).get("workflow_status", "")).strip()
+        current_step = str((state_payload or {}).get("current_step_label", "")).strip()
+        passed = state_payload is not None and bool(recent_snapshots) and bool(recent_events)
+        detail = (
+            f"status={status or 'unknown'}, step={current_step or 'unknown'}, snapshots={len(recent_snapshots)}, events={len(recent_events)}"
+            if passed
+            else f"workflow recovery trail incomplete: state={'yes' if state_payload is not None else 'no'}, snapshots={len(recent_snapshots)}, events={len(recent_events)}"
+        )
+        return ReleaseReadinessCheck(
+            name="Workflow Recovery Trail",
+            passed=passed,
+            detail=detail,
+            severity="medium" if not passed else "low",
+            recommendation="补齐 .super-dev/workflow-state.json、workflow-history 快照和 workflow-events.jsonl，确保关窗、断开和次日恢复有正式证据。",
+        )
+
+    def _check_hook_audit_trail(self) -> ReleaseReadinessCheck:
+        history = HookManager.load_recent_history(self.project_dir, limit=20)
+        if not history:
+            return ReleaseReadinessCheck(
+                name="Hook Audit Trail",
+                passed=True,
+                detail="no hook execution history recorded",
+                severity="low",
+                recommendation="如项目启用了 hooks，建议在关键阶段执行后保留 hook 审计历史。",
+            )
+
+        blocked = [item for item in history if item.blocked]
+        failed = [item for item in history if not item.success]
+        passed = not blocked and not failed
+        if passed:
+            detail = f"recent hook history clean across {len(history)} events"
+        elif blocked:
+            detail = f"recent hook history contains {len(blocked)} blocked events"
+        else:
+            detail = f"recent hook history contains {len(failed)} failed events"
+        return ReleaseReadinessCheck(
+            name="Hook Audit Trail",
+            passed=passed,
+            detail=detail,
+            severity="medium" if not passed else "low",
+            recommendation="检查 .super-dev/hook-history.jsonl 中最近的失败或阻断 hook，修复命令或放宽 blocking 策略后再重试。",
+        )
+
+    def _check_framework_harness_trail(self) -> ReleaseReadinessCheck:
+        harness = FrameworkHarnessBuilder(self.project_dir).build()
+        if not harness.enabled:
+            return ReleaseReadinessCheck(
+                name="Framework Harness Trail",
+                passed=True,
+                detail="no cross-platform framework harness required",
+                severity="low",
+                recommendation="如项目属于 uni-app / Taro / RN / Flutter / Desktop Shell，建议保留 framework harness 证据。",
+            )
+
+        passed = harness.passed
+        blocker_count = len(harness.blockers)
+        detail = (
+            f"{harness.framework or 'framework'} harness clean"
+            if passed
+            else f"{harness.framework or 'framework'} harness has {blocker_count} blockers"
+        )
+        recommendation = (
+            harness.next_actions[0]
+            if harness.next_actions
+            else "补齐 framework playbook、alignment 与 frontend runtime 的专项执行证据。"
+        )
+        return ReleaseReadinessCheck(
+            name="Framework Harness Trail",
+            passed=passed,
+            detail=detail,
+            severity="medium" if not passed else "low",
+            recommendation=recommendation,
+        )
+
+    def _check_operational_harness_trail(self) -> ReleaseReadinessCheck:
+        harness = OperationalHarnessBuilder(self.project_dir).build()
+        focus = derive_operational_focus(self.project_dir)
+        if not harness.enabled:
+            return ReleaseReadinessCheck(
+                name="Operational Harness Trail",
+                passed=True,
+                detail="no operational harness evidence required",
+                severity="low",
+                recommendation="如当前 run 依赖 workflow / framework / hook harness，建议保留统一 operational harness 证据。",
+            )
+
+        passed = harness.passed
+        detail = (
+            f"operational harness clean across {harness.passed_count}/{harness.enabled_count} enabled harnesses"
+            if passed
+            else str(focus.get("summary", "")).strip()
+            or f"operational harness has {len(harness.blockers)} blockers across {harness.enabled_count} enabled harnesses"
+        )
+        recommendation = (
+            str(focus.get("recommended_action", "")).strip()
+            or (
+                harness.next_actions[0]
+                if harness.next_actions
+                else "补齐 workflow / framework / hook harness 后重新生成 operational harness。"
+            )
+        )
+        return ReleaseReadinessCheck(
+            name="Operational Harness Trail",
+            passed=passed,
+            detail=detail,
+            severity="medium" if not passed else "low",
+            recommendation=recommendation,
         )
 
     def _check_governance_artifacts(self) -> list[ReleaseReadinessCheck]:

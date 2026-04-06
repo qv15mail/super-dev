@@ -20,6 +20,7 @@ import yaml  # type: ignore[import-untyped]
 from defusedxml import ElementTree
 
 from ..config import ConfigManager
+from ..frameworks import framework_playbook_complete, is_cross_platform_frontend
 from .redteam import RedTeamReport
 from .validation_rules import ValidationRuleEngine
 
@@ -1386,8 +1387,16 @@ class QualityGateChecker:
             if isinstance(payload.get("component_stack"), dict)
             else {}
         )
+        analysis = payload.get("analysis", {}) if isinstance(payload.get("analysis"), dict) else {}
+        frontend_value = str(analysis.get("frontend") or "").lower().strip()
+        cross_platform_frontend = is_cross_platform_frontend(frontend_value)
         emoji_policy = (
             payload.get("emoji_policy") if isinstance(payload.get("emoji_policy"), dict) else {}
+        )
+        framework_playbook = (
+            payload.get("framework_playbook")
+            if isinstance(payload.get("framework_playbook"), dict)
+            else {}
         )
         icon_system = (
             payload.get("icon_system")
@@ -1416,8 +1425,26 @@ class QualityGateChecker:
             "design_tokens": isinstance(payload.get("design_tokens"), dict)
             and bool(payload.get("design_tokens")),
         }
+        if cross_platform_frontend:
+            required_sections["framework_playbook"] = framework_playbook_complete(framework_playbook)
         missing_sections = [name for name, present in required_sections.items() if not present]
         if missing_sections:
+            if cross_platform_frontend and "framework_playbook" in missing_sections:
+                framework_name = str(
+                    framework_playbook.get("framework") or frontend_value or "cross-platform"
+                ).strip()
+                return QualityCheck(
+                    name="UI 契约执行",
+                    category="ui_quality",
+                    description="UI 契约、Design Token 与运行时验证闭环",
+                    status=CheckStatus.FAILED,
+                    score=30,
+                    weight=self.CHECKS_CONFIG["ui_quality"]["weight"],
+                    details=(
+                        f"{framework_name} 跨平台框架 playbook 缺少冻结字段: "
+                        + ", ".join(missing_sections)
+                    ),
+                )
             return QualityCheck(
                 name="UI 契约执行",
                 category="ui_quality",
@@ -1440,6 +1467,16 @@ class QualityGateChecker:
             )
 
         if not runtime_path.exists():
+            if frontend_dir.exists():
+                return QualityCheck(
+                    name="UI 契约执行",
+                    category="ui_quality",
+                    description="UI 契约、Design Token 与运行时验证闭环",
+                    status=CheckStatus.FAILED,
+                    score=35,
+                    weight=self.CHECKS_CONFIG["ui_quality"]["weight"],
+                    details="前端产物已生成，但 frontend runtime 报告缺失，无法证明运行时已接入",
+                )
             warning_score = 75 if self.is_zero_to_one else 55
             return QualityCheck(
                 name="UI 契约执行",
@@ -1452,6 +1489,16 @@ class QualityGateChecker:
             )
 
         if not alignment_path.exists():
+            if frontend_dir.exists():
+                return QualityCheck(
+                    name="UI 契约执行",
+                    category="ui_quality",
+                    description="UI 契约、Design Token 与运行时验证闭环",
+                    status=CheckStatus.FAILED,
+                    score=35,
+                    weight=self.CHECKS_CONFIG["ui_quality"]["weight"],
+                    details="前端产物和 runtime 已存在，但 UI 契约对齐报告缺失，无法证明源码已真正遵守 UI 契约",
+                )
             warning_score = 80 if self.is_zero_to_one else 60
             return QualityCheck(
                 name="UI 契约执行",
@@ -1493,8 +1540,30 @@ class QualityGateChecker:
             and bool(runtime_payload.get("passed", False))
             and bool(checks.get("ui_contract_json", False))
             and bool(checks.get("output_frontend_design_tokens", False))
+            and bool(checks.get("ui_contract_alignment", False))
+            and bool(checks.get("ui_theme_entry", False))
+            and bool(checks.get("ui_navigation_shell", False))
+            and bool(checks.get("ui_component_imports", False))
+            and bool(checks.get("ui_banned_patterns", False))
+            and bool(checks.get("ui_framework_playbook", True))
+            and bool(checks.get("ui_framework_execution", True))
         )
         if not runtime_ready:
+            if cross_platform_frontend:
+                framework_name = str(
+                    framework_playbook.get("framework") or frontend_value or "cross-platform"
+                ).strip()
+                return QualityCheck(
+                    name="UI 契约执行",
+                    category="ui_quality",
+                    description="UI 契约、Design Token 与运行时验证闭环",
+                    status=CheckStatus.FAILED,
+                    score=35,
+                    weight=self.CHECKS_CONFIG["ui_quality"]["weight"],
+                    details=(
+                        f"frontend runtime 未证明 {framework_name} 跨平台框架 playbook 与专项执行已真实接入前端"
+                    ),
+                )
             return QualityCheck(
                 name="UI 契约执行",
                 category="ui_quality",
@@ -1502,7 +1571,7 @@ class QualityGateChecker:
                 status=CheckStatus.FAILED,
                 score=35,
                 weight=self.CHECKS_CONFIG["ui_quality"]["weight"],
-                details="frontend runtime 未证明 UI 契约文件和 Design Token 已真实接入前端",
+                details="frontend runtime 未证明 UI 契约文件、Design Token 与跨平台框架 playbook 已真实接入前端",
             )
 
         library = payload.get("ui_library_preference", {}).get("final_selected", "-")

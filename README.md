@@ -19,7 +19,7 @@
 
 ## 版本
 
-当前版本：`2.3.1`
+当前版本：`2.3.2`
 
 ---
 
@@ -179,6 +179,10 @@ super-dev knowledge evolve            # 知识权重自演化
 | `super-dev memory list` | 查看项目记忆 |
 | `super-dev memory consolidate` | 触发记忆整合 |
 | `super-dev hooks list` | 查看已配置的 hooks |
+| `super-dev hooks history` | 查看最近 hook 执行历史 |
+| `super-dev harness status` | 汇总查看 workflow / framework / hook harness 状态，并显示最近关键时间线 |
+| `super-dev harness operational` | 查看统一 operational harness 报告，并直接给出当前治理焦点与建议先做 |
+| `super-dev harness timeline` | 查看 workflow 快照、语义事件与 hook 事件合并后的统一时间线 |
 | `super-dev experts list` | 查看可用专家 |
 | `super-dev compact list` | 查看上下文压缩摘要 |
 | `super-dev generate scaffold` | 生成项目脚手架 |
@@ -263,6 +267,7 @@ UI/UX 文档不再只是建议，而是会冻结成一份真正的 UI 契约：
 - **适配 0-1 与 1-N+1**：新建项目走完整流水线，已有项目走增量分析路径
 - **继续当前流程路由**：`super-dev resume` / `super-dev continue` / `super-dev next` / `start --json` / `doctor --json` 都共享同一套 workflow state 与 action card
 - **恢复状态卡**：`.super-dev/SESSION_BRIEF.md` 和 `.super-dev/workflow-state.json` 会沉淀“当前动作 / 宿主第一句 / 机器侧动作 / 连续性规则”
+- **关键时间线**：流程快照、语义事件、Hook 事件会汇总成统一的 recent timeline，进入 `SESSION_BRIEF`、Workflow Harness、proof-pack 与 release readiness
 - **返工优先级**：文档确认门、预览确认门、UI 改版、架构返工、质量整改都进入统一状态机，不再靠用户记命令
 
 ### 4. 文档生成引擎
@@ -425,13 +430,13 @@ super-dev
 ### 3. 指定版本安装
 
 ```bash
-pip install super-dev==2.3.1
+pip install super-dev==2.3.2
 ```
 
 ### 4. GitHub 指定标签安装
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.3.1
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.3.2
 ```
 
 ### 5. 源码开发安装
@@ -602,7 +607,7 @@ super-dev bootstrap --name my-project --platform web --frontend next --backend n
 
 ## 架构概览
 
-Super Dev 2.3.1 架构由四层组成：**宿主接入层**（20 个统一接入宿主 + 1 个 OpenClaw 手动插件宿主）、**知识治理层**（306 索引 / 渐进式加载 / 自演化）、**编排引擎层**（9 阶段流水线 / 11 专家 / 验证规则引擎）、**交付审计层**（DORA 度量 / ADR / 一致性检测 / proof-pack）。
+Super Dev 2.3.2 架构由四层组成：**宿主接入层**（20 个统一接入宿主 + 1 个 OpenClaw 手动插件宿主）、**知识治理层**（306 索引 / 渐进式加载 / 自演化）、**编排引擎层**（9 阶段流水线 / 11 专家 / 验证规则引擎）、**交付审计层**（DORA 度量 / ADR / 一致性检测 / proof-pack）。
 
 ### 一、系统高阶流转架构
 
@@ -639,7 +644,7 @@ Super Dev 2.3.1 架构由四层组成：**宿主接入层**（20 个统一接入
 | Codex | App/Desktop: `/super-dev`（skill 入口） / CLI: `$super-dev` / 回退: `super-dev: 需求` | `super-dev onboard --host codex-cli` |
 | Gemini CLI | `/super-dev 需求` | `super-dev onboard --host gemini-cli` |
 | OpenCode | `/super-dev 需求` | `super-dev onboard --host opencode` |
-| Kiro CLI | `super-dev: 需求` | `super-dev onboard --host kiro-cli` |
+| Kiro CLI | `/super-dev 需求` | `super-dev onboard --host kiro-cli` |
 | Cursor CLI | `/super-dev 需求` | `super-dev onboard --host cursor-cli` |
 | Qoder CLI | `/super-dev 需求` | `super-dev onboard --host qoder-cli` |
 | Copilot CLI | `super-dev: 需求` | `super-dev onboard --host copilot-cli` |
@@ -652,7 +657,7 @@ Super Dev 2.3.1 架构由四层组成：**宿主接入层**（20 个统一接入
 | Antigravity | `/super-dev 需求` | `super-dev onboard --host antigravity` |
 | Cursor | `/super-dev 需求` | `super-dev onboard --host cursor` |
 | Windsurf | `/super-dev 需求` | `super-dev onboard --host windsurf` |
-| Kiro | `super-dev: 需求` | `super-dev onboard --host kiro` |
+| Kiro | `/super-dev 需求` | `super-dev onboard --host kiro` |
 | Qoder | `/super-dev 需求` | `super-dev onboard --host qoder` |
 | Trae | `super-dev: 需求` | `super-dev onboard --host trae` |
 | CodeBuddy | `/super-dev 需求` | `super-dev onboard --host codebuddy` |
@@ -771,15 +776,15 @@ super-dev onboard --host kiro-cli --force --yes
 
 触发命令：
 ```text
-super-dev: 你的需求
+/super-dev 你的需求
 ```
 
 接入后是否需要重启：是
 
 补充说明：
-1. Kiro CLI 当前不再按自定义 slash 宿主建模。
-2. 官方接入面是 `.kiro/steering/super-dev.md` + `.kiro/skills/super-dev-core/SKILL.md` + `~/.kiro/skills/super-dev-core/SKILL.md`。
-3. 完成接入后建议重开 Kiro CLI，让 steering 与 skills 在新会话里一起生效。
+1. Kiro CLI 当前优先按官方 steering slash entry 触发；如果当前会话只接受自然语言，再回退到 `super-dev: 需求`。
+2. 官方接入面是 `.kiro/steering/super-dev.md` + `.kiro/skills/super-dev-core/SKILL.md` + `~/.kiro/steering/super-dev.md` + `~/.kiro/skills/super-dev-core/SKILL.md`。
+3. 完成接入后建议重开 Kiro CLI，让 steering slash entry 与 skills 在新会话里一起生效。
 
 #### 6. Cursor CLI
 
@@ -821,8 +826,8 @@ super-dev onboard --host qoder-cli --force --yes
 
 补充说明：
 1. 适合命令行流水线开发。
-2. 若 slash 未生效，先确认 `.qoder/commands/super-dev.md` 已生成，并检查 `.qoder/rules/` 目录是否存在。
-3. 官方接入面已切到 `.qoder/rules/super-dev.md` + `.qoder/commands/super-dev.md` + `.qoder/skills/` / `~/.qoder/skills/`。
+2. 若 slash 未生效，先确认 `AGENTS.md`、`.qoder/commands/super-dev.md` 已生成，并检查 `.qoder/rules/` 目录是否存在。
+3. 官方接入面已切到 `AGENTS.md` + `.qoder/rules/super-dev.md` + `.qoder/commands/super-dev.md` + `.qoder/skills/` / `~/.qoder/AGENTS.md` + `~/.qoder/skills/`。
 
 #### 8. Copilot CLI
 
@@ -836,7 +841,7 @@ super-dev onboard --host copilot-cli --force --yes
 
 触发命令：
 ```text
-super-dev: 你的需求
+/super-dev 你的需求
 ```
 
 接入后是否需要重启：否
@@ -864,7 +869,8 @@ super-dev onboard --host codebuddy-cli --force --yes
 
 补充说明：
 1. 在当前 CLI 会话中直接输入即可。
-2. 如果会话已提前打开，建议重新加载项目规则后再试。
+2. 官方主面是 `CODEBUDDY.md` + `.codebuddy/commands/` + `.codebuddy/skills/`，并补充 `~/.codebuddy/CODEBUDDY.md`。
+3. 如果会话已提前打开，建议重新加载项目规则后再试。
 
 #### 10. Antigravity
 
@@ -943,14 +949,14 @@ super-dev onboard --host kiro --force --yes
 
 触发命令：
 ```text
-super-dev: 你的需求
+/super-dev 你的需求
 ```
 
 接入后是否需要重启：是
 
 补充说明：
-1. Kiro IDE 当前使用官方 steering + skills 模式，触发词为 `super-dev: 你的需求`。
-2. 接入会写入项目级 `.kiro/steering/super-dev.md`、`.kiro/skills/super-dev-core/SKILL.md`，并补充全局 `~/.kiro/steering/AGENTS.md` 与 `~/.kiro/skills/super-dev-core/SKILL.md`。
+1. Kiro IDE 当前优先使用官方 steering slash entry，直接在 Agent Chat 输入 `/super-dev 你的需求`；如果当前会话只接受自然语言，再回退到 `super-dev: 你的需求`。
+2. 接入会写入项目级 `.kiro/steering/super-dev.md`、`.kiro/skills/super-dev-core/SKILL.md`，并补充全局 `~/.kiro/steering/super-dev.md` 与 `~/.kiro/skills/super-dev-core/SKILL.md`；旧 `~/.kiro/steering/AGENTS.md` 仍作为兼容面保留。
 3. 如果 steering 或 skills 未加载，先重开项目窗口或新开一个 Agent Chat。
 
 #### 14. Qoder
@@ -972,8 +978,8 @@ super-dev onboard --host qoder --force --yes
 
 补充说明：
 1. Qoder IDE 当前优先使用项目级 commands + rules + skills 模式，直接在 Agent Chat 输入 `/super-dev 你的需求`。
-2. 若新增命令未出现，先确认 `.qoder/commands/super-dev.md` 已生成，并检查 `.qoder/rules/super-dev.md` 是否存在，再重新打开项目或新开一个 Agent Chat。
-3. 官方接入面已切到 `.qoder/rules/super-dev.md` + `.qoder/commands/super-dev.md` + `.qoder/skills/` / `~/.qoder/skills/`。
+2. 若新增命令未出现，先确认 `AGENTS.md`、`.qoder/commands/super-dev.md` 已生成，并检查 `.qoder/rules/super-dev.md` 是否存在，再重新打开项目或新开一个 Agent Chat。
+3. 官方接入面已切到 `AGENTS.md` + `.qoder/rules/super-dev.md` + `.qoder/commands/super-dev.md` + `.qoder/skills/` / `~/.qoder/AGENTS.md` + `~/.qoder/skills/`。
 
 #### 15. Trae
 
@@ -1018,7 +1024,7 @@ super-dev onboard --host codebuddy --force --yes
 补充说明：
 1. 建议在项目级 Agent Chat 中使用，不要脱离项目上下文。
 2. 先让宿主完成 research，再继续文档和编码。
-3. 当前按 `.codebuddy/commands/` + `.codebuddy/agents/` + `.codebuddy/skills/` 接入。
+3. 当前按 `CODEBUDDY.md` + `.codebuddy/rules/super-dev/RULE.mdc` + `.codebuddy/commands/` + `.codebuddy/agents/` + `.codebuddy/skills/` 接入。
 
 #### 17. Copilot (VS Code)
 
@@ -1203,13 +1209,14 @@ super-dev: 你的需求
 ## License
 
 [MIT](LICENSE)
-## 2.3.1 更新重点
+## 2.3.2 更新重点
 
-- Codex 适配升级为 `AGENTS.md + Skills + repo plugin 增强` 的双层模型，CLI 与 App/Desktop 入口统一成同一条 Super Dev 流程。
-- Claude Code 适配升级为 `CLAUDE.md + .claude/skills + ~/.claude/skills + optional plugin enhancement`，并与安装引导、doctor、runtime、文档口径统一。
-- 安装引导、Onboard、Doctor、Detect 全部改成当前真实宿主入口模型，不再用过期的“slash / 非 slash”二分法误导 Codex。
-- 工作流状态机继续收口，`resume / next / continue / doctor / validate / Web API` 统一共享动作卡和恢复语义。
-- UI 契约、emoji 禁用、runtime 对齐、quality gate、release readiness 继续打通，交付前更容易拦住偏离。
-- 官网首页、更新历史、版本真源与双语文档统一到 `2.3.1`。
+- 21 个宿主口径继续收正：`20` 个统一接入宿主 + `1` 个 OpenClaw 手动插件宿主，安装脚本、README、官网 Docs、能力审计页和站点矩阵统一到同一套真实模型。
+- Claude Code / Codex 继续深适配到官方协议：`CLAUDE.md + skills + optional plugin enhancement`、`AGENTS.md + skills + repo plugin enhancement`，不再停留在旧的 commands-first / skill-only 近似模型。
+- Kiro / Qoder / Cursor / Trae / CodeBuddy 等 IDE 宿主继续按真实 surface 深适配，避免“代码一套、官网一套、安装引导又一套”的漂移。
+- 恢复链继续产品化：`resume / next / continue / doctor / validate / Web API` 统一带现实场景卡，`SESSION_BRIEF` 直接告诉用户“第二天回来继续开发 / 只想知道下一步 / 本地流程中断后恢复”该怎么做。
+- 工作流治理继续加固：`workflow history`、语义事件、hook history、workflow/framework/hook/operational harness、recent operational timeline 现在已经一起进入 proof-pack 和 release readiness。
+- 跨平台框架支持继续深化：`uni-app / Taro / React Native / Flutter / Desktop Web Shell` 的 framework playbook 现在不只进 UI 契约，也进入脚手架、runtime、quality gate、release readiness 和 proof-pack。
+- UI 系统继续强化：emoji 作为功能图标被系统级禁止，UI 契约、token、图标库、组件生态、导航骨架、主题入口、framework harness 一起纳入交付门禁。
 
 ---

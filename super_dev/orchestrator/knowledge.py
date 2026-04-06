@@ -200,7 +200,11 @@ class KnowledgeAugmenter:
             local_items=local_items,
             web_items=web_items,
         )
-        knowledge_application_plan = self._build_knowledge_application_plan(local_items)
+        knowledge_application_plan = self._build_knowledge_application_plan(
+            local_items,
+            requirement=requirement,
+            keywords=keywords,
+        )
 
         result = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -294,6 +298,30 @@ class KnowledgeAugmenter:
                 lines.extend(self._render_summary_section(f"### {self._stage_label(stage)}", entries if isinstance(entries, list) else []))
         else:
             lines.append("- 当前未生成阶段化知识应用计划。")
+            lines.append("")
+
+        framework_guidance = plan.get("framework_guidance", {}) if isinstance(plan, dict) else {}
+        if isinstance(framework_guidance, dict) and framework_guidance:
+            lines.extend(
+                [
+                    "### 跨平台框架专项指引",
+                    "",
+                    f"- **Framework**: {framework_guidance.get('framework', 'Unknown')}",
+                    "",
+                    "**关键实现模块**:",
+                ]
+            )
+            for item in framework_guidance.get("critical_modules", []):
+                if isinstance(item, str) and item.strip():
+                    lines.append(f"- {item}")
+            lines.extend(["", "**必须验收的真实场景**:"])
+            for item in framework_guidance.get("validation_surfaces", []):
+                if isinstance(item, str) and item.strip():
+                    lines.append(f"- {item}")
+            lines.extend(["", "**交付证据要求**:"])
+            for item in framework_guidance.get("delivery_evidence", []):
+                if isinstance(item, str) and item.strip():
+                    lines.append(f"- {item}")
             lines.append("")
 
         lines.extend(["## 联网检索结果", ""])
@@ -999,7 +1027,111 @@ class KnowledgeAugmenter:
             return "operating-guidance"
         return "knowledge"
 
-    def _build_knowledge_application_plan(self, local_items: list[KnowledgeItem]) -> dict[str, Any]:
+    def _infer_framework_guidance(
+        self, *, requirement: str, keywords: list[str]
+    ) -> dict[str, Any]:
+        normalized = f"{requirement} {' '.join(keywords)}".lower()
+        mapping = [
+            (
+                ("uni-app", "uniapp", "小程序", "微信小程序"),
+                {
+                    "framework": "uni-app",
+                    "critical_modules": [
+                        "自定义导航栏、状态栏、安全区与胶囊按钮区域先冻结再实现",
+                        "登录/支付/分享 provider 按平台拆分，避免一套逻辑硬跑全端",
+                    ],
+                    "validation_surfaces": [
+                        "微信小程序真机导航/支付/触控与包体策略",
+                        "H5 与 App 的 provider、登录态和条件编译差异",
+                    ],
+                    "delivery_evidence": [
+                        "pages.json / 分包 / provider 配置说明",
+                        "三端差异与条件编译点清单",
+                    ],
+                },
+            ),
+            (
+                ("taro",),
+                {
+                    "framework": "Taro",
+                    "critical_modules": [
+                        "路由与状态管理先统一，再映射多端页面容器",
+                        "小程序/H5 的事件模型、样式隔离与组件能力差异先冻结",
+                    ],
+                    "validation_surfaces": [
+                        "微信小程序与 H5 的滚动、分享、登录与样式差异",
+                    ],
+                    "delivery_evidence": [
+                        "平台条件分支说明",
+                        "跨端事件与样式差异验证记录",
+                    ],
+                },
+            ),
+            (
+                ("react-native", "react native"),
+                {
+                    "framework": "React Native",
+                    "critical_modules": [
+                        "导航栈、权限、深链、离线缓存先冻结",
+                        "iOS/Android 的原生桥接与安全区差异先单独设计",
+                    ],
+                    "validation_surfaces": [
+                        "iOS 真机导航、推送、权限弹窗",
+                        "Android 返回栈、深链与通知恢复",
+                    ],
+                    "delivery_evidence": [
+                        "真机截图与权限矩阵",
+                        "导航/深链/离线恢复验收记录",
+                    ],
+                },
+            ),
+            (
+                ("flutter",),
+                {
+                    "framework": "Flutter",
+                    "critical_modules": [
+                        "ThemeData、路由、状态管理和平台感知组件先冻结",
+                        "Material/Cupertino 的切换边界和动画策略先明确",
+                    ],
+                    "validation_surfaces": [
+                        "Android 与 iOS 的主题、动画、输入法和返回行为",
+                    ],
+                    "delivery_evidence": [
+                        "ThemeData / 组件映射说明",
+                        "双平台主题与动画验收记录",
+                    ],
+                },
+            ),
+            (
+                ("electron", "tauri", "wails", "桌面"),
+                {
+                    "framework": "Desktop Web Shell",
+                    "critical_modules": [
+                        "窗口布局、快捷键、托盘、本地文件与 IPC 边界先冻结",
+                        "离线缓存和本地能力调用不能按普通 Web 假设实现",
+                    ],
+                    "validation_surfaces": [
+                        "窗口恢复、快捷键、文件系统与离线恢复",
+                    ],
+                    "delivery_evidence": [
+                        "窗口/快捷键/原生桥接清单",
+                        "本地文件流与离线恢复验证记录",
+                    ],
+                },
+            ),
+        ]
+        for aliases, payload in mapping:
+            if any(alias in normalized for alias in aliases):
+                return payload
+        return {}
+
+    def _build_knowledge_application_plan(
+        self,
+        local_items: list[KnowledgeItem],
+        *,
+        requirement: str,
+        keywords: list[str],
+    ) -> dict[str, Any]:
         stage_guidance: dict[str, list[str]] = {stage: [] for stage in self._STAGE_ORDER}
         hard_constraints: list[str] = []
 
@@ -1022,9 +1154,14 @@ class KnowledgeAugmenter:
             for stage, entries in stage_guidance.items()
             if entries
         }
+        framework_guidance = self._infer_framework_guidance(
+            requirement=requirement,
+            keywords=keywords,
+        )
         return {
             "hard_constraints": hard_constraints[:8],
             "stage_guidance": normalized_stage_guidance,
+            "framework_guidance": framework_guidance,
         }
 
     def _stage_label(self, stage: str) -> str:

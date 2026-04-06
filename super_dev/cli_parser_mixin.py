@@ -47,6 +47,7 @@ class CliParserMixin:
                 "  governance        治理报告\n"
                 "  memory            记忆系统管理\n"
                 "  hooks             Hook 事件管理\n"
+                "  harness           Workflow / Framework / Hook harness\n"
                 "  experts           专家角色管理\n"
                 "  compact           上下文压缩\n"
                 "\n"
@@ -1687,8 +1688,87 @@ class CliParserMixin:
             description="使用 'super-dev hooks <command> -h' 查看帮助",
         )
         hooks_subparsers.add_parser("list", help="列出所有已配置的 hooks")
+        hooks_history_parser = hooks_subparsers.add_parser("history", help="查看最近 hook 执行历史")
+        hooks_history_parser.add_argument(
+            "--limit",
+            type=int,
+            default=10,
+            help="最多显示最近多少条 hook 历史（默认 10）",
+        )
         hooks_test_parser = hooks_subparsers.add_parser("test", help="测试执行指定 hook（dry-run）")
         hooks_test_parser.add_argument("event", help="Hook 事件名")
+
+        # harness 命令 - 管理 workflow/framework/hook harness 报告
+        harness_parser = subparsers.add_parser(
+            "harness",
+            help="查看 workflow / framework / hook harness",
+            description="汇总或单独查看 workflow continuity、framework harness、hook audit trail 报告",
+        )
+        harness_subparsers = harness_parser.add_subparsers(
+            dest="harness_action",
+            title="Harness 命令",
+            description="使用 'super-dev harness <command> -h' 查看帮助",
+        )
+        harness_status_parser = harness_subparsers.add_parser(
+            "status", help="汇总查看全部 harness 状态"
+        )
+        harness_status_parser.add_argument(
+            "--hook-limit",
+            type=int,
+            default=20,
+            help="生成 hook harness 时最多读取最近多少条历史（默认 20）",
+        )
+        harness_status_parser.add_argument(
+            "--json", action="store_true", help="以 JSON 输出结果"
+        )
+        harness_workflow_parser = harness_subparsers.add_parser(
+            "workflow", help="查看 workflow continuity harness"
+        )
+        harness_workflow_parser.add_argument(
+            "--json", action="store_true", help="以 JSON 输出结果"
+        )
+        harness_framework_parser = harness_subparsers.add_parser(
+            "framework", help="查看跨平台 framework harness"
+        )
+        harness_framework_parser.add_argument(
+            "--json", action="store_true", help="以 JSON 输出结果"
+        )
+        harness_operational_parser = harness_subparsers.add_parser(
+            "operational", help="查看统一 operational harness 总报告"
+        )
+        harness_operational_parser.add_argument(
+            "--hook-limit",
+            type=int,
+            default=20,
+            help="生成 hook harness 时最多读取最近多少条历史（默认 20）",
+        )
+        harness_operational_parser.add_argument(
+            "--json", action="store_true", help="以 JSON 输出结果"
+        )
+        harness_timeline_parser = harness_subparsers.add_parser(
+            "timeline", help="查看统一运行时时间线"
+        )
+        harness_timeline_parser.add_argument(
+            "--limit",
+            type=int,
+            default=10,
+            help="最多读取最近多少条统一时间线（默认 10）",
+        )
+        harness_timeline_parser.add_argument(
+            "--json", action="store_true", help="以 JSON 输出结果"
+        )
+        harness_hooks_parser = harness_subparsers.add_parser(
+            "hooks", help="查看 hook audit trail harness"
+        )
+        harness_hooks_parser.add_argument(
+            "--limit",
+            type=int,
+            default=20,
+            help="最多读取最近多少条 hook 历史（默认 20）",
+        )
+        harness_hooks_parser.add_argument(
+            "--json", action="store_true", help="以 JSON 输出结果"
+        )
 
         # experts 命令 - 查看专家角色
         experts_parser = subparsers.add_parser(
@@ -1807,7 +1887,7 @@ class CliParserMixin:
         subparsers.add_parser(
             "migrate",
             help="迁移项目到最新版本",
-            description="将 2.2.0 项目配置迁移到 2.3.1（更新配置、规则文件与 hooks）",
+            description="将 2.2.0+ 项目配置迁移到 2.3.2（更新配置、规则文件与 hooks）",
         )
 
         return parser

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-SUPER_DEV_VERSION = "2.3.1"
+SUPER_DEV_VERSION = "2.3.2"
 
 
 @dataclass
@@ -402,6 +402,8 @@ class SuperDevSkillContent:
             "super-dev memory list                   # 查看记忆条目\n"
             "super-dev experts list                  # 查看专家角色\n"
             "super-dev hooks list                    # 查看 hook 事件\n"
+            "super-dev hooks history                 # 查看最近 hook 历史\n"
+            "super-dev harness status                # 查看 workflow/framework/hook harness\n"
             "super-dev compact list                  # 查看压缩摘要\n"
             "super-dev config list                   # 查看项目配置\n"
             "super-dev spec list                     # 查看规范与变更\n"

@@ -5,6 +5,15 @@ import type { SiteLocale } from '@/lib/site-locale';
 
 const CHANGELOG = {
   zh: [
+    { version: '2.3.2', date: '2026-04-06', type: 'patch' as const, changes: [
+      '21 个宿主口径继续收正：20 个统一接入宿主 + 1 个 OpenClaw 手动插件宿主，安装脚本、README、官网 Docs、能力审计页和站点矩阵统一到同一套真实模型',
+      'Claude Code / Codex 继续深适配到官方协议：CLAUDE.md + skills + optional plugin enhancement、AGENTS.md + skills + repo plugin enhancement',
+      'Kiro / Qoder / Cursor / Trae / CodeBuddy 等 IDE 宿主继续按真实 surface 深适配，避免代码、安装引导、文档和官网口径漂移',
+      '恢复链继续产品化：resume / next / continue / doctor / validate / Web API 统一带现实场景卡，SESSION_BRIEF 直接告诉用户现实场景该怎么做',
+      'workflow history、语义事件、hook history、workflow/framework/hook/operational harness、recent operational timeline 现在一起进入 proof-pack 与 release readiness',
+      '跨平台框架 playbook 深化到 uni-app / Taro / React Native / Flutter / Desktop Web Shell，并接入脚手架、runtime、quality gate、release readiness 与 proof-pack',
+      'UI 系统继续强化：emoji 被系统级禁止作为功能图标，UI 契约、token、图标库、组件生态、导航骨架、主题入口和 framework harness 全部进入交付门禁',
+    ] },
     { version: '2.3.1', date: '2026-04-03', type: 'patch' as const, changes: [
       'Codex 深度适配升级为 AGENTS.md + Skills + repo plugin 双层模型，App/Desktop 与 CLI 统一进入同一条 Super Dev 流程',
       'Claude Code 深度适配升级为 CLAUDE.md + .claude/skills + ~/.claude/skills + optional plugin enhancement，并与安装引导、doctor、runtime 口径统一',
@@ -86,6 +95,15 @@ const CHANGELOG = {
     { version: '1.0.0', date: '2025-12-29', type: 'major' as const, changes: ['首次发布', '基础流水线框架（research / documents / spec / implement）', 'Spec-Driven Development 模块', '支持 Claude Code、Cursor、Windsurf 宿主', 'PyPI 正式发布'] },
   ],
   en: [
+    { version: '2.3.2', date: '2026-04-06', type: 'patch' as const, changes: [
+      'Host product scope was hardened again: 20 unified integration hosts plus 1 manual OpenClaw plugin host, with install scripts, README, website docs, capability audit, and host matrices finally sharing one accurate model',
+      'Claude Code and Codex moved further toward their official host contracts: CLAUDE.md + skills + optional plugin enhancement, and AGENTS.md + skills + repo plugin enhancement',
+      'Kiro, Qoder, Cursor, Trae, and CodeBuddy family hosts were deepened around their real surfaces so code, onboarding, docs, and website no longer drift',
+      'Recovery UX became more productized: resume / next / continue / doctor / validate / Web API now expose scenario cards, and SESSION_BRIEF directly tells users what to do in real situations',
+      'workflow history, semantic events, hook history, workflow/framework/hook/operational harnesses, and the recent operational timeline now all feed proof-pack and release readiness',
+      'Cross-platform framework playbooks for uni-app / Taro / React Native / Flutter / Desktop Web Shell now drive scaffolds, runtime checks, quality gates, release readiness, and proof-pack',
+      'The UI system was tightened further: emoji are systemically banned as functional icons, and UI contracts, tokens, icon libraries, component ecosystems, navigation shells, theme entry points, and framework harness checks now all participate in delivery gates',
+    ] },
     { version: '2.3.1', date: '2026-04-03', type: 'patch' as const, changes: [
       'Codex deep adaptation upgraded to the official AGENTS.md + Skills + repo plugin dual-layer model, with App/Desktop and CLI converging into one Super Dev flow',
       'Claude Code deep adaptation now follows a CLAUDE.md + .claude/skills + ~/.claude/skills + optional plugin enhancement model with unified onboarding, doctor, and runtime semantics',

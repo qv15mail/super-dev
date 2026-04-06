@@ -56,6 +56,8 @@ class TestAIPromptGenerator:
         assert "设计系统优先级" in prompt
         assert "备选组件生态与适用边界" in prompt
         assert "设计知识库关键词" in prompt
+        assert "高质量设计参考锚点" in prompt
+        assert "参考使用规则" in prompt
         assert "首选组件生态" in prompt
         assert "宿主 UI 生成执行契约（必须遵守）" in prompt
         assert "每个关键页面必须提供 **2 个视觉方案**" in prompt
@@ -91,3 +93,26 @@ class TestAIPromptGenerator:
         assert "如果当前需求明显属于 bugfix / regression / hotfix" in prompt
         assert "缺陷修复轻量路径" in prompt
         assert "- `bugfix`" in prompt
+
+    def test_generate_uniapp_prompt_includes_framework_playbook(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        for suffix in ("research", "prd", "architecture", "uiux", "execution-plan", "frontend-blueprint"):
+            (output_dir / f"uni-shop-{suffix}.md").write_text(f"# {suffix}", encoding="utf-8")
+
+        config = {
+            "description": "构建 uni-app 商城，覆盖 H5、微信小程序和 App 登录支付流程",
+            "platform": "miniapp",
+            "frontend": "uni-app",
+            "backend": "node",
+        }
+        (temp_project_dir / "super-dev.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
+
+        generator = AIPromptGenerator(project_dir=temp_project_dir, name="uni-shop")
+        prompt = generator.generate()
+
+        assert "跨平台框架深优化 Playbook（uni-app）" in prompt
+        assert "自定义导航栏高度、状态栏占位、胶囊按钮区域必须独立建模" in prompt
+        assert "登录/支付/分享流程按平台 provider 拆分" in prompt
+        assert "必须验收的真实场景" in prompt
+        assert "交付时必须沉淀的证据" in prompt

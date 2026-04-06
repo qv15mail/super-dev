@@ -126,6 +126,7 @@ class TestDocumentGeneratorIntegration:
         assert "表单与验证" in uiux
         assert "图标体系" in uiux
         assert "多场景组件库矩阵" in uiux
+        assert "设计参考锚点" in uiux
 
     def test_document_generator_emits_ui_contract(self):
         generator = DocumentGenerator(
@@ -144,8 +145,42 @@ class TestDocumentGeneratorIntegration:
         assert contract["emoji_policy"]["allowed_in_ui"] is False
         assert contract["emoji_policy"]["allowed_as_icon"] is False
         assert contract["emoji_policy"]["allowed_during_development"] is False
+        assert len(contract["design_references"]) == 3
+        assert contract["design_references"][0]["name"]
         assert contract["design_tokens"]["css_variables"]
         assert contract["typography_preset"]["heading"]
+
+    def test_document_generator_emits_uniapp_framework_playbook(self):
+        generator = DocumentGenerator(
+            name="uni-shop",
+            description="构建一个 uni-app 会员商城，覆盖 H5、微信小程序和 App 的登录、支付与分享",
+            frontend="uni-app",
+            backend="node",
+        )
+
+        contract = generator.generate_ui_contract()
+        uiux = generator.generate_uiux()
+
+        assert contract["framework_playbook"]["framework"] == "uni-app"
+        assert "跨平台框架深优化 Playbook（uni-app）" in uiux
+        assert "登录/支付/分享流程按平台 provider 拆分" in uiux
+        assert "必须验收的真实场景" in uiux
+        assert "交付证据要求" in uiux
+
+    def test_document_generator_emits_desktop_framework_playbook(self):
+        generator = DocumentGenerator(
+            name="desktop-ops",
+            description="构建 Electron 桌面分析客户端，支持本地文件导入、通知、快捷键和离线缓存",
+            frontend="electron",
+            backend="python",
+        )
+
+        contract = generator.generate_ui_contract()
+        uiux = generator.generate_uiux()
+
+        assert contract["framework_playbook"]["framework"] == "Desktop Web Shell"
+        assert "快捷键清单、窗口布局说明、原生桥接清单" in uiux
+        assert "文件流与离线恢复验证结果" in uiux
 
     def test_document_generator_consumes_research_summary_for_evidence(self):
         generator = DocumentGenerator(

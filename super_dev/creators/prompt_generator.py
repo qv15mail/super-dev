@@ -1238,10 +1238,61 @@ project-root/
         if pre_delivery:
             lines.extend(["", "**交付前核对项**:"])
             lines.extend(f"- [ ] {item}" for item in pre_delivery[:6])
+        framework_playbook = profile.get("framework_playbook") or {}
+        if framework_playbook:
+            lines.extend(
+                [
+                    "",
+                    f"**跨平台框架深优化 Playbook（{framework_playbook.get('framework', '当前框架')}）**:",
+                    f"- **优化焦点**: {framework_playbook.get('focus', 'N/A')}",
+                    f"- **适配理由**: {framework_playbook.get('rationale', 'N/A')}",
+                    "- **必须优先落实**:",
+                ]
+            )
+            lines.extend(f"- {item}" for item in framework_playbook.get("implementation_modules", [])[:4])
+            lines.extend(["", "- **平台差异/限制**:"])
+            lines.extend(f"- {item}" for item in framework_playbook.get("platform_constraints", [])[:4])
+            lines.extend(["", "- **执行护栏**:"])
+            lines.extend(f"- {item}" for item in framework_playbook.get("execution_guardrails", [])[:3])
+            anti_patterns = framework_playbook.get("anti_patterns", [])
+            if anti_patterns:
+                lines.extend(["", "- **框架级反模式**:"])
+                lines.extend(f"- {item}" for item in anti_patterns[:3])
+            native_capabilities = framework_playbook.get("native_capabilities", [])
+            if native_capabilities:
+                lines.extend(["", "- **原生能力面**:"])
+                lines.extend(f"- {item}" for item in native_capabilities[:3])
+            validation_surfaces = framework_playbook.get("validation_surfaces", [])
+            if validation_surfaces:
+                lines.extend(["", "- **必须验收的真实场景**:"])
+                lines.extend(f"- {item}" for item in validation_surfaces[:3])
+            delivery_evidence = framework_playbook.get("delivery_evidence", [])
+            if delivery_evidence:
+                lines.extend(["", "- **交付时必须沉淀的证据**:"])
+                lines.extend(f"- {item}" for item in delivery_evidence[:3])
         keywords = profile.get("knowledge_keywords", [])
         if keywords:
             lines.extend(["", "**设计知识库关键词**:"])
             lines.append("- " + " / ".join(keywords[:10]))
+        references = profile.get("design_references", [])
+        if references:
+            lines.extend(["", "**高质量设计参考锚点**:"])
+            for item in references[:3]:
+                if not isinstance(item, dict):
+                    continue
+                signals = " / ".join(item.get("signals", [])[:3])
+                caution = "；".join(item.get("cautions", [])[:2])
+                lines.append(
+                    f"- {item.get('name', 'N/A')}: {item.get('rationale', 'N/A')} 参考信号：{signals or 'N/A'}。避免：{caution or 'N/A'}。"
+                )
+            lines.extend(
+                [
+                    "",
+                    "**参考使用规则**:",
+                    "- 参考锚点用于锁定气质、层级、留白、配色和组件骨架，不允许整站照抄单个品牌。",
+                    "- 主方案必须明确吸收了哪些参考信号、又刻意避开了哪些参考品牌的套路。",
+                ]
+            )
         return "\n".join(lines)
 
     def _read_document(self, doc_type: str) -> str | None:

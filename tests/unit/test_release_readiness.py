@@ -2,7 +2,9 @@ import json
 from pathlib import Path
 
 from super_dev import __version__
+from super_dev.hooks.manager import HookManager
 from super_dev.release_readiness import ReleaseReadinessEvaluator
+from super_dev.review_state import save_workflow_state, workflow_event_log_file
 from super_dev.specs.generator import SpecGenerator
 
 
@@ -219,6 +221,14 @@ def test_release_readiness_passes_when_required_artifacts_exist(temp_project_dir
     assert report.score == 100
     assert files["markdown"].exists()
     assert files["json"].exists()
+    operational_check = next(
+        check for check in report.checks if check.name == "Operational Harness Trail"
+    )
+    assert operational_check.passed is True
+    assert operational_check.detail in {
+        "operational harness clean across 3/3 enabled harnesses",
+        "no operational harness evidence required",
+    }
 
 
 def test_release_readiness_fails_when_latest_spec_quality_is_weak(temp_project_dir: Path) -> None:
@@ -298,6 +308,57 @@ def test_release_readiness_fails_when_frontend_runtime_structural_ui_checks_fail
     assert "frontend runtime ui contract alignment missing" in closure_check.detail
 
 
+def test_release_readiness_fails_when_cross_platform_runtime_missing_framework_execution(
+    temp_project_dir: Path,
+) -> None:
+    _prepare_release_ready_project(temp_project_dir)
+    contract_file = temp_project_dir / "output" / f"{temp_project_dir.name}-ui-contract.json"
+    payload = json.loads(contract_file.read_text(encoding="utf-8"))
+    payload["analysis"] = {"frontend": "uni-app"}
+    payload["framework_playbook"] = {
+        "framework": "uni-app",
+        "implementation_modules": ["自定义导航栏高度"],
+        "platform_constraints": ["status bar 与安全区"],
+        "execution_guardrails": ["先冻结 navigationStyle"],
+        "native_capabilities": ["登录 provider"],
+        "validation_surfaces": ["微信小程序导航"],
+        "delivery_evidence": ["三端差异说明"],
+    }
+    contract_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    runtime_file = temp_project_dir / "output" / f"{temp_project_dir.name}-frontend-runtime.json"
+    runtime_file.write_text(
+        (
+            "{\n"
+            '  "passed": false,\n'
+            '  "checks": {\n'
+            '    "output_frontend_index": true,\n'
+            '    "output_frontend_styles": true,\n'
+            '    "output_frontend_design_tokens": true,\n'
+            '    "output_frontend_script": true,\n'
+            '    "preview_html": true,\n'
+            '    "ui_contract_json": true,\n'
+            '    "ui_contract_alignment": true,\n'
+            '    "ui_theme_entry": true,\n'
+            '    "ui_navigation_shell": true,\n'
+            '    "ui_component_imports": true,\n'
+            '    "ui_banned_patterns": true,\n'
+            '    "ui_framework_playbook": true,\n'
+            '    "ui_framework_execution": false\n'
+            "  }\n"
+            "}\n"
+        ),
+        encoding="utf-8",
+    )
+
+    evaluator = ReleaseReadinessEvaluator(temp_project_dir)
+    report = evaluator.evaluate(verify_tests=False)
+
+    closure_check = next(check for check in report.checks if check.name == "Delivery Closure")
+    assert closure_check.passed is False
+    assert "uni-app frontend runtime framework execution missing" in closure_check.detail
+
+
 def test_release_readiness_fails_when_ui_contract_missing_emoji_policy(temp_project_dir: Path) -> None:
     _prepare_release_ready_project(temp_project_dir)
     contract_file = temp_project_dir / "output" / f"{temp_project_dir.name}-ui-contract.json"
@@ -311,6 +372,156 @@ def test_release_readiness_fails_when_ui_contract_missing_emoji_policy(temp_proj
     closure_check = next(check for check in report.checks if check.name == "Delivery Closure")
     assert closure_check.passed is False
     assert "ui contract incomplete" in closure_check.detail
+
+
+def test_release_readiness_fails_when_cross_platform_ui_contract_missing_framework_playbook(
+    temp_project_dir: Path,
+) -> None:
+    _prepare_release_ready_project(temp_project_dir)
+    contract_file = temp_project_dir / "output" / f"{temp_project_dir.name}-ui-contract.json"
+    payload = json.loads(contract_file.read_text(encoding="utf-8"))
+    payload["analysis"] = {"frontend": "uni-app"}
+    contract_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    evaluator = ReleaseReadinessEvaluator(temp_project_dir)
+    report = evaluator.evaluate(verify_tests=False)
+
+    closure_check = next(check for check in report.checks if check.name == "Delivery Closure")
+    assert closure_check.passed is False
+    assert "uni-app ui contract playbook incomplete" in closure_check.detail
+
+
+def test_release_readiness_fails_when_active_workflow_recovery_trail_is_incomplete(
+    temp_project_dir: Path,
+) -> None:
+    _prepare_release_ready_project(temp_project_dir)
+    save_workflow_state(
+        temp_project_dir,
+        {
+            "status": "waiting_docs_confirmation",
+            "workflow_mode": "continue",
+            "current_step_label": "等待三文档确认",
+            "recommended_command": "super-dev review docs --status confirmed",
+        },
+    )
+    workflow_event_log_file(temp_project_dir).unlink()
+
+    evaluator = ReleaseReadinessEvaluator(temp_project_dir)
+    report = evaluator.evaluate(verify_tests=False)
+
+    continuity_check = next(check for check in report.checks if check.name == "Workflow Recovery Trail")
+    assert continuity_check.passed is False
+    assert "workflow recovery trail incomplete" in continuity_check.detail
+
+
+def test_release_readiness_fails_when_hook_audit_contains_blocked_event(temp_project_dir: Path) -> None:
+    _prepare_release_ready_project(temp_project_dir)
+    history_file = HookManager.hook_history_file(temp_project_dir)
+    history_file.parent.mkdir(parents=True, exist_ok=True)
+    history_file.write_text(
+        json.dumps(
+            {
+                "hook_name": "python3 scripts/guard.py",
+                "event": "WorkflowEvent",
+                "success": False,
+                "output": "",
+                "error": "blocked by policy",
+                "duration_ms": 8.4,
+                "blocked": True,
+                "phase": "quality_revision_saved",
+                "source": "config",
+                "timestamp": "2026-04-06T01:02:03+00:00",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    evaluator = ReleaseReadinessEvaluator(temp_project_dir)
+    report = evaluator.evaluate(verify_tests=False)
+
+    hook_check = next(check for check in report.checks if check.name == "Hook Audit Trail")
+    assert hook_check.passed is False
+    assert "blocked events" in hook_check.detail
+    markdown = report.to_markdown()
+    assert "## Operational Continuity" in markdown
+    assert "## Current Governance Focus" in markdown
+    assert "## Recent Operational Timeline" in markdown
+    assert "Operational Harness Trail" in markdown
+    assert "Workflow Recovery Trail" in markdown
+    assert "Framework Harness Trail" in markdown
+    assert "Hook Audit Trail" in markdown
+
+
+def test_release_readiness_fails_when_framework_harness_has_blockers(
+    temp_project_dir: Path,
+) -> None:
+    _prepare_release_ready_project(temp_project_dir)
+
+    output_dir = temp_project_dir / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / f"{temp_project_dir.name}-ui-contract.json").write_text(
+        json.dumps(
+            {
+                "analysis": {"frontend": "uni-app"},
+                "framework_playbook": {
+                    "framework": "uni-app",
+                    "implementation_modules": ["pages", "composables"],
+                    "native_capabilities": [],
+                    "validation_surfaces": ["微信小程序导航/支付/触控与包体策略"],
+                    "delivery_evidence": ["跨端截图"],
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    evaluator = ReleaseReadinessEvaluator(temp_project_dir)
+    report = evaluator.evaluate(verify_tests=False)
+
+    framework_check = next(
+        check for check in report.checks if check.name == "Framework Harness Trail"
+    )
+    assert framework_check.passed is False
+    assert "uni-app harness has" in framework_check.detail
+
+
+def test_release_readiness_fails_when_operational_harness_has_blockers(
+    temp_project_dir: Path,
+) -> None:
+    _prepare_release_ready_project(temp_project_dir)
+
+    output_dir = temp_project_dir / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / f"{temp_project_dir.name}-ui-contract.json").write_text(
+        json.dumps(
+            {
+                "analysis": {"frontend": "uni-app"},
+                "framework_playbook": {
+                    "framework": "uni-app",
+                    "implementation_modules": ["pages"],
+                    "native_capabilities": [],
+                    "validation_surfaces": ["微信小程序导航"],
+                    "delivery_evidence": ["跨端截图"],
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    evaluator = ReleaseReadinessEvaluator(temp_project_dir)
+    report = evaluator.evaluate(verify_tests=False)
+
+    operational_check = next(
+        check for check in report.checks if check.name == "Operational Harness Trail"
+    )
+    assert operational_check.passed is False
+    assert "需要先处理" in operational_check.detail
 
 
 def test_release_readiness_fails_when_latest_spec_contains_tbd_placeholders(temp_project_dir: Path) -> None:

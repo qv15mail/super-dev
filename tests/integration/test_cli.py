@@ -13,6 +13,7 @@ import yaml
 from super_dev import __version__ as _super_dev_version
 from super_dev.catalogs import PRIMARY_HOST_TOOL_IDS
 from super_dev.cli import SuperDevCLI
+from super_dev.hooks.manager import HookManager
 from super_dev.integrations import IntegrationManager
 from super_dev.review_state import (
     save_docs_confirmation,
@@ -43,6 +44,45 @@ def _prepare_workflow_context(project_dir: Path) -> None:
     (project_dir / "output" / f"{project_dir.name}-prd.md").write_text("# prd\n", encoding="utf-8")
     (project_dir / "output" / f"{project_dir.name}-architecture.md").write_text("# arch\n", encoding="utf-8")
     (project_dir / "output" / f"{project_dir.name}-uiux.md").write_text("# uiux\n", encoding="utf-8")
+    (project_dir / "output" / f"{project_dir.name}-ui-contract.json").write_text(
+        json.dumps(
+            {
+                "framework_playbook": {
+                    "framework": "uni-app",
+                    "implementation_modules": ["自定义导航栏高度、状态栏占位、胶囊按钮区域必须独立建模"],
+                    "platform_constraints": ["自定义导航启用后必须显式处理 status bar 与安全区"],
+                    "execution_guardrails": ["先冻结 pages.json / navigationStyle / provider 配置，再开始页面实现"],
+                    "native_capabilities": ["登录/支付/分享 provider 必须按端隔离并显式验收"],
+                    "validation_surfaces": ["微信小程序导航/支付/触控与包体策略"],
+                    "delivery_evidence": ["三端差异说明与条件编译点清单"],
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    hook_history = HookManager.hook_history_file(project_dir)
+    hook_history.parent.mkdir(parents=True, exist_ok=True)
+    hook_history.write_text(
+        json.dumps(
+            {
+                "hook_name": "python3 scripts/check.py",
+                "event": "WorkflowEvent",
+                "success": True,
+                "output": "",
+                "error": "",
+                "duration_ms": 11.2,
+                "blocked": False,
+                "phase": "docs_confirmation_saved",
+                "source": "config",
+                "timestamp": "2026-04-06T01:02:03+00:00",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def _prepare_release_ready_project(project_dir: Path) -> None:
@@ -1141,6 +1181,7 @@ class TestCLISkillAndIntegrate:
             cli = SuperDevCLI()
             result = cli.run(["integrate", "setup", "--target", "qoder", "--force"])
             assert result == 0
+            assert (temp_project_dir / "AGENTS.md").exists()
             assert (temp_project_dir / ".qoder" / "rules" / "super-dev.md").exists()
             assert (temp_project_dir / ".qoder" / "skills" / "super-dev-core" / "SKILL.md").exists()
         finally:
@@ -1455,7 +1496,7 @@ class TestCLISkillAndIntegrate:
             assert result == 0
             assert (temp_project_dir / ".kiro" / "steering" / "super-dev.md").exists()
             assert (temp_project_dir / ".kiro" / "skills" / "super-dev-core" / "SKILL.md").exists()
-            assert (fake_home / ".kiro" / "steering" / "AGENTS.md").exists()
+            assert (fake_home / ".kiro" / "steering" / "super-dev.md").exists()
             assert (fake_home / ".kiro" / "skills" / "super-dev-core" / "SKILL.md").exists()
         finally:
             os.chdir(original_cwd)
@@ -1470,7 +1511,7 @@ class TestCLISkillAndIntegrate:
 
             output = capsys.readouterr().out
             assert "接下来这样用" in output
-            assert "Kiro CLI: 打开宿主后输入 super-dev: 你的需求" in output
+            assert 'Kiro CLI: 打开宿主后输入 /super-dev "你的需求"' in output
         finally:
             os.chdir(original_cwd)
 
@@ -1528,6 +1569,8 @@ class TestCLISkillAndIntegrate:
             assert (temp_project_dir / ".qoder" / "commands" / "super-dev.md").exists()
             assert (temp_project_dir / ".kiro" / "steering" / "super-dev.md").exists()
             assert (temp_project_dir / ".kiro" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (temp_project_dir / "CODEBUDDY.md").exists()
+            assert (temp_project_dir / ".codebuddy" / "rules" / "super-dev" / "RULE.mdc").exists()
             assert (temp_project_dir / ".codebuddy" / "skills" / "super-dev-core" / "SKILL.md").exists()
             assert (temp_project_dir / ".claude" / "commands" / "super-dev.md").exists()
             assert (temp_project_dir / ".github" / "copilot-instructions.md").exists()
@@ -1849,7 +1892,7 @@ class TestCLISkillAndIntegrate:
             official_skill.unlink()
 
             result = cli.run(["doctor", "--host", "codex-cli"])
-            assert result == 0
+            assert result == 1
         finally:
             os.chdir(original_cwd)
 
@@ -1886,7 +1929,7 @@ class TestCLISkillAndIntegrate:
             stale_file.write_text("# stale\n/super-dev\n", encoding="utf-8")
 
             result = cli.run(["doctor", "--host", "claude-code"])
-            assert result == 1
+            assert result == 0
         finally:
             os.chdir(original_cwd)
 
@@ -1941,8 +1984,8 @@ class TestCLISkillAndIntegrate:
             assert "同一条 Super Dev 流程" in payload["usage_profiles"]["codex-cli"]["flow_contract"]["summary"]
             assert payload["usage_profiles"]["codex-cli"]["flow_probe"]["enabled"] is True
             assert len(payload["usage_profiles"]["codex-cli"]["flow_probe"]["steps"]) >= 4
-            assert ".agents/plugins/marketplace.json" in payload["usage_profiles"]["codex-cli"]["official_project_surfaces"]
-            assert "plugins/super-dev-codex/.codex-plugin/plugin.json" in payload["usage_profiles"]["codex-cli"]["official_project_surfaces"]
+            assert ".agents/plugins/marketplace.json" in payload["usage_profiles"]["codex-cli"]["optional_project_surfaces"]
+            assert "plugins/super-dev-codex/.codex-plugin/plugin.json" in payload["usage_profiles"]["codex-cli"]["optional_project_surfaces"]
             assert "SMOKE_OK" in payload["usage_profiles"]["codex-cli"]["smoke_test_prompt"]
             assert payload["usage_profiles"]["codex-cli"]["smoke_test_steps"]
             assert payload["session_resume_cards"]["codex-cli"]["enabled"] is False
@@ -2089,7 +2132,39 @@ class TestCLISkillAndIntegrate:
             assert resume_card["entry_prompts"]["fallback"].startswith("super-dev:")
             assert ".super-dev/SESSION_BRIEF.md" in resume_card["session_brief_path"]
             assert ".super-dev/workflow-state.json" in resume_card["workflow_state_path"]
+            assert ".super-dev/workflow-events.jsonl" in resume_card["workflow_event_log_path"]
+            assert ".super-dev/hook-history.jsonl" in resume_card["hook_history_path"]
             assert resume_card["recommended_workflow_command"]
+            assert [item["id"] for item in resume_card["scenario_cards"][:3]] == [
+                "resume_workday",
+                "know_next",
+                "current_gate_or_stage",
+            ]
+            assert any(
+                item["cli_command"] == "super-dev run --resume"
+                for item in resume_card["scenario_cards"]
+            )
+            assert resume_card["framework_playbook"]["framework"] == "uni-app"
+            assert resume_card["operational_harnesses"]
+            assert resume_card["operational_focus"]["status"] == "needs_attention"
+            assert resume_card["operational_focus"]["kind"] == "framework"
+            assert {item["kind"] for item in resume_card["operational_harnesses"]} == {
+                "workflow",
+                "framework",
+                "hooks",
+            }
+            assert resume_card["recent_snapshots"]
+            assert resume_card["recent_events"]
+            assert resume_card["recent_hook_events"]
+            assert resume_card["recent_snapshots"][0]["current_step_label"] == "等待三文档确认"
+            assert any("provider" in item for item in resume_card["framework_playbook"]["native_capabilities"])
+            assert any("框架专项: uni-app" in line for line in resume_card["lines"])
+            assert any("最近一次:" in line for line in resume_card["lines"])
+            assert any("最近事件:" in line for line in resume_card["lines"])
+            assert any("最近 Hook:" in line for line in resume_card["lines"])
+            assert any("Workflow Continuity:" in line for line in resume_card["lines"])
+            assert any("当前治理焦点:" in line for line in resume_card["lines"])
+            assert any("建议先做:" in line for line in resume_card["lines"])
         finally:
             os.environ["PATH"] = original_path
             os.chdir(original_cwd)
@@ -2260,6 +2335,15 @@ class TestCLISkillAndIntegrate:
             assert host["resume_probe_prompt"].startswith('/super-dev "')
             assert any("新会话里恢复" in item for item in host["resume_checklist"])
             assert any("同一条 Super Dev 流程" in item for item in host["resume_checklist"])
+            assert host["framework_playbook"]["framework"] == "uni-app"
+            assert any(
+                "provider" in item for item in host["framework_playbook"]["native_capabilities"]
+            )
+            assert any("uni-app playbook" in item for item in host["runtime_checklist"])
+            assert any("框架专项原生能力面" in item for item in host["runtime_checklist"])
+            assert any("框架专项必验场景" in item for item in host["runtime_checklist"])
+            assert any("跨平台框架专项能力" in item for item in host["pass_criteria"])
+            assert any("uni-app 的专项 playbook" in item for item in host["resume_checklist"])
         finally:
             os.chdir(original_cwd)
 
@@ -2392,7 +2476,17 @@ class TestCLISkillAndIntegrate:
             assert "流程状态卡: " in output
             assert "恢复探针:" in output
             assert ".super-dev/SESSION_BRIEF.md" in output
+            assert "跨平台框架专项: uni-app" in output
+            assert "原生能力面:" in output
+            assert "必验场景:" in output
             assert "恢复检查清单" in output
+            md_reports = list((temp_project_dir / "output").glob("*-host-runtime-validation.md"))
+            assert md_reports
+            markdown = md_reports[0].read_text(encoding="utf-8")
+            assert "### Framework Playbook" in markdown
+            assert "- Framework: uni-app" in markdown
+            assert "Native Capabilities:" in markdown
+            assert "Validation Surfaces:" in markdown
         finally:
             os.chdir(original_cwd)
 
@@ -3262,6 +3356,13 @@ class TestCLIPipeline:
             assert payload["session_resume_card"]["host_first_sentence"].startswith('/super-dev "')
             assert ".super-dev/SESSION_BRIEF.md" in payload["session_resume_card"]["session_brief_path"]
             assert ".super-dev/workflow-state.json" in payload["session_resume_card"]["workflow_state_path"]
+            assert ".super-dev/workflow-events.jsonl" in payload["session_resume_card"]["workflow_event_log_path"]
+            assert payload["session_resume_card"]["operational_harnesses"]
+            assert payload["session_resume_card"]["recent_snapshots"]
+            assert payload["session_resume_card"]["recent_events"]
+            assert payload["session_resume_card"]["recent_timeline"]
+            assert payload["session_resume_card"]["scenario_cards"]
+            assert payload["session_resume_card"]["scenario_cards"][0]["id"] == "resume_workday"
             assert "继续仓库里已有的 Super Dev 流程" in payload["quick_start"]
             assert ".super-dev/SESSION_BRIEF.md" in payload["quick_start"]
             assert "只有用户明确说取消当前流程" in payload["quick_start"]
@@ -3289,7 +3390,12 @@ class TestCLIPipeline:
             assert "如果你是在继续已有流程" in output
             assert "流程状态卡: " in output
             assert "继续规则: 用户说“改一下 / 补充 / 继续改 / 确认 / 通过”时" in output
-            assert ".super-dev/SESSION_BRIEF.md" in (temp_project_dir / ".super-dev" / "SESSION_BRIEF.md").read_text(encoding="utf-8")
+            brief = (temp_project_dir / ".super-dev" / "SESSION_BRIEF.md").read_text(encoding="utf-8")
+            assert ".super-dev/SESSION_BRIEF.md" in brief
+            assert ".super-dev/hook-history.jsonl" in brief
+            assert "## 运行时 Harness 摘要" in brief
+            assert "## 最近 Hook 事件" in brief
+            assert "## 最近关键时间线" in brief
         finally:
             os.chdir(original_cwd)
 
@@ -3313,13 +3419,283 @@ class TestCLIPipeline:
             assert "继续围绕 PRD、Architecture、UIUX 修改或确认" in payload["user_next_action"]
             brief = (temp_project_dir / ".super-dev" / "SESSION_BRIEF.md").read_text(encoding="utf-8")
             workflow_state = json.loads((temp_project_dir / ".super-dev" / "workflow-state.json").read_text(encoding="utf-8"))
+            latest_snapshot = temp_project_dir / ".super-dev" / "workflow-history" / "latest.json"
             assert "当前步骤: 等待三文档确认" in brief
             assert ".super-dev/workflow-state.json" in brief
+            assert ".super-dev/workflow-history/latest.json" in brief
             assert "会话连续性规则" in brief
             assert "下次回来怎么继续" in brief
             assert "super-dev resume" in brief
+            assert latest_snapshot.exists()
+            latest_payload = json.loads(latest_snapshot.read_text(encoding="utf-8"))
             assert workflow_state["status"] == "waiting_docs_confirmation"
             assert workflow_state["current_step_label"] == "等待三文档确认"
+            assert latest_payload["status"] == "waiting_docs_confirmation"
+            assert latest_payload["current_step_label"] == "等待三文档确认"
+        finally:
+            os.chdir(original_cwd)
+
+    def test_run_status_json_with_workflow_context_exposes_operational_harnesses(
+        self,
+        temp_project_dir: Path,
+        monkeypatch,
+        capsys,
+    ):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            _prepare_workflow_context(temp_project_dir)
+            cli = SuperDevCLI()
+            assert cli.run(["run", "--status", "--json"]) == 0
+            payload = json.loads(capsys.readouterr().out)
+            assert payload["framework_playbook"]["framework"] == "uni-app"
+            assert payload["recent_snapshots"]
+            assert payload["recent_events"]
+            assert payload["recent_hook_events"]
+            assert payload["operational_harnesses"]
+            assert payload["operational_focus"]["status"] == "needs_attention"
+            assert payload["operational_focus"]["kind"] == "framework"
+            assert {item["kind"] for item in payload["operational_harnesses"]} == {
+                "workflow",
+                "framework",
+                "hooks",
+            }
+        finally:
+            os.chdir(original_cwd)
+
+    def test_harness_status_json_reports_operational_harnesses(
+        self, temp_project_dir: Path, monkeypatch, capsys
+    ):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            _prepare_workflow_context(temp_project_dir)
+            output_dir = temp_project_dir / "output"
+            (output_dir / f"{temp_project_dir.name}-frontend-runtime.json").write_text(
+                json.dumps(
+                    {
+                        "passed": True,
+                        "checks": {
+                            "ui_contract_json": True,
+                            "output_frontend_design_tokens": True,
+                            "ui_contract_alignment": True,
+                            "ui_theme_entry": True,
+                            "ui_navigation_shell": True,
+                            "ui_component_imports": True,
+                            "ui_banned_patterns": True,
+                            "ui_framework_playbook": True,
+                            "ui_framework_execution": True,
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (output_dir / f"{temp_project_dir.name}-ui-contract-alignment.json").write_text(
+                json.dumps(
+                    {
+                        "framework_execution": {
+                            "label": "框架专项执行",
+                            "passed": True,
+                            "expected": "uni / provider / navigationStyle",
+                            "observed": "uni / provider / navigationStyle",
+                        }
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            cli = SuperDevCLI()
+            monkeypatch.setattr(cli, "_preferred_host_target_for_project", lambda project_dir: "codex-cli")
+            assert cli.run(["next", "--json"]) == 0
+            capsys.readouterr()
+
+            assert cli.run(["harness", "status", "--json", "--hook-limit", "1"]) == 0
+            payload = json.loads(capsys.readouterr().out)
+            assert payload["all_passed"] is True
+            assert payload["operational_focus"]["status"] == "passed"
+            assert payload["operational_focus"]["summary"]
+            assert set(payload["harnesses"]) == {"workflow", "framework", "hooks"}
+            assert payload["json_file"].endswith("-operational-harness.json")
+            assert payload["report_file"].endswith("-operational-harness.md")
+            assert payload["harnesses"]["workflow"]["passed"] is True
+            assert payload["harnesses"]["workflow"]["recent_snapshots"]
+            assert payload["harnesses"]["framework"]["passed"] is True
+            assert payload["harnesses"]["framework"]["framework"] == "uni-app"
+            assert payload["harnesses"]["hooks"]["passed"] is True
+            assert payload["harnesses"]["hooks"]["total_events"] == 1
+            assert payload["harnesses"]["hooks"]["json_file"].endswith("-hook-harness.json")
+        finally:
+            os.chdir(original_cwd)
+
+    def test_harness_operational_json_reports_unified_operational_harness(
+        self, temp_project_dir: Path, monkeypatch, capsys
+    ):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            _prepare_workflow_context(temp_project_dir)
+            output_dir = temp_project_dir / "output"
+            (output_dir / f"{temp_project_dir.name}-frontend-runtime.json").write_text(
+                json.dumps(
+                    {
+                        "passed": True,
+                        "checks": {
+                            "ui_contract_json": True,
+                            "output_frontend_design_tokens": True,
+                            "ui_contract_alignment": True,
+                            "ui_theme_entry": True,
+                            "ui_navigation_shell": True,
+                            "ui_component_imports": True,
+                            "ui_banned_patterns": True,
+                            "ui_framework_playbook": True,
+                            "ui_framework_execution": True,
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (output_dir / f"{temp_project_dir.name}-ui-contract-alignment.json").write_text(
+                json.dumps(
+                    {
+                        "framework_execution": {
+                            "label": "框架专项执行",
+                            "passed": True,
+                        }
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            cli = SuperDevCLI()
+            monkeypatch.setattr(cli, "_preferred_host_target_for_project", lambda project_dir: "codex-cli")
+            assert cli.run(["next", "--json"]) == 0
+            capsys.readouterr()
+
+            assert cli.run(["harness", "operational", "--json", "--hook-limit", "1"]) == 0
+            payload = json.loads(capsys.readouterr().out)
+            assert payload["enabled"] is True
+            assert payload["passed"] is True
+            assert payload["enabled_count"] == 3
+            assert payload["passed_count"] == 3
+            assert payload["harnesses"]["workflow"]["enabled"] is True
+            assert payload["harnesses"]["framework"]["enabled"] is True
+            assert payload["harnesses"]["hooks"]["enabled"] is True
+            assert payload["json_file"].endswith("-operational-harness.json")
+            assert payload["report_file"].endswith("-operational-harness.md")
+        finally:
+            os.chdir(original_cwd)
+
+    def test_harness_operational_json_emits_unified_report(
+        self, temp_project_dir: Path, monkeypatch, capsys
+    ):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            _prepare_workflow_context(temp_project_dir)
+            output_dir = temp_project_dir / "output"
+            (output_dir / f"{temp_project_dir.name}-frontend-runtime.json").write_text(
+                json.dumps(
+                    {
+                        "passed": True,
+                        "checks": {
+                            "ui_contract_json": True,
+                            "output_frontend_design_tokens": True,
+                            "ui_contract_alignment": True,
+                            "ui_theme_entry": True,
+                            "ui_navigation_shell": True,
+                            "ui_component_imports": True,
+                            "ui_banned_patterns": True,
+                            "ui_framework_playbook": True,
+                            "ui_framework_execution": True,
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (output_dir / f"{temp_project_dir.name}-ui-contract-alignment.json").write_text(
+                json.dumps(
+                    {
+                        "framework_execution": {
+                            "label": "框架专项执行",
+                            "passed": True,
+                        }
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            cli = SuperDevCLI()
+            monkeypatch.setattr(cli, "_preferred_host_target_for_project", lambda project_dir: "codex-cli")
+            assert cli.run(["next", "--json"]) == 0
+            capsys.readouterr()
+
+            assert cli.run(["harness", "operational", "--json", "--hook-limit", "1"]) == 0
+            payload = json.loads(capsys.readouterr().out)
+            assert payload["enabled"] is True
+            assert payload["passed"] is True
+            assert payload["json_file"].endswith("-operational-harness.json")
+            assert payload["report_file"].endswith("-operational-harness.md")
+            assert set(payload["harnesses"]) == {"workflow", "framework", "hooks"}
+        finally:
+            os.chdir(original_cwd)
+
+    def test_harness_workflow_json_exposes_snapshot_and_event_paths(
+        self, temp_project_dir: Path, monkeypatch, capsys
+    ):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            _prepare_workflow_context(temp_project_dir)
+            cli = SuperDevCLI()
+            monkeypatch.setattr(cli, "_preferred_host_target_for_project", lambda project_dir: "codex-cli")
+            assert cli.run(["next", "--json"]) == 0
+            capsys.readouterr()
+
+            assert cli.run(["harness", "workflow", "--json"]) == 0
+            payload = json.loads(capsys.readouterr().out)
+            assert payload["kind"] == "workflow"
+            assert payload["enabled"] is True
+            assert payload["passed"] is True
+            assert payload["source_files"]["workflow_state"].endswith(".super-dev/workflow-state.json")
+            assert payload["source_files"]["latest_snapshot"].endswith(".super-dev/workflow-history/latest.json")
+            assert payload["source_files"]["workflow_event_log"].endswith(".super-dev/workflow-events.jsonl")
+            assert payload["json_file"].endswith("-workflow-harness.json")
+        finally:
+            os.chdir(original_cwd)
+
+    def test_harness_timeline_json_exposes_unified_operational_timeline(
+        self, temp_project_dir: Path, monkeypatch, capsys
+    ):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+        try:
+            _prepare_workflow_context(temp_project_dir)
+            cli = SuperDevCLI()
+            monkeypatch.setattr(cli, "_preferred_host_target_for_project", lambda project_dir: "codex-cli")
+            assert cli.run(["next", "--json"]) == 0
+            capsys.readouterr()
+
+            assert cli.run(["harness", "timeline", "--json", "--limit", "5"]) == 0
+            payload = json.loads(capsys.readouterr().out)
+            assert payload["count"] >= 1
+            assert payload["timeline"]
+            assert payload["timeline"][0]["kind"] in {"workflow_snapshot", "workflow_event", "hook_event"}
+            assert payload["timeline"][0]["message"]
         finally:
             os.chdir(original_cwd)
 
@@ -3352,9 +3728,25 @@ class TestCLIPipeline:
             assert "继续调 UI" in payload["user_action_shortcuts"]
             assert payload["action_card"]["mode"] == "revise"
             assert "继续调 UI" in payload["action_card"]["examples"]
+            assert payload["recent_snapshots"]
+            assert payload["recent_snapshots"][0]["current_step_label"] == "等待前端预览确认"
             workflow_state = json.loads((temp_project_dir / ".super-dev" / "workflow-state.json").read_text(encoding="utf-8"))
+            latest_snapshot = temp_project_dir / ".super-dev" / "workflow-history" / "latest.json"
             assert workflow_state["status"] == "waiting_preview_confirmation"
             assert workflow_state["gates"]["preview_confirmation"]["status"] == "pending_review"
+            assert latest_snapshot.exists()
+            latest_payload = json.loads(latest_snapshot.read_text(encoding="utf-8"))
+            assert latest_payload["status"] == "waiting_preview_confirmation"
+            event_log = temp_project_dir / ".super-dev" / "workflow-events.jsonl"
+            assert event_log.exists()
+            event_lines = [line for line in event_log.read_text(encoding="utf-8").splitlines() if line.strip()]
+            assert event_lines
+            last_event = json.loads(event_lines[-1])
+            assert last_event["status"] == "waiting_preview_confirmation"
+            brief = (temp_project_dir / ".super-dev" / "SESSION_BRIEF.md").read_text(encoding="utf-8")
+            assert "## 最近流程快照" in brief
+            assert "## 最近状态事件" in brief
+            assert "等待前端预览确认" in brief
         finally:
             os.chdir(original_cwd)
 
@@ -3375,6 +3767,9 @@ class TestCLIPipeline:
             assert "App/Desktop 恢复入口:" in output
             assert "CLI 恢复入口:" in output
             assert "自然语言示例: 这里补一下" in output
+            assert "真实场景: 第二天回来继续开发 -> super-dev resume" in output
+            assert "真实场景: 我只想知道现在先做什么 -> super-dev next" in output
+            assert "真实场景: 本地流程跑到一半中断后恢复 -> super-dev run --resume" in output
             assert "流程状态卡:" in output
             assert "机器侧动作: super-dev review docs --status confirmed --comment \"三文档已确认\"" in output
         finally:
@@ -3392,6 +3787,9 @@ class TestCLIPipeline:
             assert "当前步骤: 等待三文档确认" in brief
             assert "你现在可以直接说:" in brief
             assert "自然语言示例: 这里补一下" in brief
+            assert "## 现实场景怎么做" in brief
+            assert "- 第二天回来继续开发: `super-dev resume`" in brief
+            assert "- 我只想知道现在先做什么: `super-dev next`" in brief
             assert "修改、补充、重写、继续完善" in brief
             assert "只有用户明确表达“确认/通过/进入下一阶段”" in brief
         finally:

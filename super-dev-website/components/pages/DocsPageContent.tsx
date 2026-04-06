@@ -97,12 +97,12 @@ const zhContent: Content = {
   heroBody:
     '这份文档说明安装方式、宿主接入、触发方式、流水线、代码库理解、回归守卫、知识库、门禁和交付要求。',
   heroStats: [
-    { label: '适配宿主', value: '20' },
+    { label: '宿主总数', value: '20+1' },
     { label: '专家 Agent', value: '10' },
     { label: '核心阶段', value: '9 段' },
   ],
   sections: [
-    { id: 'highlights', label: 'v2.3.1 新功能', icon: Zap },
+    { id: 'highlights', label: 'v2.3.2 新功能', icon: Zap },
     { id: 'governance', label: '产品定位', icon: BookOpen },
     { id: 'install', label: '安装方式', icon: Package },
     { id: 'surfaces', label: '接入面', icon: Boxes },
@@ -128,7 +128,7 @@ const zhContent: Content = {
   installBullets: [
     'pip 或 uv 会自动安装 Super Dev 的 Python 依赖。',
     '不会自动安装 Claude Code、Cursor、Trae、Gemini CLI、VS Code Copilot 等宿主本体。',
-    '终端输入 super-dev 后，会进入宿主安装引导，并把 21 个适配宿主的对应协议面写入宿主和项目。',
+    '终端输入 super-dev 后，会进入宿主安装引导，并把 20 个统一接入宿主的对应协议面写入宿主和项目；OpenClaw 仍是单独的手动插件宿主。',
   ],
   installCode:
     'pip install -U super-dev\n# 或\nuv tool install super-dev\n\n# 打开安装引导\nsuper-dev\n\n# OpenClaw 用户额外安装\nopenclaw plugins install @super-dev/openclaw-plugin\n# 或安装 ClawHub Skill\nclawhub install super-dev\n\n# 更新到最新版\nsuper-dev update',
@@ -153,13 +153,13 @@ const zhContent: Content = {
     },
   ],
   triggerTitle: '触发方式',
-  triggerBody: '只记住两种触发方式即可。协议细节放在宿主矩阵和接入面一节展开。',
+  triggerBody: '大多数宿主只需要记住 slash 或文本触发；Codex 属于三入口模型，宿主矩阵里会单独展开。',
   triggerCards: [
     {
       title: 'Slash 宿主',
       command: '/super-dev 你的需求',
       hosts: SLASH_HOSTS,
-      note: '宿主会通过 commands / workflows / subagents / rules 进入 Super Dev 流水线。',
+      note: '宿主会通过 commands / workflows / subagents / rules / steering slash entry 进入 Super Dev 流水线；Codex App/Desktop 也会把启用的 super-dev Skill 暴露进 `/` 列表。',
       variant: 'certified',
     },
     {
@@ -176,15 +176,15 @@ const zhContent: Content = {
     {
       category: 'CLI',
       items: [
-        { host: 'claude-code', protocol: '官方 commands + subagents', grade: 'Certified', trigger: '/super-dev' },
-        { host: 'codex-cli', protocol: '官方 AGENTS.md + 官方 Skills', grade: 'Certified', trigger: 'super-dev:' },
+        { host: 'claude-code', protocol: '官方 CLAUDE.md + skills + optional plugin', grade: 'Certified', trigger: '/super-dev' },
+        { host: 'codex-cli', protocol: '官方 AGENTS.md + 官方 Skills + repo plugin', grade: 'Certified', trigger: 'App/Desktop: /super-dev · CLI: $super-dev' },
         { host: 'opencode', protocol: '官方 commands + skills', grade: 'Experimental', trigger: '/super-dev' },
         { host: 'gemini-cli', protocol: '官方 commands + GEMINI.md', grade: 'Compatible', trigger: '/super-dev' },
-        { host: 'kiro-cli', protocol: '官方 commands + AGENTS.md', grade: 'Compatible', trigger: '/super-dev' },
+        { host: 'kiro-cli', protocol: '官方 steering slash entry + skills', grade: 'Compatible', trigger: '/super-dev' },
         { host: 'cursor-cli', protocol: '官方 commands + rules', grade: 'Compatible', trigger: '/super-dev' },
-        { host: 'qoder-cli', protocol: '官方 commands + skills', grade: 'Compatible', trigger: '/super-dev' },
-        { host: 'codebuddy-cli', protocol: '官方 commands + skills', grade: 'Compatible', trigger: '/super-dev' },
-        { host: 'openclaw', protocol: 'Plugin SDK + ClawHub Skill', grade: 'Compatible', trigger: '/super-dev' },
+        { host: 'qoder-cli', protocol: '官方 AGENTS.md + rules + commands + skills', grade: 'Compatible', trigger: '/super-dev' },
+        { host: 'copilot-cli', protocol: '官方 copilot-instructions + skills', grade: 'Experimental', trigger: 'super-dev:' },
+        { host: 'codebuddy-cli', protocol: '官方 CODEBUDDY.md + commands + skills', grade: 'Compatible', trigger: '/super-dev' },
       ],
     },
     {
@@ -192,12 +192,21 @@ const zhContent: Content = {
       items: [
         { host: 'cursor', protocol: '官方 commands + rules', grade: 'Experimental', trigger: '/super-dev' },
         { host: 'antigravity', protocol: '官方 commands + GEMINI.md + workflows', grade: 'Compatible', trigger: '/super-dev' },
-        { host: 'kiro', protocol: '官方 project steering + global steering', grade: 'Experimental', trigger: 'super-dev:' },
-        { host: 'qoder', protocol: '官方 commands + rules + skills', grade: 'Experimental', trigger: '/super-dev' },
+        { host: 'kiro', protocol: '官方 project steering + global steering + skills', grade: 'Experimental', trigger: '/super-dev' },
+        { host: 'qoder', protocol: '官方 AGENTS.md + rules + commands + skills', grade: 'Experimental', trigger: '/super-dev' },
         { host: 'trae', protocol: '官方 project rules + 兼容 Skill', grade: 'Compatible', trigger: 'super-dev:' },
         { host: 'vscode-copilot', protocol: '官方 copilot-instructions + AGENTS', grade: 'Experimental', trigger: 'super-dev:' },
-        { host: 'codebuddy', protocol: '官方 commands + skills', grade: 'Experimental', trigger: '/super-dev' },
+        { host: 'codebuddy', protocol: '官方 CODEBUDDY.md + rules + commands + agents + skills', grade: 'Experimental', trigger: '/super-dev' },
         { host: 'windsurf', protocol: '官方 workflows + skills', grade: 'Experimental', trigger: '/super-dev' },
+        { host: 'roo-code', protocol: '官方 commands + rules + custom modes', grade: 'Experimental', trigger: 'super-dev:' },
+        { host: 'kilo-code', protocol: '官方 rules + compatibility skill', grade: 'Experimental', trigger: 'super-dev:' },
+        { host: 'cline', protocol: '官方 rules + skills + AGENTS compatibility', grade: 'Experimental', trigger: 'super-dev:' },
+      ],
+    },
+    {
+      category: '手动插件宿主',
+      items: [
+        { host: 'openclaw', protocol: 'Plugin SDK + ClawHub Skill', grade: 'Compatible', trigger: '/super-dev' },
       ],
     },
   ],
@@ -315,17 +324,17 @@ const zhContent: Content = {
     '先用 smoke 触发语句。',
     '如果宿主直接开始开发，优先判断当前会话没有重新加载规则。',
   ],
-  highlightsTitle: 'v2.3.1 新功能亮点',
-  highlightsBody: '2.3.1 继续把 Codex 深度适配、宿主安装引导、恢复链和 UI 契约治理打磨到同一套真实入口与交付闭环。',
+  highlightsTitle: 'v2.3.2 新功能亮点',
+  highlightsBody: '2.3.2 把 21 个宿主口径、Claude/Codex 深适配、现实场景恢复链、framework harness 与 UI 契约门禁继续收进同一套可发布的产品闭环。',
   highlightsCards: [
-    { title: '知识推送引擎', body: '每阶段自动推送相关知识约束，306文件索引，7阶段映射，L1/L2/L3渐进式加载。' },
-    { title: '知识自演化', body: 'SQLite追踪使用效果，数据驱动权重优化，知识库扩展至270+文件/15万行，覆盖23个技术领域。' },
-    { title: '可编程验证规则', body: '25条YAML声明式规则（14默认+11红队），支持自定义扩展。' },
-    { title: '质量顾问', body: '主动质量建议，Quick Wins优先排序，Spec-Code一致性检测防止代码偏离Spec。' },
-    { title: '专家系统四层武装', body: 'Profile+Knowledge+Rules+Protocol，11个深度Playbook，交叉审查引擎多专家视角自动审查。' },
-    { title: 'Pipeline效能度量', body: 'DORA五指标+Rework Rate，ADR自动生成，Prompt模板版本化。' },
-    { title: '跨系统集成', body: 'A2A协议5个Agent Cards，外部审查集成（CodeRabbit/Qodo），结构化输出5个JSON Schema。' },
-    { title: '基础设施强化', body: 'Web API认证，OpenClaw插件升级至20个Tool，终端UI自适应，1600+测试覆盖。' },
+    { title: '宿主口径统一', body: '20 个统一接入宿主 + 1 个 OpenClaw 手动插件宿主，安装脚本、README、站点矩阵与能力审计页全部统一。' },
+    { title: 'Claude / Codex 深适配', body: '继续按官方 surface 收口到 CLAUDE.md + skills + optional plugin enhancement、AGENTS.md + skills + repo plugin enhancement。' },
+    { title: 'IDE 宿主真实模型', body: 'Kiro / Qoder / Cursor / Trae / CodeBuddy 等宿主的代码、安装引导、文档和官网不再各说各话。' },
+    { title: '现实场景恢复链', body: 'resume / next / continue / doctor / validate / Web API 统一带现实场景卡，SESSION_BRIEF 明确告诉用户现实场景该怎么做。' },
+    { title: 'Workflow / Hook / Operational Harness', body: 'workflow history、语义事件、hook history、recent operational timeline 全部进入 proof-pack 和 release readiness。' },
+    { title: 'Framework Playbook', body: 'uni-app / Taro / React Native / Flutter / Desktop Web Shell playbook 已进入脚手架、runtime、quality gate、proof-pack。' },
+    { title: 'UI 契约门禁', body: 'emoji 功能图标系统级禁用，token、图标库、组件生态、导航骨架、主题入口和 framework harness 一起进入交付门禁。' },
+    { title: '发布级稳定性', body: '全量回归通过，官网、更新历史、文档页与版本真源同步切到 2.3.2，并保持 2150+ 回归通过。' },
   ],
   smokeTitle: 'Smoke 验收',
   smokeCode:
@@ -338,12 +347,12 @@ const enContent: Content = {
   heroBody:
     'This documentation covers installation, host onboarding, triggers, pipeline stages, codebase intelligence, regression guard, local knowledge, workflow gates, and delivery requirements.',
   heroStats: [
-    { label: 'Primary hosts', value: '16' },
-    { label: 'Trigger modes', value: '2' },
+    { label: 'Hosts', value: '20+1' },
+    { label: 'Trigger modes', value: '3' },
     { label: 'Core phases', value: '9' },
   ],
   sections: [
-    { id: 'highlights', label: 'v2.3.1 Highlights', icon: Zap },
+    { id: 'highlights', label: 'v2.3.2 Highlights', icon: Zap },
     { id: 'governance', label: 'Positioning', icon: BookOpen },
     { id: 'install', label: 'Installation', icon: Package },
     { id: 'surfaces', label: 'Integration Surfaces', icon: Boxes },
@@ -369,7 +378,7 @@ const enContent: Content = {
   installBullets: [
     'pip or uv automatically install Super Dev and its Python dependencies.',
     'They do not install Claude Code, Cursor, Trae, Gemini CLI, VS Code Copilot, or any host application.',
-    'Running super-dev opens the host installer and writes the required protocol surfaces for the 16 primary host profiles.',
+    'Running super-dev opens the installer and writes the required protocol surfaces for 20 unified hosts; OpenClaw remains a separate manual plugin host.',
   ],
   installCode:
     'pip install -U super-dev\n# or\nuv tool install super-dev\n\n# open the installer\nsuper-dev\n\n# OpenClaw users: install plugin or skill\nopenclaw plugins install @super-dev/openclaw-plugin\n# or\nclawhub install super-dev\n\n# update later\nsuper-dev update',
@@ -394,13 +403,13 @@ const enContent: Content = {
     },
   ],
   triggerTitle: 'Trigger model',
-  triggerBody: 'There are only two trigger syntaxes. Learn those first, then inspect the host protocol surfaces when needed.',
+  triggerBody: 'Most hosts only need slash or text triggers. Codex is the notable three-entry exception and is expanded in the host matrix.',
   triggerCards: [
     {
       title: 'Slash hosts',
       command: '/super-dev your requirement',
       hosts: SLASH_HOSTS,
-      note: 'The host enters the Super Dev pipeline through official commands, workflows, rules, or subagents.',
+      note: 'The host enters the Super Dev pipeline through official commands, workflows, rules, subagents, or steering slash entry; Codex App/Desktop also exposes the enabled super-dev Skill in the `/` list.',
       variant: 'certified',
     },
     {
@@ -417,15 +426,15 @@ const enContent: Content = {
     {
       category: 'CLI',
       items: [
-        { host: 'claude-code', protocol: 'official commands + subagents', grade: 'Certified', trigger: '/super-dev' },
-        { host: 'codex-cli', protocol: 'official AGENTS.md + official Skills', grade: 'Certified', trigger: 'super-dev:' },
+        { host: 'claude-code', protocol: 'official CLAUDE.md + skills + optional plugin', grade: 'Certified', trigger: '/super-dev' },
+        { host: 'codex-cli', protocol: 'official AGENTS.md + official Skills + repo plugin', grade: 'Certified', trigger: 'App/Desktop: /super-dev · CLI: $super-dev' },
         { host: 'opencode', protocol: 'official commands + skills', grade: 'Experimental', trigger: '/super-dev' },
         { host: 'gemini-cli', protocol: 'official commands + GEMINI.md', grade: 'Compatible', trigger: '/super-dev' },
-        { host: 'kiro-cli', protocol: 'official commands + AGENTS.md', grade: 'Compatible', trigger: '/super-dev' },
+        { host: 'kiro-cli', protocol: 'official steering slash entry + skills', grade: 'Compatible', trigger: '/super-dev' },
         { host: 'cursor-cli', protocol: 'official commands + rules', grade: 'Compatible', trigger: '/super-dev' },
-        { host: 'qoder-cli', protocol: 'official commands + skills', grade: 'Compatible', trigger: '/super-dev' },
-        { host: 'codebuddy-cli', protocol: 'official commands + skills', grade: 'Compatible', trigger: '/super-dev' },
-        { host: 'openclaw', protocol: 'Plugin SDK + ClawHub Skill', grade: 'Compatible', trigger: '/super-dev' },
+        { host: 'qoder-cli', protocol: 'official AGENTS.md + rules + commands + skills', grade: 'Compatible', trigger: '/super-dev' },
+        { host: 'copilot-cli', protocol: 'official copilot-instructions + skills', grade: 'Experimental', trigger: 'super-dev:' },
+        { host: 'codebuddy-cli', protocol: 'official CODEBUDDY.md + commands + skills', grade: 'Compatible', trigger: '/super-dev' },
       ],
     },
     {
@@ -433,12 +442,21 @@ const enContent: Content = {
       items: [
         { host: 'cursor', protocol: 'official commands + rules', grade: 'Experimental', trigger: '/super-dev' },
         { host: 'antigravity', protocol: 'official commands + GEMINI.md + workflows', grade: 'Compatible', trigger: '/super-dev' },
-        { host: 'kiro', protocol: 'official project steering + global steering', grade: 'Experimental', trigger: 'super-dev:' },
-        { host: 'qoder', protocol: 'official commands + rules + skills', grade: 'Experimental', trigger: '/super-dev' },
+        { host: 'kiro', protocol: 'official project steering + global steering + skills', grade: 'Experimental', trigger: '/super-dev' },
+        { host: 'qoder', protocol: 'official AGENTS.md + rules + commands + skills', grade: 'Experimental', trigger: '/super-dev' },
         { host: 'trae', protocol: 'official project rules + compatibility skill', grade: 'Compatible', trigger: 'super-dev:' },
         { host: 'vscode-copilot', protocol: 'official copilot-instructions + AGENTS', grade: 'Experimental', trigger: 'super-dev:' },
-        { host: 'codebuddy', protocol: 'official commands + skills', grade: 'Experimental', trigger: '/super-dev' },
+        { host: 'codebuddy', protocol: 'official CODEBUDDY.md + rules + commands + agents + skills', grade: 'Experimental', trigger: '/super-dev' },
         { host: 'windsurf', protocol: 'official workflows + skills', grade: 'Experimental', trigger: '/super-dev' },
+        { host: 'roo-code', protocol: 'official commands + rules + custom modes', grade: 'Experimental', trigger: 'super-dev:' },
+        { host: 'kilo-code', protocol: 'official rules + compatibility skill', grade: 'Experimental', trigger: 'super-dev:' },
+        { host: 'cline', protocol: 'official rules + skills + AGENTS compatibility', grade: 'Experimental', trigger: 'super-dev:' },
+      ],
+    },
+    {
+      category: 'Manual Plugin',
+      items: [
+        { host: 'openclaw', protocol: 'Plugin SDK + ClawHub Skill', grade: 'Compatible', trigger: '/super-dev' },
       ],
     },
   ],
@@ -556,17 +574,17 @@ const enContent: Content = {
     'Use a smoke prompt before trying the real requirement.',
     'If the host starts coding immediately, assume the current session did not reload the rules.',
   ],
-  highlightsTitle: 'v2.3.1 Highlights',
-  highlightsBody: 'Version 2.3.1 continues hardening Codex deep adaptation, host onboarding, recovery flows, and UI contract governance into one coherent delivery system.',
+  highlightsTitle: 'v2.3.2 Highlights',
+  highlightsBody: 'Version 2.3.2 keeps tightening the 21-host product model, Claude/Codex deep adaptation, scenario-based recovery UX, framework harnesses, and UI contract gates into one publishable system.',
   highlightsCards: [
-    { title: 'Knowledge Push Engine', body: 'Auto-push relevant knowledge per pipeline phase. 306 files indexed, 7-phase mapping, L1/L2/L3 progressive loading.' },
-    { title: 'Knowledge Evolution', body: 'SQLite-based usage tracking with data-driven weight optimization. Knowledge base expanded to 270+ files / 150K lines across 23 domains.' },
-    { title: 'Programmable Validation Rules', body: '25 YAML declarative rules (14 default + 11 redteam), fully customizable.' },
-    { title: 'Quality Advisor', body: 'Proactive quality suggestions with Quick Wins prioritization. Spec-Code consistency checker prevents code drift.' },
-    { title: 'Expert System 4-Layer Upgrade', body: 'Profile+Knowledge+Rules+Protocol, 11 deep Playbooks, cross-review engine for multi-expert artifact validation.' },
-    { title: 'Pipeline Metrics', body: 'DORA 5 indicators + Rework Rate, ADR auto-generation, prompt template versioning.' },
-    { title: 'Cross-System Integration', body: 'A2A protocol with 5 Agent Cards, external review integration (CodeRabbit/Qodo), 5 structured output JSON Schemas.' },
-    { title: 'Infrastructure Hardening', body: 'Web API authentication, OpenClaw plugin upgraded to 20 Tools, responsive terminal UI, 1600+ test coverage.' },
+    { title: 'Unified Host Product Model', body: '20 unified integration hosts plus 1 manual OpenClaw plugin host, with install scripts, README, website docs, and audits finally aligned.' },
+    { title: 'Claude / Codex Deep Adaptation', body: 'Both hosts were pushed closer to their official surfaces: CLAUDE.md + skills + optional plugin enhancement, and AGENTS.md + skills + repo plugin enhancement.' },
+    { title: 'Real IDE Surface Modeling', body: 'Kiro, Qoder, Cursor, Trae, and CodeBuddy family hosts now present one coherent model across code, onboarding, docs, and website guidance.' },
+    { title: 'Scenario-Based Recovery UX', body: 'resume / next / continue / doctor / validate / Web API now expose scenario cards, and SESSION_BRIEF explains what to do in real-world cases.' },
+    { title: 'Workflow / Hook / Operational Harness', body: 'workflow history, semantic events, hook history, and the recent operational timeline now feed proof-pack and release readiness.' },
+    { title: 'Framework Playbooks', body: 'uni-app, Taro, React Native, Flutter, and Desktop Web Shell playbooks now drive scaffolds, runtime, quality gates, and release evidence.' },
+    { title: 'UI Contract Gates', body: 'Emoji are systemically banned as functional icons, and tokens, icon libraries, component ecosystems, nav shells, theme entry points, and framework harnesses all participate in delivery gates.' },
+    { title: 'Release-Grade Stability', body: 'Full regression coverage is green, and the homepage, changelog, docs page, and version sources are all aligned to 2.3.2 with 2150+ passing checks.' },
   ],
   smokeTitle: 'Smoke validation',
   smokeCode:
@@ -619,7 +637,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             <div className="max-w-[860px]">
               <div className="mb-5 flex flex-wrap items-center gap-2">
                 <Badge variant="version">{content.heroKicker}</Badge>
-                <Badge variant="certified">v2.3.1</Badge>
+                <Badge variant="certified">v2.3.2</Badge>
                 <Badge variant="compatible">{locale === 'en' ? 'Bilingual' : '中英双语'}</Badge>
               </div>
               <h1 className="max-w-[900px] text-4xl font-bold leading-[1.08] tracking-tight text-text-primary sm:text-5xl lg:text-[3.5rem]">

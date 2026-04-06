@@ -55,6 +55,11 @@ class FrontendScaffoldBuilder:
     def _build_html(self, ui_contract: dict) -> str:
         typography = ui_contract.get("typography_preset", {})
         style_direction = ui_contract.get("style_direction", {})
+        framework_playbook = (
+            ui_contract.get("framework_playbook")
+            if isinstance(ui_contract.get("framework_playbook"), dict)
+            else {}
+        )
         component_stack = ui_contract.get("component_stack", {}) if isinstance(ui_contract.get("component_stack"), dict) else {}
         icon_system = (
             ui_contract.get("icon_system")
@@ -200,6 +205,25 @@ class FrontendScaffoldBuilder:
             <strong>Case Study Ready</strong>
             <p>支持把页面、文档、任务状态和质量报告一起用于内部评审或商业验证。</p>
             <a class="inline-link" href="#faq">查看 FAQ</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="card framework-playbook" {'' if framework_playbook else 'hidden'}>
+        <div class="section-head">
+          <h2>跨平台框架执行护栏</h2>
+          <p>跨平台项目要先冻结框架专项能力、平台差异、验收面和交付证据，再进入实现。</p>
+        </div>
+        <div class="split">
+          <div>
+            <p class="eyebrow">Framework Playbook</p>
+            <h3>{html.escape(str(framework_playbook.get("framework") or "跨平台框架"))}</h3>
+            <ul id="framework-modules" class="delivery-list"></ul>
+          </div>
+          <div>
+            <p class="eyebrow">Native & Validation</p>
+            <ul id="framework-native" class="delivery-list"></ul>
+            <ul id="framework-validation" class="delivery-list"></ul>
           </div>
         </div>
       </section>
@@ -685,6 +709,7 @@ body {
                 ),
                 "surface": ui_contract.get("surface"),
                 "information_density": ui_contract.get("information_density"),
+                "framework_playbook": ui_contract.get("framework_playbook"),
             },
         }
         payload_str = json.dumps(payload, ensure_ascii=False, indent=2)
@@ -694,6 +719,9 @@ body {
 const docContainer = document.getElementById("doc-links");
 const reqContainer = document.getElementById("requirements");
 const timelineContainer = document.getElementById("timeline");
+const frameworkModules = document.getElementById("framework-modules");
+const frameworkNative = document.getElementById("framework-native");
+const frameworkValidation = document.getElementById("framework-validation");
 
 const docList = [
   {{ title: "PRD 文档", desc: "产品目标、需求边界、验收标准", path: DATA.docs.prd }},
@@ -725,6 +753,25 @@ for (const phase of DATA.phases) {{
   const li = document.createElement("li");
   li.innerHTML = `<b>${{phase.title}}</b><p>${{phase.objective}}</p>`;
   timelineContainer.appendChild(li);
+}}
+
+const frameworkPlaybook = DATA.ui_contract.framework_playbook || null;
+if (frameworkPlaybook && frameworkModules && frameworkNative && frameworkValidation) {{
+  for (const item of frameworkPlaybook.implementation_modules || []) {{
+    const li = document.createElement("li");
+    li.textContent = item;
+    frameworkModules.appendChild(li);
+  }}
+  for (const item of frameworkPlaybook.native_capabilities || []) {{
+    const li = document.createElement("li");
+    li.textContent = item;
+    frameworkNative.appendChild(li);
+  }}
+  for (const item of frameworkPlaybook.validation_surfaces || []) {{
+    const li = document.createElement("li");
+    li.textContent = item;
+    frameworkValidation.appendChild(li);
+  }}
 }}
 
 function relativePath(path) {{

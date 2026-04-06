@@ -2,7 +2,7 @@
 Pipeline Hook 管理器 — 注册、匹配、执行 hook。
 
 Pipeline hook 系统架构:
-- 10 种 hook 事件
+- Pipeline 事件 + workflow 事件
 - 事件匹配模式 (阶段名 / 通配符)
 - Shell 命令执行 + 超时控制
 - 执行结果记录和日志
@@ -14,11 +14,14 @@ Pipeline hook 系统架构:
 from __future__ import annotations
 
 import fnmatch
+import json
 import subprocess  # nosec B404
 import time
 from enum import Enum
 from pathlib import Path
 from typing import Any
+
+import yaml  # type: ignore[import-untyped]
 
 from ..utils import get_logger
 from .models import HookConfig, HookDefinition, HookResult, HookType
@@ -27,10 +30,7 @@ logger = get_logger("hooks")
 
 
 class HookEvent(str, Enum):
-    """Pipeline hook 事件类型
-
-    Super Dev pipeline 适用的 8 种 hook 事件类型。
-    """
+    """Pipeline hook 事件类型。"""
 
     PRE_PHASE = "PrePhase"  # 阶段执行前
     POST_PHASE = "PostPhase"  # 阶段执行后
@@ -40,6 +40,7 @@ class HookEvent(str, Enum):
     POST_QUALITY_GATE = "PostQualityGate"  # 质量门禁后
     ON_ERROR = "OnError"  # 错误发生时
     SESSION_START = "SessionStart"  # 会话开始
+    WORKFLOW_EVENT = "WorkflowEvent"  # workflow/review state 事件
 
 
 class HookManager:
@@ -60,6 +61,65 @@ class HookManager:
         """从 super-dev.yaml 的 hooks 段创建管理器"""
         config = HookConfig.from_dict(yaml_config.get("hooks"))
         return cls(config=config, project_dir=project_dir)
+
+    @staticmethod
+    def hook_history_file(project_dir: Path | str) -> Path:
+        """Path to persisted hook execution history."""
+        project_path = Path(project_dir).resolve()
+        return project_path / ".super-dev" / "hook-history.jsonl"
+
+    @classmethod
+    def load_recent_history(
+        cls,
+        project_dir: Path | str,
+        limit: int = 20,
+    ) -> list[HookResult]:
+        """Load recent persisted hook execution history."""
+        history_path = cls.hook_history_file(project_dir)
+        if not history_path.exists():
+            return []
+
+        items: list[HookResult] = []
+        try:
+            lines = [line for line in history_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        except Exception as exc:
+            logger.warning(f"读取 hook 历史失败: {exc}")
+            return []
+
+        for line in reversed(lines):
+            try:
+                payload = json.loads(line)
+                items.append(HookResult.from_dict(payload))
+            except Exception:
+                continue
+            if len(items) >= max(limit, 1):
+                break
+        return items
+
+    @classmethod
+    def dispatch_workflow_event(
+        cls,
+        project_dir: Path | str,
+        payload: dict[str, Any],
+    ) -> list[HookResult]:
+        """从 super-dev.yaml 动态加载并分发 workflow 事件 hook。"""
+        project_path = Path(project_dir).resolve()
+        config_path = project_path / "super-dev.yaml"
+        yaml_config: dict[str, Any] = {}
+        if config_path.exists():
+            try:
+                yaml_config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+            except Exception as exc:
+                logger.warning(f"Workflow hook 配置加载失败: {exc}")
+                yaml_config = {}
+        manager = cls.from_yaml_config(yaml_config, project_dir=project_path)
+        phase = str(payload.get("event", "")).strip() or str(payload.get("review_type", "")).strip()
+        context = {
+            key: str(value)
+            for key, value in payload.items()
+            if isinstance(value, str | int | float | bool)
+        }
+        return manager.execute(HookEvent.WORKFLOW_EVENT, context=context, phase=phase)
 
     def register_callback(
         self,
@@ -90,6 +150,9 @@ class HookManager:
             HookResult 列表
         """
         event_name = event.value if isinstance(event, HookEvent) else event
+        payload = dict(context or {})
+        if phase and "phase" not in payload:
+            payload["phase"] = phase
         results: list[HookResult] = []
 
         # 1. 执行配置文件中的 hook
@@ -97,9 +160,12 @@ class HookManager:
         for defn in definitions:
             if not self._matches(defn.matcher, phase):
                 continue
-            result = self._execute_definition(defn, event_name, context or {})
+            result = self._execute_definition(defn, event_name, payload)
+            result.phase = phase
+            result.source = "config"
             results.append(result)
             self._results.append(result)
+            self._persist_result(result)
 
             if result.blocked:
                 logger.warning(f"Hook 阻止了 pipeline 继续: {event_name} ({defn.command})")
@@ -109,9 +175,12 @@ class HookManager:
         for cb_entry in self._callbacks.get(event_name, []):
             if not self._matches(cb_entry["matcher"], phase):
                 continue
-            result = self._execute_callback(cb_entry["callback"], event_name, context or {})
+            result = self._execute_callback(cb_entry["callback"], event_name, payload)
+            result.phase = phase
+            result.source = "callback"
             results.append(result)
             self._results.append(result)
+            self._persist_result(result)
 
         return results
 
@@ -126,6 +195,10 @@ class HookManager:
     def clear_history(self) -> None:
         """清除执行历史"""
         self._results.clear()
+
+    def get_persisted_history(self, limit: int = 20) -> list[HookResult]:
+        """Load recent persisted hook history for this project."""
+        return self.load_recent_history(self.project_dir, limit=limit)
 
     def list_configured_hooks(self) -> dict[str, list[dict[str, Any]]]:
         """列出所有配置的 hook (用于 CLI 展示)"""
@@ -276,3 +349,13 @@ class HookManager:
                 error=str(e),
                 duration_ms=duration_ms,
             )
+
+    def _persist_result(self, result: HookResult) -> None:
+        """Append hook execution result to project hook history log."""
+        history_path = self.hook_history_file(self.project_dir)
+        try:
+            history_path.parent.mkdir(parents=True, exist_ok=True)
+            with history_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(result.to_dict(), ensure_ascii=False) + "\n")
+        except Exception as exc:
+            logger.warning(f"写入 hook 历史失败: {exc}")

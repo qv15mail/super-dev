@@ -38,16 +38,24 @@ from .catalogs import (
     host_runtime_validation_overrides,
 )
 from .config import ConfigManager, ProjectConfig, get_config_manager
+from .harness_registry import derive_operational_focus, summarize_operational_harnesses
+from .hooks.manager import HookManager
 from .review_state import (
+    describe_workflow_event,
     host_runtime_validation_file,
     load_host_runtime_validation,
+    load_recent_operational_timeline,
+    load_recent_workflow_events,
+    load_recent_workflow_snapshots,
     save_host_runtime_validation,
+    workflow_event_log_file,
 )
 from .terminal import normalize_terminal_text, output_mode_label, output_mode_reason
 from .workflow_state import (
     build_host_entry_prompts,
     build_host_flow_contract,
     build_host_flow_probe,
+    load_framework_playbook_summary,
 )
 
 
@@ -225,7 +233,9 @@ class CliHostOpsMixin:
             explained[host] = [self._format_detection_reason(item) for item in reasons]
         return explained
 
-    def _host_runtime_checklist(self, *, target: str, usage: dict[str, Any]) -> list[str]:
+    def _host_runtime_checklist(
+        self, *, target: str, usage: dict[str, Any], project_dir: Path | None = None
+    ) -> list[str]:
         trigger = str(usage.get("final_trigger", "")).strip() or "-"
         common = [
             f"在宿主中使用最终触发命令进入 Super Dev 流水线：{trigger}",
@@ -234,25 +244,47 @@ class CliHostOpsMixin:
             "确认三文档完成后暂停等待用户确认，而不是直接继续实现。",
             "确认文档确认后能继续进入 Spec、前端运行验证、后端与交付阶段。",
         ]
+        if project_dir is not None:
+            framework_playbook = load_framework_playbook_summary(project_dir)
+            if framework_playbook:
+                common.extend(
+                    [
+                        f"确认当前项目按 {framework_playbook.get('framework', '跨平台框架')} playbook 执行，而不是按普通 Web 假设实现。",
+                        "确认宿主已落实框架专项原生能力面，而不是只完成通用页面实现。",
+                        "确认宿主已按框架专项必验场景完成真实验证，并沉淀交付证据。",
+                    ]
+                )
         overrides = host_runtime_validation_overrides(target)
         return [*overrides.get("runtime_checklist", []), *common]
 
-    def _host_runtime_pass_criteria(self, *, target: str) -> list[str]:
+    def _host_runtime_pass_criteria(
+        self, *, target: str, project_dir: Path | None = None
+    ) -> list[str]:
         common = [
             "首轮响应符合 Super Dev 首轮契约。",
             "关键文档真实落盘到项目目录。",
             "确认门真实生效。",
             "后续恢复路径可用。",
         ]
+        if project_dir is not None and load_framework_playbook_summary(project_dir):
+            common.append("跨平台框架专项能力、必验场景与交付证据均已通过真人验收。")
         overrides = host_runtime_validation_overrides(target)
         return [*overrides.get("pass_criteria", []), *common]
 
-    def _host_resume_checklist(self, *, target: str) -> list[str]:
+    def _host_resume_checklist(
+        self, *, target: str, project_dir: Path | None = None
+    ) -> list[str]:
         common = [
             "重开宿主或新开会话后，使用恢复探针而不是普通闲聊进入当前流程。",
             "确认宿主先读取 `.super-dev/SESSION_BRIEF.md`，并继续当前流程而不是重新开始。",
             "确认用户继续说“改一下 / 补充 / 继续改 / 确认 / 通过”时，宿主仍然留在当前 Super Dev 流程内。",
         ]
+        if project_dir is not None:
+            framework_playbook = load_framework_playbook_summary(project_dir)
+            if framework_playbook:
+                common.append(
+                    f"恢复后继续实现或返工时，仍然遵守 {framework_playbook.get('framework', '跨平台框架')} 的专项 playbook。"
+                )
         overrides = host_runtime_validation_overrides(target)
         return [*overrides.get("resume_checklist", []), *common]
 
@@ -843,7 +875,6 @@ class CliHostOpsMixin:
         from .skills import SkillManager
 
         integration_manager = IntegrationManager(project_dir)
-        integration_targets = IntegrationManager.TARGETS
         skill_manager = SkillManager(project_dir)
 
         report: dict[str, Any] = {"hosts": {}, "overall_ready": True}
@@ -852,18 +883,30 @@ class CliHostOpsMixin:
                 "ready": True,
                 "checks": {},
                 "missing": [],
+                "optional_missing": [],
                 "suggestions": [],
             }
+            surface_groups = integration_manager.readiness_surface_sets(
+                target=target,
+                skill_name=skill_name,
+            )
+            surface_classification = integration_manager.managed_surface_classification(
+                target=target,
+                skill_name=skill_name,
+            )
 
             surface_audit: dict[str, dict[str, Any]] = {}
             for surface_key, surface_path in integration_manager.collect_managed_surface_paths(
                 target=target,
                 skill_name=skill_name,
             ).items():
+                surface_meta = surface_classification.get(surface_key, {})
                 exists = surface_path.exists()
                 audit_entry: dict[str, Any] = {
                     "path": str(surface_path),
                     "exists": exists,
+                    "group": str(surface_meta.get("group", "unclassified")),
+                    "required": bool(surface_meta.get("required", False)),
                     "missing_markers": [],
                 }
                 if exists:
@@ -881,29 +924,41 @@ class CliHostOpsMixin:
                         )
                 surface_audit[surface_key] = audit_entry
 
-            invalid_surfaces = {
+            invalid_required_surfaces = {
                 key: value
                 for key, value in surface_audit.items()
-                if value.get("exists") and value.get("missing_markers")
+                if value.get("exists") and value.get("required") and value.get("missing_markers")
+            }
+            invalid_optional_surfaces = {
+                key: value
+                for key, value in surface_audit.items()
+                if value.get("exists")
+                and not value.get("required")
+                and value.get("missing_markers")
             }
             host_report["checks"]["contract"] = {
-                "ok": not invalid_surfaces,
+                "ok": not invalid_required_surfaces,
                 "surfaces": surface_audit,
-                "invalid_surfaces": invalid_surfaces,
+                "invalid_surfaces": invalid_required_surfaces,
+                "invalid_optional_surfaces": invalid_optional_surfaces,
             }
-            if invalid_surfaces:
+            if invalid_required_surfaces:
                 host_report["ready"] = False
                 host_report["missing"].append("contract")
                 host_report["suggestions"].append(
                     f"super-dev onboard --host {target} --force --yes"
                 )
+            if invalid_optional_surfaces:
+                host_report["optional_missing"].append("contract_optional_surfaces")
 
             if check_integrate:
-                integrate_files = [project_dir / item for item in integration_targets[target].files]
+                integrate_files = surface_groups["official_project"]
+                optional_integrate_files = surface_groups["optional_project"]
                 integrate_ok = all(path.exists() for path in integrate_files)
                 host_report["checks"]["integrate"] = {
                     "ok": integrate_ok,
                     "files": [str(item) for item in integrate_files],
+                    "optional_files": [str(item) for item in optional_integrate_files],
                 }
                 if not integrate_ok:
                     host_report["ready"] = False
@@ -911,28 +966,43 @@ class CliHostOpsMixin:
                     host_report["suggestions"].append(
                         f"super-dev integrate setup --target {target} --force"
                     )
+                user_surface_files = surface_groups["official_user"]
+                optional_user_surface_files = surface_groups["optional_user"]
+                user_surfaces_ok = all(path.exists() for path in user_surface_files)
+                host_report["checks"]["user_surfaces"] = {
+                    "ok": user_surfaces_ok,
+                    "files": [str(item) for item in user_surface_files],
+                    "optional_files": [str(item) for item in optional_user_surface_files],
+                }
+                if user_surface_files and not user_surfaces_ok:
+                    host_report["ready"] = False
+                    host_report["missing"].append("user_surfaces")
+                    host_report["suggestions"].append(
+                        f"super-dev onboard --host {target} --force --yes"
+                    )
 
             if check_skill and IntegrationManager.requires_skill(target):
-                skill_files = IntegrationManager.expected_skill_paths(
-                    target=target, skill_name=skill_name
-                )
+                skill_files = surface_groups["official_skill"]
+                optional_skill_files = surface_groups["optional_skill"]
+                compatibility_skill_files = surface_groups["compatibility_skill"]
+                all_skill_files = skill_files or optional_skill_files or compatibility_skill_files
                 primary_skill_file = (
-                    skill_files[0]
-                    if skill_files
+                    all_skill_files[0]
+                    if all_skill_files
                     else (skill_manager._target_dir(target) / skill_name / "SKILL.md")
                 )
-                surface_available = skill_manager.skill_surface_available(target)
-                skill_ok = any(path.exists() for path in skill_files) if surface_available else True
+                surface_available = bool(skill_files)
+                skill_ok = all(path.exists() for path in skill_files) if surface_available else True
                 host_report["checks"]["skill"] = {
                     "ok": skill_ok,
                     "file": str(primary_skill_file),
-                    "files": (
-                        [str(item) for item in skill_files]
-                        if skill_files
-                        else [str(primary_skill_file)]
-                    ),
+                    "files": [str(item) for item in skill_files] if skill_files else [str(primary_skill_file)],
+                    "optional_files": [str(item) for item in optional_skill_files],
+                    "compatibility_files": [str(item) for item in compatibility_skill_files],
                     "surface_available": surface_available,
-                    "mode": "managed" if surface_available else "compatibility-surface-unavailable",
+                    "mode": "official-project-and-user-skill-surface"
+                    if surface_available
+                    else "compatibility-surface-unavailable",
                 }
                 if surface_available and not skill_ok:
                     host_report["ready"] = False
@@ -951,14 +1021,11 @@ class CliHostOpsMixin:
                     "ok": plugin_ok,
                     "marketplace_file": str(plugin_marketplace),
                     "plugin_manifest": str(plugin_manifest),
-                    "mode": "repo-marketplace-plugin",
+                    "mode": "repo-marketplace-plugin-enhancement",
+                    "required": False,
                 }
                 if not plugin_ok:
-                    host_report["ready"] = False
-                    host_report["missing"].append("plugin_enhancement")
-                    host_report["suggestions"].append(
-                        f"super-dev onboard --host {target} --force --yes"
-                    )
+                    host_report["optional_missing"].append("plugin_enhancement")
             if target == "claude-code":
                 plugin_marketplace = project_dir / ".claude-plugin" / "marketplace.json"
                 plugin_manifest = (
@@ -969,37 +1036,45 @@ class CliHostOpsMixin:
                     "ok": plugin_ok,
                     "marketplace_file": str(plugin_marketplace),
                     "plugin_manifest": str(plugin_manifest),
-                    "mode": "repo-marketplace-plugin",
+                    "mode": "repo-marketplace-plugin-enhancement",
+                    "required": False,
                 }
                 if not plugin_ok:
-                    host_report["ready"] = False
-                    host_report["missing"].append("plugin_enhancement")
-                    host_report["suggestions"].append(
-                        f"super-dev onboard --host {target} --force --yes"
-                    )
+                    host_report["optional_missing"].append("plugin_enhancement")
 
             if check_slash:
-                if IntegrationManager.supports_slash(target):
-                    project_slash = IntegrationManager.resolve_slash_command_path(
-                        target=target,
-                        scope="project",
-                        project_dir=project_dir,
+                required_slash_files = surface_groups["required_slash"]
+                optional_slash_files = surface_groups["optional_slash"]
+                compatibility_slash_files = surface_groups["compatibility_slash"]
+                tracked_slash_files = required_slash_files or optional_slash_files or compatibility_slash_files
+                if tracked_slash_files:
+                    project_slash = next(
+                        (path for path in tracked_slash_files if str(path).startswith(str(project_dir))),
+                        None,
                     )
-                    global_slash = IntegrationManager.resolve_slash_command_path(
-                        target=target,
-                        scope="global",
+                    global_slash = next(
+                        (path for path in tracked_slash_files if not str(path).startswith(str(project_dir))),
+                        None,
                     )
-                    project_ok = project_slash.exists()
-                    global_ok = global_slash.exists()
-                    slash_ok = project_ok or global_ok
-                    scope = "project" if project_ok else ("global" if global_ok else "missing")
+                    project_ok = bool(project_slash and project_slash.exists())
+                    global_ok = bool(global_slash and global_slash.exists())
+                    slash_ok = all(path.exists() for path in required_slash_files) if required_slash_files else True
+                    if required_slash_files:
+                        scope = "project" if project_ok else ("global" if global_ok else "missing")
+                    elif project_ok or global_ok:
+                        scope = "optional"
+                    else:
+                        scope = "not-required"
                     host_report["checks"]["slash"] = {
                         "ok": slash_ok,
                         "scope": scope,
-                        "project_file": str(project_slash),
-                        "global_file": str(global_slash),
+                        "project_file": str(project_slash or ""),
+                        "global_file": str(global_slash or ""),
+                        "required_files": [str(item) for item in required_slash_files],
+                        "optional_files": [str(item) for item in optional_slash_files],
+                        "compatibility_files": [str(item) for item in compatibility_slash_files],
                     }
-                    if not slash_ok:
+                    if required_slash_files and not slash_ok:
                         host_report["ready"] = False
                         host_report["missing"].append("slash")
                         host_report["suggestions"].append(
@@ -1523,6 +1598,7 @@ class CliHostOpsMixin:
 
             host_actions: dict[str, str] = {}
             contract_needs_repair = "contract" in missing
+            user_surfaces_need_repair = "user_surfaces" in missing
 
             if contract_needs_repair:
                 try:
@@ -1552,6 +1628,29 @@ class CliHostOpsMixin:
                     host_actions["integrate"] = "fixed"
             except Exception as exc:
                 host_actions["integrate"] = f"failed: {exc}"
+
+            try:
+                if user_surfaces_need_repair and not contract_needs_repair:
+                    repaired_any = False
+                    if integration_manager.resolve_global_protocol_path(target) is not None:
+                        integration_manager.setup_global_protocol(target=target, force=True)
+                        repaired_any = True
+                    if (
+                        check_skill
+                        and IntegrationManager.requires_skill(target)
+                        and skill_manager.skill_surface_available(target)
+                    ):
+                        skill_manager.install(
+                            source="super-dev",
+                            target=target,
+                            name=skill_name,
+                            force=True,
+                        )
+                        repaired_any = True
+                    if repaired_any:
+                        host_actions["user_surfaces"] = "fixed"
+            except Exception as exc:
+                host_actions["user_surfaces"] = f"failed: {exc}"
 
             try:
                 if (
@@ -3172,6 +3271,16 @@ class CliHostOpsMixin:
             self.console.print(f"{indent}官方用户级接入面:")
             for item in official_user:
                 self.console.print(f"{indent}  - {item}")
+        optional_project = usage.get("optional_project_surfaces", [])
+        if isinstance(optional_project, list) and optional_project:
+            self.console.print(f"{indent}可选项目增强面:")
+            for item in optional_project:
+                self.console.print(f"{indent}  - {item}")
+        optional_user = usage.get("optional_user_surfaces", [])
+        if isinstance(optional_user, list) and optional_user:
+            self.console.print(f"{indent}可选用户增强面:")
+            for item in optional_user:
+                self.console.print(f"{indent}  - {item}")
         observed_surfaces = usage.get("observed_compatibility_surfaces", [])
         if isinstance(observed_surfaces, list) and observed_surfaces:
             self.console.print(f"{indent}兼容增强路径:")
@@ -3521,7 +3630,7 @@ class CliHostOpsMixin:
             return ""
         escaped = idea.replace('"', '\\"')
         if target == "codex-cli":
-            return f"{IntegrationManager.TEXT_TRIGGER_PREFIX} {idea}"
+            return f'/super-dev "{escaped}"'
         if target == "trae":
             return f"{IntegrationManager.TEXT_TRIGGER_PREFIX} {idea}"
         if IntegrationManager.supports_slash(target):
@@ -3575,6 +3684,11 @@ class CliHostOpsMixin:
             if isinstance(session_hint.get("user_action_shortcuts"), list)
             else []
         )
+        scenario_cards = (
+            session_hint.get("scenario_cards")
+            if isinstance(session_hint.get("scenario_cards"), list)
+            else []
+        )
         continuity_rules = (
             session_hint.get("continuity_rules")
             if isinstance(session_hint.get("continuity_rules"), list)
@@ -3586,6 +3700,13 @@ class CliHostOpsMixin:
             "用户说“改一下 / 补充 / 继续改 / 确认 / 通过”时，仍然留在当前 Super Dev 流程。"
         )
         generic_exit_rule = "只有用户明确说取消当前流程、重新开始或切回普通聊天，才允许离开流程。"
+        framework_playbook = load_framework_playbook_summary(project_dir)
+        recent_snapshots = load_recent_workflow_snapshots(project_dir, limit=3)
+        recent_events = load_recent_workflow_events(project_dir, limit=3)
+        recent_hook_events = HookManager.load_recent_history(project_dir, limit=3)
+        recent_timeline = load_recent_operational_timeline(project_dir, limit=5)
+        harness_summaries = summarize_operational_harnesses(project_dir, write_reports=False)
+        operational_focus = derive_operational_focus(project_dir)
         lines = [
             f"动作类型: {self._workflow_mode_label(workflow_mode)}" if workflow_mode else "",
             f"当前动作: {action_title}" if action_title else "",
@@ -3604,6 +3725,56 @@ class CliHostOpsMixin:
                 else ""
             ),
         ]
+        if framework_playbook:
+            lines.append(f"框架专项: {framework_playbook.get('framework', '-')}")
+            native = framework_playbook.get("native_capabilities", [])
+            validation = framework_playbook.get("validation_surfaces", [])
+            if native:
+                lines.append(f"原生能力面: {' / '.join(str(item) for item in native[:3])}")
+            if validation:
+                lines.append(f"必验场景: {' / '.join(str(item) for item in validation[:3])}")
+        if recent_snapshots:
+            first = recent_snapshots[0]
+            step = str(first.get("current_step_label", "")).strip() or str(
+                first.get("status", "")
+            ).strip()
+            updated_at = str(first.get("updated_at", "")).strip() or "-"
+            lines.append(f"最近一次: {updated_at} · {step}")
+        if recent_events:
+            latest_event = recent_events[0]
+            event_time = str(latest_event.get("timestamp", "")).strip() or "-"
+            lines.append(f"最近事件: {event_time} · {describe_workflow_event(latest_event)}")
+        if recent_hook_events:
+            latest_hook = recent_hook_events[0]
+            hook_status = (
+                "blocked" if latest_hook.blocked else ("ok" if latest_hook.success else "failed")
+            )
+            lines.append(
+                f"最近 Hook: {latest_hook.timestamp} · {latest_hook.event} / {latest_hook.phase or '-'} / {latest_hook.hook_name} / {hook_status}"
+            )
+        if recent_timeline:
+            latest_timeline = recent_timeline[0]
+            timeline_time = str(latest_timeline.get("timestamp", "")).strip() or "-"
+            timeline_title = str(latest_timeline.get("title", "")).strip() or str(
+                latest_timeline.get("kind", "")
+            ).strip()
+            timeline_message = str(latest_timeline.get("message", "")).strip() or "-"
+            lines.append(f"关键时间线: {timeline_time} · {timeline_title} · {timeline_message}")
+        if harness_summaries:
+            for item in harness_summaries[:3]:
+                label = str(item.get("label", "")).strip() or str(item.get("kind", "")).strip()
+                status = "pass" if item.get("passed") else "fail"
+                line = f"{label}: {status}"
+                blocker = str(item.get("first_blocker", "")).strip()
+                if blocker:
+                    line += f" · {blocker}"
+                lines.append(line)
+        focus_summary = str(operational_focus.get("summary", "")).strip()
+        focus_action = str(operational_focus.get("recommended_action", "")).strip()
+        if focus_summary:
+            lines.append(f"当前治理焦点: {focus_summary}")
+        if focus_action:
+            lines.append(f"建议先做: {focus_action}")
         if user_action_shortcuts:
             lines.insert(
                 2,
@@ -3614,6 +3785,18 @@ class CliHostOpsMixin:
                 3 if user_action_shortcuts else 2,
                 f"自然语言示例: {', '.join(str(item) for item in action_examples[:3])}",
             )
+        if scenario_cards:
+            insert_at = 4 if user_action_shortcuts and action_examples else 3 if (user_action_shortcuts or action_examples) else 2
+            scenario_lines = []
+            for item in scenario_cards[:4]:
+                if not isinstance(item, dict):
+                    continue
+                title = str(item.get("title", "")).strip()
+                command = str(item.get("cli_command", "")).strip()
+                if title and command:
+                    scenario_lines.append(f"真实场景: {title} -> {command}")
+            for offset, line in enumerate(scenario_lines):
+                lines.insert(insert_at + offset, line)
         entry_bundle = build_host_entry_prompts(
             target=target,
             instruction=continue_instruction or continue_prompt,
@@ -3662,11 +3845,23 @@ class CliHostOpsMixin:
             if isinstance(session_hint.get("user_action_shortcuts"), list)
             else []
         )
+        scenario_cards = (
+            session_hint.get("scenario_cards")
+            if isinstance(session_hint.get("scenario_cards"), list)
+            else []
+        )
         specific_rules = (
             session_hint.get("continuity_rules")
             if isinstance(session_hint.get("continuity_rules"), list)
             else []
         )
+        framework_playbook = load_framework_playbook_summary(project_dir)
+        recent_snapshots = load_recent_workflow_snapshots(project_dir, limit=3)
+        recent_events = load_recent_workflow_events(project_dir, limit=3)
+        recent_hook_events = HookManager.load_recent_history(project_dir, limit=3)
+        recent_timeline = load_recent_operational_timeline(project_dir, limit=5)
+        harness_summaries = summarize_operational_harnesses(project_dir, write_reports=False)
+        operational_focus = derive_operational_focus(project_dir)
         rules = [
             "用户说“改一下 / 补充 / 继续改 / 确认 / 通过”时，仍然留在当前 Super Dev 流程。",
             *[str(item).strip() for item in specific_rules if str(item).strip()],
@@ -3697,14 +3892,24 @@ class CliHostOpsMixin:
             "action_title": action_title if enabled else "",
             "action_examples": action_examples if enabled else [],
             "user_action_shortcuts": user_action_shortcuts if enabled else [],
+            "scenario_cards": scenario_cards if enabled else [],
             "host_first_sentence": continue_prompt,
             "preferred_entry": preferred_entry if enabled else "",
             "preferred_entry_label": preferred_entry_label if enabled else "",
             "entry_prompts": entry_prompts if enabled else {},
             "session_brief_path": str(self._session_brief_path(project_dir)) if enabled else "",
             "workflow_state_path": str(self._workflow_state_path(project_dir)) if enabled else "",
+            "workflow_event_log_path": str(workflow_event_log_file(project_dir)) if enabled else "",
+            "hook_history_path": str(HookManager.hook_history_file(project_dir)) if enabled else "",
             "rules": rules if enabled else [],
             "recommended_workflow_command": recommended_workflow_command if enabled else "",
+            "framework_playbook": framework_playbook if enabled else {},
+            "operational_harnesses": harness_summaries if enabled else [],
+            "operational_focus": operational_focus if enabled else {},
+            "recent_snapshots": recent_snapshots if enabled else [],
+            "recent_events": recent_events if enabled else [],
+            "recent_hook_events": [item.to_dict() for item in recent_hook_events] if enabled else [],
+            "recent_timeline": recent_timeline if enabled else [],
             "lines": self._build_session_resume_card_lines(project_dir=project_dir, target=target),
         }
 
@@ -3900,6 +4105,8 @@ class CliHostOpsMixin:
             "capability_labels": dict(profile.capability_labels),
             "official_project_surfaces": list(profile.official_project_surfaces),
             "official_user_surfaces": list(profile.official_user_surfaces),
+            "optional_project_surfaces": list(profile.optional_project_surfaces),
+            "optional_user_surfaces": list(profile.optional_user_surfaces),
             "observed_compatibility_surfaces": list(profile.observed_compatibility_surfaces),
             "official_docs_url": profile.official_docs_url,
             "official_docs_references": list(profile.official_docs_references),
@@ -4317,13 +4524,20 @@ class CliHostOpsMixin:
                     "smoke_test_prompt": usage.get("smoke_test_prompt", ""),
                     "smoke_success_signal": usage.get("smoke_success_signal", ""),
                     "checks": host.get("checks", {}) if isinstance(host.get("checks", {}), dict) else {},
-                    "runtime_checklist": self._host_runtime_checklist(target=target, usage=usage),
-                    "pass_criteria": self._host_runtime_pass_criteria(target=target),
+                    "runtime_checklist": self._host_runtime_checklist(
+                        target=target, usage=usage, project_dir=project_dir
+                    ),
+                    "pass_criteria": self._host_runtime_pass_criteria(
+                        target=target, project_dir=project_dir
+                    ),
                     "flow_probe": build_host_flow_probe(target),
                     "resume_probe_prompt": self._host_resume_probe_prompt(
                         project_dir=project_dir, target=target
                     ),
-                    "resume_checklist": self._host_resume_checklist(target=target),
+                    "resume_checklist": self._host_resume_checklist(
+                        target=target, project_dir=project_dir
+                    ),
+                    "framework_playbook": load_framework_playbook_summary(project_dir),
                 }
             )
 
@@ -4452,6 +4666,40 @@ class CliHostOpsMixin:
             resume_probe = host.get("resume_probe_prompt", "")
             if isinstance(resume_probe, str) and resume_probe.strip():
                 lines.extend(["### Resume Probe Prompt", "", f"- {resume_probe.strip()}", ""])
+            framework_playbook = host.get("framework_playbook", {})
+            if isinstance(framework_playbook, dict) and framework_playbook:
+                lines.extend(
+                    [
+                        "### Framework Playbook",
+                        "",
+                        f"- Framework: {framework_playbook.get('framework', '-')}",
+                    ]
+                )
+                modules = framework_playbook.get("implementation_modules", [])
+                if isinstance(modules, list) and modules:
+                    lines.append(
+                        "- Implementation Modules: "
+                        + "；".join(str(item) for item in modules[:3])
+                    )
+                native_capabilities = framework_playbook.get("native_capabilities", [])
+                if isinstance(native_capabilities, list) and native_capabilities:
+                    lines.append(
+                        "- Native Capabilities: "
+                        + "；".join(str(item) for item in native_capabilities[:3])
+                    )
+                validation = framework_playbook.get("validation_surfaces", [])
+                if isinstance(validation, list) and validation:
+                    lines.append(
+                        "- Validation Surfaces: "
+                        + "；".join(str(item) for item in validation[:3])
+                    )
+                evidence = framework_playbook.get("delivery_evidence", [])
+                if isinstance(evidence, list) and evidence:
+                    lines.append(
+                        "- Delivery Evidence: "
+                        + "；".join(str(item) for item in evidence[:3])
+                    )
+                lines.append("")
             comment = host.get("manual_runtime_comment", "")
             if isinstance(comment, str) and comment.strip():
                 lines.extend(["### Runtime Validation Note", "", f"- {comment.strip()}", ""])

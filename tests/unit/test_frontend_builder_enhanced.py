@@ -291,3 +291,36 @@ class TestGeneratedFileContent:
             path = builder.project_dir / "output" / "frontend" / filename
             content = path.read_text(encoding="utf-8")
             assert isinstance(content, str)
+
+    def test_cross_platform_playbook_is_rendered_into_frontend_blueprint(
+        self,
+        builder,
+        sample_requirements,
+        sample_phases,
+        sample_docs,
+    ):
+        output_dir = builder.project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "test-app-ui-contract.json").write_text(
+            (
+                "{\n"
+                '  "typography_preset": {"heading": "IBM Plex Sans", "body": "Public Sans"},\n'
+                '  "framework_playbook": {\n'
+                '    "framework": "uni-app",\n'
+                '    "implementation_modules": ["自定义导航栏高度、状态栏占位、胶囊按钮区域必须独立建模"],\n'
+                '    "native_capabilities": ["登录/支付/分享 provider 必须按端隔离并显式验收"],\n'
+                '    "validation_surfaces": ["微信小程序导航/支付/触控与包体策略"]\n'
+                "  }\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+
+        builder.generate(sample_requirements, sample_phases, sample_docs)
+
+        html_content = (builder.project_dir / "output" / "frontend" / "index.html").read_text(encoding="utf-8")
+        js_content = (builder.project_dir / "output" / "frontend" / "app.js").read_text(encoding="utf-8")
+        assert "跨平台框架执行护栏" in html_content
+        assert "uni-app" in html_content
+        assert "framework_playbook" in js_content
+        assert "登录/支付/分享 provider" in js_content

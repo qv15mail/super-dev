@@ -5,7 +5,11 @@
 测试对象: super_dev.proof_pack
 """
 
-from super_dev.proof_pack import ProofPackArtifact, ProofPackReport
+import json
+from pathlib import Path
+
+from super_dev.proof_pack import ProofPackArtifact, ProofPackBuilder, ProofPackReport
+from super_dev.review_state import save_workflow_state, workflow_event_log_file
 
 
 # ---------------------------------------------------------------------------
@@ -255,6 +259,20 @@ class TestProofPackReportStatusCombinations:
         assert report.total_count == 2
         assert report.ready_count == 1
 
+    def test_executive_summary_mentions_operational_harnesses(self):
+        report = ProofPackReport(
+            project_name="ops",
+            artifacts=[
+                ProofPackArtifact(name="Operational Harness", status="ready", summary="operational ok"),
+                ProofPackArtifact(name="Workflow Continuity", status="ready", summary="workflow ok"),
+                ProofPackArtifact(name="Framework Harness", status="ready", summary="framework ok"),
+                ProofPackArtifact(name="Hook Audit Trail", status="ready", summary="hooks ok"),
+            ],
+        )
+        assert "运行时/恢复类 harness" in report.executive_summary
+        assert "Operational Harness" in report.executive_summary
+        assert "Workflow Continuity" in report.executive_summary
+
     def test_empty_summary(self):
         artifact = ProofPackArtifact(name="empty-summary", status="ready", summary="")
         d = artifact.to_dict()
@@ -313,3 +331,263 @@ class TestProofPackReportStatusCombinations:
             ],
         )
         assert report.completion_percent == 67
+
+    def test_next_actions_prioritize_framework_playbook_when_ui_contract_missing_it(self):
+        report = ProofPackReport(
+            project_name="cross-platform",
+            artifacts=[
+                ProofPackArtifact(
+                    name="UI Contract",
+                    status="pending",
+                    summary="missing framework playbook",
+                    details={"required_sections": {"framework_playbook": False}},
+                )
+            ],
+        )
+        assert any("跨平台框架 playbook" in action for action in report.next_actions)
+
+    def test_builder_ui_contract_artifact_mentions_cross_platform_playbook_gap(self, tmp_path):
+        project_dir = tmp_path / "demo"
+        output_dir = project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-ui-contract.json").write_text(
+            (
+                "{\n"
+                '  "analysis": {"frontend": "uni-app"},\n'
+                '  "style_direction": "可信商城",\n'
+                '  "typography": {"heading": "Alibaba PuHuiTi", "body": "PingFang SC"},\n'
+                '  "icon_system": "TDesign Icons",\n'
+                '  "emoji_policy": {"allowed_in_ui": false, "allowed_as_icon": false, "allowed_during_development": false},\n'
+                '  "ui_library_preference": {"final_selected": "TDesign 小程序 + UniApp"},\n'
+                '  "design_tokens": {"color": {"primary": "#0f172a"}}\n'
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+
+        artifact = ProofPackBuilder(project_dir)._ui_contract_artifact()
+        assert artifact.status == "pending"
+        assert "uni-app framework playbook" in artifact.summary
+
+    def test_builder_emits_framework_harness_artifact_for_cross_platform_project(self, tmp_path):
+        project_dir = tmp_path / "demo"
+        output_dir = project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-ui-contract.json").write_text(
+            json.dumps(
+                {
+                    "analysis": {"frontend": "uni-app"},
+                    "style_direction": "可信商城",
+                    "typography": {"heading": "Alibaba PuHuiTi", "body": "PingFang SC"},
+                    "icon_system": "TDesign Icons",
+                    "emoji_policy": {
+                        "allowed_in_ui": False,
+                        "allowed_as_icon": False,
+                        "allowed_during_development": False,
+                    },
+                    "ui_library_preference": {"final_selected": "TDesign 小程序 + UniApp"},
+                    "design_tokens": {"color": {"primary": "#0f172a"}},
+                    "framework_playbook": {
+                        "framework": "uni-app",
+                        "implementation_modules": ["自定义导航栏高度"],
+                        "platform_constraints": ["status bar 与安全区"],
+                        "execution_guardrails": ["先冻结 navigationStyle"],
+                        "native_capabilities": ["登录 provider"],
+                        "validation_surfaces": ["微信小程序导航"],
+                        "delivery_evidence": ["三端差异说明"],
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (output_dir / "demo-frontend-runtime.json").write_text(
+            json.dumps(
+                {
+                    "passed": True,
+                    "checks": {
+                        "ui_framework_playbook": True,
+                        "ui_framework_execution": True,
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (output_dir / "demo-ui-contract-alignment.json").write_text(
+            json.dumps(
+                {
+                    "framework_execution": {
+                        "label": "框架 Playbook 执行",
+                        "passed": True,
+                    }
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        artifact = ProofPackBuilder(project_dir)._framework_harness_artifact()
+        assert artifact is not None
+        assert artifact.name == "Framework Harness"
+        assert artifact.status == "ready"
+        assert artifact.details["framework"] == "uni-app"
+        assert Path(artifact.path).exists()
+
+    def test_next_actions_include_framework_harness_when_pending(self):
+        report = ProofPackReport(
+            project_name="cross-platform",
+            artifacts=[
+                ProofPackArtifact(
+                    name="Framework Harness",
+                    status="pending",
+                    summary="framework execution missing",
+                )
+            ],
+        )
+        assert any("framework harness" in action for action in report.next_actions)
+
+    def test_next_actions_include_operational_harness_when_pending(self):
+        report = ProofPackReport(
+            project_name="ops",
+            artifacts=[
+                ProofPackArtifact(
+                    name="Operational Harness",
+                    status="pending",
+                    summary="operational blockers",
+                    details={
+                        "operational_focus": {
+                            "recommended_action": "先补 framework harness 再重新生成 proof-pack。",
+                        },
+                        "focus": {
+                            "recommended_action": "先补 framework harness 再重新生成 proof-pack。",
+                        }
+                    },
+                )
+            ],
+        )
+        assert "先补 framework harness 再重新生成 proof-pack。" in report.next_actions
+
+    def test_executive_markdown_includes_operational_continuity_section(self):
+        report = ProofPackReport(
+            project_name="demo",
+            artifacts=[
+                ProofPackArtifact(
+                    name="Operational Harness",
+                    status="ready",
+                    summary="operational ok",
+                    details={
+                        "operational_focus": {
+                            "summary": "当前 workflow / framework / hooks harness 已全部通过。",
+                            "recommended_action": "当前 workflow / framework / hooks harness 已形成统一运行时证据。",
+                        },
+                        "focus": {
+                            "summary": "当前 workflow / framework / hooks harness 已全部通过。",
+                            "recommended_action": "当前 workflow / framework / hooks harness 已形成统一运行时证据。",
+                        }
+                    },
+                ),
+                ProofPackArtifact(name="Workflow Continuity", status="ready", summary="workflow ok"),
+                ProofPackArtifact(name="Framework Harness", status="pending", summary="framework gaps"),
+                ProofPackArtifact(name="Hook Audit Trail", status="ready", summary="hook clean"),
+            ],
+        )
+        markdown = report.to_executive_markdown()
+        assert "## Operational Continuity" in markdown
+        assert "Operational Harness" in markdown
+        assert "Workflow Continuity" in markdown
+        assert "Framework Harness" in markdown
+        assert "Hook Audit Trail" in markdown
+        assert "Current operational focus" in markdown
+
+    def test_builder_emits_operational_harness_artifact_when_workflow_exists(self, tmp_path):
+        project_dir = tmp_path / "demo"
+        project_dir.mkdir(parents=True, exist_ok=True)
+        save_workflow_state(
+            project_dir,
+            {
+                "status": "waiting_docs_confirmation",
+                "workflow_mode": "continue",
+                "current_step_label": "等待三文档确认",
+                "recommended_command": "super-dev review docs --status confirmed",
+            },
+        )
+
+        artifact = ProofPackBuilder(project_dir)._operational_harness_artifact()
+        assert artifact.name == "Operational Harness"
+        assert artifact.status == "ready"
+        assert artifact.details["enabled_count"] >= 1
+        assert artifact.details["operational_focus"]["status"] == "passed"
+        assert artifact.details["focus"]["status"] == "passed"
+        assert Path(artifact.path).exists()
+
+    def test_builder_emits_workflow_continuity_artifact_when_trail_exists(self, tmp_path):
+        project_dir = tmp_path / "demo"
+        project_dir.mkdir(parents=True, exist_ok=True)
+        save_workflow_state(
+            project_dir,
+            {
+                "status": "waiting_docs_confirmation",
+                "workflow_mode": "continue",
+                "current_step_label": "等待三文档确认",
+                "recommended_command": "super-dev review docs --status confirmed",
+            },
+        )
+
+        artifact = ProofPackBuilder(project_dir)._workflow_continuity_artifact()
+        assert artifact.name == "Workflow Continuity"
+        assert artifact.status == "ready"
+        assert artifact.details["recent_snapshots"]
+        assert artifact.details["recent_events"]
+        assert artifact.details["recent_timeline"]
+
+    def test_builder_marks_workflow_continuity_pending_when_event_log_missing(self, tmp_path):
+        project_dir = tmp_path / "demo"
+        project_dir.mkdir(parents=True, exist_ok=True)
+        save_workflow_state(
+            project_dir,
+            {
+                "status": "waiting_docs_confirmation",
+                "workflow_mode": "continue",
+                "current_step_label": "等待三文档确认",
+                "recommended_command": "super-dev review docs --status confirmed",
+            },
+        )
+        workflow_event_log_file(project_dir).unlink()
+
+        artifact = ProofPackBuilder(project_dir)._workflow_continuity_artifact()
+        assert artifact.status == "pending"
+        assert "incomplete" in artifact.summary
+
+    def test_builder_emits_hook_audit_artifact_when_history_exists(self, tmp_path):
+        project_dir = tmp_path / "demo"
+        history_file = project_dir / ".super-dev" / "hook-history.jsonl"
+        history_file.parent.mkdir(parents=True, exist_ok=True)
+        history_file.write_text(
+            json.dumps(
+                {
+                    "hook_name": "python3 scripts/check.py",
+                    "event": "WorkflowEvent",
+                    "success": True,
+                    "output": "",
+                    "error": "",
+                    "duration_ms": 12.3,
+                    "blocked": False,
+                    "phase": "docs_confirmation_saved",
+                    "source": "config",
+                    "timestamp": "2026-04-06T01:02:03+00:00",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        artifact = ProofPackBuilder(project_dir)._hook_audit_artifact()
+        assert artifact is not None
+        assert artifact.name == "Hook Audit Trail"
+        assert artifact.status == "ready"
+        assert artifact.details["total_events"] == 1

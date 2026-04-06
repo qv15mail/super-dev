@@ -278,6 +278,8 @@ const theme: ThemeConfig = {
             "quality_checklist": list(profile.get("quality_checklist", [])),
             "banned_patterns": list(profile.get("banned_patterns", [])),
             "knowledge_keywords": list(profile.get("knowledge_keywords", [])),
+            "design_references": list(profile.get("design_references", [])),
+            "framework_playbook": profile.get("framework_playbook"),
             "color_palette": palette,
             "typography_preset": typography,
             "icon_system": icon_system,
@@ -3004,6 +3006,7 @@ spec:
             f"- **配色逻辑**: {palette.get('name', 'N/A')}（主色 {palette.get('primary', 'N/A')} / 强调色 {palette.get('accent', 'N/A')} / 背景 {palette.get('background', 'N/A')}）",
             f"- **图标系统**: {profile.get('component_stack', {}).get('icons', 'N/A')}",
             f"- **首选组件生态**: {primary.get('name', 'N/A')}",
+            f"- **跨平台框架 Playbook**: {(profile.get('framework_playbook') or {}).get('framework', '通用 Web / 原生约束')}",
             f"- **页面定位与密度**: {profile.get('surface', 'N/A')} / {profile.get('information_density', 'N/A')}",
             "",
             "**设计 token 优先级**:",
@@ -3019,6 +3022,17 @@ spec:
                 if not isinstance(item, dict):
                     continue
                 lines.append(f"- **{item.get('name', 'N/A')}**: {item.get('rationale', 'N/A')}")
+        references = profile.get("design_references", [])
+        if references:
+            lines.extend(["", "**设计参考锚点**:"])
+            for item in references[:3]:
+                if not isinstance(item, dict):
+                    continue
+                signals = " / ".join(item.get("signals", [])[:3])
+                cautions = "；".join(item.get("cautions", [])[:2])
+                lines.append(
+                    f"- **{item.get('name', 'N/A')}**: {item.get('rationale', 'N/A')} 参考信号：{signals or 'N/A'}。避免：{cautions or 'N/A'}"
+                )
 
         lines.extend(["", "**明确不默认采用**:"])
         lines.extend(f"- {item}" for item in profile.get("banned_patterns", [])[:6])
@@ -3028,6 +3042,7 @@ spec:
                 "**视觉方案输出要求**:",
                 "- 每个关键页面至少提供 2 个视觉方向候选（主方案 + 备选方案），并记录为什么不用另一种方向。",
                 "- 开始编码前先冻结图标库、token 策略和页面骨架，不允许边写边猜。",
+                "- 主方案必须明确引用 2-3 个设计参考锚点，说明吸收哪些信号、舍弃哪些套路。",
                 "- 绝对不允许 emoji 表情作为图标，也不允许在开发过程中用 emoji 充当临时占位；从文档冻结到最终交付都必须使用正式图标库。",
             ]
         )
@@ -3170,6 +3185,38 @@ spec:
             "- 视觉品牌保持一致（字体、色彩、图形语言），但交互尊重平台差异。",
             "- 同一业务模块必须共享组件契约，避免 Web/H5/小程序/APP/桌面端 逻辑漂移。",
         ]
+        framework_playbook = profile.get("framework_playbook") or {}
+        if framework_playbook:
+            lines.extend(
+                [
+                    "",
+                    f"**跨平台框架深优化 Playbook（{framework_playbook.get('framework', '当前框架')}）**:",
+                    f"- **优化焦点**: {framework_playbook.get('focus', 'N/A')}",
+                    f"- **适配理由**: {framework_playbook.get('rationale', 'N/A')}",
+                    "- **必须优先落实**:",
+                ]
+            )
+            lines.extend(f"- {item}" for item in framework_playbook.get("implementation_modules", [])[:4])
+            lines.extend(["", "**平台差异/限制**:"])
+            lines.extend(f"- {item}" for item in framework_playbook.get("platform_constraints", [])[:4])
+            lines.extend(["", "**执行护栏**:"])
+            lines.extend(f"- {item}" for item in framework_playbook.get("execution_guardrails", [])[:3])
+            anti_patterns = framework_playbook.get("anti_patterns", [])
+            if anti_patterns:
+                lines.extend(["", "**框架级反模式**:"])
+                lines.extend(f"- {item}" for item in anti_patterns[:3])
+            native_capabilities = framework_playbook.get("native_capabilities", [])
+            if native_capabilities:
+                lines.extend(["", "**原生能力面**:"])
+                lines.extend(f"- {item}" for item in native_capabilities[:4])
+            validation_surfaces = framework_playbook.get("validation_surfaces", [])
+            if validation_surfaces:
+                lines.extend(["", "**必须验收的真实场景**:"])
+                lines.extend(f"- {item}" for item in validation_surfaces[:4])
+            delivery_evidence = framework_playbook.get("delivery_evidence", [])
+            if delivery_evidence:
+                lines.extend(["", "**交付证据要求**:"])
+                lines.extend(f"- {item}" for item in delivery_evidence[:4])
         keywords = profile.get("knowledge_keywords", [])
         if keywords:
             lines.extend(["", "**设计检索关键词建议**:", "- " + " / ".join(keywords[:10])])

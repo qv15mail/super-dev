@@ -19,31 +19,19 @@
 
 ## Version
 
-Current version: `2.3.1`
+Current version: `2.3.2`
 
 ---
 
-## What's New in 2.3.1
+## What's New in 2.3.2
 
-### Codex Deep Adaptation
-
-- Codex now follows the official `AGENTS.md + Skills + repo plugin enhancement` model instead of a shallow skill-only approximation.
-- Codex App/Desktop and Codex CLI now converge into the same Super Dev workflow with explicit entry guidance.
-- Onboarding, doctor, detect, and runtime validation now reflect the actual Codex entry model instead of the old slash-vs-text simplification.
-
-### Claude Code Deep Adaptation
-
-- Claude Code now follows a `CLAUDE.md + .claude/skills + ~/.claude/skills + optional plugin enhancement` model instead of the older commands-first approximation.
-- Root `CLAUDE.md`, the compatibility `.claude/CLAUDE.md`, project/user skills, and optional repo plugin enhancement now share one consistent onboarding, doctor, runtime, and documentation contract.
-
-### Workflow and UI Governance Hardening
-
-- Workflow recovery semantics were unified further across CLI, onboarding, doctor, validate, and Web API action cards.
-- UI contract enforcement, emoji blocking, runtime alignment, quality gates, and release readiness were tightened so drift is caught earlier.
-
-### Documentation and Website Alignment
-
-- Version sources, bilingual READMEs, homepage, changelog, and release history are now aligned to `2.3.1`.
+- Host product scope was hardened again: `20` unified integration hosts plus `1` manual OpenClaw plugin host, with install scripts, README, website docs, capability audit, and host matrices finally sharing one accurate model.
+- Claude Code and Codex moved further toward their official host contracts: `CLAUDE.md + skills + optional plugin enhancement` and `AGENTS.md + skills + repo plugin enhancement`, instead of the older commands-first / skill-only approximations.
+- Kiro, Qoder, Cursor, Trae, and CodeBuddy family hosts were deepened around their real surfaces so the code, onboarding, docs, and website no longer drift from one another.
+- Recovery UX became more productized: `resume / next / continue / doctor / validate / Web API` now expose scenario cards, and `SESSION_BRIEF` explicitly tells users what to do for “come back tomorrow”, “just tell me the next step”, and “resume an interrupted pipeline”.
+- Workflow governance was hardened again: workflow history, semantic events, hook history, workflow/framework/hook/operational harnesses, and the recent operational timeline now all feed proof-pack and release readiness.
+- Cross-platform support deepened: `uni-app / Taro / React Native / Flutter / Desktop Web Shell` framework playbooks now drive scaffolds, runtime checks, quality gates, release readiness, and proof-pack rather than living only in UI docs.
+- The UI system was tightened further: emoji are systemically banned as functional icons, and UI contracts, design tokens, icon libraries, component ecosystems, navigation shells, theme entry points, and framework harness checks now all participate in delivery gates.
 
 ## What's New in 2.3.0
 
@@ -89,6 +77,10 @@ Current version: `2.3.1`
 - `super-dev enforce install` — auto-configure host hooks (emoji checks, etc.).
 - `super-dev enforce validate` — run constraint validation scripts.
 - `super-dev enforce status` — view enforcement configuration status.
+- `super-dev hooks history` — inspect recent hook execution history.
+- `super-dev harness status` — inspect workflow/framework/hook harness status in one place, including the recent operational timeline.
+- `super-dev harness operational` — inspect the unified operational harness report, including the current operational focus and the first recommended action.
+- `super-dev harness timeline` — inspect the merged operational timeline across workflow snapshots, semantic events, and hook events.
 
 ### Memory System
 
@@ -344,6 +336,7 @@ Key review commands:
 - **Dual-mode delivery**: works for both greenfield (0-1) and iterative (1-N+1) projects.
 - **Continuation routing**: `super-dev resume`, `super-dev continue`, `super-dev next`, `start --json`, and `doctor --json` all share the same workflow state and action card semantics.
 - **Session recovery card**: `.super-dev/SESSION_BRIEF.md` and `.super-dev/workflow-state.json` persist the current action, host first sentence, machine action, and continuity rules.
+- **Recent operational timeline**: workflow snapshots, semantic workflow events, and hook events are merged into one timeline that now surfaces in `SESSION_BRIEF`, Workflow Harness, proof-pack, and release readiness.
 - **Rework-first state handling**: docs confirmation, preview confirmation, UI redesign, architecture rework, and quality remediation all stay inside one governed state machine.
 
 ### 4. Document Generation Engine
@@ -486,13 +479,13 @@ This generates `.super-dev/WORKFLOW.md` and `output/*-bootstrap.md` to lock down
 ### 3. Pin a specific version
 
 ```bash
-pip install super-dev==2.3.1
+pip install super-dev==2.3.2
 ```
 
 ### 4. Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.3.1
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.3.2
 ```
 
 ### 5. Source install for development
@@ -567,7 +560,7 @@ Super Dev officially documents 20 unified onboarding hosts plus 1 manual plugin 
 | Codex | App/Desktop: `/super-dev` (skill entry) / CLI: `$super-dev` / fallback: `super-dev: your requirement` | `super-dev onboard --host codex-cli` |
 | Gemini CLI | `/super-dev your requirement` | `super-dev onboard --host gemini-cli` |
 | OpenCode | `/super-dev your requirement` | `super-dev onboard --host opencode` |
-| Kiro CLI | `super-dev: your requirement` | `super-dev onboard --host kiro-cli` |
+| Kiro CLI | `/super-dev your requirement` | `super-dev onboard --host kiro-cli` |
 | Cursor CLI | `/super-dev your requirement` | `super-dev onboard --host cursor-cli` |
 | Qoder CLI | `/super-dev your requirement` | `super-dev onboard --host qoder-cli` |
 | Copilot CLI | `super-dev: your requirement` | `super-dev onboard --host copilot-cli` |
@@ -580,7 +573,7 @@ Super Dev officially documents 20 unified onboarding hosts plus 1 manual plugin 
 | Antigravity | `/super-dev your requirement` | `super-dev onboard --host antigravity` |
 | Cursor IDE | `/super-dev your requirement` | `super-dev onboard --host cursor` |
 | Windsurf | `/super-dev your requirement` | `super-dev onboard --host windsurf` |
-| Kiro IDE | `super-dev: your requirement` | `super-dev onboard --host kiro` |
+| Kiro IDE | `/super-dev your requirement` | `super-dev onboard --host kiro` |
 | Qoder IDE | `/super-dev your requirement` | `super-dev onboard --host qoder` |
 | Trae | `super-dev: your requirement` | `super-dev onboard --host trae` |
 | CodeBuddy IDE | `/super-dev your requirement` | `super-dev onboard --host codebuddy` |
@@ -685,13 +678,13 @@ super-dev onboard --host kiro-cli --force --yes
 ```
 
 Trigger location: launch Kiro CLI in the project directory.
-Trigger command: `super-dev: your requirement`
+Trigger command: `/super-dev your requirement`
 Restart required after onboarding: Yes.
 
 Notes:
-1. Kiro CLI no longer relies on custom slash commands.
-2. The official integration surfaces are `.kiro/steering/super-dev.md` + `.kiro/skills/super-dev-core/SKILL.md` + `~/.kiro/skills/super-dev-core/SKILL.md`.
-3. Relaunch Kiro CLI after onboarding so steering and skills load in the new session.
+1. Kiro CLI now prefers the official steering slash entry; if the current session only accepts natural language, fall back to `super-dev: your requirement`.
+2. The official integration surfaces are `.kiro/steering/super-dev.md` + `.kiro/skills/super-dev-core/SKILL.md` + `~/.kiro/steering/super-dev.md` + `~/.kiro/skills/super-dev-core/SKILL.md`.
+3. Relaunch Kiro CLI after onboarding so the steering slash entry and skills load in the new session.
 
 **OpenCode**
 
@@ -719,8 +712,8 @@ Restart required after onboarding: No.
 
 Notes:
 1. Suitable for command-line pipeline development.
-2. If slash is not active, confirm that `.qoder/commands/super-dev.md` exists and that the `.qoder/rules/` directory has been created.
-3. The official surfaces now use `.qoder/rules/super-dev.md` + `.qoder/commands/super-dev.md` + `.qoder/skills/` / `~/.qoder/skills/`.
+2. If slash is not active, confirm that `AGENTS.md` and `.qoder/commands/super-dev.md` exist and that the `.qoder/rules/` directory has been created.
+3. The official surfaces now use `AGENTS.md` + `.qoder/rules/super-dev.md` + `.qoder/commands/super-dev.md` + `.qoder/skills/` / `~/.qoder/AGENTS.md` + `~/.qoder/skills/`.
 
 **CodeBuddy CLI**
 
@@ -734,7 +727,8 @@ Restart required after onboarding: No.
 
 Notes:
 1. Type the command directly in the current CLI session.
-2. If the session was opened before onboarding, reload project rules before triggering.
+2. The primary official surfaces are `CODEBUDDY.md` + `.codebuddy/commands/` + `.codebuddy/skills/`, plus `~/.codebuddy/CODEBUDDY.md`.
+3. If the session was opened before onboarding, reload project rules before triggering.
 
 #### IDE Hosts
 
@@ -789,12 +783,12 @@ super-dev onboard --host kiro --force --yes
 ```
 
 Trigger location: open the Agent Chat / AI panel in Kiro IDE within the project context.
-Trigger command: `super-dev: your requirement`
+Trigger command: `/super-dev your requirement`
 Restart required after onboarding: Yes.
 
 Notes:
-1. Uses the official steering + skills model with `super-dev: your requirement` as the trigger.
-2. Onboarding writes project-level `.kiro/steering/super-dev.md` and `.kiro/skills/super-dev-core/SKILL.md`, plus global `~/.kiro/steering/AGENTS.md` and `~/.kiro/skills/super-dev-core/SKILL.md`.
+1. Uses the official steering slash entry first; if the current session only accepts natural language, fall back to `super-dev: your requirement`.
+2. Onboarding writes project-level `.kiro/steering/super-dev.md` and `.kiro/skills/super-dev-core/SKILL.md`, plus global `~/.kiro/steering/super-dev.md` and `~/.kiro/skills/super-dev-core/SKILL.md`; legacy `~/.kiro/steering/AGENTS.md` remains as a compatibility surface.
 3. If steering or skills are not loaded, reopen the project window or start a new Agent Chat.
 
 **Qoder IDE**
@@ -809,8 +803,8 @@ Restart required after onboarding: No.
 
 Notes:
 1. Uses the official project commands + rules + skills mode; type `/super-dev your requirement` directly in Agent Chat.
-2. If the new command does not appear, confirm `.qoder/commands/super-dev.md` and `.qoder/rules/super-dev.md` exist, then reopen the project or start a new Agent Chat.
-3. The official surfaces now use `.qoder/rules/super-dev.md` + `.qoder/commands/super-dev.md` + `.qoder/skills/` / `~/.qoder/skills/`.
+2. If the new command does not appear, confirm `AGENTS.md`, `.qoder/commands/super-dev.md`, and `.qoder/rules/super-dev.md` exist, then reopen the project or start a new Agent Chat.
+3. The official surfaces now use `AGENTS.md` + `.qoder/rules/super-dev.md` + `.qoder/commands/super-dev.md` + `.qoder/skills/` / `~/.qoder/AGENTS.md` + `~/.qoder/skills/`.
 
 **Trae**
 
@@ -841,7 +835,7 @@ Restart required after onboarding: No.
 Notes:
 1. Use within a project-level Agent Chat; do not leave the project context.
 2. Let the host complete research before proceeding to documents and coding.
-3. Uses `.codebuddy/commands/` + `.codebuddy/agents/` + `.codebuddy/skills/` integration surfaces.
+3. Uses `CODEBUDDY.md` + `.codebuddy/rules/super-dev/RULE.mdc` + `.codebuddy/commands/` + `.codebuddy/agents/` + `.codebuddy/skills/` integration surfaces.
 
 **Copilot (VS Code) / Roo Code / Kilo Code / Cline**
 

@@ -1,11 +1,23 @@
 """E2E smoke test — runs the core CLI commands in sequence."""
 
+import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 PYTHON = sys.executable
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _subprocess_env() -> dict[str, str]:
+    env = os.environ.copy()
+    existing = env.get("PYTHONPATH", "").strip()
+    repo_path = str(REPO_ROOT)
+    env["PYTHONPATH"] = (
+        repo_path if not existing else os.pathsep.join([repo_path, existing])
+    )
+    return env
 
 
 def test_full_init_to_status_flow():
@@ -20,6 +32,7 @@ def test_full_init_to_status_flow():
             capture_output=True,
             text=True,
             timeout=30,
+            env=_subprocess_env(),
         )
         assert result.returncode == 0
         assert (project / "super-dev.yaml").exists()
@@ -31,6 +44,7 @@ def test_full_init_to_status_flow():
             capture_output=True,
             text=True,
             timeout=10,
+            env=_subprocess_env(),
         )
         # Should not crash
         assert result.returncode in (0, 1)
@@ -42,6 +56,7 @@ def test_full_init_to_status_flow():
             capture_output=True,
             text=True,
             timeout=10,
+            env=_subprocess_env(),
         )
         assert result.returncode in (0, 1)
 
@@ -52,6 +67,7 @@ def test_full_init_to_status_flow():
             capture_output=True,
             text=True,
             timeout=10,
+            env=_subprocess_env(),
         )
         assert result.returncode == 0
 
@@ -62,6 +78,7 @@ def test_full_init_to_status_flow():
             capture_output=True,
             text=True,
             timeout=10,
+            env=_subprocess_env(),
         )
         assert result.returncode in (0, 1)
 
@@ -72,6 +89,7 @@ def test_full_init_to_status_flow():
             capture_output=True,
             text=True,
             timeout=10,
+            env=_subprocess_env(),
         )
         assert result.returncode in (0, 1)
 
@@ -82,6 +100,7 @@ def test_full_init_to_status_flow():
             capture_output=True,
             text=True,
             timeout=10,
+            env=_subprocess_env(),
         )
         assert result.returncode == 0
-        assert "2.3.1" in result.stdout
+        assert "2.3.2" in result.stdout

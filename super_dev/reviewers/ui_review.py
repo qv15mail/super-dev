@@ -311,6 +311,54 @@ class UIReviewReviewer:
             "expected": "UI 与开发过程都禁止 emoji，图标只能来自正式图标库",
             "observed": emoji_policy.get("rule", "") if emoji_policy else "",
         }
+        cross_platform_frontend = self._is_cross_platform_frontend(frontend)
+        framework_playbook = (
+            ui_contract.get("framework_playbook")
+            if isinstance(ui_contract.get("framework_playbook"), dict)
+            else {}
+        )
+        framework_playbook_passed = self._framework_playbook_complete(framework_playbook)
+        has_native_capabilities = bool(framework_playbook.get("native_capabilities"))
+        has_validation_surfaces = bool(framework_playbook.get("validation_surfaces"))
+        has_delivery_evidence = bool(framework_playbook.get("delivery_evidence"))
+        alignment_summary["framework_playbook"] = {
+            "label": "跨平台框架 Playbook",
+            "passed": framework_playbook_passed if cross_platform_frontend else True,
+            "expected": "跨平台框架需冻结 focus / implementation_modules / platform_constraints / validation_surfaces / delivery_evidence",
+            "observed": (
+                framework_playbook.get("framework", "")
+                if framework_playbook and framework_playbook_passed
+                else (
+                    framework_playbook.get("framework", "missing")
+                    if framework_playbook
+                    else ("not required for web-only" if not cross_platform_frontend else "missing")
+                )
+            ),
+        }
+        alignment_summary["native_capabilities"] = {
+            "label": "原生能力面",
+            "passed": has_native_capabilities if cross_platform_frontend else True,
+            "expected": "跨平台框架需冻结原生能力面（如 provider / offline / filesystem / push / share）",
+            "observed": ", ".join(framework_playbook.get("native_capabilities", [])[:4])
+            if framework_playbook
+            else ("not required for web-only" if not cross_platform_frontend else "missing"),
+        }
+        alignment_summary["validation_surfaces"] = {
+            "label": "真实验收面",
+            "passed": has_validation_surfaces if cross_platform_frontend else True,
+            "expected": "跨平台框架需冻结必须验收的真实场景",
+            "observed": ", ".join(framework_playbook.get("validation_surfaces", [])[:4])
+            if framework_playbook
+            else ("not required for web-only" if not cross_platform_frontend else "missing"),
+        }
+        alignment_summary["delivery_evidence"] = {
+            "label": "交付证据要求",
+            "passed": has_delivery_evidence if cross_platform_frontend else True,
+            "expected": "跨平台框架需冻结交付阶段必须沉淀的证据",
+            "observed": ", ".join(framework_playbook.get("delivery_evidence", [])[:4])
+            if framework_playbook
+            else ("not required for web-only" if not cross_platform_frontend else "missing"),
+        }
         product_type = self._infer_product_type(description)
         conversational_product = any(
             token in description.lower() for token in ("ai", "chat", "对话", "助手", "agent", "copilot")
@@ -338,6 +386,41 @@ class UIReviewReviewer:
                     )
                 )
                 score -= 12
+            if cross_platform_frontend and not framework_playbook_passed:
+                findings.append(
+                    UIReviewFinding(
+                        level="high",
+                        title="跨平台框架 Playbook 未冻结",
+                        description="当前项目属于跨平台框架，但 UI 契约没有完整冻结框架级实现清单、平台限制、真实验收面和交付证据，宿主很容易退回到泛 Web 实现。",
+                        recommendation="在 output/*-ui-contract.json 与 UIUX 文档中补齐 framework_playbook，明确原生能力、平台差异、验证面和交付证据，再继续实现。",
+                        evidence=[framework_playbook.get("framework", "missing"), frontend],
+                    )
+                )
+                score -= 14
+            elif cross_platform_frontend and framework_playbook:
+                strengths.append(
+                    f"已冻结 {framework_playbook.get('framework', '跨平台框架')} playbook，框架级约束进入 UI 契约。"
+                )
+            if cross_platform_frontend and framework_playbook and (
+                not has_native_capabilities or not has_validation_surfaces or not has_delivery_evidence
+            ):
+                missing_framework_facets = []
+                if not has_native_capabilities:
+                    missing_framework_facets.append("原生能力面")
+                if not has_validation_surfaces:
+                    missing_framework_facets.append("真实验收面")
+                if not has_delivery_evidence:
+                    missing_framework_facets.append("交付证据要求")
+                findings.append(
+                    UIReviewFinding(
+                        level="medium",
+                        title="跨平台框架治理仍缺少关键面",
+                        description="虽然已经识别到跨平台框架，但原生能力、真实验收面或交付证据要求仍未冻结，后续实现与交付容易退回泛化 Web 口径。",
+                        recommendation="在 framework_playbook 中补齐原生能力面、必须验收的真实场景和交付证据要求，再继续实现与验收。",
+                        evidence=missing_framework_facets,
+                    )
+                )
+                score -= 8
 
             required_sections = [
                 "设计 Intelligence 结论",
@@ -654,6 +737,35 @@ class UIReviewReviewer:
                     score -= 14
                 else:
                     strengths.append("源码已显式接入 UI 契约对应的 design tokens。")
+
+                framework_playbook = (
+                    ui_contract.get("framework_playbook")
+                    if isinstance(ui_contract.get("framework_playbook"), dict)
+                    else {}
+                )
+                if framework_playbook:
+                    framework_alignment = self._check_framework_playbook_execution(
+                        framework_playbook=framework_playbook,
+                        source_content=source_content,
+                        preview_content=preview_content,
+                        dependency_blob=dependency_blob,
+                    )
+                    alignment_summary["framework_execution"] = framework_alignment
+                    if not framework_alignment.get("passed", False):
+                        findings.append(
+                            UIReviewFinding(
+                                level="high",
+                                title="跨平台框架 Playbook 未真正进入实现",
+                                description="UI 契约里已经冻结了框架级执行约束，但源码和依赖中没有足够信号证明这些平台能力与差异化策略已经进入实现。",
+                                recommendation="按 UI 契约补齐框架级执行信号：原生能力面、平台差异处理、导航/权限/离线/文件等关键能力，以及对应的验收面说明。",
+                                evidence=[
+                                    str(framework_playbook.get("framework", "")),
+                                    str(framework_alignment.get("expected", "")),
+                                    str(framework_alignment.get("observed", "")),
+                                ],
+                            )
+                        )
+                        score -= 10
 
                 token_variables = self._extract_token_variables(design_tokens_content)
                 if token_variables:
@@ -1393,6 +1505,26 @@ class UIReviewReviewer:
             return "luxury"
         return "modern"
 
+    def _is_cross_platform_frontend(self, frontend: str) -> bool:
+        normalized = UIIntelligenceAdvisor.FRONTEND_ALIASES.get(frontend.lower().strip(), frontend.lower().strip())
+        return normalized in {"miniapp", "react-native", "flutter", "desktop"}
+
+    def _framework_playbook_complete(self, playbook: dict[str, Any]) -> bool:
+        if not playbook:
+            return False
+        required_lists = (
+            "implementation_modules",
+            "platform_constraints",
+            "execution_guardrails",
+            "native_capabilities",
+            "validation_surfaces",
+            "delivery_evidence",
+        )
+        return bool(playbook.get("framework")) and all(
+            isinstance(playbook.get(name), list) and bool(playbook.get(name))
+            for name in required_lists
+        )
+
     def _inspect_preview_html(self, html: str) -> dict[str, int]:
         parser = _HTMLSurfaceParser(self.TRUST_TERMS)
         parser.feed(html)
@@ -1603,6 +1735,83 @@ class UIReviewReviewer:
         if "vuetify" in lowered:
             return ("vuetify",)
         return ()
+
+    def _expected_framework_tokens(self, framework: str) -> tuple[str, ...]:
+        lowered = framework.lower().strip()
+        if lowered == "uni-app":
+            return (
+                "uni.",
+                "#ifdef",
+                "navigationstyle",
+                "statusbarheight",
+                "provider",
+                "mp-weixin",
+                "safe-area",
+                "renderjs",
+                "wxs",
+            )
+        if lowered == "taro":
+            return (
+                "@tarojs",
+                "taro.",
+                "usedidshow",
+                "userachbottom",
+                "process.env.taro_env",
+                "taro.navigate",
+            )
+        if lowered == "react native":
+            return (
+                "react-native",
+                "@react-navigation",
+                "safeareaview",
+                "linking",
+                "permissionsandroid",
+                "expo-notifications",
+                "reanimated",
+            )
+        if lowered == "flutter":
+            return (
+                "materialapp",
+                "themedata",
+                "cupertino",
+                "mediaquery",
+                "gorouter",
+                "navigator",
+                "widgetsapp",
+            )
+        if lowered == "desktop web shell":
+            return (
+                "electron",
+                "tauri",
+                "ipc",
+                "tray",
+                "menu",
+                "shortcut",
+                "filesystem",
+                "offline",
+            )
+        return ()
+
+    def _check_framework_playbook_execution(
+        self,
+        *,
+        framework_playbook: dict[str, Any],
+        source_content: str,
+        preview_content: str,
+        dependency_blob: str,
+    ) -> dict[str, Any]:
+        framework = str(framework_playbook.get("framework") or "").strip()
+        expected_tokens = self._expected_framework_tokens(framework)
+        combined = "\n".join([dependency_blob.lower(), source_content.lower(), preview_content.lower()])
+        matched = [token for token in expected_tokens if token and token in combined]
+        required_hits = 2 if framework in {"React Native", "Flutter", "Desktop Web Shell"} else 3
+        passed = len(matched) >= required_hits if expected_tokens else bool(framework)
+        return {
+            "label": "框架 Playbook 执行",
+            "passed": passed,
+            "expected": ", ".join(expected_tokens[:6]) if expected_tokens else framework or "framework signals",
+            "observed": ", ".join(matched[:8]),
+        }
 
     def _extract_import_sources(self, source_content: str) -> list[str]:
         if not source_content:

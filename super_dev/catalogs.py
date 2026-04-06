@@ -527,6 +527,18 @@ HOST_PATH_PATTERNS: dict[str, list[str]] = {
         "%PROGRAMFILES%/CodeBuddy/CodeBuddy.exe",
         "%PROGRAMFILES(X86)%/CodeBuddy/CodeBuddy.exe",
     ],
+    "codex-cli": [
+        "~/Applications/Codex.app",
+        "/Applications/Codex.app",
+        "~/Applications/OpenAI Codex.app",
+        "/Applications/OpenAI Codex.app",
+        "%LOCALAPPDATA%/Programs/Codex/Codex.exe",
+        "%PROGRAMFILES%/Codex/Codex.exe",
+        "%PROGRAMFILES(X86)%/Codex/Codex.exe",
+        "%LOCALAPPDATA%/Programs/OpenAI Codex/Codex.exe",
+        "%PROGRAMFILES%/OpenAI Codex/Codex.exe",
+        "%PROGRAMFILES(X86)%/OpenAI Codex/Codex.exe",
+    ],
     "cursor-cli": [
         "~/Applications/Cursor.app",
         "/Applications/Cursor.app",

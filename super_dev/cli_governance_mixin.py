@@ -158,10 +158,255 @@ class CliGovernanceMixin:
         action = getattr(args, "hooks_action", None)
         if action == "list":
             return self._cmd_hooks_list(args)
+        if action == "history":
+            return self._cmd_hooks_history(args)
         if action == "test":
             return self._cmd_hooks_test(args)
-        self.console.print("[yellow]请指定 hooks 子命令: list / test[/yellow]")
+        self.console.print("[yellow]请指定 hooks 子命令: list / history / test[/yellow]")
         return 1
+
+    # ------------------------------------------------------------------
+    # harness commands
+    # ------------------------------------------------------------------
+
+    def _cmd_harness(self, args: Any) -> int:
+        """Route harness subcommands."""
+        action = getattr(args, "harness_action", None)
+        if action == "status":
+            return self._cmd_harness_status(args)
+        if action == "workflow":
+            return self._cmd_harness_workflow(args)
+        if action == "framework":
+            return self._cmd_harness_framework(args)
+        if action == "operational":
+            return self._cmd_harness_operational(args)
+        if action == "timeline":
+            return self._cmd_harness_timeline(args)
+        if action == "hooks":
+            return self._cmd_harness_hooks(args)
+        self.console.print(
+            "[yellow]请指定 harness 子命令: status / workflow / framework / operational / timeline / hooks[/yellow]"
+        )
+        return 1
+
+    def _build_harness_payload(self, *, hook_limit: int = 20) -> dict[str, Any]:
+        from .harness_registry import build_operational_harness_payload, derive_operational_focus
+        from .operational_harness import OperationalHarnessBuilder
+
+        project_dir = Path.cwd()
+        builder = OperationalHarnessBuilder(project_dir)
+        report = builder.build(hook_limit=max(hook_limit, 1))
+        files = builder.write(report)
+        payload = build_operational_harness_payload(
+            project_dir,
+            hook_limit=max(hook_limit, 1),
+            write_reports=True,
+        )
+        payload["enabled"] = report.enabled
+        payload["passed"] = report.passed
+        payload["enabled_count"] = report.enabled_count
+        payload["passed_count"] = report.passed_count
+        payload["blockers"] = list(report.blockers)
+        payload["next_actions"] = list(report.next_actions)
+        payload["recent_timeline"] = list(report.recent_timeline)
+        payload["operational_focus"] = derive_operational_focus(
+            project_dir, hook_limit=max(hook_limit, 1)
+        )
+        payload["report_file"] = str(files["markdown"])
+        payload["json_file"] = str(files["json"])
+        return payload
+
+    @staticmethod
+    def _summarize_harness_item(item: dict[str, Any]) -> str:
+        kind = str(item.get("kind", ""))
+        if not item.get("enabled"):
+            if kind == "workflow":
+                return "未检测到活动 workflow continuity trail"
+            if kind == "framework":
+                return "未检测到跨平台 framework playbook"
+            if kind == "hooks":
+                return "未检测到 hook 审计历史"
+            return "未启用"
+        if item.get("passed"):
+            if kind == "workflow":
+                recent_timeline = item.get("recent_timeline") or []
+                if isinstance(recent_timeline, list) and recent_timeline:
+                    first = recent_timeline[0] if isinstance(recent_timeline[0], dict) else {}
+                    message = str(first.get("message", "")).strip()
+                    if message:
+                        return message
+                return str(item.get("current_step_label") or item.get("workflow_status") or "workflow continuity 正常")
+            if kind == "framework":
+                return f"{item.get('framework') or 'framework'} harness 已通过"
+            if kind == "hooks":
+                return f"最近 {item.get('total_events', 0)} 条 hook 审计干净"
+            return "已通过"
+        blockers = item.get("blockers") or []
+        if blockers:
+            return "；".join(str(part) for part in blockers[:2])
+        return "存在待处理阻塞项"
+
+    def _render_harness_item(self, item: dict[str, Any]) -> None:
+        label = str(item.get("label") or str(item.get("kind", "")) or "Harness")
+        status = "ready" if item.get("passed") else ("disabled" if not item.get("enabled") else "pending")
+        self.console.print(f"[cyan]{label}[/cyan] [{status}]")
+        self.console.print(f"  概览: {self._summarize_harness_item(item)}")
+        self.console.print(f"  JSON: {item.get('json_file', '-')}")
+        self.console.print(f"  Markdown: {item.get('report_file', '-')}")
+        blockers = item.get("blockers") or []
+        if blockers:
+            self.console.print("  阻塞:")
+            for blocker in blockers[:3]:
+                self.console.print(f"    - {blocker}")
+        next_actions = item.get("next_actions") or []
+        if next_actions:
+            self.console.print("  下一步:")
+            for action in next_actions[:2]:
+                self.console.print(f"    - {action}")
+        recent_timeline = item.get("recent_timeline") or []
+        if isinstance(recent_timeline, list) and recent_timeline:
+            self.console.print("  最近关键时间线:")
+            for entry in recent_timeline[:3]:
+                if not isinstance(entry, dict):
+                    continue
+                timestamp = str(entry.get("timestamp", "")).strip() or "-"
+                title = str(entry.get("title", "")).strip() or str(entry.get("kind", "")).strip()
+                message = str(entry.get("message", "")).strip() or "-"
+                self.console.print(f"    - {timestamp} · {title} · {message}")
+
+    def _cmd_harness_status(self, args: Any) -> int:
+        hook_limit = max(int(getattr(args, "hook_limit", 20) or 20), 1)
+        payload = self._build_harness_payload(hook_limit=hook_limit)
+        if bool(getattr(args, "json", False)):
+            self.console.print_json(data=payload)
+            return 0
+
+        harnesses = payload.get("harnesses", {})
+        if RICH_AVAILABLE:
+            table = Table(title="Operational Harness Status")
+            table.add_column("Harness", style="cyan")
+            table.add_column("Enabled")
+            table.add_column("Passed")
+            table.add_column("Summary")
+            table.add_column("Report")
+            for key in ("workflow", "framework", "hooks"):
+                item = harnesses.get(key, {})
+                table.add_row(
+                    key,
+                    "yes" if item.get("enabled") else "no",
+                    "yes" if item.get("passed") else "no",
+                    self._summarize_harness_item(item),
+                    str(item.get("json_file", "-")),
+                )
+            self.console.print(table)
+        else:
+            for key in ("workflow", "framework", "hooks"):
+                item = harnesses.get(key, {})
+                self.console.print(f"{key}: {self._summarize_harness_item(item)}")
+        self.console.print(f"[dim]Operational Harness JSON:[/dim] {payload.get('json_file', '-')}")
+        self.console.print(f"[dim]Operational Harness Markdown:[/dim] {payload.get('report_file', '-')}")
+        focus = payload.get("operational_focus", {})
+        if isinstance(focus, dict) and str(focus.get("summary", "")).strip():
+            self.console.print(f"[dim]当前治理焦点:[/dim] {focus.get('summary')}")
+            action = str(focus.get("recommended_action", "")).strip()
+            if action:
+                self.console.print(f"[dim]建议先做:[/dim] {action}")
+
+        return 0
+
+    def _cmd_harness_workflow(self, args: Any) -> int:
+        payload = self._build_harness_payload()
+        item = payload["harnesses"]["workflow"]
+        if bool(getattr(args, "json", False)):
+            self.console.print_json(data=item)
+            return 0
+        self._render_harness_item(item)
+        return 0
+
+    def _cmd_harness_framework(self, args: Any) -> int:
+        payload = self._build_harness_payload()
+        item = payload["harnesses"]["framework"]
+        if bool(getattr(args, "json", False)):
+            self.console.print_json(data=item)
+            return 0
+        self._render_harness_item(item)
+        return 0
+
+    def _cmd_harness_operational(self, args: Any) -> int:
+        from .operational_harness import OperationalHarnessBuilder
+
+        hook_limit = max(int(getattr(args, "hook_limit", 20) or 20), 1)
+        builder = OperationalHarnessBuilder(Path.cwd())
+        report = builder.build(hook_limit=hook_limit)
+        files = builder.write(report)
+        payload = report.to_dict()
+        payload["report_file"] = str(files["markdown"])
+        payload["json_file"] = str(files["json"])
+        if bool(getattr(args, "json", False)):
+            self.console.print_json(data=payload)
+            return 0
+        self.console.print("[cyan]Operational Harness[/cyan]")
+        self.console.print(
+            f"  状态: {'passed' if payload.get('passed') else 'pending'} "
+            f"({payload.get('passed_count', 0)}/{payload.get('enabled_count', 0)})"
+        )
+        self.console.print(f"  JSON: {payload.get('json_file', '-')}")
+        self.console.print(f"  Markdown: {payload.get('report_file', '-')}")
+        blockers = payload.get("blockers") or []
+        if blockers:
+            self.console.print("  阻塞:")
+            for blocker in blockers[:3]:
+                self.console.print(f"    - {blocker}")
+        next_actions = payload.get("next_actions") or []
+        if next_actions:
+            self.console.print("  下一步:")
+            for action in next_actions[:3]:
+                self.console.print(f"    - {action}")
+        timeline = payload.get("recent_timeline") or []
+        if timeline:
+            self.console.print("  最近关键时间线:")
+            for entry in timeline[:5]:
+                if not isinstance(entry, dict):
+                    continue
+                timestamp = str(entry.get("timestamp", "")).strip() or "-"
+                title = str(entry.get("title", "")).strip() or str(entry.get("kind", "")).strip()
+                message = str(entry.get("message", "")).strip() or "-"
+                self.console.print(f"    - {timestamp} · {title} · {message}")
+        return 0
+
+    def _cmd_harness_timeline(self, args: Any) -> int:
+        from .review_state import load_recent_operational_timeline
+
+        limit = max(int(getattr(args, "limit", 10) or 10), 1)
+        timeline = load_recent_operational_timeline(Path.cwd(), limit=limit)
+        payload = {
+            "project_dir": str(Path.cwd().resolve()),
+            "count": len(timeline),
+            "timeline": timeline,
+        }
+        if bool(getattr(args, "json", False)):
+            self.console.print_json(data=payload)
+            return 0
+        if not timeline:
+            self.console.print("[yellow]当前没有统一运行时时间线。[/yellow]")
+            return 0
+        self.console.print("[cyan]Operational Timeline[/cyan]")
+        for item in timeline:
+            timestamp = str(item.get("timestamp", "")).strip() or "-"
+            title = str(item.get("title", "")).strip() or str(item.get("kind", "")).strip()
+            message = str(item.get("message", "")).strip() or "-"
+            self.console.print(f"  - {timestamp} · {title} · {message}")
+        return 0
+
+    def _cmd_harness_hooks(self, args: Any) -> int:
+        limit = max(int(getattr(args, "limit", 20) or 20), 1)
+        payload = self._build_harness_payload(hook_limit=limit)
+        item = payload["harnesses"]["hooks"]
+        if bool(getattr(args, "json", False)):
+            self.console.print_json(data=item)
+            return 0
+        self._render_harness_item(item)
+        return 0
 
     def _cmd_hooks_list(self, _args: Any) -> int:
         """List configured hooks from super-dev.yaml."""
@@ -189,6 +434,47 @@ class CliGovernanceMixin:
             for event, cmd in hooks.items():
                 self.console.print(f"  {event}: {cmd}")
 
+        return 0
+
+    def _cmd_hooks_history(self, args: Any) -> int:
+        """Show recent persisted hook execution history."""
+        try:
+            from .hooks.manager import HookManager
+
+            limit = max(int(getattr(args, "limit", 10) or 10), 1)
+            results = HookManager.load_recent_history(Path.cwd(), limit=limit)
+        except Exception as exc:
+            self.console.print(f"[red]读取 hook 历史失败: {exc}[/red]")
+            return 1
+
+        if not results:
+            self.console.print("[yellow]暂无 hook 执行历史[/yellow]")
+            return 0
+
+        if RICH_AVAILABLE:
+            table = Table(title="Recent Hook History")
+            table.add_column("Time", style="cyan")
+            table.add_column("Event")
+            table.add_column("Phase")
+            table.add_column("Hook")
+            table.add_column("Status")
+            table.add_column("Source")
+            for item in results:
+                table.add_row(
+                    item.timestamp.replace("T", " ")[:19],
+                    item.event,
+                    item.phase or "-",
+                    item.hook_name,
+                    "blocked" if item.blocked else ("ok" if item.success else "failed"),
+                    item.source or "-",
+                )
+            self.console.print(table)
+        else:
+            for item in results:
+                status = "blocked" if item.blocked else ("ok" if item.success else "failed")
+                self.console.print(
+                    f"{item.timestamp} {item.event} {item.phase or '-'} {item.hook_name} {status}"
+                )
         return 0
 
     def _cmd_hooks_test(self, args: Any) -> int:
@@ -727,11 +1013,11 @@ class CliGovernanceMixin:
     # ------------------------------------------------------------------
 
     def _cmd_migrate(self, _args: Any) -> int:
-        """执行项目迁移 (2.2.0 -> 2.3.1)。"""
+        """执行项目迁移 (2.2.0+ -> 2.3.2)。"""
         from .migrate import migrate_project
 
         project_dir = Path.cwd()
-        self.console.print("[cyan]正在执行 2.2.0 → 2.3.1 迁移...[/cyan]\n")
+        self.console.print("[cyan]正在执行 2.2.0+ → 2.3.2 迁移...[/cyan]\n")
 
         changes = migrate_project(project_dir)
 

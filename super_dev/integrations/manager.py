@@ -5,8 +5,9 @@
 from __future__ import annotations
 
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Any
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
@@ -19,6 +20,7 @@ class IntegrationTarget:
     name: str
     description: str
     files: list[str]
+    optional_files: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -62,6 +64,8 @@ class HostAdapterProfile:
     host_protocol_summary: str
     official_project_surfaces: list[str]
     official_user_surfaces: list[str]
+    optional_project_surfaces: list[str]
+    optional_user_surfaces: list[str]
     observed_compatibility_surfaces: list[str]
     official_docs_references: list[str]
     docs_check_status: str
@@ -81,6 +85,8 @@ class IntegrationManager(IntegrationManagerContentMixin):
     CODEX_AGENTS_END = "<!-- END SUPER DEV CODEX -->"
     OPENCODE_AGENTS_BEGIN = "<!-- BEGIN SUPER DEV OPENCODE -->"
     OPENCODE_AGENTS_END = "<!-- END SUPER DEV OPENCODE -->"
+    QODER_AGENTS_BEGIN = "<!-- BEGIN SUPER DEV QODER -->"
+    QODER_AGENTS_END = "<!-- END SUPER DEV QODER -->"
     CLAUDE_RULES_BEGIN = "<!-- BEGIN SUPER DEV CLAUDE -->"
     CLAUDE_RULES_END = "<!-- END SUPER DEV CLAUDE -->"
     NO_SKILL_TARGETS: set[str] = {
@@ -133,12 +139,12 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "codebuddy-cli": [
             "在当前 CLI 会话中直接输入即可。",
             "如果会话早于接入动作启动，建议重开会话后再试。",
-            "官方文档已公开 `.codebuddy/commands/` 与 `.codebuddy/skills/` / `~/.codebuddy/skills/`，项目级 `.codebuddy/AGENTS.md` 作为兼容增强路径保留。",
+            "官方文档已公开 `CODEBUDDY.md`、`.codebuddy/commands/`、`.codebuddy/skills/` 与 `~/.codebuddy/CODEBUDDY.md` / `~/.codebuddy/skills/`。",
         ],
         "codebuddy": [
             "建议在项目级 Agent Chat 中使用，不要脱离项目上下文。",
             "先让宿主完成 research，再继续文档和编码。",
-            "官方文档已公开 `.codebuddy/commands/`、`.codebuddy/agents/`、`.codebuddy/skills/` 与 `~/.codebuddy/agents/`、`~/.codebuddy/skills/`。",
+            "官方文档已公开 `CODEBUDDY.md`、`.codebuddy/rules/`、`.codebuddy/commands/`、`.codebuddy/agents/`、`.codebuddy/skills/` 与对应用户级目录。",
         ],
         "codex-cli": [
             "Codex 官方不走自定义项目 slash；桌面端请从 `/` 列表选择 `super-dev`，那是启用 Skill 的展示入口。",
@@ -174,9 +180,9 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "Gemini CLI 官方文档明确 `GEMINI.md` 与 `.gemini/commands/` 的项目级上下文与命令目录，用户级 `~/.gemini/commands/` 也会一并写入。",
         ],
         "kiro-cli": [
-            "Kiro CLI 当前优先按 `.kiro/steering/super-dev.md` + `.kiro/skills/` / `~/.kiro/skills/` 适配，不依赖自定义 slash。",
+            "Kiro CLI 当前优先按 `.kiro/steering/super-dev.md` + `.kiro/skills/` / `~/.kiro/skills/` 适配，并通过 steering 的 inclusion 暴露 `/super-dev`。",
             "如果 steering 或 skills 未刷新，重新进入项目目录后重开 Kiro CLI 会话。",
-            "官方文档已公开 `.kiro/steering/`、`.kiro/skills/` 与 `~/.kiro/skills/`。",
+            "官方文档已公开 `.kiro/steering/`、`.kiro/skills/`、`~/.kiro/steering/` 与 `~/.kiro/skills/`。",
         ],
         "opencode": [
             "按 CLI slash 模式使用。",
@@ -185,8 +191,8 @@ class IntegrationManager(IntegrationManagerContentMixin):
         ],
         "qoder-cli": [
             "适合命令行流水线开发。",
-            "若 slash 未生效，先确认 `.qoder/commands/super-dev.md` 已生成，并检查 `.qoder/rules/` 目录是否存在。",
-            "官方文档已公开 .qoder/skills 与 ~/.qoder/skills。",
+            "若 slash 未生效，先确认 `AGENTS.md`、`.qoder/commands/super-dev.md` 已生成，并检查 `.qoder/rules/` 目录是否存在。",
+            "官方文档已公开 `.qoder/skills/`、`~/.qoder/skills/`、项目根 `AGENTS.md` 与 `~/.qoder/AGENTS.md`。",
             "Qoder 官方规则目录是 `.qoder/rules/`，不要再依赖单文件 `.qoder/rules.md`。",
         ],
         "roo-code": [
@@ -202,14 +208,14 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "当前按文本触发 `super-dev: <需求描述>` 适配，减少与内建 slash 的语义冲突。",
         ],
         "kiro": [
-            "Kiro IDE 当前优先按 steering + skills 模式触发，不走 /super-dev。",
+            "Kiro IDE 当前优先按 steering + skills 模式触发，并通过 steering 的 inclusion 暴露 `/super-dev`。",
             "如果 steering 或 Skill 未加载，先重开项目窗口或新开一个 Agent Chat。",
             "Kiro 官方已公开工作区 `.kiro/steering/`、`.kiro/skills/` 与全局 `~/.kiro/steering/`、`~/.kiro/skills/`。",
         ],
         "qoder": [
             "Qoder IDE 当前优先按项目级 commands + rules + 宿主级 Skill 模式触发，可直接使用 /super-dev。",
             "若新增命令未出现，重新打开项目或新开一个 Agent Chat。",
-            "官方文档已公开 `.qoder/rules/`、`.qoder/commands/`、`.qoder/skills/` 与 `~/.qoder/skills/`。",
+            "官方文档已公开 `.qoder/rules/`、`.qoder/commands/`、`.qoder/skills/`、项目根 `AGENTS.md` 与 `~/.qoder/AGENTS.md`。",
         ],
         "trae": [
             "不要输入 /super-dev。",
@@ -309,12 +315,23 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 ".claude/CLAUDE.md",
                 ".claude/skills/super-dev/SKILL.md",
                 ".claude/agents/super-dev-core.md",
+                ".claude/commands/super-dev.md",
                 ".claude-plugin/marketplace.json",
                 "plugins/super-dev-claude/.claude-plugin/plugin.json",
                 "plugins/super-dev-claude/README.md",
                 "plugins/super-dev-claude/skills/super-dev/SKILL.md",
                 "plugins/super-dev-claude/skills/super-dev-core/SKILL.md",
-                "plugins/super-dev-claude/commands/super-dev.md",
+                "plugins/super-dev-claude/agents/super-dev-core.md",
+            ],
+            optional_files=[
+                ".claude/CLAUDE.md",
+                ".claude/commands/super-dev.md",
+                ".claude/agents/super-dev-core.md",
+                ".claude-plugin/marketplace.json",
+                "plugins/super-dev-claude/.claude-plugin/plugin.json",
+                "plugins/super-dev-claude/README.md",
+                "plugins/super-dev-claude/skills/super-dev/SKILL.md",
+                "plugins/super-dev-claude/skills/super-dev-core/SKILL.md",
                 "plugins/super-dev-claude/agents/super-dev-core.md",
             ],
         ),
@@ -326,13 +343,14 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "codebuddy-cli": IntegrationTarget(
             name="codebuddy-cli",
             description="CodeBuddy CLI 项目规则注入",
-            files=[".codebuddy/AGENTS.md", ".codebuddy/skills/super-dev-core/SKILL.md"],
+            files=["CODEBUDDY.md", ".codebuddy/skills/super-dev-core/SKILL.md"],
         ),
         "codebuddy": IntegrationTarget(
             name="codebuddy",
             description="CodeBuddy IDE rules + agent protocol 注入",
             files=[
-                ".codebuddy/rules.md",
+                "CODEBUDDY.md",
+                ".codebuddy/rules/super-dev/RULE.mdc",
                 ".codebuddy/agents/super-dev-core.md",
                 ".codebuddy/skills/super-dev-core/SKILL.md",
             ],
@@ -343,6 +361,13 @@ class IntegrationManager(IntegrationManagerContentMixin):
             files=[
                 "AGENTS.md",
                 ".agents/skills/super-dev/SKILL.md",
+                ".agents/plugins/marketplace.json",
+                "plugins/super-dev-codex/.codex-plugin/plugin.json",
+                "plugins/super-dev-codex/README.md",
+                "plugins/super-dev-codex/skills/super-dev/SKILL.md",
+                "plugins/super-dev-codex/skills/super-dev-core/SKILL.md",
+            ],
+            optional_files=[
                 ".agents/plugins/marketplace.json",
                 "plugins/super-dev-codex/.codex-plugin/plugin.json",
                 "plugins/super-dev-codex/README.md",
@@ -383,7 +408,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "qoder-cli": IntegrationTarget(
             name="qoder-cli",
             description="Qoder CLI 项目规则注入",
-            files=[".qoder/rules/super-dev.md", ".qoder/skills/super-dev-core/SKILL.md"],
+            files=["AGENTS.md", ".qoder/rules/super-dev.md", ".qoder/skills/super-dev-core/SKILL.md"],
         ),
         "roo-code": IntegrationTarget(
             name="roo-code",
@@ -413,7 +438,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "qoder": IntegrationTarget(
             name="qoder",
             description="Qoder IDE 规则 + 命令注入",
-            files=[".qoder/rules/super-dev.md", ".qoder/skills/super-dev-core/SKILL.md"],
+            files=["AGENTS.md", ".qoder/rules/super-dev.md", ".qoder/skills/super-dev-core/SKILL.md"],
         ),
         "trae": IntegrationTarget(
             name="trae",
@@ -434,6 +459,8 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "cursor-cli": ".cursor/commands/super-dev.md",
         "windsurf": ".windsurf/workflows/super-dev.md",
         "gemini-cli": ".gemini/commands/super-dev.md",
+        "kiro-cli": ".kiro/steering/super-dev.md",
+        "kiro": ".kiro/steering/super-dev.md",
         "opencode": ".opencode/commands/super-dev.md",
         "qoder-cli": ".qoder/commands/super-dev.md",
         "qoder": ".qoder/commands/super-dev.md",
@@ -451,8 +478,6 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "codex-cli",
         "copilot-cli",
         "kilo-code",
-        "kiro-cli",
-        "kiro",
         "trae",
         "vscode-copilot",
     }
@@ -468,11 +493,13 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "codebuddy-cli": (
             "https://www.codebuddy.ai/docs/cli/slash-commands",
             "https://www.codebuddy.ai/docs/cli/skills",
+            "https://www.codebuddy.ai/docs/cli/plugins",
         ),
         "codebuddy": (
             "https://www.codebuddy.ai/docs/cli/ide-integrations",
+            "https://www.codebuddy.ai/docs/zh/ide/User-guide/Rules",
             "https://www.codebuddy.ai/docs/ide/Features/Subagents",
-            "https://www.codebuddy.ai/docs/cli/skills",
+            "https://www.codebuddy.ai/docs/zh/ide/Features/Skills",
         ),
         "codex-cli": (
             "https://developers.openai.com/codex/cli",
@@ -505,6 +532,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "https://kiro.dev/docs/cli/",
             "https://kiro.dev/docs/cli/skills/",
             "https://kiro.dev/docs/steering/",
+            "https://kiro.dev/changelog/powers-auto-summarization-and-slash-commands",
         ),
         "opencode": (
             "https://opencode.ai/docs/rules/",
@@ -593,10 +621,10 @@ class IntegrationManager(IntegrationManagerContentMixin):
         },
         "codebuddy-cli": {
             "level": "compatible",
-            "reason": "官方文档明确、slash 路径可接入，但仍缺少长期真机回归矩阵。",
+            "reason": "官方文档已经转向 CODEBUDDY.md + commands + skills 模型，当前接入已对齐，但仍缺少长期真机回归矩阵。",
             "evidence": [
-                "官方文档公开 slash commands",
-                "Super Dev 已提供规则、Skill 与 slash 安装路径",
+                "官方文档公开 CODEBUDDY.md、CLI slash commands 与 skills",
+                "Super Dev 已改为写入 CODEBUDDY.md + commands + skills，并保留 AGENTS.md compatibility 观察面",
             ],
         },
         "cursor-cli": {
@@ -617,27 +645,26 @@ class IntegrationManager(IntegrationManagerContentMixin):
         },
         "kiro-cli": {
             "level": "compatible",
-            "reason": "已按 Kiro 官方 steering + skills 机制接入，不再把它误建模成自定义 slash 宿主。",
+            "reason": "已按 Kiro 官方 steering + skills 机制接入，并把 steering slash entry 纳入正式模型，不再误建模成纯文本触发宿主。",
             "evidence": [
-                "官方文档公开 Kiro CLI、steering 与 skills 目录",
-                "Super Dev 已改为 `.kiro/steering/` + `.kiro/skills/` + `~/.kiro/skills/` 接入",
+                "官方文档公开 Kiro CLI、steering 与 skills 目录，以及 steering inclusion 的 slash 入口",
+                "Super Dev 已改为 `.kiro/steering/` + `.kiro/skills/` + `~/.kiro/steering/` + `~/.kiro/skills/` 接入",
             ],
         },
         "qoder-cli": {
             "level": "compatible",
-            "reason": "Qoder CLI 已按官方 `.qoder/rules/`、commands 与 skills 目录接入，不再依赖旧的单文件规则面。",
+            "reason": "Qoder CLI 已按官方 `.qoder/rules/`、commands、skills 与 AGENTS memory 接入，不再依赖旧的单文件规则面。",
             "evidence": [
-                "官方文档公开 `.qoder/rules/`、commands、skills 与 AGENTS.md compatibility",
-                "Super Dev 已改为规则目录 + slash command + skills 接入",
+                "官方文档公开 `.qoder/rules/`、commands、skills 与项目/用户 AGENTS.md memory",
+                "Super Dev 已改为规则目录 + slash command + skills + AGENTS memory 接入",
             ],
         },
         "codebuddy": {
             "level": "experimental",
-            "reason": "IDE 侧 commands + agents + skills 接入完整，但对 Agent Chat slash 的项目级行为仍缺少持续真机验证。",
+            "reason": "IDE 侧已对齐官方 CODEBUDDY.md + rules + commands + agents + skills，但 Agent Chat 的项目级行为仍缺少持续真机验证。",
             "evidence": [
-                "官方文档公开 IDE integrations",
-                "官方文档公开 Subagents 与 Skills",
-                "Super Dev 已写入 rules、commands、agents 与 skills 接入面",
+                "官方文档公开 IDE rules、commands、subagents 与 skills",
+                "Super Dev 已写入 CODEBUDDY.md、rules、commands、agents 与 skills 接入面",
             ],
         },
         "copilot-cli": {
@@ -683,18 +710,18 @@ class IntegrationManager(IntegrationManagerContentMixin):
         },
         "kiro": {
             "level": "experimental",
-            "reason": "IDE 侧已按官方 steering + skills 对齐，但仍需更多真机回归样本验证 Agent Chat 行为。",
+            "reason": "IDE 侧已按官方 steering + skills + steering slash entry 对齐，但仍需更多真机回归样本验证 Agent Chat 行为。",
             "evidence": [
-                "官方文档公开 steering 与 skills",
-                "Super Dev 已改为 `.kiro/steering/` + `.kiro/skills/` + `~/.kiro/skills/` 接入",
+                "官方文档公开 steering、skills 与 steering inclusion 的 slash 入口",
+                "Super Dev 已改为 `.kiro/steering/` + `.kiro/skills/` + `~/.kiro/steering/` + `~/.kiro/skills/` 接入",
             ],
         },
         "qoder": {
             "level": "experimental",
-            "reason": "官方文档已明确 `.qoder/rules/`、commands、skills 与 AGENTS.md compatibility，当前已切到目录化规则面，但仍需要更多真机样本。",
+            "reason": "官方文档已明确 `.qoder/rules/`、commands、skills 与 AGENTS memory，当前已切到目录化规则面，但仍需要更多真机样本。",
             "evidence": [
-                "官方文档公开 `.qoder/rules/` 目录、commands、skills 与 AGENTS.md compatibility",
-                "Super Dev 已改为 `.qoder/rules/super-dev.md` + `.qoder/commands/super-dev.md` + `.qoder/skills/`",
+                "官方文档公开 `.qoder/rules/` 目录、commands、skills 与项目/用户 AGENTS.md memory",
+                "Super Dev 已改为 `.qoder/rules/super-dev.md` + `.qoder/commands/super-dev.md` + `.qoder/skills/` + `AGENTS.md`",
             ],
         },
         "openclaw": {
@@ -841,6 +868,21 @@ class IntegrationManager(IntegrationManagerContentMixin):
     def list_targets(self) -> list[IntegrationTarget]:
         return list(self.TARGETS.values())
 
+    @classmethod
+    def required_integration_files(cls, target: str) -> list[str]:
+        target_info = cls.TARGETS.get(target)
+        if target_info is None:
+            return []
+        optional = set(target_info.optional_files)
+        return [item for item in target_info.files if item not in optional]
+
+    @classmethod
+    def optional_integration_files(cls, target: str) -> list[str]:
+        target_info = cls.TARGETS.get(target)
+        if target_info is None:
+            return []
+        return list(target_info.optional_files)
+
     def get_adapter_profile(self, target: str) -> HostAdapterProfile:
         from ..catalogs import HOST_COMMAND_CANDIDATES, host_path_candidates
         from ..skills import SkillManager
@@ -849,7 +891,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
             raise ValueError(f"Unsupported target: {target}")
 
         category = HOST_TOOL_CATEGORY_MAP.get(target, "ide")
-        integration_files = list(self.TARGETS[target].files)
+        integration_files = list(self.required_integration_files(target))
         slash_file = self.SLASH_COMMAND_FILES.get(target, "") if self.supports_slash(target) else ""
         skill_dir = SkillManager.TARGET_PATHS.get(target, "") if self.requires_skill(target) else ""
         docs_references = self._official_docs_references(target)
@@ -906,6 +948,8 @@ class IntegrationManager(IntegrationManagerContentMixin):
             host_protocol_summary=str(protocol["summary"]),
             official_project_surfaces=list(surfaces["official_project_surfaces"]),
             official_user_surfaces=list(surfaces["official_user_surfaces"]),
+            optional_project_surfaces=list(surfaces["optional_project_surfaces"]),
+            optional_user_surfaces=list(surfaces["optional_user_surfaces"]),
             observed_compatibility_surfaces=list(surfaces["observed_compatibility_surfaces"]),
             official_docs_references=docs_references,
             docs_check_status="declared" if docs_references else "missing",
@@ -961,6 +1005,8 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "required_steps": required_steps,
             "required_project_surfaces": list(profile.official_project_surfaces),
             "required_user_surfaces": list(profile.official_user_surfaces),
+            "optional_project_surfaces": list(profile.optional_project_surfaces),
+            "optional_user_surfaces": list(profile.optional_user_surfaces),
         }
 
     def _official_docs_references(self, target: str) -> list[str]:
@@ -1238,12 +1284,16 @@ class IntegrationManager(IntegrationManagerContentMixin):
     def resolve_global_protocol_path(cls, target: str) -> Path | None:
         mapping = {
             "claude-code": Path.home() / ".claude" / "CLAUDE.md",
-            "codebuddy": Path.home() / ".codebuddy" / "agents" / "super-dev-core.md",
+            "codebuddy-cli": Path.home() / ".codebuddy" / "CODEBUDDY.md",
+            "codebuddy": Path.home() / ".codebuddy" / "CODEBUDDY.md",
             "codex-cli": cls._codex_home_dir() / "AGENTS.md",
-            "kiro": Path.home() / ".kiro" / "steering" / "AGENTS.md",
+            "kiro-cli": Path.home() / ".kiro" / "steering" / "super-dev.md",
+            "kiro": Path.home() / ".kiro" / "steering" / "super-dev.md",
             "gemini-cli": Path.home() / ".gemini" / "GEMINI.md",
             "antigravity": Path.home() / ".gemini" / "GEMINI.md",
             "opencode": Path.home() / ".config" / "opencode" / "AGENTS.md",
+            "qoder-cli": Path.home() / ".qoder" / "AGENTS.md",
+            "qoder": Path.home() / ".qoder" / "AGENTS.md",
             "trae": Path.home() / ".trae" / "user_rules.md",
         }
         return mapping.get(target)
@@ -1255,21 +1305,41 @@ class IntegrationManager(IntegrationManagerContentMixin):
         return None
 
     @classmethod
-    def expected_skill_path(cls, target: str, skill_name: str = "super-dev-core") -> Path | None:
-        paths = cls.expected_skill_paths(target=target, skill_name=skill_name)
+    def expected_skill_path(
+        cls,
+        target: str,
+        skill_name: str = "super-dev-core",
+        project_dir: Path | None = None,
+    ) -> Path | None:
+        paths = cls.expected_skill_paths(target=target, skill_name=skill_name, project_dir=project_dir)
         return paths[0] if paths else None
 
     @classmethod
-    def expected_skill_paths(cls, target: str, skill_name: str = "super-dev-core") -> list[Path]:
+    def expected_skill_paths(
+        cls,
+        target: str,
+        skill_name: str = "super-dev-core",
+        project_dir: Path | None = None,
+    ) -> list[Path]:
         from ..skills import SkillManager
 
         if not cls.requires_skill(target):
             return []
-        if target not in SkillManager.TARGET_PATHS:
-            return []
         paths: list[Path] = []
+        project_root = Path(project_dir).resolve() if project_dir is not None else None
+        surface_kind = SkillManager.target_path_kind(target)
         for name in SkillManager.compatibility_skill_names(target, skill_name):
-            paths.append(Path(SkillManager.TARGET_PATHS[target]).expanduser() / name / "SKILL.md")
+            if project_root is not None:
+                if target == "codex-cli":
+                    paths.append(project_root / ".agents" / "skills" / name / "SKILL.md")
+                elif target == "claude-code":
+                    paths.append(project_root / ".claude" / "skills" / name / "SKILL.md")
+            if target not in SkillManager.TARGET_PATHS:
+                continue
+            target_root = Path(SkillManager.TARGET_PATHS[target]).expanduser()
+            if surface_kind == "observed-compatibility-surface" and not target_root.exists():
+                continue
+            paths.append(target_root / name / "SKILL.md")
             for mirror in SkillManager.COMPATIBILITY_MIRROR_PATHS.get(target, []):
                 mirror_root = (
                     cls._codex_home_dir() / "skills"
@@ -1427,6 +1497,139 @@ class IntegrationManager(IntegrationManagerContentMixin):
 
         return surfaces
 
+    def _resolve_surface_declaration(self, *, target: str, surface: str) -> Path:
+        normalized = str(surface).strip()
+        if normalized == "~/.codex/AGENTS.md":
+            return self.resolve_global_protocol_path("codex-cli") or Path(normalized).expanduser()
+        if normalized.startswith("~/"):
+            return Path(normalized).expanduser()
+        return self.project_dir / normalized
+
+    def surface_path_groups(
+        self,
+        *,
+        target: str,
+    ) -> dict[str, dict[str, Path]]:
+        surfaces = self._install_surfaces(target=target)
+        groups: dict[str, dict[str, Path]] = {
+            "official_project": {},
+            "official_user": {},
+            "optional_project": {},
+            "optional_user": {},
+            "compatibility": {},
+        }
+        mapping = {
+            "official_project_surfaces": "official_project",
+            "official_user_surfaces": "official_user",
+            "optional_project_surfaces": "optional_project",
+            "optional_user_surfaces": "optional_user",
+            "observed_compatibility_surfaces": "compatibility",
+        }
+        for source_key, group_key in mapping.items():
+            for surface in surfaces.get(source_key, []):
+                if not isinstance(surface, str) or not surface.strip():
+                    continue
+                path = self._resolve_surface_declaration(target=target, surface=surface)
+                groups[group_key][surface] = path
+        return groups
+
+    def managed_surface_classification(
+        self,
+        *,
+        target: str,
+        skill_name: str = "super-dev-core",
+    ) -> dict[str, dict[str, Any]]:
+        managed = self.collect_managed_surface_paths(target=target, skill_name=skill_name)
+        groups = self.surface_path_groups(target=target)
+        group_path_sets = {
+            name: {str(path.resolve()) for path in surfaces.values()}
+            for name, surfaces in groups.items()
+        }
+        classified: dict[str, dict[str, Any]] = {}
+        for surface_key, surface_path in managed.items():
+            resolved = str(surface_path.resolve())
+            group = "unclassified"
+            for candidate, path_set in group_path_sets.items():
+                if resolved in path_set:
+                    group = candidate
+                    break
+            classified[surface_key] = {
+                "path": surface_path,
+                "group": group,
+                "required": group in {"official_project", "official_user"},
+            }
+        return classified
+
+    def readiness_surface_sets(
+        self,
+        *,
+        target: str,
+        skill_name: str = "super-dev-core",
+    ) -> dict[str, list[Path]]:
+        groups = self.surface_path_groups(target=target)
+        skill_paths = self.expected_skill_paths(
+            target=target,
+            skill_name=skill_name,
+            project_dir=self.project_dir,
+        )
+
+        official_skill_paths: list[Path] = []
+        optional_skill_paths: list[Path] = []
+        compatibility_skill_paths: list[Path] = []
+        for path in skill_paths:
+            resolved = str(path.resolve())
+            if resolved in {str(item.resolve()) for item in groups["official_project"].values()} or resolved in {
+                str(item.resolve()) for item in groups["official_user"].values()
+            }:
+                official_skill_paths.append(path)
+            elif resolved in {str(item.resolve()) for item in groups["optional_project"].values()} or resolved in {
+                str(item.resolve()) for item in groups["optional_user"].values()
+            }:
+                optional_skill_paths.append(path)
+            else:
+                compatibility_skill_paths.append(path)
+
+        project_slash: Path | None = None
+        global_slash: Path | None = None
+        if self.supports_slash(target):
+            project_slash = self.resolve_slash_command_path(
+                target=target,
+                scope="project",
+                project_dir=self.project_dir,
+            )
+            global_slash = self.resolve_slash_command_path(target=target, scope="global")
+        required_slash_paths: list[Path] = []
+        optional_slash_paths: list[Path] = []
+        compatibility_slash_paths: list[Path] = []
+        for slash_path in [project_slash, global_slash]:
+            if slash_path is None:
+                continue
+            resolved = str(slash_path.resolve())
+            if resolved in {str(item.resolve()) for item in groups["official_project"].values()} or resolved in {
+                str(item.resolve()) for item in groups["official_user"].values()
+            }:
+                required_slash_paths.append(slash_path)
+            elif resolved in {str(item.resolve()) for item in groups["optional_project"].values()} or resolved in {
+                str(item.resolve()) for item in groups["optional_user"].values()
+            }:
+                optional_slash_paths.append(slash_path)
+            else:
+                compatibility_slash_paths.append(slash_path)
+
+        return {
+            "official_project": list(groups["official_project"].values()),
+            "official_user": list(groups["official_user"].values()),
+            "optional_project": list(groups["optional_project"].values()),
+            "optional_user": list(groups["optional_user"].values()),
+            "compatibility": list(groups["compatibility"].values()),
+            "official_skill": official_skill_paths,
+            "optional_skill": optional_skill_paths,
+            "compatibility_skill": compatibility_skill_paths,
+            "required_slash": required_slash_paths,
+            "optional_slash": optional_slash_paths,
+            "compatibility_slash": compatibility_slash_paths,
+        }
+
     def remove(self, target: str) -> list[Path]:
         """卸载指定宿主的 Super Dev 集成文件"""
         surfaces = self.collect_managed_surface_paths(target=target)
@@ -1446,6 +1649,14 @@ class IntegrationManager(IntegrationManagerContentMixin):
                             else self.OPENCODE_AGENTS_END
                         )
                         if self._remove_managed_block(file_path=path, begin=begin, end=end):
+                            removed.append(path)
+                            continue
+                    if path.name == "AGENTS.md" and target in {"qoder", "qoder-cli"}:
+                        if self._remove_managed_block(
+                            file_path=path,
+                            begin=self.QODER_AGENTS_BEGIN,
+                            end=self.QODER_AGENTS_END,
+                        ):
                             removed.append(path)
                             continue
                     if target == "claude-code" and path.name == "CLAUDE.md":
@@ -1595,26 +1806,26 @@ class IntegrationManager(IntegrationManagerContentMixin):
             }
         if target == "kiro":
             return {
-                "usage_mode": "rules-and-skill",
-                "primary_entry": "在 Kiro IDE Agent Chat 输入 `super-dev: <需求描述>`（由 `.kiro/steering/super-dev.md` + `.kiro/skills/` / `~/.kiro/skills/` 生效）",
-                "trigger_command": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
+                "usage_mode": "native-slash",
+                "primary_entry": '在 Kiro IDE Agent Chat 输入 `/super-dev "<需求描述>"`（由 `.kiro/steering/super-dev.md` + `.kiro/skills/` / `~/.kiro/steering/` + `~/.kiro/skills/` 生效）',
+                "trigger_command": '/super-dev "<需求描述>"',
                 "trigger_context": "Kiro IDE Agent Chat",
                 "usage_location": usage_location,
                 "requires_restart_after_onboard": True,
                 "post_onboard_steps": [
                     "完成接入后重新打开 Kiro，或至少新开一个 Agent Chat，使 steering 与 skills 一起生效。",
                     "确保当前项目就是已接入 Super Dev 的工作区。",
-                    "输入 `super-dev: <需求描述>` 触发完整流程。",
+                    '优先输入 `/super-dev "<需求描述>"` 触发完整流程；若当前会话只接受自然语言，再回退到 `super-dev: <需求描述>`。',
                     "按 output/* 与 .super-dev/changes/*/tasks.md 执行开发。",
                 ],
                 "usage_notes": usage_notes,
-                "notes": "该宿主当前走官方 steering + skills 模式：项目级 `.kiro/steering/super-dev.md` 与 `.kiro/skills/` 负责工作区约束，`~/.kiro/skills/` 负责全局增强。",
+                "notes": "该宿主当前走官方 steering + skills 模式：项目级 `.kiro/steering/super-dev.md` 会通过 steering inclusion 暴露 `/super-dev`，项目级 `.kiro/skills/` 与 `~/.kiro/skills/` 提供能力增强，`~/.kiro/steering/` 提供全局 steering 记忆。",
             }
         if target == "kiro-cli":
             return {
-                "usage_mode": "rules-and-skill",
-                "primary_entry": "在 Kiro CLI 会话输入 `super-dev: <需求描述>`（由 `.kiro/steering/super-dev.md` + `.kiro/skills/` / `~/.kiro/skills/` 生效）",
-                "trigger_command": f"{self.TEXT_TRIGGER_PREFIX} <需求描述>",
+                "usage_mode": "native-slash",
+                "primary_entry": '在 Kiro CLI 会话输入 `/super-dev "<需求描述>"`（由 `.kiro/steering/super-dev.md` + `.kiro/skills/` / `~/.kiro/steering/` + `~/.kiro/skills/` 生效）',
+                "trigger_command": '/super-dev "<需求描述>"',
                 "trigger_context": "Kiro CLI 当前会话",
                 "usage_location": usage_location
                 or "进入目标项目目录后，重开 Kiro CLI 会话再触发。",
@@ -1622,11 +1833,11 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "post_onboard_steps": [
                     "完成接入后重开 Kiro CLI，使 `.kiro/steering/` 与 skills 在新会话里生效。",
                     "确认项目内已生成 `.kiro/steering/super-dev.md` 与 `.kiro/skills/super-dev-core/SKILL.md`。",
-                    "确认用户目录已生成 `~/.kiro/skills/super-dev-core/SKILL.md`。",
-                    "在 Kiro CLI 会话里输入 `super-dev: <需求描述>` 触发完整流程。",
+                    "确认用户目录已生成 `~/.kiro/steering/super-dev.md` 与 `~/.kiro/skills/super-dev-core/SKILL.md`。",
+                    '在 Kiro CLI 会话里优先输入 `/super-dev "<需求描述>"`；若当前会话只接受自然语言，再回退到 `super-dev: <需求描述>`。',
                 ],
                 "usage_notes": usage_notes,
-                "notes": "Kiro CLI 当前不再走自定义 slash，而是按官方 steering + skills 模式触发。",
+                "notes": "Kiro CLI 当前按官方 steering + skills 模式触发：steering inclusion 会把 `/super-dev` 暴露进 slash 入口，skills 负责让宿主理解完整 Super Dev 流程。",
             }
         if self.supports_slash(target):
             if category == "cli":
@@ -1810,11 +2021,11 @@ class IntegrationManager(IntegrationManagerContentMixin):
             },
             "codebuddy-cli": {
                 "mode": "official-skill",
-                "summary": "官方 commands + skills + AGENTS.md compatibility",
+                "summary": "官方 CODEBUDDY.md + commands + skills + AGENTS.md compatibility",
             },
             "codebuddy": {
                 "mode": "official-subagent",
-                "summary": "官方 commands + agents + skills",
+                "summary": "官方 CODEBUDDY.md + rules + commands + agents + skills",
             },
             "vscode-copilot": {
                 "mode": "official-context",
@@ -1830,11 +2041,11 @@ class IntegrationManager(IntegrationManagerContentMixin):
             },
             "qoder-cli": {
                 "mode": "official-skill",
-                "summary": "官方 rules + commands + skills",
+                "summary": "官方 rules + commands + skills + AGENTS.md memory",
             },
             "qoder": {
                 "mode": "official-skill",
-                "summary": "官方 rules + commands + skills",
+                "summary": "官方 rules + commands + skills + AGENTS.md memory",
             },
             "windsurf": {
                 "mode": "official-skill",
@@ -1850,7 +2061,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
             },
             "kiro": {
                 "mode": "official-steering",
-                "summary": "官方 steering + skills",
+                "summary": "官方 steering + slash entry + skills",
             },
             "codex-cli": {
                 "mode": "official-skill",
@@ -1874,7 +2085,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
             },
             "kiro-cli": {
                 "mode": "official-steering",
-                "summary": "官方 steering + skills",
+                "summary": "官方 steering + slash entry + skills",
             },
             "trae": {
                 "mode": "compatibility-skill",
@@ -1892,18 +2103,24 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "claude-code": {
                 "official_project_surfaces": [
                     "CLAUDE.md",
-                    ".claude/CLAUDE.md",
                     ".claude/skills/super-dev/SKILL.md",
-                    ".claude/commands/super-dev.md",
-                    ".claude/agents/super-dev-core.md",
-                    ".claude-plugin/marketplace.json",
-                    "plugins/super-dev-claude/.claude-plugin/plugin.json",
                 ],
                 "official_user_surfaces": [
                     "~/.claude/CLAUDE.md",
                     "~/.claude/skills/super-dev/SKILL.md",
-                    "~/.claude/commands/super-dev.md",
                 ],
+                "optional_project_surfaces": [
+                    ".claude/CLAUDE.md",
+                    ".claude/commands/super-dev.md",
+                    ".claude/agents/super-dev-core.md",
+                    ".claude-plugin/marketplace.json",
+                    "plugins/super-dev-claude/.claude-plugin/plugin.json",
+                    "plugins/super-dev-claude/README.md",
+                    "plugins/super-dev-claude/skills/super-dev/SKILL.md",
+                    "plugins/super-dev-claude/skills/super-dev-core/SKILL.md",
+                    "plugins/super-dev-claude/agents/super-dev-core.md",
+                ],
+                "optional_user_surfaces": ["~/.claude/commands/super-dev.md"],
                 "observed_compatibility_surfaces": [
                     "~/.claude/skills/super-dev-core/SKILL.md",
                     "~/.claude/agents/super-dev-core.md",
@@ -1924,10 +2141,12 @@ class IntegrationManager(IntegrationManagerContentMixin):
             },
             "codebuddy-cli": {
                 "official_project_surfaces": [
+                    "CODEBUDDY.md",
                     ".codebuddy/commands/super-dev.md",
                     ".codebuddy/skills/super-dev-core/SKILL.md",
                 ],
                 "official_user_surfaces": [
+                    "~/.codebuddy/CODEBUDDY.md",
                     "~/.codebuddy/commands/super-dev.md",
                     "~/.codebuddy/skills/super-dev-core/SKILL.md",
                 ],
@@ -1935,16 +2154,19 @@ class IntegrationManager(IntegrationManagerContentMixin):
             },
             "codebuddy": {
                 "official_project_surfaces": [
+                    "CODEBUDDY.md",
+                    ".codebuddy/rules/super-dev/RULE.mdc",
                     ".codebuddy/commands/super-dev.md",
                     ".codebuddy/agents/super-dev-core.md",
                     ".codebuddy/skills/super-dev-core/SKILL.md",
                 ],
                 "official_user_surfaces": [
+                    "~/.codebuddy/CODEBUDDY.md",
                     "~/.codebuddy/commands/super-dev.md",
                     "~/.codebuddy/agents/super-dev-core.md",
                     "~/.codebuddy/skills/super-dev-core/SKILL.md",
                 ],
-                "observed_compatibility_surfaces": [".codebuddy/rules.md"],
+                "observed_compatibility_surfaces": [".codebuddy/rules.md", ".codebuddy/AGENTS.md"],
             },
             "vscode-copilot": {
                 "official_project_surfaces": [".github/copilot-instructions.md"],
@@ -1982,13 +2204,19 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "official_project_surfaces": [
                     "AGENTS.md",
                     ".agents/skills/super-dev/SKILL.md",
-                    ".agents/plugins/marketplace.json",
-                    "plugins/super-dev-codex/.codex-plugin/plugin.json",
                 ],
                 "official_user_surfaces": [
                     "~/.codex/AGENTS.md",
                     "~/.agents/skills/super-dev/SKILL.md",
                 ],
+                "optional_project_surfaces": [
+                    ".agents/plugins/marketplace.json",
+                    "plugins/super-dev-codex/.codex-plugin/plugin.json",
+                    "plugins/super-dev-codex/README.md",
+                    "plugins/super-dev-codex/skills/super-dev/SKILL.md",
+                    "plugins/super-dev-codex/skills/super-dev-core/SKILL.md",
+                ],
+                "optional_user_surfaces": [],
                 "observed_compatibility_surfaces": [
                     "~/.agents/skills/super-dev-core/SKILL.md",
                     "~/.codex/skills/super-dev/SKILL.md",
@@ -2047,7 +2275,10 @@ class IntegrationManager(IntegrationManagerContentMixin):
                     ".kiro/steering/super-dev.md",
                     ".kiro/skills/super-dev-core/SKILL.md",
                 ],
-                "official_user_surfaces": ["~/.kiro/skills/super-dev-core/SKILL.md"],
+                "official_user_surfaces": [
+                    "~/.kiro/steering/super-dev.md",
+                    "~/.kiro/skills/super-dev-core/SKILL.md",
+                ],
                 "observed_compatibility_surfaces": [],
             },
             "kiro": {
@@ -2056,10 +2287,10 @@ class IntegrationManager(IntegrationManagerContentMixin):
                     ".kiro/skills/super-dev-core/SKILL.md",
                 ],
                 "official_user_surfaces": [
-                    "~/.kiro/steering/AGENTS.md",
+                    "~/.kiro/steering/super-dev.md",
                     "~/.kiro/skills/super-dev-core/SKILL.md",
                 ],
-                "observed_compatibility_surfaces": [],
+                "observed_compatibility_surfaces": ["~/.kiro/steering/AGENTS.md"],
             },
             "opencode": {
                 "official_project_surfaces": [
@@ -2076,27 +2307,31 @@ class IntegrationManager(IntegrationManagerContentMixin):
             },
             "qoder-cli": {
                 "official_project_surfaces": [
+                    "AGENTS.md",
                     ".qoder/rules/super-dev.md",
                     ".qoder/commands/super-dev.md",
                     ".qoder/skills/super-dev-core/SKILL.md",
                 ],
                 "official_user_surfaces": [
+                    "~/.qoder/AGENTS.md",
                     "~/.qoder/commands/super-dev.md",
                     "~/.qoder/skills/super-dev-core/SKILL.md",
                 ],
-                "observed_compatibility_surfaces": ["AGENTS.md"],
+                "observed_compatibility_surfaces": [],
             },
             "qoder": {
                 "official_project_surfaces": [
+                    "AGENTS.md",
                     ".qoder/rules/super-dev.md",
                     ".qoder/commands/super-dev.md",
                     ".qoder/skills/super-dev-core/SKILL.md",
                 ],
                 "official_user_surfaces": [
+                    "~/.qoder/AGENTS.md",
                     "~/.qoder/commands/super-dev.md",
                     "~/.qoder/skills/super-dev-core/SKILL.md",
                 ],
-                "observed_compatibility_surfaces": ["AGENTS.md"],
+                "observed_compatibility_surfaces": [],
             },
             "trae": {
                 "official_project_surfaces": [".trae/project_rules.md"],
@@ -2118,14 +2353,19 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "observed_compatibility_surfaces": [],
             },
         }
-        return by_target.get(
+        surfaces = by_target.get(
             target,
             {
                 "official_project_surfaces": [],
                 "official_user_surfaces": [],
+                "optional_project_surfaces": [],
+                "optional_user_surfaces": [],
                 "observed_compatibility_surfaces": [],
             },
         )
+        surfaces.setdefault("optional_project_surfaces", [])
+        surfaces.setdefault("optional_user_surfaces", [])
+        return surfaces
 
     def setup(self, target: str, force: bool = False) -> list[Path]:
         if target not in self.TARGETS:
@@ -2135,11 +2375,21 @@ class IntegrationManager(IntegrationManagerContentMixin):
         integration = self.TARGETS[target]
         for relative in integration.files:
             file_path = self.project_dir / relative
-            if target in {"codex-cli", "opencode"} and relative == "AGENTS.md":
+            if target in {"codex-cli", "opencode", "qoder", "qoder-cli"} and relative == "AGENTS.md":
                 begin = (
-                    self.CODEX_AGENTS_BEGIN if target == "codex-cli" else self.OPENCODE_AGENTS_BEGIN
+                    self.CODEX_AGENTS_BEGIN
+                    if target == "codex-cli"
+                    else self.OPENCODE_AGENTS_BEGIN
+                    if target == "opencode"
+                    else self.QODER_AGENTS_BEGIN
                 )
-                end = self.CODEX_AGENTS_END if target == "codex-cli" else self.OPENCODE_AGENTS_END
+                end = (
+                    self.CODEX_AGENTS_END
+                    if target == "codex-cli"
+                    else self.OPENCODE_AGENTS_END
+                    if target == "opencode"
+                    else self.QODER_AGENTS_END
+                )
                 block_content = self._append_flow_contract(
                     content=self._build_file_content(target=target, relative=relative),
                     relative=relative,
@@ -2218,20 +2468,20 @@ class IntegrationManager(IntegrationManagerContentMixin):
             )
             return protocol_file if updated or protocol_file.exists() else None
 
-        if target == "codebuddy" and protocol_file is not None:
+        if target in {"codebuddy", "codebuddy-cli"} and protocol_file is not None:
             if protocol_file.exists() and not force:
                 return None
             protocol_file.parent.mkdir(parents=True, exist_ok=True)
             protocol_file.write_text(
                 self._append_flow_contract(
-                    content=self._build_codebuddy_agent_content(),
+                    content=self._build_content(target),
                     relative=protocol_file.as_posix(),
                 ),
                 encoding="utf-8",
             )
             return protocol_file
 
-        if target == "kiro" and protocol_file is not None:
+        if target in {"kiro", "kiro-cli"} and protocol_file is not None:
             if protocol_file.exists() and not force:
                 return None
             protocol_file.parent.mkdir(parents=True, exist_ok=True)
@@ -2243,6 +2493,19 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 encoding="utf-8",
             )
             return protocol_file
+
+        if target in {"qoder", "qoder-cli"} and protocol_file is not None:
+            block_content = self._append_flow_contract(
+                content=self._build_content(target),
+                relative=protocol_file.as_posix(),
+            )
+            updated = self._upsert_managed_block(
+                file_path=protocol_file,
+                begin=self.QODER_AGENTS_BEGIN,
+                end=self.QODER_AGENTS_END,
+                block_content=block_content,
+            )
+            return protocol_file if updated or protocol_file.exists() else None
 
         if target == "gemini-cli" and protocol_file is not None:
             if protocol_file.exists() and not force:

@@ -32,6 +32,67 @@ class LibraryRecommendation:
         }
 
 
+@dataclass
+class DesignReference:
+    """设计参考锚点"""
+
+    slug: str
+    name: str
+    rationale: str
+    source: str
+    direction: str
+    signals: list[str] = field(default_factory=list)
+    cautions: list[str] = field(default_factory=list)
+    fit_product_types: tuple[str, ...] = ()
+    fit_industries: tuple[str, ...] = ()
+    fit_styles: tuple[str, ...] = ()
+    fit_frontends: tuple[str, ...] = ()
+    priority: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "slug": self.slug,
+            "name": self.name,
+            "rationale": self.rationale,
+            "source": self.source,
+            "direction": self.direction,
+            "signals": list(self.signals),
+            "cautions": list(self.cautions),
+        }
+
+
+@dataclass
+class FrameworkPlaybook:
+    """跨平台框架深优化 playbook"""
+
+    framework: str
+    focus: str
+    rationale: str
+    source_basis: list[str] = field(default_factory=list)
+    implementation_modules: list[str] = field(default_factory=list)
+    platform_constraints: list[str] = field(default_factory=list)
+    execution_guardrails: list[str] = field(default_factory=list)
+    anti_patterns: list[str] = field(default_factory=list)
+    native_capabilities: list[str] = field(default_factory=list)
+    validation_surfaces: list[str] = field(default_factory=list)
+    delivery_evidence: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "framework": self.framework,
+            "focus": self.focus,
+            "rationale": self.rationale,
+            "source_basis": list(self.source_basis),
+            "implementation_modules": list(self.implementation_modules),
+            "platform_constraints": list(self.platform_constraints),
+            "execution_guardrails": list(self.execution_guardrails),
+            "anti_patterns": list(self.anti_patterns),
+            "native_capabilities": list(self.native_capabilities),
+            "validation_surfaces": list(self.validation_surfaces),
+            "delivery_evidence": list(self.delivery_evidence),
+        }
+
+
 class UIIntelligenceAdvisor:
     """商业级 UI/UX 推荐引擎"""
 
@@ -54,6 +115,393 @@ class UIIntelligenceAdvisor:
         "electron": "desktop",
         "tauri": "desktop",
         "desktop": "desktop",
+    }
+
+    DESIGN_REFERENCES: tuple[DesignReference, ...] = (
+        DesignReference(
+            slug="linear.app",
+            name="Linear",
+            rationale="适合作为高密度工作台、issue/workflow、专业工程产品的精度参考。",
+            source="https://github.com/VoltAgent/awesome-design-md/tree/main/design-md/linear.app",
+            direction="dark-mode-native precision with compressed typography",
+            signals=[
+                "近黑底色上的层级化亮度控制",
+                "克制的品牌紫/靛色只用于关键交互",
+                "高信息密度下仍然可扫描的面板和工作区",
+            ],
+            cautions=[
+                "不要复制它的聊天式外壳",
+                "不要把极暗界面套到不适合的行业场景",
+            ],
+            fit_product_types=("saas", "dashboard"),
+            fit_industries=("general", "fintech", "developer"),
+            fit_styles=("professional", "minimal", "modern"),
+            fit_frontends=("react", "vue", "desktop"),
+            priority=10,
+        ),
+        DesignReference(
+            slug="vercel",
+            name="Vercel",
+            rationale="适合作为开发者品牌官网、产品营销页和黑白极简技术品牌的叙事参考。",
+            source="https://github.com/VoltAgent/awesome-design-md/tree/main/design-md/vercel",
+            direction="minimal monochrome marketing with engineered typography",
+            signals=[
+                "极简黑白体系与大留白",
+                "压缩标题字距与工程感文案节奏",
+                "用工作流图和产品截图解释价值",
+            ],
+            cautions=[
+                "不要把它做成空洞的白板官网",
+                "不要只学黑白配色而丢掉品牌辨识度",
+            ],
+            fit_product_types=("landing", "saas"),
+            fit_industries=("general", "developer"),
+            fit_styles=("minimal", "professional", "modern"),
+            fit_frontends=("react", "vue", "web"),
+            priority=9,
+        ),
+        DesignReference(
+            slug="stripe",
+            name="Stripe",
+            rationale="适合作为金融、支付、平台型产品的可信商业表达参考。",
+            source="https://github.com/VoltAgent/awesome-design-md/tree/main/design-md/stripe",
+            direction="editorial gradients with trustworthy infrastructure polish",
+            signals=[
+                "大标题与柔和渐变形成品牌识别",
+                "信息层级清晰，信任模块丰富",
+                "复杂能力通过内容编排降低理解成本",
+            ],
+            cautions=[
+                "不要滥用紫色渐变",
+                "不要只复制视觉，不补齐支付/安全信任模块",
+            ],
+            fit_product_types=("landing", "saas"),
+            fit_industries=("fintech", "general"),
+            fit_styles=("luxury", "professional", "modern"),
+            fit_frontends=("react", "web"),
+            priority=9,
+        ),
+        DesignReference(
+            slug="raycast",
+            name="Raycast",
+            rationale="适合作为桌面效率工具、命令中心和操作导向产品的紧凑交互参考。",
+            source="https://github.com/VoltAgent/awesome-design-md/tree/main/design-md/raycast",
+            direction="compact utility-first dark chrome with vivid accents",
+            signals=[
+                "高效的紧凑布局与快捷动作",
+                "工具型品牌感而非后台感",
+                "深色界面上的高识别度重点色",
+            ],
+            cautions=[
+                "不要把桌面壳层直接搬到普通 Web SaaS",
+                "不要牺牲可读性去追求过度紧凑",
+            ],
+            fit_product_types=("dashboard", "saas"),
+            fit_industries=("general", "developer"),
+            fit_styles=("modern", "professional"),
+            fit_frontends=("desktop", "react"),
+            priority=8,
+        ),
+        DesignReference(
+            slug="notion",
+            name="Notion",
+            rationale="适合作为内容、知识、协作型产品的信息组织与柔和编辑体验参考。",
+            source="https://github.com/VoltAgent/awesome-design-md/tree/main/design-md/notion",
+            direction="warm editorial minimalism with content-first hierarchy",
+            signals=[
+                "内容优先的阅读层级",
+                "柔和中性色与少量强调色",
+                "块级结构清晰，适合知识产品",
+            ],
+            cautions=[
+                "不要把内容产品做成死板文档页",
+                "不要在高操作密度后台里硬套这种轻质感",
+            ],
+            fit_product_types=("content", "saas"),
+            fit_industries=("education", "general"),
+            fit_styles=("minimal", "modern"),
+            fit_frontends=("react", "vue", "web"),
+            priority=8,
+        ),
+        DesignReference(
+            slug="figma",
+            name="Figma",
+            rationale="适合作为设计协作、创意工具和多功能产品的高活力品牌表达参考。",
+            source="https://github.com/VoltAgent/awesome-design-md/tree/main/design-md/figma",
+            direction="playful professional color energy with tool-centric clarity",
+            signals=[
+                "强品牌配色但不牺牲可用性",
+                "创意工具感而不是营销模板感",
+                "通过色块和图形语言建立识别度",
+            ],
+            cautions=[
+                "不要把多彩系统做成廉价插画风",
+                "不要忽略业务界面的秩序和层级",
+            ],
+            fit_product_types=("landing", "saas"),
+            fit_industries=("general", "education"),
+            fit_styles=("playful", "modern"),
+            fit_frontends=("react", "web"),
+            priority=7,
+        ),
+        DesignReference(
+            slug="intercom",
+            name="Intercom",
+            rationale="适合作为服务型 SaaS、客户支持和沟通场景的信任与亲和力参考。",
+            source="https://github.com/VoltAgent/awesome-design-md/tree/main/design-md/intercom",
+            direction="friendly operational SaaS with service-oriented clarity",
+            signals=[
+                "亲和但不幼稚的服务体验",
+                "帮助/对话模块与产品主线并存",
+                "品牌色与业务效率平衡",
+            ],
+            cautions=[
+                "不要演变成聊天壳层产品",
+                "不要把所有流程都塞进对话窗口",
+            ],
+            fit_product_types=("saas", "landing"),
+            fit_industries=("general", "education", "healthcare"),
+            fit_styles=("professional", "playful", "modern"),
+            fit_frontends=("react", "web"),
+            priority=7,
+        ),
+        DesignReference(
+            slug="supabase",
+            name="Supabase",
+            rationale="适合作为开发者产品、数据库/平台型工具的技术品牌表达参考。",
+            source="https://github.com/VoltAgent/awesome-design-md/tree/main/design-md/supabase",
+            direction="developer dark system with emerald technical accent",
+            signals=[
+                "暗色开发者语境 + 绿色品牌点缀",
+                "技术内容与产品价值并行",
+                "截图、代码和配置说明并重",
+            ],
+            cautions=[
+                "不要直接复制绿色黑底组合",
+                "不要失去行业特定的信任表达",
+            ],
+            fit_product_types=("saas", "dashboard", "landing"),
+            fit_industries=("developer", "general"),
+            fit_styles=("professional", "modern"),
+            fit_frontends=("react", "web"),
+            priority=7,
+        ),
+        DesignReference(
+            slug="airbnb",
+            name="Airbnb",
+            rationale="适合作为消费服务、生活方式与强图像叙事产品的体验参考。",
+            source="https://github.com/VoltAgent/awesome-design-md/tree/main/design-md/airbnb",
+            direction="warm hospitality marketplace with rounded trustful surfaces",
+            signals=[
+                "摄影/图像驱动的转化叙事",
+                "圆角与暖色调带来的友好感",
+                "场景化内容与决策辅助并存",
+            ],
+            cautions=[
+                "不要把服务平台做成纯广告册",
+                "不要忽略高频任务路径和结构清晰度",
+            ],
+            fit_product_types=("ecommerce", "landing"),
+            fit_industries=("general", "beauty", "education"),
+            fit_styles=("playful", "luxury", "modern"),
+            fit_frontends=("react", "web"),
+            priority=6,
+        ),
+    )
+
+    FRAMEWORK_PLAYBOOKS: dict[str, FrameworkPlaybook] = {
+        "uni-app": FrameworkPlaybook(
+            framework="uni-app",
+            focus="多端业务应用的一套代码多端落地，但必须显式处理平台差异、导航、登录支付与包体性能。",
+            rationale="适合微信/支付宝/抖音小程序、H5 与 App 共用业务模型，但不能把 Web 习惯直接平移到小程序与 App。",
+            source_basis=[
+                "本地 uniapp-dev-guide 的平台差异、custom navigation、login/payment/share 工程实践",
+                "uni-app 官方关于 CSS/自定义导航/平台差异的约束模型",
+            ],
+            implementation_modules=[
+                "自定义导航栏高度、状态栏占位、胶囊按钮区域必须独立建模",
+                "登录/支付/分享流程按平台 provider 拆分，不做一套 UI 直接复用",
+                "请求、存储、路由、权限、分包与条件编译要进入实现清单",
+                "表单、列表、支付确认、状态页优先贴合小程序生态组件和交互节奏",
+            ],
+            platform_constraints=[
+                "小程序与 App 不可依赖 DOM/window/localStorage/cookie 语义",
+                "CSS 本地背景图、通配符选择器、复杂伪元素与 viewport 单位存在平台限制",
+                "自定义导航启用后必须显式处理 status bar 与安全区",
+                "支付、登录、手机号、分享链路必须按 provider 单独验收",
+            ],
+            execution_guardrails=[
+                "先冻结 pages.json / 分包 / navigationStyle / provider 配置，再开始页面实现",
+                "把触控热区、滚动性能、包体体积、图片体积和网络并发纳入 UI 约束",
+                "预览与交付必须至少覆盖 H5、微信小程序、目标 App 三端差异说明",
+            ],
+            anti_patterns=[
+                "把 Web 版 header、hover、复杂阴影和大 Hero 原样搬进小程序",
+                "未区分 provider 就统一实现登录/支付/分享按钮和回调",
+                "忽略 renderjs/WXS/nvue 差异后再用补丁修崩平台",
+            ],
+            native_capabilities=[
+                "登录 provider（微信/支付宝/App）",
+                "支付 provider、手机号授权、分享链路",
+                "状态栏/安全区/胶囊按钮信息",
+            ],
+            validation_surfaces=[
+                "H5 页面骨架与首屏性能",
+                "微信小程序导航/支付/触控与包体策略",
+                "目标 App 的原生导航、权限与支付回调",
+            ],
+            delivery_evidence=[
+                "三端差异说明与条件编译点清单",
+                "provider 配置、pages.json、分包与导航策略截图/说明",
+            ],
+        ),
+        "taro": FrameworkPlaybook(
+            framework="Taro",
+            focus="React 技术栈驱动的小程序/多端业务应用，强调组件抽象与平台 API 包装。",
+            rationale="适合团队已有 React/React Query/Tailwind 体系，但必须对齐小程序生态和包体限制。",
+            source_basis=[
+                "小程序生态组件与路由/权限约束",
+                "跨端 React 组件复用与平台 API 包装经验",
+            ],
+            implementation_modules=[
+                "平台 API 通过 hooks/service 封装，避免页面直调",
+                "小程序列表、表单、支付路径优先选择生态组件而非 Web 组件硬适配",
+                "分包、图片体积、请求并发和状态同步作为默认约束",
+            ],
+            platform_constraints=[
+                "小程序端不可靠 hover 和复杂 DOM 结构表达交互",
+                "路由层级、包体、网络并发、原生层级组件需单独处理",
+            ],
+            execution_guardrails=[
+                "先冻结跨端组件边界，再决定哪些页面保留平台差异化",
+                "用条件编译/运行时分支隔离支付、登录、地图、分享等能力",
+            ],
+            anti_patterns=[
+                "把普通 React Web 页面直接搬进小程序容器",
+                "组件设计不考虑包体与首屏性能",
+            ],
+            native_capabilities=[
+                "小程序 API hooks/service 封装",
+                "支付、登录、地图、分享 provider 分层",
+            ],
+            validation_surfaces=[
+                "目标小程序端真实导航/包体/性能验证",
+                "H5 回退策略与平台差异说明",
+            ],
+            delivery_evidence=[
+                "跨端 service 封装说明",
+                "小程序限制与降级清单",
+            ],
+        ),
+        "react-native": FrameworkPlaybook(
+            framework="React Native",
+            focus="移动端原生交互优先，Web 设计语言只能作为品牌层，不能覆盖导航、手势和系统反馈。",
+            rationale="适合需要复用 TS/React 能力的多端 App，但必须严格遵守移动端信息密度和触控范式。",
+            source_basis=[
+                "原生导航、手势、权限与离线缓存最佳实践",
+            ],
+            implementation_modules=[
+                "导航、手势、表单、权限、离线缓存单独建模",
+                "状态页、空态、错误态、权限拒绝态按移动端任务流设计",
+                "推送、深链、文件上传、系统分享和生物识别作为平台能力面单独设计",
+            ],
+            platform_constraints=[
+                "避免使用 Web 栅格、悬浮面板和 hover 交互作为核心模式",
+                "iOS/Android 的安全区、返回手势、权限授权与通知策略需分开验收",
+            ],
+            execution_guardrails=[
+                "优先原生反馈节奏和触控热区，再叠加品牌 token",
+                "先冻结 navigation tree、权限矩阵与离线缓存策略，再做视觉抛光",
+            ],
+            anti_patterns=[
+                "把 Web Dashboard 压缩到手机上",
+                "只做通用页面，不定义 iOS/Android 差异化手势和系统入口",
+            ],
+            native_capabilities=[
+                "push notification、deep link、share sheet、camera/media、biometric auth",
+                "offline cache、background sync、permissions",
+            ],
+            validation_surfaces=[
+                "iOS 真机/模拟器安全区、返回手势、分享与权限流",
+                "Android 返回键、通知、文件权限与深链流",
+            ],
+            delivery_evidence=[
+                "navigation tree 与权限矩阵",
+                "离线/弱网/权限拒绝状态截图或验证记录",
+            ],
+        ),
+        "flutter": FrameworkPlaybook(
+            framework="Flutter",
+            focus="高一致性跨端渲染与复杂动效，但必须避免 Material 默认味道直接上线。",
+            rationale="适合品牌要求强、动效复杂的跨端 App，但主题和组件状态要先冻结。",
+            source_basis=[
+                "Flutter theme、Material/Cupertino 双栈约束",
+            ],
+            implementation_modules=[
+                "主题色、字号、圆角、阴影和组件状态要先生成主题层",
+                "导航、底栏、表单、空态、权限流程按移动端任务流落地",
+                "深色模式、响应式断点、动画规范和平台感知组件策略前置冻结",
+            ],
+            platform_constraints=[
+                "默认 Material 3 视觉不能直接作为商业 UI 成品",
+                "iOS / Android / 桌面 targets 不能共用一套默认 Scaffold 语义直接上线",
+            ],
+            execution_guardrails=[
+                "先定义 ThemeData / token 映射，再进入页面实现",
+                "明确哪些页面需要 Cupertino/平台感知组件，而不是统一 Material 皮肤",
+            ],
+            anti_patterns=[
+                "Material 默认控件直出",
+                "只改颜色不改 typography、shape、elevation 和状态层级",
+            ],
+            native_capabilities=[
+                "theme / localization / deep link / notification / app lifecycle",
+            ],
+            validation_surfaces=[
+                "Android 与 iOS 的导航、手势、状态栏与 dark mode 一致性",
+                "复杂动画页面的性能与掉帧验证",
+            ],
+            delivery_evidence=[
+                "ThemeData/token 映射文档",
+                "暗色模式与平台感知组件差异截图",
+            ],
+        ),
+        "desktop": FrameworkPlaybook(
+            framework="Desktop Web Shell",
+            focus="桌面工作台要突出窗口范式、快捷键、菜单、离线、本地文件能力，而不是网页放大版。",
+            rationale="适合 Electron/Tauri/Wails 等桌面壳，但必须显式设计本地能力、窗口层级和多面板结构。",
+            source_basis=[
+                "桌面效率工具与数据分析客户端的窗口/快捷键模式",
+            ],
+            implementation_modules=[
+                "窗口状态、命令面板、侧栏/面板布局、本地文件与通知能力要进入骨架设计",
+                "离线态、同步态、后台任务态必须是默认状态矩阵的一部分",
+                "菜单栏、托盘、拖拽导入、文件关联、全局快捷键要有明确边界",
+            ],
+            platform_constraints=[
+                "不能只做网页式顶部导航 + 单列内容区",
+                "macOS / Windows 的菜单、标题栏、快捷键与窗口行为不能强行统一",
+            ],
+            execution_guardrails=[
+                "先冻结快捷键、菜单栏、拖拽、文件读写与离线缓存交互",
+                "明确哪些功能需要原生桥接，哪些继续留在 Web 层",
+            ],
+            anti_patterns=[
+                "把 marketing website 套进桌面壳",
+                "只有浏览器式 header/nav，没有 split view、command bar、local state",
+            ],
+            native_capabilities=[
+                "filesystem、native notifications、tray/menu、window controls、offline cache",
+            ],
+            validation_surfaces=[
+                "窗口布局、快捷键、文件导入导出、离线恢复",
+                "macOS / Windows 标题栏和菜单行为差异",
+            ],
+            delivery_evidence=[
+                "快捷键清单、窗口布局说明、原生桥接清单",
+                "文件流与离线恢复验证结果",
+            ],
+        ),
     }
 
     PRODUCT_PROFILES: dict[str, dict[str, Any]] = {
@@ -1225,7 +1673,8 @@ class UIIntelligenceAdvisor:
         ui_library: str | None = None,
     ) -> dict[str, Any]:
         """生成 UI intelligence 推荐"""
-        normalized_frontend = self.FRONTEND_ALIASES.get(frontend.lower(), frontend.lower())
+        raw_frontend = frontend.lower().strip()
+        normalized_frontend = self.FRONTEND_ALIASES.get(raw_frontend, raw_frontend)
         profile = self.PRODUCT_PROFILES.get(product_type, self.PRODUCT_PROFILES["general"])
         industry_rules = self.INDUSTRY_TRUST_RULES.get(industry, self.INDUSTRY_TRUST_RULES["general"])
         library_options = self.STACK_RECOMMENDATIONS.get(
@@ -1333,8 +1782,22 @@ class UIIntelligenceAdvisor:
         if typo_key not in self.PRODUCT_TYPOGRAPHY_PRESETS:
             typo_key = industry if industry in self.PRODUCT_TYPOGRAPHY_PRESETS else "general"
         typography_preset = self.PRODUCT_TYPOGRAPHY_PRESETS.get(typo_key, self.PRODUCT_TYPOGRAPHY_PRESETS["general"])
+        design_references = [
+            item.to_dict()
+            for item in self._select_design_references(
+                product_type=product_type,
+                industry=industry,
+                style=style,
+                frontend=normalized_frontend,
+            )
+        ]
+        framework_playbook = self._select_framework_playbook(
+            raw_frontend=raw_frontend,
+            normalized_frontend=normalized_frontend,
+        )
 
         return {
+            "frontend_variant": raw_frontend,
             "normalized_frontend": normalized_frontend,
             "surface": profile["surface"],
             "information_density": density,
@@ -1357,8 +1820,60 @@ class UIIntelligenceAdvisor:
             "color_palette": color_palette,
             "color_palette_dark": self.generate_dark_variant(color_palette),
             "typography_preset": typography_preset,
+            "design_references": design_references,
+            "framework_playbook": framework_playbook.to_dict() if framework_playbook else None,
             "pre_delivery_checklist": list(self.PRE_DELIVERY_CHECKLIST),
         }
+
+    def _select_design_references(
+        self,
+        *,
+        product_type: str,
+        industry: str,
+        style: str,
+        frontend: str,
+        limit: int = 3,
+    ) -> list[DesignReference]:
+        scored: list[tuple[int, DesignReference]] = []
+        for item in self.DESIGN_REFERENCES:
+            score = item.priority
+            if product_type in item.fit_product_types:
+                score += 5
+            if industry in item.fit_industries:
+                score += 3
+            if style in item.fit_styles:
+                score += 2
+            if frontend in item.fit_frontends:
+                score += 2
+            if product_type == "dashboard" and "dashboard" in item.rationale.lower():
+                score += 1
+            scored.append((score, item))
+        scored.sort(key=lambda pair: pair[0], reverse=True)
+
+        picked: list[DesignReference] = []
+        seen: set[str] = set()
+        for _, item in scored:
+            if item.slug in seen:
+                continue
+            picked.append(item)
+            seen.add(item.slug)
+            if len(picked) >= limit:
+                break
+        return picked
+
+    def _select_framework_playbook(
+        self,
+        *,
+        raw_frontend: str,
+        normalized_frontend: str,
+    ) -> FrameworkPlaybook | None:
+        if raw_frontend in self.FRAMEWORK_PLAYBOOKS:
+            return self.FRAMEWORK_PLAYBOOKS[raw_frontend]
+        if normalized_frontend == "miniapp":
+            return self.FRAMEWORK_PLAYBOOKS["uni-app"]
+        if normalized_frontend in self.FRAMEWORK_PLAYBOOKS:
+            return self.FRAMEWORK_PLAYBOOKS[normalized_frontend]
+        return None
 
     def _table_strategy(self, frontend: str, density: str) -> str:
         if density == "high":

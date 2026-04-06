@@ -25,6 +25,9 @@ class TestUIIntelligenceAdvisor:
         assert any("DaisyUI" in item["name"] or "Aceternity" in item["name"] for item in profile["alternative_libraries"])
         assert any(row["scene"] == "微信小程序" for row in profile["ui_library_matrix"])
         assert len(profile["quality_checklist"]) >= 4
+        assert len(profile["design_references"]) == 3
+        assert profile["design_references"][0]["name"] == "Linear"
+        assert any(ref["name"] == "Stripe" for ref in profile["design_references"])
 
     def test_recommend_vue_stack_prefers_naive_ui(self):
         advisor = UIIntelligenceAdvisor()
@@ -55,6 +58,22 @@ class TestUIIntelligenceAdvisor:
         assert "TDesign 小程序" in profile["primary_library"]["name"]
         assert "小程序" in profile["component_stack"]["form"]
 
+    def test_recommend_uniapp_emits_framework_playbook(self):
+        advisor = UIIntelligenceAdvisor()
+
+        profile = advisor.recommend(
+            description="构建一个 uni-app 会员商城，覆盖 H5、微信小程序和 App 登录支付流程",
+            frontend="uni-app",
+            product_type="ecommerce",
+            industry="general",
+            style="modern",
+        )
+
+        assert profile["frontend_variant"] == "uni-app"
+        assert profile["framework_playbook"]["framework"] == "uni-app"
+        assert any("自定义导航栏" in item for item in profile["framework_playbook"]["implementation_modules"])
+        assert any("provider" in item or "登录/支付/分享" in item for item in profile["framework_playbook"]["anti_patterns"] + profile["framework_playbook"]["platform_constraints"])
+
     def test_recommend_desktop_stack_prefers_electron_tauri(self):
         advisor = UIIntelligenceAdvisor()
 
@@ -69,6 +88,33 @@ class TestUIIntelligenceAdvisor:
         assert profile["normalized_frontend"] == "desktop"
         assert "Electron / Tauri" in profile["primary_library"]["name"]
         assert "AG Grid" in profile["component_stack"]["table"]
+        assert profile["design_references"][0]["name"] in {"Linear", "Raycast"}
+        assert profile["framework_playbook"]["framework"] == "Desktop Web Shell"
+        assert any("filesystem" in item for item in profile["framework_playbook"]["native_capabilities"])
+
+    def test_recommend_react_native_and_flutter_emit_deep_playbooks(self):
+        advisor = UIIntelligenceAdvisor()
+
+        rn = advisor.recommend(
+            description="移动端协作应用，需要推送、深链、离线缓存和系统分享",
+            frontend="react-native",
+            product_type="saas",
+            industry="general",
+            style="modern",
+        )
+        flutter = advisor.recommend(
+            description="跨端会员应用，需要深色模式、复杂动画和平台感知组件",
+            frontend="flutter",
+            product_type="saas",
+            industry="general",
+            style="modern",
+        )
+
+        assert rn["framework_playbook"]["framework"] == "React Native"
+        assert any("push notification" in item for item in rn["framework_playbook"]["native_capabilities"])
+        assert any("iOS 真机" in item or "Android" in item for item in rn["framework_playbook"]["validation_surfaces"])
+        assert flutter["framework_playbook"]["framework"] == "Flutter"
+        assert any("ThemeData" in item for item in flutter["framework_playbook"]["delivery_evidence"])
 
 
 class TestUIReviewReviewer:
@@ -380,6 +426,145 @@ export function App() {
 
         titles = [item.title for item in report.findings]
         assert any("Design Token 接入实现" in title for title in titles)
+
+    def test_review_tracks_framework_playbook_execution_for_uniapp(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        frontend_output = output_dir / "frontend"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        frontend_output.mkdir(parents=True, exist_ok=True)
+        (output_dir / "uni-uiux.md").write_text(
+            "# uni\n\n## 设计 Intelligence 结论\n\n## 组件生态与实现基线\n\n## 页面骨架优先级\n\n## 图标、图表与内容模块\n\n## 商业化与信任设计\n\n## 多端适配与平台化设计策略\n",
+            encoding="utf-8",
+        )
+        (output_dir / "uni-ui-contract.json").write_text(
+            (
+                "{\n"
+                '  "analysis": {"frontend": "uni-app"},\n'
+                '  "icon_system": "TDesign Icons",\n'
+                '  "emoji_policy": {"allowed_in_ui": false, "allowed_as_icon": false, "allowed_during_development": false},\n'
+                '  "typography_preset": {"heading": "Alibaba PuHuiTi", "body": "PingFang SC"},\n'
+                '  "ui_library_preference": {"final_selected": "TDesign 小程序 + Taro / UniApp"},\n'
+                '  "design_tokens": {"css_variables": ":root { --color-primary: #0F172A; }"},\n'
+                '  "framework_playbook": {\n'
+                '    "framework": "uni-app",\n'
+                '    "implementation_modules": ["自定义导航栏高度、状态栏占位、胶囊按钮区域必须独立建模"],\n'
+                '    "platform_constraints": ["自定义导航启用后必须显式处理 status bar 与安全区"],\n'
+                '    "execution_guardrails": ["先冻结 pages.json / 分包 / navigationStyle / provider 配置，再开始页面实现"],\n'
+                '    "native_capabilities": ["登录/支付/分享 provider 必须按端隔离并显式验收"],\n'
+                '    "validation_surfaces": ["微信小程序导航/支付/触控与包体策略"],\n'
+                '    "delivery_evidence": ["三端差异说明与条件编译点清单"]\n'
+                "  }\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        (frontend_output / "design-tokens.css").write_text(":root { --color-primary: #0F172A; }\n", encoding="utf-8")
+        (temp_project_dir / "pages.json").write_text('{"globalStyle":{"navigationStyle":"custom"}}', encoding="utf-8")
+        frontend_dir = temp_project_dir / "frontend"
+        frontend_dir.mkdir(parents=True, exist_ok=True)
+        (frontend_dir / "App.vue").write_text(
+            "<script setup>uni.getSystemInfoSync();</script><template><view>#ifdef MP-WEIXIN provider navigationStyle statusBarHeight</view></template>",
+            encoding="utf-8",
+        )
+
+        reviewer = UIReviewReviewer(
+            project_dir=temp_project_dir,
+            name="uni",
+            tech_stack={"frontend": "uni-app", "backend": "node", "platform": "miniapp"},
+        )
+        report = reviewer.review()
+
+        assert report.alignment_summary["framework_playbook"]["passed"] is True
+        assert report.alignment_summary["framework_execution"]["passed"] is True
+
+    def test_review_flags_missing_framework_playbook_for_uniapp(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / "super-dev.yaml").write_text(
+            "frontend: uni-app\nbackend: node\ndescription: uni-app 商城\n",
+            encoding="utf-8",
+        )
+        (output_dir / "uni-uiux.md").write_text(
+            "# uni\n\n## 设计 Intelligence 结论\n\n## 组件生态与实现基线\n\n## 页面骨架优先级\n\n## 图标、图表与内容模块\n\n## 商业化与信任设计\n",
+            encoding="utf-8",
+        )
+        (output_dir / "uni-ui-contract.json").write_text(
+            (
+                "{\n"
+                '  "analysis": {"frontend": "uni-app"},\n'
+                '  "icon_system": "Lucide Icons",\n'
+                '  "emoji_policy": {"allowed_in_ui": false, "allowed_as_icon": false, "allowed_during_development": false},\n'
+                '  "typography_preset": {"heading": "Space Grotesk", "body": "Inter"},\n'
+                '  "ui_library_preference": {"final_selected": "TDesign 小程序 + Taro / UniApp + Tailwind(TW 适配)"},\n'
+                '  "design_tokens": {"css_variables": ":root { --color-primary: #0F172A; }"}\n'
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+
+        reviewer = UIReviewReviewer(
+            project_dir=temp_project_dir,
+            name="uni",
+            tech_stack={"frontend": "uni-app", "backend": "node", "platform": "miniapp"},
+        )
+        report = reviewer.review()
+
+        assert report.alignment_summary["framework_playbook"]["passed"] is False
+        assert any("跨平台框架 Playbook 未冻结" in item.title for item in report.findings)
+
+    def test_review_flags_missing_native_capabilities_for_uniapp(self, temp_project_dir: Path):
+        output_dir = temp_project_dir / "output"
+        frontend_output = output_dir / "frontend"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        frontend_output.mkdir(parents=True, exist_ok=True)
+        (temp_project_dir / "super-dev.yaml").write_text(
+            "frontend: uni-app\nbackend: node\ndescription: uni-app 商城\n",
+            encoding="utf-8",
+        )
+        (output_dir / "uni-uiux.md").write_text(
+            "# uni\n\n## 设计 Intelligence 结论\n\n## 组件生态与实现基线\n\n## 页面骨架优先级\n\n## 图标、图表与内容模块\n\n## 商业化与信任设计\n\n## 多端适配与平台化设计策略\n",
+            encoding="utf-8",
+        )
+        (output_dir / "uni-ui-contract.json").write_text(
+            (
+                "{\n"
+                '  "analysis": {"frontend": "uni-app"},\n'
+                '  "icon_system": "TDesign Icons",\n'
+                '  "emoji_policy": {"allowed_in_ui": false, "allowed_as_icon": false, "allowed_during_development": false},\n'
+                '  "typography_preset": {"heading": "Alibaba PuHuiTi", "body": "PingFang SC"},\n'
+                '  "ui_library_preference": {"final_selected": "TDesign 小程序 + Taro / UniApp"},\n'
+                '  "design_tokens": {"css_variables": ":root { --color-primary: #0F172A; }"},\n'
+                '  "framework_playbook": {\n'
+                '    "framework": "uni-app",\n'
+                '    "implementation_modules": ["自定义导航栏高度、状态栏占位、胶囊按钮区域必须独立建模"],\n'
+                '    "platform_constraints": ["自定义导航启用后必须显式处理 status bar 与安全区"],\n'
+                '    "execution_guardrails": ["先冻结 pages.json / 分包 / navigationStyle / provider 配置，再开始页面实现"],\n'
+                '    "validation_surfaces": ["微信小程序导航/支付/触控与包体策略"],\n'
+                '    "delivery_evidence": ["三端差异说明与条件编译点清单"]\n'
+                "  }\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        (frontend_output / "design-tokens.css").write_text(":root { --color-primary: #0F172A; }\n", encoding="utf-8")
+        (temp_project_dir / "pages.json").write_text('{"globalStyle":{"navigationStyle":"custom"}}', encoding="utf-8")
+        frontend_dir = temp_project_dir / "frontend"
+        frontend_dir.mkdir(parents=True, exist_ok=True)
+        (frontend_dir / "App.vue").write_text(
+            "<script setup>uni.getSystemInfoSync();</script><template><view>#ifdef MP-WEIXIN provider navigationStyle statusBarHeight</view></template>",
+            encoding="utf-8",
+        )
+
+        reviewer = UIReviewReviewer(
+            project_dir=temp_project_dir,
+            name="uni",
+            tech_stack={"frontend": "uni-app", "backend": "node", "platform": "miniapp"},
+        )
+        report = reviewer.review()
+
+        assert report.alignment_summary["framework_playbook"]["passed"] is False
+        assert report.alignment_summary["native_capabilities"]["passed"] is False
+        assert any("跨平台框架治理仍缺少关键面" in item.title for item in report.findings)
 
     def test_review_accepts_magic_ui_when_ui_contract_selects_it(self, temp_project_dir: Path):
         output_dir = temp_project_dir / "output"

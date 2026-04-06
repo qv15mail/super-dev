@@ -1,4 +1,4 @@
-# Super Dev 宿主使用指南（2.3.1）
+# Super Dev 宿主使用指南（2.3.2）
 
 ## 目标
 
@@ -73,18 +73,18 @@ super-dev next
 | Antigravity | IDE | Experimental | 支持 | 在 Antigravity Agent Chat 中输入 `/super-dev 你的需求`（由 `GEMINI.md` + `.gemini/commands/` + `.agent/workflows/` + `~/.gemini/skills/` 生效） | 是 |
 | Claude Code | CLI | Certified | 支持 | 在 Claude Code 会话中输入 `/super-dev 你的需求` | 否 |
 | Cline | IDE | Compatible | 不支持 | 在 Cline 面板中输入 `super-dev: 你的需求`（由 `.clinerules/super-dev.md` + `.cline/skills/` / `~/.cline/skills/` 生效，`AGENTS.md` 作为兼容增强面） | 否 |
-| CodeBuddy CLI | CLI | Compatible | 支持 | 在 CodeBuddy CLI 会话中输入 `/super-dev 你的需求`（由 `.codebuddy/commands/super-dev.md` + `.codebuddy/skills/` / `~/.codebuddy/skills/` 生效） | 否 |
-| CodeBuddy IDE | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求`（由 `.codebuddy/commands/` + `.codebuddy/agents/` + `.codebuddy/skills/` / `~/.codebuddy/agents/` + `~/.codebuddy/skills/` 生效） | 否 |
+| CodeBuddy CLI | CLI | Compatible | 支持 | 在 CodeBuddy CLI 会话中输入 `/super-dev 你的需求`（由 `CODEBUDDY.md` + `.codebuddy/commands/super-dev.md` + `.codebuddy/skills/` / `~/.codebuddy/CODEBUDDY.md` + `~/.codebuddy/skills/` 生效） | 否 |
+| CodeBuddy IDE | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求`（由 `CODEBUDDY.md` + `.codebuddy/rules/super-dev/RULE.mdc` + `.codebuddy/commands/` + `.codebuddy/agents/` + `.codebuddy/skills/` / `~/.codebuddy/CODEBUDDY.md` + `~/.codebuddy/agents/` + `~/.codebuddy/skills/` 生效） | 否 |
 | Copilot CLI | CLI | Compatible | 不支持 | 在 Copilot CLI 会话中输入 `super-dev: 你的需求`（由 `.github/copilot-instructions.md` + `.github/skills/` / `~/.copilot/skills/` 生效） | 否 |
 | Cursor CLI | CLI | Compatible | 支持 | 在 Cursor CLI 会话中输入 `/super-dev 你的需求` | 否 |
 | Cursor IDE | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求` | 否 |
 | Gemini CLI | CLI | Compatible | 支持 | 在 Gemini CLI 会话中输入 `/super-dev 你的需求` | 否 |
-| Kiro CLI | CLI | Compatible | 不支持 | 重开 Kiro CLI 后输入 `super-dev: 你的需求`（由 `.kiro/steering/super-dev.md` + `.kiro/skills/` / `~/.kiro/skills/` 生效） | 是 |
-| Kiro IDE | IDE | Experimental | 不支持 | 在 Kiro IDE Agent Chat 中输入 `super-dev: 你的需求`（由 `.kiro/steering/super-dev.md` + `.kiro/skills/` / `~/.kiro/skills/` 生效） | 是 |
+| Kiro CLI | CLI | Compatible | 支持 | 重开 Kiro CLI 后优先输入 `/super-dev 你的需求`（由 `.kiro/steering/super-dev.md` + `.kiro/skills/` / `~/.kiro/steering/` + `~/.kiro/skills/` 生效；自然语言 `super-dev:` 为回退入口） | 是 |
+| Kiro IDE | IDE | Experimental | 支持 | 在 Kiro IDE Agent Chat 中优先输入 `/super-dev 你的需求`（由 `.kiro/steering/super-dev.md` + `.kiro/skills/` / `~/.kiro/steering/` + `~/.kiro/skills/` 生效；自然语言 `super-dev:` 为回退入口） | 是 |
 | Kilo Code | IDE | Compatible | 不支持 | 在 Kilo Code 面板中输入 `super-dev: 你的需求`（由 `.kilocode/rules/super-dev.md` 生效；若检测到 `~/.kilocode/skills/` 会作为兼容增强） | 否 |
 | OpenCode | CLI | Experimental | 支持 | 在 OpenCode 会话中输入 `/super-dev 你的需求`（由 `AGENTS.md` + `.opencode/commands/super-dev.md` + `.opencode/skills/` / `~/.config/opencode/skills/` 生效） | 否 |
-| Qoder CLI | CLI | Compatible | 支持 | 在 Qoder CLI 会话中输入 `/super-dev 你的需求`（由 `.qoder/commands/super-dev.md` + `.qoder/skills/` / `~/.qoder/skills/` 生效） | 否 |
-| Qoder IDE | IDE | Experimental | 支持 | 在 Qoder IDE Agent Chat 中输入 `/super-dev 你的需求`（由 `.qoder/commands/super-dev.md` + `.qoder/rules/super-dev.md` + `.qoder/skills/` / `~/.qoder/skills/` 生效） | 否 |
+| Qoder CLI | CLI | Compatible | 支持 | 在 Qoder CLI 会话中输入 `/super-dev 你的需求`（由 `AGENTS.md` + `.qoder/commands/super-dev.md` + `.qoder/rules/super-dev.md` + `.qoder/skills/` / `~/.qoder/AGENTS.md` + `~/.qoder/skills/` 生效） | 否 |
+| Qoder IDE | IDE | Experimental | 支持 | 在 Qoder IDE Agent Chat 中输入 `/super-dev 你的需求`（由 `AGENTS.md` + `.qoder/commands/super-dev.md` + `.qoder/rules/super-dev.md` + `.qoder/skills/` / `~/.qoder/AGENTS.md` + `~/.qoder/skills/` 生效） | 否 |
 | Roo Code | IDE | Compatible | 支持 | 在 Roo Code 面板中输入 `/super-dev 你的需求`（由 `.roo/commands/super-dev.md` + `.roo/rules/super-dev.md` / `~/.roo/commands/` + `~/.roo/rules/` 生效） | 否 |
 | VS Code Copilot | IDE | Experimental | 不支持 | 在 Copilot Chat 中输入 `super-dev: 你的需求` 或 `super-dev：你的需求`（由 `.github/copilot-instructions.md` + `AGENTS.md` 生效） | 否 |
 | Windsurf | IDE | Experimental | 支持 | 在 Agent Chat 中输入 `/super-dev 你的需求`（由 `.windsurf/rules/super-dev.md` + `.windsurf/workflows/super-dev.md` + `.windsurf/skills/` / `~/.codeium/windsurf/skills/` 生效） | 否 |
@@ -97,7 +97,7 @@ super-dev next
 2. 优先选择 `Certified` 宿主，其次是 `Compatible`。
 3. 如果是 `Codex`，不要把 `/super-dev` 理解成项目自定义 slash 文件；App/Desktop 优先从 `/` 列表选择 `super-dev`，CLI 优先用 `$super-dev`，`super-dev: 你的需求` 作为自然语言回退入口。
 4. 如果是 `Trae`，不要试 `/super-dev`，直接在 Trae Agent Chat 输入 `super-dev: 你的需求`。
-5. 如果是 `Kiro IDE`、`Trae` 或 `VS Code Copilot`，优先用 `super-dev: 你的需求` 或 `super-dev：你的需求`。
+5. 如果是 `VS Code Copilot`，优先用 `super-dev: 你的需求` 或 `super-dev：你的需求`。
 
 ---
 
@@ -227,8 +227,9 @@ super-dev onboard --host codebuddy-cli --force --yes
 接入后是否需要重启：否
 
 补充说明：
-1. 在当前 CLI 会话中直接输入即可。
-2. 如果会话已提前打开，建议重新加载项目规则后再试。
+1. 当前按 `CODEBUDDY.md` + `.codebuddy/commands/` + `.codebuddy/skills/` 接入。
+2. 用户级会同步安装 `~/.codebuddy/CODEBUDDY.md` + `~/.codebuddy/commands/` + `~/.codebuddy/skills/`。
+3. 如果会话已提前打开，建议重新加载项目规则后再试。
 
 #### 3. CodeBuddy IDE
 
@@ -250,7 +251,7 @@ super-dev onboard --host codebuddy --force --yes
 补充说明：
 1. 建议在项目级 Agent Chat 中使用，不要脱离项目上下文。
 2. 先让宿主完成 research，再继续文档和编码。
-3. 当前按 `.codebuddy/commands/` + `.codebuddy/agents/` + `.codebuddy/skills/` 接入。
+3. 当前按 `CODEBUDDY.md` + `.codebuddy/rules/super-dev/RULE.mdc` + `.codebuddy/commands/` + `.codebuddy/agents/` + `.codebuddy/skills/` 接入。
 
 
 #### 4. Cursor CLI
@@ -351,14 +352,14 @@ super-dev onboard --host kiro-cli --force --yes
 
 触发命令：
 ```text
-super-dev: 你的需求
+/super-dev 你的需求
 ```
 
 接入后是否需要重启：是
 
 补充说明：
-1. Kiro CLI 当前不再按自定义 slash 宿主建模。
-2. 官方接入面是 `.kiro/steering/super-dev.md` + `.kiro/skills/super-dev-core/SKILL.md` + `~/.kiro/skills/super-dev-core/SKILL.md`。
+1. Kiro CLI 当前优先按官方 steering slash entry 触发；若当前会话只接受自然语言，再回退到 `super-dev: 你的需求`。
+2. 官方接入面是 `.kiro/steering/super-dev.md` + `.kiro/skills/super-dev-core/SKILL.md` + `~/.kiro/steering/super-dev.md` + `~/.kiro/skills/super-dev-core/SKILL.md`。
 3. 如果 steering 或 skills 未刷新，重新进入项目目录后重开 Kiro CLI 会话。
 
 #### 9. Kiro IDE
@@ -373,14 +374,14 @@ super-dev onboard --host kiro --force --yes
 
 触发命令：
 ```text
-super-dev: 你的需求
+/super-dev 你的需求
 ```
 
 接入后是否需要重启：是
 
 补充说明：
-1. Kiro IDE 当前优先按 steering + skills 模式触发，不走 `/super-dev`。
-2. 接入会写入项目级 `.kiro/steering/super-dev.md`、`.kiro/skills/super-dev-core/SKILL.md`，并补充官方全局 steering `~/.kiro/steering/AGENTS.md` 与 `~/.kiro/skills/super-dev-core/SKILL.md`。
+1. Kiro IDE 当前优先按 steering slash entry 触发；若当前会话只接受自然语言，再回退到 `super-dev: 你的需求`。
+2. 接入会写入项目级 `.kiro/steering/super-dev.md`、`.kiro/skills/super-dev-core/SKILL.md`，并补充官方全局 steering `~/.kiro/steering/super-dev.md` 与 `~/.kiro/skills/super-dev-core/SKILL.md`；旧 `~/.kiro/steering/AGENTS.md` 作为兼容面保留。
 3. 如果 steering 或 skills 未加载，先重开项目窗口或新开一个 Agent Chat。
 
 #### 10. OpenCode
@@ -423,8 +424,8 @@ super-dev onboard --host qoder-cli --force --yes
 
 补充说明：
 1. 适合命令行流水线开发。
-2. 若 slash 未生效，先确认 `.qoder/commands/super-dev.md` 已生成，并检查 `.qoder/rules/` 目录是否存在。
-3. 官方文档已公开 `.qoder/rules/`、`.qoder/skills/` 与 `~/.qoder/skills/`，Super Dev 会同时安装命令与 Skill。
+2. 若 slash 未生效，先确认 `AGENTS.md`、`.qoder/commands/super-dev.md` 已生成，并检查 `.qoder/rules/` 目录是否存在。
+3. 官方文档已公开 `.qoder/rules/`、`.qoder/skills/`、项目/用户 `AGENTS.md` memory 与 `~/.qoder/skills/`，Super Dev 会同时安装命令、规则、Skill 与 memory 文件。
 
 #### 12. Qoder IDE
 
@@ -444,9 +445,9 @@ super-dev onboard --host qoder --force --yes
 接入后是否需要重启：否
 
 补充说明：
-1. Qoder IDE 当前优先使用项目级 commands + rules + skill 模式，直接在 Agent Chat 输入 `/super-dev 你的需求`。
-2. 若新增命令未出现，先确认 `.qoder/commands/super-dev.md` 与 `.qoder/rules/super-dev.md` 已生成，再重新打开项目或新开一个 Agent Chat。
-3. 官方文档已公开 `.qoder/rules/`、`.qoder/skills/` 与 `~/.qoder/skills/`，Super Dev 会同步安装 `super-dev-core`。
+1. Qoder IDE 当前优先使用项目级 `AGENTS.md` + commands + rules + skills 模式，直接在 Agent Chat 输入 `/super-dev 你的需求`。
+2. 若新增命令未出现，先确认 `AGENTS.md`、`.qoder/commands/super-dev.md` 与 `.qoder/rules/super-dev.md` 已生成，再重新打开项目或新开一个 Agent Chat。
+3. 官方文档已公开 `.qoder/rules/`、`.qoder/skills/`、项目/用户 `AGENTS.md` memory 与 `~/.qoder/skills/`，Super Dev 会同步安装 `super-dev-core` 与 memory 文件。
 
 #### 13. Windsurf
 

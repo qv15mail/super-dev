@@ -48,6 +48,15 @@ class TestKnowledgeAugmenter:
         assert "prd" in application_plan["stage_guidance"]
         assert any("payment.md" in item for item in application_plan["stage_guidance"]["prd"])
 
+    def test_augment_emits_framework_guidance_for_uniapp(self, temp_project_dir: Path):
+        augmenter = KnowledgeAugmenter(project_dir=temp_project_dir, web_enabled=False)
+        bundle = augmenter.augment("构建 uni-app 商城，覆盖微信小程序、H5 与 App 登录支付分享流程", domain="commerce")
+
+        framework_guidance = bundle.get("knowledge_application_plan", {}).get("framework_guidance", {})
+        assert framework_guidance["framework"] == "uni-app"
+        assert any("provider" in item or "登录/支付/分享" in item for item in framework_guidance["critical_modules"])
+        assert any("微信小程序" in item for item in framework_guidance["validation_surfaces"])
+
     def test_augment_prioritizes_knowledge_over_docs_when_scores_equal(self, temp_project_dir: Path):
         docs_dir = temp_project_dir / "docs"
         docs_dir.mkdir(parents=True, exist_ok=True)
@@ -104,6 +113,12 @@ class TestKnowledgeAugmenter:
                     "research": ["先研究同类管理后台的信息架构"],
                     "prd": ["把权限与审计列为核心需求"],
                 },
+                "framework_guidance": {
+                    "framework": "Desktop Web Shell",
+                    "critical_modules": ["窗口布局、快捷键、托盘、本地文件与 IPC 边界先冻结"],
+                    "validation_surfaces": ["窗口恢复、快捷键、文件系统与离线恢复"],
+                    "delivery_evidence": ["窗口/快捷键/原生桥接清单"],
+                },
             },
             "research_summary": {
                 "benchmark_products": ["Product A: benchmark"],
@@ -140,6 +155,7 @@ class TestKnowledgeAugmenter:
         assert "## 提取关键词" in markdown
         assert "## 本地知识应用计划" in markdown
         assert "### Research / 同类产品研究" in markdown
+        assert "### 跨平台框架专项指引" in markdown
         assert "## 同类产品研究与机会洞察" in markdown
         assert "### 1. 对标产品" in markdown
         assert "### 7. 研究证据与可信度" in markdown

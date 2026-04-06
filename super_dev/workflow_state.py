@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .frameworks import summarize_framework_playbook
 from .review_state import (
     load_architecture_revision,
     load_docs_confirmation,
@@ -143,6 +144,23 @@ def build_host_flow_probe(target: str) -> dict[str, Any]:
         "steps": [],
         "success_signal": "",
     }
+
+
+def load_framework_playbook_summary(project_dir: Path) -> dict[str, Any]:
+    project_dir = Path(project_dir).resolve()
+    output_dir = project_dir / "output"
+    candidates = sorted(output_dir.glob("*-ui-contract.json"))
+    if not candidates:
+        return {}
+    latest = max(candidates, key=lambda path: path.stat().st_mtime)
+    try:
+        payload = json.loads(latest.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    playbook = payload.get("framework_playbook")
+    return summarize_framework_playbook(playbook, limit=4)
 
 
 def workflow_mode_label(workflow_mode: str) -> str:
@@ -327,6 +345,119 @@ def _build_action_card(*, workflow_status: str, recommended_command: str, blocke
     action["shortcuts"] = workflow_mode_shortcuts(str(action.get("mode", "")), examples=action["examples"])
     action["continuity_rules"] = workflow_continuity_rules(workflow_status)
     return action
+
+
+def build_workflow_scenario_cards(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    workflow_status = str(summary.get("workflow_status", "")).strip()
+    workflow_mode = str(summary.get("workflow_mode", "")).strip() or "continue"
+    recommended_command = str(summary.get("recommended_command", "")).strip() or "super-dev run --resume"
+    action_card = summary.get("action_card")
+    action_title = ""
+    action_examples: list[str] = []
+    user_message = "继续"
+    if isinstance(action_card, dict):
+        action_title = str(action_card.get("title", "")).strip()
+        raw_examples = action_card.get("examples")
+        if isinstance(raw_examples, list):
+            action_examples = [str(item).strip() for item in raw_examples if str(item).strip()]
+        user_message = (
+            action_examples[0]
+            if action_examples
+            else (
+                workflow_mode_shortcuts(
+                    str(action_card.get("mode", "")).strip() or workflow_mode,
+                    examples=action_examples,
+                    limit=1,
+                )[0]
+                if workflow_mode_shortcuts(
+                    str(action_card.get("mode", "")).strip() or workflow_mode,
+                    examples=action_examples,
+                    limit=1,
+                )
+                else "继续"
+            )
+        )
+
+    stage_specific_titles: dict[str, str] = {
+        "waiting_docs_confirmation": "当前在三文档确认门里继续修改",
+        "waiting_preview_confirmation": "当前在前端预览确认门里继续修改",
+        "waiting_ui_revision": "当前先处理 UI 改版",
+        "waiting_architecture_revision": "当前先处理架构返工",
+        "waiting_quality_revision": "当前先处理质量整改",
+        "missing_spec": "当前进入 Spec 与任务拆解",
+        "missing_frontend": "当前先推进前端实现",
+        "missing_backend": "当前先推进后端与联调",
+        "missing_quality": "当前先补质量门禁",
+        "missing_delivery": "当前先补交付与发布",
+        "delivery_closure_incomplete": "当前先补交付闭环证据",
+        "proof_pack_incomplete": "当前先重建证据包",
+    }
+    stage_specific_when: dict[str, str] = {
+        "waiting_docs_confirmation": "产品补需求、文档要重写或还没确认时",
+        "waiting_preview_confirmation": "前端页面要再改、还没确认预览时",
+        "waiting_ui_revision": "用户明确要求 UI 重做时",
+        "waiting_architecture_revision": "用户明确要求改架构或技术路线时",
+        "waiting_quality_revision": "质量、安全、测试问题要先修时",
+        "missing_spec": "三文档刚确认，准备进入执行计划时",
+        "missing_frontend": "文档和 Spec 已就绪，准备开始前端时",
+        "missing_backend": "前端预览已确认，准备接后端时",
+        "missing_quality": "功能已完成，准备做发布前检查时",
+        "missing_delivery": "质量门禁已通过，准备交付时",
+        "delivery_closure_incomplete": "proof-pack / readiness 还没闭环时",
+        "proof_pack_incomplete": "交付证据包不完整时",
+    }
+
+    cards: list[dict[str, Any]] = [
+        {
+            "id": "resume_workday",
+            "title": "第二天回来继续开发",
+            "when": "关掉宿主、重启电脑、第二天继续时",
+            "user_message": "继续当前流程",
+            "cli_command": "super-dev resume",
+            "recommended": workflow_mode in {"continue", "revise", "release"},
+        },
+        {
+            "id": "know_next",
+            "title": "我只想知道现在先做什么",
+            "when": "不想自己判断流程状态时",
+            "user_message": "下一步",
+            "cli_command": "super-dev next",
+            "recommended": False,
+        },
+    ]
+
+    if workflow_status:
+        cards.append(
+            {
+                "id": "current_gate_or_stage",
+                "title": stage_specific_titles.get(workflow_status, action_title or "按当前流程继续"),
+                "when": stage_specific_when.get(workflow_status, "当前流程还没结束，需要继续推进时"),
+                "user_message": user_message,
+                "cli_command": recommended_command,
+                "recommended": workflow_mode == "revise" or workflow_status.startswith("waiting_"),
+            }
+        )
+
+    cards.append(
+        {
+            "id": "resume_pipeline",
+            "title": "本地流程跑到一半中断后恢复",
+            "when": "run / pipeline 中途失败、终端断开或想接着跑时",
+            "user_message": "恢复本地流程",
+            "cli_command": "super-dev run --resume",
+            "recommended": workflow_status in {"missing_backend", "missing_quality", "missing_delivery"},
+        }
+    )
+
+    deduped: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in cards:
+        scenario_id = str(item.get("id", "")).strip()
+        if not scenario_id or scenario_id in seen:
+            continue
+        seen.add(scenario_id)
+        deduped.append(item)
+    return deduped
 
 
 def detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -634,4 +765,5 @@ def detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = None
         "evidence": evidence,
         "action_card": action_card,
     }
+    summary["scenario_cards"] = build_workflow_scenario_cards(summary)
     return summary

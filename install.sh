@@ -21,9 +21,9 @@ success() { echo -e "${GREEN}${NC} $1"; }
 warning() { echo -e "${YELLOW}${NC} $1"; }
 error() { echo -e "${RED}${NC} $1"; }
 
-ALL_TARGETS_CSV="antigravity,claude-code,codebuddy-cli,codebuddy,codex-cli,cursor-cli,windsurf,gemini-cli,kiro-cli,opencode,qoder-cli,vscode-copilot,cursor,kiro,qoder,trae"
-CLI_TARGETS_CSV="claude-code,codebuddy-cli,codex-cli,cursor-cli,gemini-cli,kiro-cli,opencode,qoder-cli"
-IDE_TARGETS_CSV="antigravity,codebuddy,cursor,kiro,qoder,trae,vscode-copilot,windsurf"
+ALL_TARGETS_CSV="antigravity,claude-code,cline,codebuddy-cli,codebuddy,codex-cli,copilot-cli,cursor-cli,windsurf,gemini-cli,kilo-code,kiro-cli,opencode,qoder-cli,roo-code,vscode-copilot,cursor,kiro,qoder,trae"
+CLI_TARGETS_CSV="claude-code,codebuddy-cli,codex-cli,copilot-cli,cursor-cli,gemini-cli,kiro-cli,opencode,qoder-cli"
+IDE_TARGETS_CSV="antigravity,cline,codebuddy,cursor,kiro,kilo-code,qoder,roo-code,trae,vscode-copilot,windsurf"
 
 TARGETS="$ALL_TARGETS_CSV"
 WITH_SKILL="true"
@@ -210,7 +210,7 @@ run_guided_selector() {
   echo "=================================="
   echo "定位：宿主负责编码，Super Dev 负责治理、规范、门禁与交付标准"
   echo "触发规则：支持 slash 的宿主使用 /super-dev；不支持 slash 的宿主使用 super-dev: 或 super-dev："
-  echo "当前版本默认内置 16 个主推宿主适配配置"
+  echo "当前版本默认提供 20 个统一接入宿主，外加 1 个 OpenClaw 手动插件宿主"
   echo "请选择要接入的宿主工具（支持多选）"
   echo ""
   echo "CLI 宿主:"
@@ -314,7 +314,7 @@ Super Dev Installer
 
 Options:
   --targets <list>   目标平台，逗号分隔，或 all/cli/ide
-                     可选: antigravity,claude-code,codebuddy-cli,codebuddy,codex-cli,cursor-cli,windsurf,gemini-cli,kiro-cli,opencode,qoder-cli,vscode-copilot,cursor,kiro,qoder,trae
+                     可选: antigravity,claude-code,cline,codebuddy-cli,codebuddy,codex-cli,copilot-cli,cursor-cli,windsurf,gemini-cli,kilo-code,kiro-cli,opencode,qoder-cli,roo-code,vscode-copilot,cursor,kiro,qoder,trae
   --no-skill         只生成宿主集成和 /super-dev 映射，不安装内置 skill
   --guided           强制进入交互式安装向导
   --no-guided        跳过交互向导（需配合 --targets）

@@ -3,7 +3,7 @@ name: super-dev
 description: "Super Dev pipeline governance: research-first, commercial-grade AI coding delivery with 10 expert roles, quality gates, and audit artifacts."
 user-invocable: true
 when_to_use: "Use when the user says /super-dev, super-dev:, or super-dev：followed by a requirement."
-version: "2.3.1"
+version: "2.3.2"
 metadata: {"openclaw":{"requires":{"bins":["super-dev"]},"homepage":"https://superdev.goder.ai","install":[{"id":"pip","kind":"uv","formula":"super-dev","bins":["super-dev"],"label":"pip install super-dev"}]}}
 ---
 # super-dev - Super Dev AI Coding Skill
@@ -20,7 +20,7 @@ metadata: {"openclaw":{"requires":{"bins":["super-dev"]},"homepage":"https://sup
 
 4. **自检规则**: 在向用户展示任何 UI 代码或预览前，必须自检源码中不存在任何 emoji 字符（Unicode range U+2600-U+27BF, U+1F300-U+1FAFF）。发现后先替换为正式图标库再继续。
 
-> 版本: 2.3.1 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
+> 版本: 2.3.2 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
 
 ---
 

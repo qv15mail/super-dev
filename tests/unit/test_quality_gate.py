@@ -801,6 +801,10 @@ class TestQualityGateChecker:
                 '  "icon_system": {"label": "图标系统", "passed": true, "expected": "lucide-react", "observed": "lucide-react"},\n'
                 '  "font_pair": {"label": "字体组合", "passed": true, "expected": "Space Grotesk / Inter", "observed": "Space Grotesk / Inter"},\n'
                 '  "component_ecosystem": {"label": "组件生态", "passed": true, "expected": "shadcn/ui + Radix + Tailwind", "observed": "shadcn/ui + Radix + Tailwind"},\n'
+                '  "theme_entry": {"label": "主题入口", "passed": true, "expected": "theme provider or tokens import", "observed": "tokens import"},\n'
+                '  "navigation_shell": {"label": "导航骨架", "passed": true, "expected": "app shell", "observed": "app shell"},\n'
+                '  "component_imports": {"label": "组件导入路径", "passed": true, "expected": "components/ui", "observed": "components/ui"},\n'
+                '  "banned_patterns": {"label": "反模式约束", "passed": true, "expected": "no emoji / no chat shell", "observed": "clean"},\n'
                 '  "design_tokens": {"label": "Design Token 接入", "passed": true, "expected": "wired", "observed": "wired"},\n'
                 '  "token_usage": {"label": "冻结 Token 使用率", "passed": true, "expected": "majority", "observed": "majority"}\n'
                 "}\n"
@@ -814,7 +818,13 @@ class TestQualityGateChecker:
                 '  "checks": {\n'
                 '    "ui_contract_json": true,\n'
                 '    "output_frontend_design_tokens": true,\n'
-                '    "ui_contract_alignment": true\n'
+                '    "ui_contract_alignment": true,\n'
+                '    "ui_theme_entry": true,\n'
+                '    "ui_navigation_shell": true,\n'
+                '    "ui_component_imports": true,\n'
+                '    "ui_banned_patterns": true,\n'
+                '    "ui_framework_playbook": true,\n'
+                '    "ui_framework_execution": true\n'
                 "  }\n"
                 "}\n"
             ),
@@ -884,7 +894,7 @@ class TestQualityGateChecker:
         )
         check = checker._check_ui_contract_execution()
         assert check.status.value == "failed"
-        assert "frontend runtime 未证明 UI 契约文件和 Design Token 已真实接入前端" in check.details
+        assert "frontend runtime 未证明 UI 契约文件" in check.details
 
     def test_ui_contract_execution_failed_when_contract_missing_emoji_policy(self, temp_project_dir: Path):
         output_dir = temp_project_dir / "output"
@@ -927,3 +937,109 @@ class TestQualityGateChecker:
         check = checker._check_ui_contract_execution()
         assert check.status.value == "failed"
         assert "emoji_policy" in check.details
+
+    def test_ui_contract_execution_failed_when_cross_platform_contract_missing_framework_playbook(
+        self, temp_project_dir: Path
+    ):
+        output_dir = temp_project_dir / "output"
+        frontend_dir = output_dir / "frontend"
+        frontend_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-ui-contract.json").write_text(
+            (
+                "{\n"
+                '  "analysis": {"frontend": "uni-app"},\n'
+                '  "style_direction": "可信商城",\n'
+                '  "typography": {"heading": "Space Grotesk", "body": "Inter"},\n'
+                '  "icon_system": "lucide-react",\n'
+                '  "emoji_policy": {"allowed_in_ui": false, "allowed_as_icon": false, "allowed_during_development": false},\n'
+                '  "ui_library_preference": {"final_selected": "TDesign 小程序 + Taro / UniApp + Tailwind(TW 适配)"},\n'
+                '  "design_tokens": {"color": {"primary": "#0f172a"}}\n'
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        (frontend_dir / "design-tokens.css").write_text(":root { --color-primary: #0f172a; }\n", encoding="utf-8")
+        (output_dir / "demo-frontend-runtime.json").write_text(
+            (
+                "{\n"
+                '  "passed": true,\n'
+                '  "checks": {\n'
+                '    "ui_contract_json": true,\n'
+                '    "output_frontend_design_tokens": true,\n'
+                '    "ui_contract_alignment": true,\n'
+                '    "ui_framework_playbook": false\n'
+                "  }\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "uni-app", "backend": "node"},
+            scenario_override="1-N+1",
+        )
+        check = checker._check_ui_contract_execution()
+        assert check.status.value == "failed"
+        assert "uni-app 跨平台框架 playbook" in check.details
+
+    def test_ui_contract_execution_failed_when_cross_platform_runtime_missing_framework_execution(
+        self, temp_project_dir: Path
+    ):
+        output_dir = temp_project_dir / "output"
+        frontend_dir = output_dir / "frontend"
+        frontend_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "demo-ui-contract.json").write_text(
+            (
+                "{\n"
+                '  "analysis": {"frontend": "uni-app"},\n'
+                '  "style_direction": "可信商城",\n'
+                '  "typography": {"heading": "Alibaba PuHuiTi", "body": "PingFang SC"},\n'
+                '  "icon_system": "TDesign Icons",\n'
+                '  "emoji_policy": {"allowed_in_ui": false, "allowed_as_icon": false, "allowed_during_development": false},\n'
+                '  "ui_library_preference": {"final_selected": "TDesign 小程序 + Taro / UniApp"},\n'
+                '  "design_tokens": {"color": {"primary": "#0f172a"}},\n'
+                '  "framework_playbook": {\n'
+                '    "framework": "uni-app",\n'
+                '    "implementation_modules": ["自定义导航栏高度"],\n'
+                '    "platform_constraints": ["status bar 与安全区"],\n'
+                '    "execution_guardrails": ["先冻结 navigationStyle"],\n'
+                '    "native_capabilities": ["登录 provider"],\n'
+                '    "validation_surfaces": ["微信小程序导航"],\n'
+                '    "delivery_evidence": ["三端差异说明"]\n'
+                "  }\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        (frontend_dir / "design-tokens.css").write_text(":root { --color-primary: #0f172a; }\n", encoding="utf-8")
+        (output_dir / "demo-ui-contract-alignment.json").write_text(
+            '{"framework_execution":{"label":"框架 Playbook 执行","passed":false,"expected":"uni., #ifdef, provider","observed":"uni."}}',
+            encoding="utf-8",
+        )
+        (output_dir / "demo-frontend-runtime.json").write_text(
+            (
+                "{\n"
+                '  "passed": false,\n'
+                '  "checks": {\n'
+                '    "ui_contract_json": true,\n'
+                '    "output_frontend_design_tokens": true,\n'
+                '    "ui_contract_alignment": true,\n'
+                '    "ui_framework_playbook": true,\n'
+                '    "ui_framework_execution": false\n'
+                "  }\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+
+        checker = QualityGateChecker(
+            project_dir=temp_project_dir,
+            name="demo",
+            tech_stack={"frontend": "uni-app", "backend": "node"},
+            scenario_override="1-N+1",
+        )
+        check = checker._check_ui_contract_execution()
+        assert check.status.value == "failed"
+        assert "uni-app 跨平台框架 playbook" in check.details
