@@ -1,9 +1,11 @@
 ---
 name: super-dev
-description: "Super Dev pipeline governance: research-first, commercial-grade AI coding delivery with 10 expert roles, quality gates, and audit artifacts."
-user-invocable: true
-when_to_use: "Use when the user says /super-dev, super-dev:, or super-dev：followed by a requirement."
-version: "2.3.3"
+description: Super Dev pipeline governance for research-first, commercial-grade AI coding delivery
+when_to_use: Use when the user says /super-dev, super-dev:, or super-dev： followed by a requirement. Activate the Super Dev pipeline for research-first, commercial-grade project delivery.
+allowed_tools: Read, Edit, Write, Bash
+user_invocable: true
+version: 2.3.3
+argument_hint: requirement description
 metadata: {"openclaw":{"requires":{"bins":["super-dev"]},"homepage":"https://superdev.goder.ai","install":[{"id":"pip","kind":"uv","formula":"super-dev","bins":["super-dev"],"label":"pip install super-dev"}]}}
 ---
 # super-dev - Super Dev AI Coding Skill
@@ -128,6 +130,8 @@ super-dev release readiness             # 发布就绪度检查
 super-dev memory list                   # 查看记忆条目
 super-dev experts list                  # 查看专家角色
 super-dev hooks list                    # 查看 hook 事件
+super-dev hooks history                 # 查看最近 hook 历史
+super-dev harness status                # 查看 workflow/framework/hook harness
 super-dev compact list                  # 查看压缩摘要
 super-dev config list                   # 查看项目配置
 super-dev spec list                     # 查看规范与变更
@@ -281,3 +285,4 @@ super-dev spec list                     # 查看规范与变更
 - DOC_CONFIRM_GATE: required
 - PREVIEW_CONFIRM_GATE: required
 - HOST_PARITY: required
+
