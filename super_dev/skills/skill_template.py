@@ -6,14 +6,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-SUPER_DEV_VERSION = "2.3.2"
+SUPER_DEV_VERSION = "2.3.3"
 
 
 @dataclass
 class SkillFrontmatter:
     """标准化 skill frontmatter 字段。"""
 
-    name: str = "super-dev-core"
+    name: str = "super-dev"
     description: str = (
         "Super Dev pipeline governance for research-first," " commercial-grade AI coding delivery"
     )

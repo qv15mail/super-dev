@@ -76,7 +76,7 @@ def _fetch_latest() -> str | None:
 def _build_hint(latest: str) -> str | None:
     """如果 latest 比当前版本更新，返回提示字符串。"""
     if latest and latest != __version__ and _is_newer(latest, __version__):
-        return f"Super Dev {latest} 可用，运行 pip install -U super-dev 升级"
+        return f"Super Dev {latest} 可用，运行 super-dev update 一键升级"
     return None
 
 

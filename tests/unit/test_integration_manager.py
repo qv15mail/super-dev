@@ -121,7 +121,7 @@ class TestIntegrationManager:
     def test_readiness_surface_sets_distinguish_official_optional_and_compatibility(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)
 
-        claude_sets = manager.readiness_surface_sets(target="claude-code", skill_name="super-dev-core")
+        claude_sets = manager.readiness_surface_sets(target="claude-code", skill_name="super-dev")
         claude_optional = {path.as_posix() for path in claude_sets["optional_project"]}
         claude_required_slash = {path.as_posix() for path in claude_sets["required_slash"]}
         claude_optional_slash = {path.as_posix() for path in claude_sets["optional_slash"]}
@@ -132,7 +132,7 @@ class TestIntegrationManager:
         assert any(item.endswith("/.claude/commands/super-dev.md") for item in claude_optional)
         assert not claude_required_slash
         assert any(item.endswith("/.claude/commands/super-dev.md") for item in claude_optional_slash)
-        assert any(item.endswith("/.claude/skills/super-dev-core/SKILL.md") for item in claude_compat_skill)
+        assert not claude_compat_skill
 
         codex_sets = manager.readiness_surface_sets(target="codex-cli", skill_name="super-dev-core")
         codex_required_slash = {path.as_posix() for path in codex_sets["required_slash"]}
@@ -243,13 +243,11 @@ class TestIntegrationManager:
         assert "~/.claude/CLAUDE.md" in claude.official_user_surfaces
         assert "~/.claude/skills/super-dev/SKILL.md" in claude.official_user_surfaces
         assert ".claude/CLAUDE.md" in claude.optional_project_surfaces
-        assert ".claude/agents/super-dev-core.md" in claude.optional_project_surfaces
         assert ".claude/commands/super-dev.md" in claude.optional_project_surfaces
         assert ".claude-plugin/marketplace.json" in claude.optional_project_surfaces
         assert "plugins/super-dev-claude/.claude-plugin/plugin.json" in claude.optional_project_surfaces
         assert "~/.claude/commands/super-dev.md" in claude.optional_user_surfaces
-        assert "~/.claude/skills/super-dev-core/SKILL.md" in claude.observed_compatibility_surfaces
-        assert "~/.claude/agents/super-dev-core.md" in claude.observed_compatibility_surfaces
+        assert claude.observed_compatibility_surfaces == []
         assert claude.skill_dir.startswith("~/.claude/skills")
 
         gemini = by_host["gemini-cli"]
@@ -473,21 +471,22 @@ class TestIntegrationManager:
         files = manager.setup("roo-code", force=True)
         slash_file = manager.setup_slash_command(target="roo-code", force=True)
 
-        assert len(files) == 1
+        assert len(files) == 2
         rules_content = (temp_project_dir / ".roo" / "rules" / "super-dev.md").read_text(encoding="utf-8")
-        assert slash_file is not None
-        command_content = slash_file.read_text(encoding="utf-8")
+        command_content = (temp_project_dir / ".roo" / "commands" / "super-dev.md").read_text(encoding="utf-8")
         assert "Super Dev" in rules_content
         assert "/super-dev" in command_content
+        assert slash_file is not None
 
     def test_kilo_code_rules_generated(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)
         files = manager.setup("kilo-code", force=True)
 
-        assert len(files) == 1
+        assert len(files) == 2
         rules_content = (temp_project_dir / ".kilocode" / "rules" / "super-dev.md").read_text(encoding="utf-8")
         assert "Super Dev" in rules_content
         assert "super-dev：" in rules_content
+        assert (temp_project_dir / ".kilocode" / "skills" / "super-dev-core" / "SKILL.md").exists()
 
     def test_slash_content_requires_host_research_first(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)

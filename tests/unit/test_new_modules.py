@@ -16,7 +16,7 @@ class TestSkillTemplate:
         from super_dev.skills.skill_template import SkillFrontmatter
 
         fm = SkillFrontmatter()
-        assert fm.name == "super-dev-core"
+        assert fm.name == "super-dev"
         assert fm.user_invocable is True
         assert "Read" in fm.allowed_tools
 

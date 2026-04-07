@@ -19,9 +19,9 @@
 
 ## Version
 
-Current version: `2.3.2`
+Current version: `2.3.3`
 
-- Release notes: [v2.3.2](docs/releases/2.3.2.md)
+- Release notes: [v2.3.3](docs/releases/2.3.3.md)
 - Website changelog: [superdev.goder.ai/changelog](https://superdev.goder.ai/changelog)
 
 ## What's New in 2.3.0
@@ -470,13 +470,13 @@ This generates `.super-dev/WORKFLOW.md` and `output/*-bootstrap.md` to lock down
 ### 3. Pin a specific version
 
 ```bash
-pip install super-dev==2.3.2
+pip install super-dev==2.3.3
 ```
 
 ### 4. Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.3.2
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.3.3
 ```
 
 ### 5. Source install for development

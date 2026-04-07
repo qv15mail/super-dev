@@ -212,9 +212,6 @@ class IntegrationManagerContentMixin:
         if target == "claude-code" and relative == "plugins/super-dev-claude/commands/super-dev.md":
             return self._build_slash_command_content("claude-code")
 
-        if target == "claude-code" and relative.endswith("plugins/super-dev-claude/agents/super-dev-core.md"):
-            return self._build_claude_agent_content()
-
         if target == "codex-cli" and relative == ".agents/plugins/marketplace.json":
             return self._build_codex_repo_marketplace_content()
 
@@ -230,9 +227,6 @@ class IntegrationManagerContentMixin:
         if target == "codex-cli" and relative == "plugins/super-dev-codex/skills/super-dev-core/SKILL.md":
             return self._build_codex_plugin_skill_content(skill_name="super-dev-core")
 
-        if target == "claude-code" and relative.endswith(".claude/agents/super-dev-core.md"):
-            return self._build_claude_agent_content()
-
         if target == "codebuddy" and relative.endswith(".codebuddy/rules/super-dev/RULE.mdc"):
             return self._build_codebuddy_rule_content()
 
@@ -244,6 +238,10 @@ class IntegrationManagerContentMixin:
 
         if relative.endswith("/skills/super-dev-core/SKILL.md") or relative.endswith("/skills/super-dev/SKILL.md"):
             return self._build_embedded_skill_content(target=target, relative=relative)
+
+        # Route command files to slash command content generator
+        if relative.endswith("/commands/super-dev.md"):
+            return self._build_slash_command_content(target)
 
         if target in {"cursor", "cursor-cli"}:
             rules_body = (
@@ -534,14 +532,11 @@ class IntegrationManagerContentMixin:
             "- `~/.claude/skills/super-dev/SKILL.md`\n\n"
             "Compatibility enhancement surfaces remain available:\n\n"
             "- `.claude/commands/super-dev.md`\n"
-            "- `.claude/agents/super-dev-core.md`\n\n"
             "This plugin enhancement adds a repo-local Claude plugin surface through:\n\n"
             "- `.claude-plugin/marketplace.json`\n"
             "- `plugins/super-dev-claude/.claude-plugin/plugin.json`\n"
             "- `plugins/super-dev-claude/commands/super-dev.md`\n"
-            "- `plugins/super-dev-claude/agents/super-dev-core.md`\n"
             "- `plugins/super-dev-claude/skills/super-dev/SKILL.md`\n"
-            "- `plugins/super-dev-claude/skills/super-dev-core/SKILL.md`\n"
         )
 
     def _build_claude_agent_content(self) -> str:
@@ -935,7 +930,7 @@ class IntegrationManagerContentMixin:
             "## Runtime Contract\n"
             "- Treat Super Dev as the local Python workflow tool plus Claude Code `CLAUDE.md + Skills` integration.\n"
             "- Primary surfaces are project-root `CLAUDE.md`, compatibility mirror `.claude/CLAUDE.md`, project-level `.claude/skills/super-dev/`, and user-level `~/.claude/skills/super-dev/`.\n"
-            "- Compatibility surfaces `.claude/commands/super-dev.md` and `.claude/agents/super-dev-core.md` remain installed so older Claude Code builds still converge onto the same Super Dev workflow.\n"
+            "- Compatibility surface `.claude/commands/super-dev.md` remains installed so older Claude Code builds still converge onto the same Super Dev workflow.\n"
             "- Optional repo enhancement surfaces `.claude-plugin/marketplace.json` and `plugins/super-dev-claude/.claude-plugin/plugin.json` can expose a richer Claude-native plugin layer without replacing the base `CLAUDE.md + Skills` contract.\n"
             "- When the user triggers `/super-dev`, `super-dev:`, or `super-dev：`, enter the Super Dev pipeline immediately rather than handling it like casual chat.\n"
             "- Use Claude Code browse/search for research and Claude Code terminal/editing for implementation.\n"
@@ -991,7 +986,7 @@ class IntegrationManagerContentMixin:
             "**Layer 1 — CLAUDE.md (Persistent Rules)**\n"
             "Project-root `CLAUDE.md` is the canonical persistent memory surface. `.claude/CLAUDE.md` is kept as a compatibility mirror for builds that still read nested memory files.\n\n"
             "**Layer 2 — Skills (Primary Execution Contract)**\n"
-            "Project-level `.claude/skills/super-dev/` and user-level `~/.claude/skills/super-dev/` carry the primary Super Dev execution contract. Compatibility aliases such as `super-dev-core` may coexist, but they must still converge onto the same workflow.\n\n"
+            "Project-level `.claude/skills/super-dev/` and user-level `~/.claude/skills/super-dev/` carry the primary Super Dev execution contract. Claude Code only uses `super-dev` as the single skill name — no `super-dev-core` alias.\n\n"
             "**Layer 3 — Hooks (Runtime Enforcement)**\n"
             "PreToolUse hooks validate every file write. PostToolUse hooks audit results.\n"
             "Hooks are auto-registered when /super-dev is invoked.\n\n"

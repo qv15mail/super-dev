@@ -150,7 +150,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "Codex 官方不走自定义项目 slash；桌面端请从 `/` 列表选择 `super-dev`，那是启用 Skill 的展示入口。",
             "实际依赖项目根 AGENTS.md、项目级 .agents/skills/super-dev/SKILL.md、全局 CODEX_HOME/AGENTS.md（默认 ~/.codex/AGENTS.md），以及官方用户级技能目录 ~/.agents/skills/super-dev/SKILL.md。",
             "仓库内还会额外生成 `.agents/plugins/marketplace.json` 与 `plugins/super-dev-codex/`，作为 Codex App/Desktop 的可选 repo plugin 增强层。",
-            "保留 super-dev-core 作为兼容别名，避免旧安装和旧文档失效。",
+            "非 Claude Code 宿主保留 super-dev-core 作为兼容别名；Claude Code 统一使用 super-dev。",
             "如果旧会话没加载新 Skill，重启 codex 再试。",
         ],
         "copilot-cli": [
@@ -314,25 +314,19 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "CLAUDE.md",
                 ".claude/CLAUDE.md",
                 ".claude/skills/super-dev/SKILL.md",
-                ".claude/agents/super-dev-core.md",
                 ".claude/commands/super-dev.md",
                 ".claude-plugin/marketplace.json",
                 "plugins/super-dev-claude/.claude-plugin/plugin.json",
                 "plugins/super-dev-claude/README.md",
                 "plugins/super-dev-claude/skills/super-dev/SKILL.md",
-                "plugins/super-dev-claude/skills/super-dev-core/SKILL.md",
-                "plugins/super-dev-claude/agents/super-dev-core.md",
             ],
             optional_files=[
                 ".claude/CLAUDE.md",
                 ".claude/commands/super-dev.md",
-                ".claude/agents/super-dev-core.md",
                 ".claude-plugin/marketplace.json",
                 "plugins/super-dev-claude/.claude-plugin/plugin.json",
                 "plugins/super-dev-claude/README.md",
                 "plugins/super-dev-claude/skills/super-dev/SKILL.md",
-                "plugins/super-dev-claude/skills/super-dev-core/SKILL.md",
-                "plugins/super-dev-claude/agents/super-dev-core.md",
             ],
         ),
         "cline": IntegrationTarget(
@@ -397,8 +391,8 @@ class IntegrationManager(IntegrationManagerContentMixin):
         ),
         "kilo-code": IntegrationTarget(
             name="kilo-code",
-            description="Kilo Code 规则注入",
-            files=[".kilocode/rules/super-dev.md"],
+            description="Kilo Code 规则 + Skill 注入",
+            files=[".kilocode/rules/super-dev.md", ".kilocode/skills/super-dev-core/SKILL.md"],
         ),
         "kiro-cli": IntegrationTarget(
             name="kiro-cli",
@@ -413,7 +407,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "roo-code": IntegrationTarget(
             name="roo-code",
             description="Roo Code 规则 + 命令注入",
-            files=[".roo/rules/super-dev.md"],
+            files=[".roo/rules/super-dev.md", ".roo/commands/super-dev.md"],
         ),
         "vscode-copilot": IntegrationTarget(
             name="vscode-copilot",
@@ -422,8 +416,8 @@ class IntegrationManager(IntegrationManagerContentMixin):
         ),
         "opencode": IntegrationTarget(
             name="opencode",
-            description="OpenCode 项目规则注入",
-            files=["AGENTS.md", ".opencode/skills/super-dev-core/SKILL.md"],
+            description="OpenCode 项目规则 + 命令 + Skill 注入",
+            files=["AGENTS.md", ".opencode/commands/super-dev.md", ".opencode/skills/super-dev-core/SKILL.md"],
         ),
         "cursor": IntegrationTarget(
             name="cursor",
@@ -732,6 +726,15 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "Super Dev 通过 CLI subprocess 桥接保证功能完整性",
                 "插件内嵌 SKILL.md 提供完整流水线行为指令",
                 "官方文档公开 Plugin 与 Skills 开发指南",
+            ],
+        },
+        "vscode-copilot": {
+            "level": "experimental",
+            "reason": "VS Code Copilot 仅支持 .github/copilot-instructions.md 作为项目指令面，不支持自定义 Skill 或 slash 命令，因此接入深度有限。",
+            "evidence": [
+                "官方文档公开 .github/copilot-instructions.md 作为项目级指令",
+                "Copilot Chat 的 @workspace 指令会读取 copilot-instructions.md",
+                "Super Dev 已写入 .github/copilot-instructions.md，但不支持 Skill 和 slash",
             ],
         },
     }
@@ -1762,12 +1765,12 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "post_onboard_steps": [
                     "确认项目根 `CLAUDE.md` 与兼容 `.claude/CLAUDE.md` 都已写入 Super Dev 规则块。",
                     "确认项目级 `.claude/skills/super-dev/SKILL.md` 与用户级 `~/.claude/skills/super-dev/SKILL.md` 已存在。",
-                    "确认兼容 `.claude/commands/super-dev.md`、`.claude/agents/super-dev-core.md` 也已生成。",
+                    "确认兼容 `.claude/commands/super-dev.md` 也已生成。",
                     "若要启用增强层，确认 `.claude-plugin/marketplace.json` 与 `plugins/super-dev-claude/.claude-plugin/plugin.json` 已存在。",
                     '在 Claude Code 当前项目会话里输入 `/super-dev "<需求描述>"` 触发完整流程。',
                 ],
                 "usage_notes": usage_notes,
-                "notes": "Claude Code 当前最佳接入面是项目根 `CLAUDE.md` + 项目级 `.claude/skills/super-dev/` + 用户级 `~/.claude/skills/`；`.claude/commands/` 与 `.claude/agents/` 保留为兼容增强面；repo 级 `.claude-plugin/marketplace.json` + `plugins/super-dev-claude/.claude-plugin/plugin.json` 作为可选 plugin enhancement 一并提供。",
+                "notes": "Claude Code 当前最佳接入面是项目根 `CLAUDE.md` + 项目级 `.claude/skills/super-dev/` + 用户级 `~/.claude/skills/`；`.claude/commands/` 保留为兼容增强面；repo 级 `.claude-plugin/marketplace.json` + `plugins/super-dev-claude/.claude-plugin/plugin.json` 作为可选 plugin enhancement 一并提供。Claude Code 不再安装 super-dev-core 别名，避免重复技能冲突。",
             }
         if target == "antigravity":
             return {
@@ -2112,19 +2115,13 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "optional_project_surfaces": [
                     ".claude/CLAUDE.md",
                     ".claude/commands/super-dev.md",
-                    ".claude/agents/super-dev-core.md",
                     ".claude-plugin/marketplace.json",
                     "plugins/super-dev-claude/.claude-plugin/plugin.json",
                     "plugins/super-dev-claude/README.md",
                     "plugins/super-dev-claude/skills/super-dev/SKILL.md",
-                    "plugins/super-dev-claude/skills/super-dev-core/SKILL.md",
-                    "plugins/super-dev-claude/agents/super-dev-core.md",
                 ],
                 "optional_user_surfaces": ["~/.claude/commands/super-dev.md"],
-                "observed_compatibility_surfaces": [
-                    "~/.claude/skills/super-dev-core/SKILL.md",
-                    "~/.claude/agents/super-dev-core.md",
-                ],
+                "observed_compatibility_surfaces": [],
             },
             "antigravity": {
                 "official_project_surfaces": [
@@ -2185,8 +2182,13 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "observed_compatibility_surfaces": ["AGENTS.md"],
             },
             "kilo-code": {
-                "official_project_surfaces": [".kilocode/rules/super-dev.md"],
-                "official_user_surfaces": [],
+                "official_project_surfaces": [
+                    ".kilocode/rules/super-dev.md",
+                    ".kilocode/skills/super-dev-core/SKILL.md",
+                ],
+                "official_user_surfaces": [
+                    "~/.kilocode/skills/super-dev-core/SKILL.md",
+                ],
                 "observed_compatibility_surfaces": [],
             },
             "roo-code": {

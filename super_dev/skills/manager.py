@@ -31,9 +31,11 @@ class SkillManager:
         "claude-code": "super-dev",
     }
 
+    # Default skill name for hosts not listed in CANONICAL_SKILL_NAMES.
+    DEFAULT_SKILL_NAME = "super-dev-core"
+
     LEGACY_SKILL_ALIASES = {
         "codex-cli": ["super-dev-core"],
-        "claude-code": ["super-dev-core"],
     }
 
     # Official user-level skill paths confirmed by vendor docs.
@@ -92,7 +94,7 @@ class SkillManager:
 
     @classmethod
     def default_skill_name(cls, target: str) -> str:
-        return cls.CANONICAL_SKILL_NAMES.get(target, "super-dev")
+        return cls.CANONICAL_SKILL_NAMES.get(target, cls.DEFAULT_SKILL_NAME)
 
     @classmethod
     def codex_home_dir(cls) -> Path:

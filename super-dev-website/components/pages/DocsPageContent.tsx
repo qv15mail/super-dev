@@ -102,7 +102,7 @@ const zhContent: Content = {
     { label: '核心阶段', value: '9 段' },
   ],
   sections: [
-    { id: 'highlights', label: 'v2.3.2 新功能', icon: Zap },
+    { id: 'highlights', label: 'v2.3.3 新功能', icon: Zap },
     { id: 'governance', label: '产品定位', icon: BookOpen },
     { id: 'install', label: '安装方式', icon: Package },
     { id: 'surfaces', label: '接入面', icon: Boxes },
@@ -324,17 +324,16 @@ const zhContent: Content = {
     '先用 smoke 触发语句。',
     '如果宿主直接开始开发，优先判断当前会话没有重新加载规则。',
   ],
-  highlightsTitle: 'v2.3.2 新功能亮点',
-  highlightsBody: '2.3.2 把 21 个宿主口径、Claude/Codex 深适配、现实场景恢复链、framework harness 与 UI 契约门禁继续收进同一套可发布的产品闭环。',
+  highlightsTitle: 'v2.3.3 新功能亮点',
+  highlightsBody: '2.3.3 聚焦宿主适配质量和安装升级体验：消除 Claude Code 重复技能问题、21 个宿主逐个对照官方文档适配、升级全流程自动化。',
   highlightsCards: [
-    { title: '宿主口径统一', body: '20 个统一接入宿主 + 1 个 OpenClaw 手动插件宿主，安装脚本、README、站点矩阵与能力审计页全部统一。' },
-    { title: 'Claude / Codex 深适配', body: '继续按官方 surface 收口到 CLAUDE.md + skills + optional plugin enhancement、AGENTS.md + skills + repo plugin enhancement。' },
-    { title: 'IDE 宿主真实模型', body: 'Kiro / Qoder / Cursor / Trae / CodeBuddy 等宿主的代码、安装引导、文档和官网不再各说各话。' },
-    { title: '现实场景恢复链', body: 'resume / next / continue / doctor / validate / Web API 统一带现实场景卡，SESSION_BRIEF 明确告诉用户现实场景该怎么做。' },
-    { title: 'Workflow / Hook / Operational Harness', body: 'workflow history、语义事件、hook history、recent operational timeline 全部进入 proof-pack 和 release readiness。' },
-    { title: 'Framework Playbook', body: 'uni-app / Taro / React Native / Flutter / Desktop Web Shell playbook 已进入脚手架、runtime、quality gate、proof-pack。' },
-    { title: 'UI 契约门禁', body: 'emoji 功能图标系统级禁用，token、图标库、组件生态、导航骨架、主题入口和 framework harness 一起进入交付门禁。' },
-    { title: '发布级稳定性', body: '全量回归通过，官网、更新历史、文档页与版本真源同步切到 2.3.2，并保持 2150+ 回归通过。' },
+    { title: 'Claude Code 单一入口', body: '消除 super-dev / super-dev-core 重复技能，统一为 super-dev 单一入口，升级时自动清理旧版残留。' },
+    { title: '升级全自动', body: 'super-dev update 自动迁移所有宿主配置；super-dev 无参数入口自动检测旧版并迁移，用户无需手动操作。' },
+    { title: '全宿主迁移', body: 'migrate 重写为全宿主迁移：自动检测所有已接入宿主，一键重建配置/Skill/slash/协议到最新版。' },
+    { title: '21 宿主官方文档适配', body: '逐个查阅 Claude Code、Codex、Windsurf、Kiro、Copilot 等官方文档，修复 Roo Code/OpenCode commands、Kilo Code Skill 等缺失。' },
+    { title: 'commands 内容修复', body: '修复 setup 生成 .roo/commands/ 等文件时写入错误的 rules 内容的 bug，现在正确生成 slash command 格式。' },
+    { title: '同族宿主智能去重', body: '--auto 安装时检测到 cursor + cursor-cli 等同族宿主自动选择功能更完整的 CLI 版本。' },
+    { title: '发布级稳定性', body: '全量 2151 测试通过，官网、更新历史、文档页与版本号统一到 2.3.3。' },
   ],
   smokeTitle: 'Smoke 验收',
   smokeCode:
@@ -352,7 +351,7 @@ const enContent: Content = {
     { label: 'Core phases', value: '9' },
   ],
   sections: [
-    { id: 'highlights', label: 'v2.3.2 Highlights', icon: Zap },
+    { id: 'highlights', label: 'v2.3.3 Highlights', icon: Zap },
     { id: 'governance', label: 'Positioning', icon: BookOpen },
     { id: 'install', label: 'Installation', icon: Package },
     { id: 'surfaces', label: 'Integration Surfaces', icon: Boxes },
@@ -574,17 +573,16 @@ const enContent: Content = {
     'Use a smoke prompt before trying the real requirement.',
     'If the host starts coding immediately, assume the current session did not reload the rules.',
   ],
-  highlightsTitle: 'v2.3.2 Highlights',
-  highlightsBody: 'Version 2.3.2 keeps tightening the 21-host product model, Claude/Codex deep adaptation, scenario-based recovery UX, framework harnesses, and UI contract gates into one publishable system.',
+  highlightsTitle: 'v2.3.3 Highlights',
+  highlightsBody: 'Version 2.3.3 focuses on host adaptation quality and upgrade UX: eliminates duplicate Claude Code skills, verifies all 21 hosts against official docs, and automates the full upgrade flow.',
   highlightsCards: [
-    { title: 'Unified Host Product Model', body: '20 unified integration hosts plus 1 manual OpenClaw plugin host, with install scripts, README, website docs, and audits finally aligned.' },
-    { title: 'Claude / Codex Deep Adaptation', body: 'Both hosts were pushed closer to their official surfaces: CLAUDE.md + skills + optional plugin enhancement, and AGENTS.md + skills + repo plugin enhancement.' },
-    { title: 'Real IDE Surface Modeling', body: 'Kiro, Qoder, Cursor, Trae, and CodeBuddy family hosts now present one coherent model across code, onboarding, docs, and website guidance.' },
-    { title: 'Scenario-Based Recovery UX', body: 'resume / next / continue / doctor / validate / Web API now expose scenario cards, and SESSION_BRIEF explains what to do in real-world cases.' },
-    { title: 'Workflow / Hook / Operational Harness', body: 'workflow history, semantic events, hook history, and the recent operational timeline now feed proof-pack and release readiness.' },
-    { title: 'Framework Playbooks', body: 'uni-app, Taro, React Native, Flutter, and Desktop Web Shell playbooks now drive scaffolds, runtime, quality gates, and release evidence.' },
-    { title: 'UI Contract Gates', body: 'Emoji are systemically banned as functional icons, and tokens, icon libraries, component ecosystems, nav shells, theme entry points, and framework harnesses all participate in delivery gates.' },
-    { title: 'Release-Grade Stability', body: 'Full regression coverage is green, and the homepage, changelog, docs page, and version sources are all aligned to 2.3.2 with 2150+ passing checks.' },
+    { title: 'Claude Code Single Entry', body: 'Eliminated duplicate super-dev / super-dev-core skills. Unified to a single super-dev skill. Upgrades auto-clean legacy residuals.' },
+    { title: 'Fully Automated Upgrades', body: 'super-dev update auto-migrates all host configs. Running super-dev (no args) auto-detects outdated projects and migrates them.' },
+    { title: 'All-Host Migration', body: 'migrate rewritten to detect all onboarded hosts and rebuild configs/Skills/slash/protocols to the latest version in one step.' },
+    { title: '21 Hosts Verified Against Docs', body: 'Each host checked against Claude Code, Codex, Windsurf, Kiro, Copilot official docs. Fixed Roo Code/OpenCode commands, Kilo Code skill gaps.' },
+    { title: 'Command Content Fix', body: 'Fixed a bug where setup generated wrong rules content for .roo/commands/ etc. Now correctly generates slash command format.' },
+    { title: 'Smart Family Deduplication', body: 'Auto-detect deduplicates same-family hosts (e.g. cursor + cursor-cli picks the CLI variant).' },
+    { title: 'Release-Grade Stability', body: 'Full 2151 tests passing. Homepage, changelog, docs, and version sources all aligned to 2.3.3.' },
   ],
   smokeTitle: 'Smoke validation',
   smokeCode:
@@ -637,7 +635,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             <div className="max-w-[860px]">
               <div className="mb-5 flex flex-wrap items-center gap-2">
                 <Badge variant="version">{content.heroKicker}</Badge>
-                <Badge variant="certified">v2.3.2</Badge>
+                <Badge variant="certified">v2.3.3</Badge>
                 <Badge variant="compatible">{locale === 'en' ? 'Bilingual' : '中英双语'}</Badge>
               </div>
               <h1 className="max-w-[900px] text-4xl font-bold leading-[1.08] tracking-tight text-text-primary sm:text-5xl lg:text-[3.5rem]">

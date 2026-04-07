@@ -103,4 +103,4 @@ def test_full_init_to_status_flow():
             env=_subprocess_env(),
         )
         assert result.returncode == 0
-        assert "2.3.2" in result.stdout
+        assert "2.3.3" in result.stdout

@@ -5,6 +5,15 @@ import type { SiteLocale } from '@/lib/site-locale';
 
 const CHANGELOG = {
   zh: [
+    { version: '2.3.3', date: '2026-04-07', type: 'patch' as const, changes: [
+      'Claude Code 统一为 super-dev 单一技能入口，消除 super-dev / super-dev-core 重复技能导致流水线不被遵循的问题',
+      'super-dev update 升级后自动迁移所有宿主配置，super-dev 无参数入口自动检测旧版并迁移',
+      'migrate.py 重写为全宿主迁移：自动检测所有已接入宿主，一键重建配置/Skill/slash/协议',
+      '21 个宿主逐个对照官方文档深度适配：Roo Code/OpenCode 补齐 commands、Kilo Code 补齐 Skill、vscode-copilot 补齐认证',
+      'commands 文件内容修复：之前 setup 写 .roo/commands/ 等文件时生成了错误的 rules 内容，现在正确生成 slash command 格式',
+      '--auto 安装时同族宿主智能去重（cursor+cursor-cli 自动选 CLI 版）',
+      '版本提示统一为 super-dev update，install.sh Skill 提示去除 super-dev-core 名称',
+    ] },
     { version: '2.3.2', date: '2026-04-06', type: 'patch' as const, changes: [
       '21 个宿主口径继续收正：20 个统一接入宿主 + 1 个 OpenClaw 手动插件宿主，安装脚本、README、官网 Docs、能力审计页和站点矩阵统一到同一套真实模型',
       'Claude Code / Codex 继续深适配到官方协议：CLAUDE.md + skills + optional plugin enhancement、AGENTS.md + skills + repo plugin enhancement',
@@ -95,6 +104,15 @@ const CHANGELOG = {
     { version: '1.0.0', date: '2025-12-29', type: 'major' as const, changes: ['首次发布', '基础流水线框架（research / documents / spec / implement）', 'Spec-Driven Development 模块', '支持 Claude Code、Cursor、Windsurf 宿主', 'PyPI 正式发布'] },
   ],
   en: [
+    { version: '2.3.3', date: '2026-04-07', type: 'patch' as const, changes: [
+      'Claude Code unified to a single super-dev skill entry, eliminating duplicate super-dev / super-dev-core skills that caused pipeline non-compliance',
+      'super-dev update now auto-migrates all host configs after upgrade; super-dev (no args) auto-detects and migrates outdated projects',
+      'migrate.py rewritten for all-host migration: auto-detects onboarded hosts and rebuilds configs/Skills/slash/protocols in one step',
+      'All 21 hosts verified against official docs: Roo Code/OpenCode commands added, Kilo Code skill added, vscode-copilot certification added',
+      'Fixed command file content bug: setup previously generated wrong rules content for .roo/commands/ etc., now correctly generates slash command format',
+      'Auto-detect deduplicates same-family hosts (cursor+cursor-cli picks CLI variant)',
+      'Version hint unified to super-dev update; install.sh skill prompt removed super-dev-core naming',
+    ] },
     { version: '2.3.2', date: '2026-04-06', type: 'patch' as const, changes: [
       'Host product scope was hardened again: 20 unified integration hosts plus 1 manual OpenClaw plugin host, with install scripts, README, website docs, capability audit, and host matrices finally sharing one accurate model',
       'Claude Code and Codex moved further toward their official host contracts: CLAUDE.md + skills + optional plugin enhancement, and AGENTS.md + skills + repo plugin enhancement',

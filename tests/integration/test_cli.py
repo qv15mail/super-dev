@@ -1330,7 +1330,6 @@ class TestCLISkillAndIntegrate:
             assert (temp_project_dir / "CLAUDE.md").exists()
             assert (temp_project_dir / ".claude" / "CLAUDE.md").exists()
             assert (temp_project_dir / ".claude" / "skills" / "super-dev" / "SKILL.md").exists()
-            assert (temp_project_dir / ".claude" / "agents" / "super-dev-core.md").exists()
             assert (fake_home / ".claude" / "CLAUDE.md").exists()
             assert (fake_home / ".claude" / "skills" / "super-dev" / "SKILL.md").exists()
             assert (temp_project_dir / ".claude" / "commands" / "super-dev.md").exists()
@@ -2641,7 +2640,8 @@ class TestCLISkillAndIntegrate:
 
         result = cli.run(["update", "--method", "uv"])
         assert result == 0
-        assert calls == [["uv", "tool", "upgrade", "super-dev"]]
+        assert calls[0] == ["uv", "tool", "upgrade", "super-dev"]
+        assert calls[1] == ["super-dev", "migrate"]
         output = capsys.readouterr().out
         assert "升级方式" in output
         assert "uv" in output
@@ -2667,7 +2667,8 @@ class TestCLISkillAndIntegrate:
 
         result = cli.run(["update", "--method", "pip"])
         assert result == 0
-        assert calls == [[os.sys.executable, "-m", "pip", "install", "-U", "super-dev"]]
+        assert calls[0] == [os.sys.executable, "-m", "pip", "install", "-U", "super-dev"]
+        assert calls[1] == ["super-dev", "migrate"]
 
     def test_policy_init_and_show(self, temp_project_dir: Path, capsys):
         original_cwd = os.getcwd()
@@ -3028,19 +3029,21 @@ class TestCLIPipeline:
         finally:
             os.chdir(original_cwd)
 
-    def test_no_args_in_initialized_project_routes_to_resume(self, temp_project_dir: Path, monkeypatch):
+    def test_no_args_in_initialized_project_routes_to_install(self, temp_project_dir: Path, monkeypatch):
         original_cwd = os.getcwd()
         os.chdir(temp_project_dir)
         try:
-            (temp_project_dir / "super-dev.yaml").write_text("name: demo\n", encoding="utf-8")
+            (temp_project_dir / "super-dev.yaml").write_text(
+                "name: demo\nversion: 2.3.3\n", encoding="utf-8"
+            )
             cli = SuperDevCLI()
             called: dict[str, bool] = {"value": False}
 
-            def fake_cmd_resume(args):
+            def fake_cmd_install(args):
                 called["value"] = True
                 return 0
 
-            monkeypatch.setattr(cli, "_cmd_resume", fake_cmd_resume)
+            monkeypatch.setattr(cli, "_cmd_install", fake_cmd_install)
             assert cli.run([]) == 0
             assert called["value"] is True
         finally:

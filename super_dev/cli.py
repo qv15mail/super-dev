@@ -198,26 +198,16 @@ class SuperDevCLI(
 
         if parsed_args.command is None:
             project_dir = Path.cwd()
+
+            # Auto-migrate if project config is outdated
             if self._project_has_super_dev_context(project_dir):
-                resume_args = argparse.Namespace(json=False)
-                return self._cmd_resume(resume_args)
-
-            # Onboarding: show first-run guide if applicable
-            try:
-                from .onboarding import OnboardingGuide
-
-                guide = OnboardingGuide()
-                if guide.should_show(project_dir):
-                    guide.show(self.console)
-                    guide.mark_seen(project_dir)
-            except Exception:
-                pass
+                self._auto_migrate_if_needed(project_dir)
 
             install_args = argparse.Namespace(
                 host=None,
                 all=False,
                 auto=False,
-                skill_name="super-dev-core",
+                skill_name="super-dev",
                 no_skill=False,
                 skip_integrate=False,
                 skip_slash=False,
@@ -1784,6 +1774,31 @@ class SuperDevCLI(
             ),
             "framework_playbook": load_framework_playbook_summary(project_dir),
         }
+
+    def _auto_migrate_if_needed(self, project_dir: Path) -> None:
+        """检测项目配置版本，如果低于当前 CLI 版本则自动迁移。"""
+        try:
+            config_path = project_dir / "super-dev.yaml"
+            if not config_path.exists():
+                return
+            import yaml
+
+            data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+            project_version = data.get("version", "")
+            if project_version == __version__:
+                return
+            self.console.print(
+                f"[yellow]检测到项目配置版本 {project_version or '未知'}，"
+                f"当前 CLI 版本 {__version__}，正在自动迁移...[/yellow]"
+            )
+            from .migrate import migrate_project
+
+            changes = migrate_project(project_dir)
+            for change in changes:
+                self.console.print(f"  [green]✓[/green] {change}")
+            self.console.print("")
+        except Exception:
+            pass
 
     def _project_has_super_dev_context(self, project_dir: Path) -> bool:
         """只有当前目录有 super-dev.yaml 且不是家目录才算 Super Dev 项目。"""
@@ -4069,7 +4084,7 @@ class SuperDevCLI(
                         skill_path = skill_manager.install(
                             source="super-dev",
                             target=target,
-                            name="super-dev-core",
+                            name=skill_manager.default_skill_name(target),
                             force=True,
                         ).path
                         skill_install = {
@@ -4107,7 +4122,7 @@ class SuperDevCLI(
             report = self._collect_host_diagnostics(
                 project_dir=project_dir,
                 targets=targets,
-                skill_name="super-dev-core",
+                skill_name="super-dev",
                 check_integrate=True,
                 check_skill=True,
                 check_slash=True,
@@ -4411,7 +4426,7 @@ class SuperDevCLI(
             report = self._collect_host_diagnostics(
                 project_dir=project_dir,
                 targets=targets,
-                skill_name="super-dev-core",
+                skill_name="super-dev",
                 check_integrate=True,
                 check_skill=True,
                 check_slash=True,
@@ -4421,7 +4436,7 @@ class SuperDevCLI(
                 repair_actions = self._repair_host_diagnostics(
                     project_dir=project_dir,
                     report=report,
-                    skill_name="super-dev-core",
+                    skill_name="super-dev",
                     force=bool(args.force),
                     check_integrate=True,
                     check_skill=True,
@@ -4430,7 +4445,7 @@ class SuperDevCLI(
                 report = self._collect_host_diagnostics(
                     project_dir=project_dir,
                     targets=targets,
-                    skill_name="super-dev-core",
+                    skill_name="super-dev",
                     check_integrate=True,
                     check_skill=True,
                     check_slash=True,
@@ -4680,7 +4695,7 @@ class SuperDevCLI(
             report = self._collect_host_diagnostics(
                 project_dir=project_dir,
                 targets=targets,
-                skill_name="super-dev-core",
+                skill_name="super-dev",
                 check_integrate=True,
                 check_skill=True,
                 check_slash=True,

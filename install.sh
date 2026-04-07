@@ -282,7 +282,7 @@ run_guided_selector() {
     warning "输入无效，请重新选择。"
   done
 
-  if prompt_yes_no "是否安装内置 Skill（super-dev-core）?" "true"; then
+  if prompt_yes_no "是否安装内置 Skill?" "true"; then
     WITH_SKILL="true"
   else
     WITH_SKILL="false"

@@ -731,6 +731,23 @@ class CliHostOpsMixin:
 
         return detected, details
 
+    # Families where IDE and CLI targets share the same config directories.
+    # When both are detected, prefer the CLI variant (more complete integration).
+    _HOST_FAMILIES: list[tuple[str, str]] = [
+        ("cursor-cli", "cursor"),
+        ("kiro-cli", "kiro"),
+        ("qoder-cli", "qoder"),
+        ("codebuddy-cli", "codebuddy"),
+    ]
+
+    def _deduplicate_host_family(self, detected: list[str]) -> list[str]:
+        """When both CLI and IDE variants of the same host are detected, keep only CLI."""
+        result = list(detected)
+        for cli_variant, ide_variant in self._HOST_FAMILIES:
+            if cli_variant in result and ide_variant in result:
+                result.remove(ide_variant)
+        return result
+
     def _collect_configured_host_targets(
         self,
         *,
@@ -808,7 +825,7 @@ class CliHostOpsMixin:
         report = self._collect_host_diagnostics(
             project_dir=project_dir,
             targets=candidate_targets,
-            skill_name="super-dev-core",
+            skill_name="super-dev",
             check_integrate=True,
             check_skill=True,
             check_slash=True,
@@ -1599,6 +1616,7 @@ class CliHostOpsMixin:
             host_actions: dict[str, str] = {}
             contract_needs_repair = "contract" in missing
             user_surfaces_need_repair = "user_surfaces" in missing
+            effective_skill_name = SkillManager.default_skill_name(target)
 
             if contract_needs_repair:
                 try:
@@ -1615,7 +1633,7 @@ class CliHostOpsMixin:
                         skill_manager.install(
                             source="super-dev",
                             target=target,
-                            name=skill_name,
+                            name=effective_skill_name,
                             force=True,
                         )
                     host_actions["contract"] = "refreshed"
@@ -1643,7 +1661,7 @@ class CliHostOpsMixin:
                         skill_manager.install(
                             source="super-dev",
                             target=target,
-                            name=skill_name,
+                            name=effective_skill_name,
                             force=True,
                         )
                         repaired_any = True
@@ -1662,7 +1680,7 @@ class CliHostOpsMixin:
                     skill_manager.install(
                         source="super-dev",
                         target=target,
-                        name=skill_name,
+                        name=effective_skill_name,
                         force=force,
                     )
                     host_actions["skill"] = "fixed"
@@ -1714,6 +1732,7 @@ class CliHostOpsMixin:
             targets = available_targets
         elif args.auto:
             targets, detected_meta = self._detect_host_targets(available_targets=available_targets)
+            targets = self._deduplicate_host_family(targets)
             if not targets:
                 self.console.print("[red]未检测到可用宿主，请改用 --host 指定或使用 --all[/red]")
                 self.console.print(f"[dim]{self._custom_host_path_override_hint()}[/dim]")
@@ -1840,16 +1859,17 @@ class CliHostOpsMixin:
                             "  [dim]- 未检测到官方或兼容 Skill 目录，已跳过宿主级 Skill 安装[/dim]"
                         )
                     else:
+                        target_skill_name = SkillManager.default_skill_name(target)
                         installed = set(skill_manager.list_installed(target))
-                        if args.skill_name in installed and not args.force:
+                        if target_skill_name in installed and not args.force:
                             self.console.print(
-                                f"  [dim]- Skill 已存在: {args.skill_name}（可加 --force 重装）[/dim]"
+                                f"  [dim]- Skill 已存在: {target_skill_name}（可加 --force 重装）[/dim]"
                             )
                         else:
                             install_result = skill_manager.install(
                                 source="super-dev",
                                 target=target,
-                                name=args.skill_name,
+                                name=target_skill_name,
                                 force=args.force,
                             )
                             if detail:
@@ -1859,11 +1879,34 @@ class CliHostOpsMixin:
                                 )
                             else:
                                 self.console.print("  [green]✓[/green] Skill: 已安装")
+                        # Clean up legacy super-dev-core for hosts that now use super-dev
+                        if target_skill_name == "super-dev" and "super-dev-core" in installed:
+                            try:
+                                skill_manager.uninstall("super-dev-core", target)
+                                self.console.print(
+                                    "  [green]✓[/green] 已清理旧版 super-dev-core（统一为 super-dev）"
+                                )
+                            except Exception:
+                                pass
                 except Exception as exc:
                     has_error = True
                     self.console.print(f"  [red]✗[/red] Skill 安装失败: {exc}")
             elif not args.skip_skill:
                 self.console.print("  [dim]- 该宿主默认按项目规则运行，已跳过 Skill 安装[/dim]")
+
+            # Clean up legacy agent file for Claude Code
+            if target == "claude-code":
+                legacy_agent = Path.home() / ".claude" / "agents" / "super-dev-core.md"
+                project_agent = project_dir / ".claude" / "agents" / "super-dev-core.md"
+                for legacy_path in [legacy_agent, project_agent]:
+                    if legacy_path.exists():
+                        try:
+                            legacy_path.unlink()
+                            self.console.print(
+                                f"  [green]✓[/green] 已清理旧版: {legacy_path.name}"
+                            )
+                        except Exception:
+                            pass
 
             if not args.skip_slash:
                 try:
@@ -2666,7 +2709,7 @@ class CliHostOpsMixin:
                 host=target,
                 all=False,
                 auto=False,
-                skill_name="super-dev-core",
+                skill_name="super-dev",
                 skip_integrate=False,
                 skip_skill=False,
                 skip_slash=False,
@@ -3154,12 +3197,29 @@ class CliHostOpsMixin:
         from rich.panel import Panel
 
         self.console.print("")
+        self.console.print("[green]✓ 升级完成[/green]")
+
+        # Auto-migrate using the newly installed version (new process)
+        self.console.print("[cyan]正在自动迁移宿主配置到新版...[/cyan]")
+        try:
+            from . import cli as cli_module
+
+            migrate_result = cli_module.subprocess.run(
+                ["super-dev", "migrate"], check=False
+            )
+            if migrate_result.returncode == 0:
+                self.console.print("[green]✓ 宿主配置已迁移到新版[/green]")
+            else:
+                self.console.print("[yellow]自动迁移未完成，可手动执行: super-dev migrate[/yellow]")
+        except Exception:
+            self.console.print("[yellow]自动迁移未执行，可手动执行: super-dev migrate[/yellow]")
+
+        self.console.print("")
         self.console.print(
             Panel(
                 "[bold green]升级完成[/bold green]\n\n"
-                "  [bold]请关闭当前终端，重新打开后再使用 super-dev[/bold]\n\n"
-                "  [dim]当前进程仍加载旧版本代码，必须重启终端才能生效[/dim]\n"
-                "  [dim]验证: super-dev --version[/dim]",
+                "  [dim]当前终端进程仍加载旧版代码[/dim]\n"
+                "  [dim]建议重开终端后使用，验证: super-dev --version[/dim]",
                 border_style="green",
                 expand=True,
                 padding=(1, 2),

@@ -2158,12 +2158,10 @@ class TestWebAPI:
         assert "~/.claude/skills/super-dev/SKILL.md" in claude_host["official_user_surfaces"]
         assert ".claude/CLAUDE.md" in claude_host["optional_project_surfaces"]
         assert ".claude/commands/super-dev.md" in claude_host["optional_project_surfaces"]
-        assert ".claude/agents/super-dev-core.md" in claude_host["optional_project_surfaces"]
         assert ".claude-plugin/marketplace.json" in claude_host["optional_project_surfaces"]
         assert "plugins/super-dev-claude/.claude-plugin/plugin.json" in claude_host["optional_project_surfaces"]
         assert "~/.claude/commands/super-dev.md" in claude_host["optional_user_surfaces"]
-        assert "~/.claude/skills/super-dev-core/SKILL.md" in claude_host["observed_compatibility_surfaces"]
-        assert "~/.claude/agents/super-dev-core.md" in claude_host["observed_compatibility_surfaces"]
+        assert claude_host["observed_compatibility_surfaces"] == []
         assert claude_host["commands"]["skill"] == "super-dev"
 
     def test_qoder_host_catalog_is_native_slash(self):
