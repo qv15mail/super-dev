@@ -67,6 +67,16 @@ class ProjectConfig:
     host_profile_targets: list[str] = field(default_factory=list)  # 目标宿主画像（用于质量门禁和运营看板）
     host_profile_enforce_selected: bool = False  # 仅按 host_profile_targets 计算宿主兼容性
 
+    # Plan-Execute 与 Overseer 配置
+    execution_mode: str = "standard"  # standard | plan-execute
+    overseer_enabled: bool = False  # 启用 Overseer 质量监督
+    codex_review_enabled: bool = False  # 启用 Codex 独立审查（Claude-Codex 混合模式）
+    codex_review_phases: list[str] = field(default_factory=lambda: [
+        "drafting", "redteam", "qa"
+    ])  # 哪些阶段触发 Codex 审查
+    overseer_halt_on_critical: bool = True  # Overseer 发现 Critical 偏差时暂停流水线
+    plan_failure_budget: int = 3  # Plan-Execute 步骤默认失败预算
+
     # 输出目录
     output_dir: str = "output"
 
@@ -95,6 +105,12 @@ class ConfigManager:
         "host_compatibility_min_ready_hosts": 1,
         "host_profile_targets": [],
         "host_profile_enforce_selected": False,
+        "execution_mode": "standard",
+        "overseer_enabled": False,
+        "codex_review_enabled": False,
+        "codex_review_phases": ["drafting", "redteam", "qa"],
+        "overseer_halt_on_critical": True,
+        "plan_failure_budget": 3,
         "output_dir": "output",
         # 前端配置
         "ui_library": None,
@@ -211,6 +227,7 @@ class ConfigManager:
             "knowledge_cache_ttl_seconds": int,
             "host_compatibility_min_score": int,
             "host_compatibility_min_ready_hosts": int,
+            "plan_failure_budget": int,
         }
 
         # 转换类型
@@ -234,6 +251,23 @@ class ConfigManager:
             if key == "host_profile_enforce_selected" and isinstance(value, str):
                 lowered = value.strip().lower()
                 converted_kwargs[key] = lowered in {"1", "true", "yes", "y", "on"}
+                continue
+            if key == "overseer_enabled" and isinstance(value, str):
+                lowered = value.strip().lower()
+                converted_kwargs[key] = lowered in {"1", "true", "yes", "y", "on"}
+                continue
+            if key == "codex_review_enabled" and isinstance(value, str):
+                lowered = value.strip().lower()
+                converted_kwargs[key] = lowered in {"1", "true", "yes", "y", "on"}
+                continue
+            if key == "overseer_halt_on_critical" and isinstance(value, str):
+                lowered = value.strip().lower()
+                converted_kwargs[key] = lowered in {"1", "true", "yes", "y", "on"}
+                continue
+            if key == "codex_review_phases" and isinstance(value, str):
+                converted_kwargs[key] = [
+                    item.strip() for item in value.split(",") if item.strip()
+                ]
                 continue
             if key in type_converters and isinstance(value, str):
                 try:
@@ -337,6 +371,13 @@ class ConfigManager:
                     + ", ".join(sorted(set(unsupported_targets)))
                 )
 
+        # 验证执行模式
+        valid_execution_modes = ("standard", "plan-execute")
+        if config.execution_mode not in valid_execution_modes:
+            errors.append(f"execution_mode 必须是: {', '.join(valid_execution_modes)}")
+        if config.plan_failure_budget < 1:
+            errors.append("plan_failure_budget 不能小于 1")
+
         # 验证知识增强配置
         if config.knowledge_cache_ttl_seconds < 0:
             errors.append("knowledge_cache_ttl_seconds 不能小于 0")
@@ -374,6 +415,8 @@ class ConfigManager:
         "backend": {"type": "str", "required": True, "allowed": list(PIPELINE_BACKEND_IDS)},
         "database": {"type": "str", "required": False, "allowed": ["postgresql", "mysql", "mongodb", "redis", "sqlite", ""]},
         "quality_gate": {"type": "int", "required": False, "min": 0, "max": 100},
+        "execution_mode": {"type": "str", "required": False, "allowed": ["standard", "plan-execute"]},
+        "plan_failure_budget": {"type": "int", "required": False, "min": 1, "max": 10},
         "host_compatibility_min_score": {"type": "int", "required": False, "min": 0, "max": 100},
         "host_compatibility_min_ready_hosts": {"type": "int", "required": False, "min": 0},
         "knowledge_cache_ttl_seconds": {"type": "int", "required": False, "min": 0},
@@ -528,6 +571,20 @@ class ConfigManager:
             "description": "从 v2.1 迁移到 v2.2：标准化版本号",
             "transforms": {},
             "removals": ["deprecated_field"],
+        },
+        {
+            "from_version": "2.2",
+            "to_version": "2.3",
+            "description": "从 v2.2 迁移到 v2.3：新增 Plan-Execute、Overseer 和 Claude-Codex 混合模式配置",
+            "transforms": {
+                "execution_mode": lambda data: data.get("execution_mode", "standard"),
+                "overseer_enabled": lambda data: data.get("overseer_enabled", False),
+                "codex_review_enabled": lambda data: data.get("codex_review_enabled", False),
+                "codex_review_phases": lambda data: data.get("codex_review_phases", ["drafting", "redteam", "qa"]),
+                "overseer_halt_on_critical": lambda data: data.get("overseer_halt_on_critical", True),
+                "plan_failure_budget": lambda data: data.get("plan_failure_budget", 3),
+            },
+            "removals": [],
         },
     ]
 

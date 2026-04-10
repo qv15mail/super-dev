@@ -7,6 +7,29 @@ from .engine import Phase, PhaseResult, WorkflowContext, WorkflowEngine
 from .knowledge_pusher import KnowledgePush, KnowledgePusher, LayeredKnowledgePush
 from .telemetry import PipelineTelemetryReport
 
+try:
+    from .plan_executor import (
+        ExecutionPlan,
+        PlanExecutor,
+        PlanStep,
+        StepStatus,
+        VerifyGate,
+    )
+except ImportError:
+    pass
+
+try:
+    from .overseer import (
+        CheckpointReport,
+        CheckpointVerdict,
+        Deviation,
+        DeviationSeverity,
+        Overseer,
+        OverseerReport,
+    )
+except ImportError:
+    pass
+
 __all__ = [
     "WorkflowEngine",
     "Phase",
@@ -17,4 +40,15 @@ __all__ = [
     "LayeredKnowledgePush",
     "PipelineContractReport",
     "PipelineTelemetryReport",
+    "PlanExecutor",
+    "ExecutionPlan",
+    "PlanStep",
+    "StepStatus",
+    "VerifyGate",
+    "Overseer",
+    "OverseerReport",
+    "CheckpointReport",
+    "CheckpointVerdict",
+    "Deviation",
+    "DeviationSeverity",
 ]

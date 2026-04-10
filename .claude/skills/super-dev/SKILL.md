@@ -194,6 +194,70 @@ super-dev spec list                     # 查看规范与变更
 - `super-dev generate components` + `super-dev generate types`
 - 运行构建命令确认零错误后才开始写业务代码
 
+## Plan-Execute 与 Overseer 模式（v2.3.3+）
+
+### 执行模式
+
+Super Dev 支持两种执行模式（通过 `super-dev.yaml` 的 `execution_mode` 配置）：
+
+**standard（默认）**: 传统的阶段顺序执行模式。
+
+**plan-execute**: 每个阶段执行前先生成结构化计划（步骤、依赖、验证闸门），按拓扑排序的 Wave 执行，每步独立验证。
+
+### Claude Code + Codex 混合模式
+
+当 `codex_review_enabled: true` 时，启用 Claude-Codex 协作模式：
+
+- **Claude Code** 作为主执行者：负责实现代码、生成文档、运行命令
+- **Codex CLI** 作为独立审查者：通过 `codex --quiet --prompt` 非交互调用
+- 审查时机：在 `codex_review_phases` 配置的阶段完成后自动触发
+- 审查结果持久化到 `.super-dev/plans/` 供追溯
+
+执行流程：
+1. Claude Code 完成阶段实现
+2. Codex 独立审查产出物
+3. 发现问题 → Claude Code 修复
+4. 循环直到 Codex 审查通过或达到失败预算
+
+### Overseer Agent（质量监督者）
+
+当 `overseer_enabled: true` 时，启用独立质量观测：
+
+- **角色**: 第 12 位专家 — 不参与实现，只做观测和判定
+- **检查点**: 每个阶段/步骤完成后自动触发审查
+- **偏差追踪**: 记录计划与实际执行的偏差（spec-drift、quality-drop、codex-unresolved 等）
+- **暂停机制**: `overseer_halt_on_critical: true` 时发现 Critical 偏差自动暂停流水线
+- **审查报告**: 持久化到 `.super-dev/overseer/` 目录
+
+偏差严重级别：
+- **INFO**: 信息提示，不影响执行
+- **WARNING**: 警告，流水线继续但需关注
+- **HIGH**: 高风险，建议暂停修正
+- **CRITICAL**: 阻断级，自动暂停流水线
+
+### 配置示例
+
+```yaml
+# super-dev.yaml
+execution_mode: plan-execute
+overseer_enabled: true
+codex_review_enabled: true
+codex_review_phases:
+  - drafting
+  - redteam
+  - qa
+overseer_halt_on_critical: true
+plan_failure_budget: 3
+```
+
+### 相关 CLI 命令
+
+```bash
+super-dev config set execution_mode plan-execute
+super-dev config set overseer_enabled true
+super-dev config set codex_review_enabled true
+```
+
 
 ## 会话连续性契约（强制）
 
