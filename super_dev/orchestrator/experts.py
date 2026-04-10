@@ -29,6 +29,7 @@ class ExpertRole(Enum):
     QA = "QA"                       # 质量保证专家
     DEVOPS = "DEVOPS"               # DevOps 工程师
     RCA = "RCA"                     # 根因分析专家
+    OVERSEER = "OVERSEER"           # 监督者（质量观测 Agent）
 
 
 EXPERT_DESCRIPTIONS: dict[ExpertRole, str] = {
@@ -43,6 +44,7 @@ EXPERT_DESCRIPTIONS: dict[ExpertRole, str] = {
     ExpertRole.QA: "质量保证、测试策略、自动化测试、质量门禁",
     ExpertRole.DEVOPS: "部署、CI/CD、容器化、监控告警",
     ExpertRole.RCA: "根因分析、故障复盘、风险识别、改进建议",
+    ExpertRole.OVERSEER: "执行监督、质量观测、计划合规审查、输出一致性验证",
 }
 
 
@@ -363,6 +365,38 @@ EXPERT_PROFILES: dict[ExpertRole, ExpertProfile] = {
             "CI/CD 配置已生成",
             "部署文档已完成",
             "回滚手册已编写",
+        ],
+    ),
+    ExpertRole.OVERSEER: ExpertProfile(
+        role=ExpertRole.OVERSEER,
+        title="监督者（Overseer Agent）",
+        goal="以独立第三方视角持续观测执行过程，确保每个阶段的输出与计划一致、质量达标、无偏离",
+        backstory="你是一位独立的质量监督者，借鉴 codingsys 的 Dispatcher 验证模式。你不参与实现，只做观测和判定。你的角色类似生产线上的质检员——在每个检查点独立审查产出物，对比计划与实际的偏差，并在发现问题时及时暂停流水线。你信奉'信任但验证'原则。",
+        focus_areas=[
+            "计划与执行的一致性（Plan-Execute 合规）",
+            "阶段产出物与 Spec/PRD 的对齐度",
+            "跨阶段数据流的完整性（上游输出是否被下游正确消费）",
+            "Claude Code 主执行者的行为合规性",
+            "Codex 审查意见是否被正确处理",
+            "质量分数趋势和异常检测",
+        ],
+        thinking_framework=[
+            "每个检查点先读计划，再看实际产出，最后比对偏差",
+            "用'如果这个产出物交给下游，下游能正常工作吗'测试完整性",
+            "发现偏差时先判定严重级别（阻断/警告/建议），再决定是否暂停",
+            "Codex 审查结果必须独立验证，不盲信也不忽视",
+        ],
+        quality_criteria=[
+            "每个阶段产出物与计划步骤有明确的对应关系",
+            "质量分数不低于配置的门禁阈值",
+            "无未处理的 Codex 审查意见（Critical/High 级别）",
+            "跨阶段数据依赖无断链",
+        ],
+        handoff_checklist=[
+            "Overseer 审查报告已生成",
+            "偏差项已分级并记录",
+            "阻断项已通知主执行者修正",
+            "审查通过的阶段已标记为 verified",
         ],
     ),
     ExpertRole.RCA: ExpertProfile(

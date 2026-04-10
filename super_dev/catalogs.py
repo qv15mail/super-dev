@@ -233,9 +233,12 @@ HOST_RUNTIME_VALIDATION_OVERRIDES: dict[str, dict[str, list[str]]] = {
             "确认项目根 `CLAUDE.md`、兼容 `.claude/CLAUDE.md`、项目级 `.claude/skills/super-dev/` 与用户级 `~/.claude/skills/` 已被当前会话重新加载。",
             "确认 `/super-dev` 直接进入 Super Dev，而不是普通聊天或旁路兼容命令面。",
             "确认改文档、补充、继续修改等自然语言仍留在当前 Super Dev 流程内。",
+            "若 execution_mode 为 plan-execute，确认 .super-dev/plans/ 目录可写且 PlanExecutor 已初始化。",
+            "若 codex_review_enabled 为 true，确认 codex CLI 可用（运行 which codex 验证）且 Overseer 已启用。",
         ],
         "pass_criteria": [
             "Claude Code 在 `CLAUDE.md + skills` 主模型下进入并保持同一条 Super Dev 流程，兼容 commands/agents 与可选 plugin enhancement 不会造成分叉。",
+            "Plan-Execute 模式下，每个阶段执行前有对应的 execution plan 文件。Overseer 审查报告在 .super-dev/overseer/ 中持续更新。",
         ],
         "resume_checklist": [
             "Claude Code 恢复时不能绕过当前确认门或返工门，并要确认重新打开的会话再次读取了 `CLAUDE.md + skills`。",
@@ -289,6 +292,7 @@ HOST_RUNTIME_VALIDATION_OVERRIDES: dict[str, dict[str, list[str]]] = {
             "确认 Codex App/Desktop 若在 `/` 列表里出现 `super-dev`，它被当作已启用 Skill 入口，而不是项目自定义 slash 文件。",
             "确认 `super-dev:` 仍可作为 AGENTS 驱动的自然语言回退入口，但不是 Codex 官方主触发面。",
             "确认会话没有先解释 skill 或退回普通聊天，而是直接进入 Super Dev 流程。",
+            "若被用于 Claude-Codex 混合模式审查，确认 codex --quiet --prompt 可正常执行。",
         ],
         "pass_criteria": [
             "重开 codex 后的新会话确实加载了项目 AGENTS.md、项目级 `.agents/skills/super-dev/`、全局 AGENTS 与官方 Skills，并识别 repo plugin enhancement。",

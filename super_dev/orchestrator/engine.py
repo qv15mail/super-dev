@@ -80,6 +80,18 @@ try:
 except ImportError:
     COST_TRACKER_AVAILABLE = False
 
+try:
+    from .plan_executor import PlanExecutor
+    PLAN_EXECUTOR_AVAILABLE = True
+except ImportError:
+    PLAN_EXECUTOR_AVAILABLE = False
+
+try:
+    from .overseer import Overseer
+    OVERSEER_AVAILABLE = True
+except ImportError:
+    OVERSEER_AVAILABLE = False
+
 
 class Phase(Enum):
     """工作流阶段"""
@@ -209,6 +221,29 @@ class WorkflowEngine:
             except Exception as e:
                 self.logger.warning(f"成本追踪器初始化失败: {e}")
 
+        # Initialize plan executor (optional)
+        self.plan_executor = None
+        if PLAN_EXECUTOR_AVAILABLE:
+            try:
+                self.plan_executor = PlanExecutor(self.project_dir)
+            except Exception as e:
+                self.logger.warning(f'Plan-Execute 引擎初始化失败: {e}')
+
+        # Initialize overseer (optional)
+        self.overseer = None
+        if OVERSEER_AVAILABLE:
+            try:
+                config = self.config_manager.config
+                if getattr(config, 'overseer_enabled', False):
+                    self.overseer = Overseer(
+                        project_dir=self.project_dir,
+                        project_name=getattr(config, 'name', ''),
+                        quality_threshold=getattr(config, 'quality_gate', 80),
+                        halt_on_critical=getattr(config, 'overseer_halt_on_critical', True),
+                    )
+            except Exception as e:
+                self.logger.warning(f'Overseer 初始化失败: {e}')
+
         self.logger.info("工作流引擎初始化完成", extra={"project_dir": str(self.project_dir)})
 
     def _emit_state_event(
@@ -243,6 +278,22 @@ class WorkflowEngine:
                     }
                     if self.memory_extractor.should_extract(phase, phase_context):
                         self.memory_extractor.extract_from_phase(phase, phase_context)
+            except Exception:
+                pass
+
+        # Overseer checkpoint on phase completion
+        if event == 'phase_completed' and self.overseer:
+            try:
+                quality_score = kwargs.get('quality_score', 0.0)
+                self.overseer.checkpoint_phase(
+                    phase=phase,
+                    quality_score=quality_score,
+                    actual_output=kwargs.get('output'),
+                )
+                if self.overseer.should_halt():
+                    self.logger.warning(
+                        f'Overseer 暂停流水线: {self.overseer.get_report().halt_reason}'
+                    )
             except Exception:
                 pass
 
@@ -533,6 +584,13 @@ class WorkflowEngine:
                 except Exception as e:
                     self.logger.warning(f"治理层 enter_phase({phase.value}) 失败: {e}")
 
+            # Overseer halt check
+            if self.overseer and self.overseer.should_halt():
+                self.logger.warning(
+                    f'Overseer 要求暂停，在阶段 {phase.value} 开始前终止'
+                )
+                break
+
             try:
                 # Hook: PrePhase
                 if self.hook_manager:
@@ -726,6 +784,17 @@ class WorkflowEngine:
                     phase=phase, success=False, duration=0.0, errors=[str(e)]
                 )
                 break
+
+        # Finalize overseer report
+        if self.overseer:
+            try:
+                overseer_report = self.overseer.finalize()
+                self.logger.info(
+                    f'Overseer 报告: {overseer_report.overall_verdict.value}, '
+                    f'偏差数: {overseer_report.total_deviations}'
+                )
+            except Exception as e:
+                self.logger.warning(f'Overseer 最终报告生成失败: {e}')
 
         # Session Brief: update status
         if SESSION_BRIEF_AVAILABLE:
