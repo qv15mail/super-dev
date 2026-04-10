@@ -5,6 +5,13 @@ import type { SiteLocale } from '@/lib/site-locale';
 
 const CHANGELOG = {
   zh: [
+    { version: '2.3.4', date: '2026-04-10', type: 'patch' as const, changes: [
+      '感谢 staruhub 提交并推动合入 PR #10，为编排系统补齐本次版本核心能力',
+      '新增 Plan-Execute 执行引擎：支持结构化执行计划、拓扑排序、步骤级验证门、失败预算和持久化计划状态',
+      '新增 Overseer 监督者角色：在阶段与步骤检查点持续观察偏差、质量下降和未解决的 Codex 审查结果，并可在关键问题出现时中止流水线',
+      '新增 Claude Code + Codex 混合模式：允许 Claude Code 负责实现，Codex 负责独立审查，审查结果由 Overseer 统一跟踪',
+      '扩展 orchestrator 配置：加入 execution_mode、overseer_enabled、codex_review_enabled 等控制项',
+    ] },
     { version: '2.3.3', date: '2026-04-07', type: 'patch' as const, changes: [
       'Claude Code 统一为 super-dev 单一技能入口，消除 super-dev / super-dev-core 重复技能导致流水线不被遵循的问题',
       'super-dev update 升级后自动迁移所有宿主配置，super-dev 无参数入口自动检测旧版并迁移',
@@ -104,6 +111,13 @@ const CHANGELOG = {
     { version: '1.0.0', date: '2025-12-29', type: 'major' as const, changes: ['首次发布', '基础流水线框架（research / documents / spec / implement）', 'Spec-Driven Development 模块', '支持 Claude Code、Cursor、Windsurf 宿主', 'PyPI 正式发布'] },
   ],
   en: [
+    { version: '2.3.4', date: '2026-04-10', type: 'patch' as const, changes: [
+      'Thanks to staruhub for PR #10, which landed the core orchestration capabilities in this release',
+      'Added the Plan-Execute engine with structured plans, topological wave sorting, step-level verification gates, failure budgets, and persisted plan state',
+      'Added the Overseer role to monitor phase and step checkpoints, detect drift and quality drops, and halt the pipeline on critical issues',
+      'Added a Claude Code + Codex hybrid mode so Claude can implement while Codex performs independent review tracked by the Overseer',
+      'Expanded orchestrator configuration with execution_mode, overseer_enabled, codex_review_enabled, and related controls',
+    ] },
     { version: '2.3.3', date: '2026-04-07', type: 'patch' as const, changes: [
       'Claude Code unified to a single super-dev skill entry, eliminating duplicate super-dev / super-dev-core skills that caused pipeline non-compliance',
       'super-dev update now auto-migrates all host configs after upgrade; super-dev (no args) auto-detects and migrates outdated projects',

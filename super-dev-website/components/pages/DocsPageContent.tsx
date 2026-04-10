@@ -102,7 +102,7 @@ const zhContent: Content = {
     { label: '核心阶段', value: '9 段' },
   ],
   sections: [
-    { id: 'highlights', label: 'v2.3.3 新功能', icon: Zap },
+    { id: 'highlights', label: 'v2.3.4 新功能', icon: Zap },
     { id: 'governance', label: '产品定位', icon: BookOpen },
     { id: 'install', label: '安装方式', icon: Package },
     { id: 'surfaces', label: '接入面', icon: Boxes },
@@ -324,16 +324,16 @@ const zhContent: Content = {
     '先用 smoke 触发语句。',
     '如果宿主直接开始开发，优先判断当前会话没有重新加载规则。',
   ],
-  highlightsTitle: 'v2.3.3 新功能亮点',
-  highlightsBody: '2.3.3 聚焦宿主适配质量和安装升级体验：消除 Claude Code 重复技能问题、21 个宿主逐个对照官方文档适配、升级全流程自动化。',
+  highlightsTitle: 'v2.3.4 新功能亮点',
+  highlightsBody: '2.3.4 聚焦编排执行能力升级：引入 Plan-Execute 执行引擎、Overseer 监督者，以及 Claude Code + Codex 混合审查模式。感谢 staruhub 的 PR。',
   highlightsCards: [
-    { title: 'Claude Code 单一入口', body: '消除 super-dev / super-dev-core 重复技能，统一为 super-dev 单一入口，升级时自动清理旧版残留。' },
-    { title: '升级全自动', body: 'super-dev update 自动迁移所有宿主配置；super-dev 无参数入口自动检测旧版并迁移，用户无需手动操作。' },
-    { title: '全宿主迁移', body: 'migrate 重写为全宿主迁移：自动检测所有已接入宿主，一键重建配置/Skill/slash/协议到最新版。' },
-    { title: '21 宿主官方文档适配', body: '逐个查阅 Claude Code、Codex、Windsurf、Kiro、Copilot 等官方文档，修复 Roo Code/OpenCode commands、Kilo Code Skill 等缺失。' },
-    { title: 'commands 内容修复', body: '修复 setup 生成 .roo/commands/ 等文件时写入错误的 rules 内容的 bug，现在正确生成 slash command 格式。' },
-    { title: '同族宿主智能去重', body: '--auto 安装时检测到 cursor + cursor-cli 等同族宿主自动选择功能更完整的 CLI 版本。' },
-    { title: '发布级稳定性', body: '全量 2151 测试通过，官网、更新历史、文档页与版本号统一到 2.3.3。' },
+    { title: '感谢 staruhub', body: '本次 2.3.4 核心能力来自 staruhub 提交并合入的 PR #10，补齐了编排执行与监督能力。' },
+    { title: 'Plan-Execute 执行引擎', body: '新增结构化执行计划、拓扑波次排序、步骤状态机、验证门和失败预算，让编排过程可追踪、可恢复、可收敛。' },
+    { title: 'Overseer 监督者', body: '新增独立观察者角色，能在阶段与步骤检查点持续监控计划偏差、质量下降和未解决审查项。' },
+    { title: 'Claude + Codex 混合审查', body: '支持 Claude Code 负责实现、Codex 独立审查，审查结果进入统一治理与验证闭环。' },
+    { title: '编排配置扩展', body: '新增 execution_mode、overseer_enabled、codex_review_enabled、codex_review_phases 等配置项。' },
+    { title: '落盘计划状态', body: '执行计划可持久化到 .super-dev/plans/，便于恢复、诊断与后续审计。' },
+    { title: '版本口径已统一', body: '首页、更新历史、文档页和版本真源已同步到 2.3.4。' },
   ],
   smokeTitle: 'Smoke 验收',
   smokeCode:
@@ -351,7 +351,7 @@ const enContent: Content = {
     { label: 'Core phases', value: '9' },
   ],
   sections: [
-    { id: 'highlights', label: 'v2.3.3 Highlights', icon: Zap },
+    { id: 'highlights', label: 'v2.3.4 Highlights', icon: Zap },
     { id: 'governance', label: 'Positioning', icon: BookOpen },
     { id: 'install', label: 'Installation', icon: Package },
     { id: 'surfaces', label: 'Integration Surfaces', icon: Boxes },
@@ -573,16 +573,16 @@ const enContent: Content = {
     'Use a smoke prompt before trying the real requirement.',
     'If the host starts coding immediately, assume the current session did not reload the rules.',
   ],
-  highlightsTitle: 'v2.3.3 Highlights',
-  highlightsBody: 'Version 2.3.3 focuses on host adaptation quality and upgrade UX: eliminates duplicate Claude Code skills, verifies all 21 hosts against official docs, and automates the full upgrade flow.',
+  highlightsTitle: 'v2.3.4 Highlights',
+  highlightsBody: 'Version 2.3.4 upgrades orchestration with the Plan-Execute engine, the Overseer observer, and a Claude Code + Codex hybrid review mode. Thanks to staruhub for the PR.',
   highlightsCards: [
-    { title: 'Claude Code Single Entry', body: 'Eliminated duplicate super-dev / super-dev-core skills. Unified to a single super-dev skill. Upgrades auto-clean legacy residuals.' },
-    { title: 'Fully Automated Upgrades', body: 'super-dev update auto-migrates all host configs. Running super-dev (no args) auto-detects outdated projects and migrates them.' },
-    { title: 'All-Host Migration', body: 'migrate rewritten to detect all onboarded hosts and rebuild configs/Skills/slash/protocols to the latest version in one step.' },
-    { title: '21 Hosts Verified Against Docs', body: 'Each host checked against Claude Code, Codex, Windsurf, Kiro, Copilot official docs. Fixed Roo Code/OpenCode commands, Kilo Code skill gaps.' },
-    { title: 'Command Content Fix', body: 'Fixed a bug where setup generated wrong rules content for .roo/commands/ etc. Now correctly generates slash command format.' },
-    { title: 'Smart Family Deduplication', body: 'Auto-detect deduplicates same-family hosts (e.g. cursor + cursor-cli picks the CLI variant).' },
-    { title: 'Release-Grade Stability', body: 'Full 2151 tests passing. Homepage, changelog, docs, and version sources all aligned to 2.3.3.' },
+    { title: 'Thanks to staruhub', body: 'The core capabilities in 2.3.4 come from PR #10 by staruhub, now merged into main.' },
+    { title: 'Plan-Execute Engine', body: 'Adds structured execution plans, topological wave sorting, step state tracking, verification gates, and failure budgets.' },
+    { title: 'Overseer Observer', body: 'Adds an independent observer role that monitors drift, quality regressions, and unresolved review items at checkpoints.' },
+    { title: 'Claude + Codex Hybrid Review', body: 'Lets Claude Code implement while Codex performs independent review that is tracked inside the governed pipeline.' },
+    { title: 'Expanded Orchestrator Config', body: 'Adds execution_mode, overseer_enabled, codex_review_enabled, codex_review_phases, and related controls.' },
+    { title: 'Persisted Plan State', body: 'Execution plans can be written to .super-dev/plans/ for recovery, debugging, and auditability.' },
+    { title: 'Version Alignment', body: 'Homepage, changelog, docs, and version sources are now aligned to 2.3.4.' },
   ],
   smokeTitle: 'Smoke validation',
   smokeCode:
@@ -635,7 +635,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             <div className="max-w-[860px]">
               <div className="mb-5 flex flex-wrap items-center gap-2">
                 <Badge variant="version">{content.heroKicker}</Badge>
-                <Badge variant="certified">v2.3.3</Badge>
+                <Badge variant="certified">v2.3.4</Badge>
                 <Badge variant="compatible">{locale === 'en' ? 'Bilingual' : '中英双语'}</Badge>
               </div>
               <h1 className="max-w-[900px] text-4xl font-bold leading-[1.08] tracking-tight text-text-primary sm:text-5xl lg:text-[3.5rem]">

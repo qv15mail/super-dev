@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-SUPER_DEV_VERSION = "2.3.3"
+SUPER_DEV_VERSION = "2.3.4"
 
 
 @dataclass

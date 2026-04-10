@@ -21,6 +21,7 @@ const COPY = {
     points: ['适配主流 CLI 与 IDE 宿主', '代码库理解、范围覆盖审计、影响分析与回归守卫一体化', '支持随时回到 docs、frontend、backend、quality 等阶段继续推进'],
     docs: '查看文档',
     installNote: '支持 pip 或 uv 安装，安装后终端输入 super-dev 进入宿主接入引导。',
+    releaseNote: '2.3.4 新增 Plan-Execute 执行引擎、Overseer 监督者和 Claude Code + Codex 混合审查模式。感谢 staruhub 的 PR。',
   },
   en: {
     openSource: 'MIT Open Source',
@@ -29,6 +30,7 @@ const COPY = {
     points: ['Works across major CLI and IDE hosts', 'Combines codebase intelligence, scope audit, impact analysis, and regression guard', 'Can return to docs, frontend, backend, and quality phases without restarting from zero'],
     docs: 'Read Docs',
     installNote: 'Install with pip or uv, then run super-dev in the terminal to open the host onboarding flow.',
+    releaseNote: 'Version 2.3.4 adds the Plan-Execute engine, the Overseer observer, and a Claude Code + Codex hybrid review mode. Thanks to staruhub for the PR.',
   },
 } as const;
 
@@ -46,7 +48,7 @@ export function HeroSection({ locale = 'zh' }: { locale?: SiteLocale }) {
       <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-14 px-4 pb-20 sm:px-6 lg:grid lg:grid-cols-[minmax(0,1fr)_520px] lg:items-center lg:gap-16 lg:pb-24">
         <div className="flex flex-col gap-7">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="version">v2.3.3</Badge>
+            <Badge variant="version">v2.3.4</Badge>
             <Badge variant="certified">{copy.openSource}</Badge>
             <a
               href={GITHUB_REPO_URL}
@@ -94,7 +96,10 @@ export function HeroSection({ locale = 'zh' }: { locale?: SiteLocale }) {
             </Link>
           </div>
 
-          <p className="text-sm text-text-muted">{copy.installNote}</p>
+          <div className="space-y-2 text-sm text-text-muted">
+            <p>{copy.installNote}</p>
+            <p>{copy.releaseNote}</p>
+          </div>
         </div>
 
         <div className="relative">
