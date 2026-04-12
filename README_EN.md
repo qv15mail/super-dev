@@ -19,9 +19,9 @@
 
 ## Version
 
-Current version: `2.3.3`
+Current version: `2.3.5`
 
-- Release notes: [v2.3.3](docs/releases/2.3.3.md)
+- Release notes: [v2.3.5](docs/releases/2.3.5.md)
 - Website changelog: [superdev.goder.ai/changelog](https://superdev.goder.ai/changelog)
 
 ## What's New in 2.3.0
@@ -170,85 +170,57 @@ super-dev governance templates show <id> # view a specific template
 
 ## Quick Start
 
-Start with these 5 entry points. The old direct requirement shortcut is still supported:
+Regular users only need 2 terminal commands:
 
 ```bash
-# Onboarding wizard / existing-project next step
+# Enter the host onboarding flow
 super-dev
 
-# Legacy shortcut still supported: enter the full pipeline directly from a requirement
-super-dev "Build an online education platform"
-
-# Greenfield (0 to 1): let Super Dev choose the host and tell you the first sentence
-super-dev start --idea "Build an online education platform"
-
-# Return the next day / reopen the host: resume the current governed flow
-super-dev resume
-
-# Existing flow: continue the current governed flow instead of restarting normal chat
-super-dev continue
-
-# Unsure what to do next: ask the system for the single recommended action
-super-dev next
+# Upgrade to the latest version and migrate onboarded hosts
+super-dev update
 ```
 
-How it behaves:
+After onboarding, regular use moves back into the host:
 
-- If the current directory is not onboarded yet, bare `super-dev` opens the host onboarding flow.
-- If the current directory already has Super Dev context, bare `super-dev` routes to the current-flow resume path.
-- `super-dev "..."` still works as the direct full-pipeline shortcut when you already know you want Super Dev to start immediately.
-- `super-dev start --idea "..."` auto-detects hosts and returns the recommended host, trigger, restart hint, and first sentence to send.
-- `super-dev resume` is the best entry for real recovery scenarios: next day, after shutdown, after reopening your machine, or after restarting the host session.
-- `super-dev continue` / `super-dev next` tell you the current action, user-side next step, host-side first sentence, and machine-side next command.
+```text
+/super-dev your requirement
+super-dev: your requirement
+/super-dev-seeai your competition brief
+super-dev-seeai: your competition brief
+```
 
-Real-world recovery guide:
+Correct mental model:
 
-| Scenario | Do this first | Why |
-|----------|---------------|-----|
-| You stopped for the day and came back tomorrow | `super-dev resume` | Restores the current governed flow, host first sentence, and machine-side next step |
-| The host closed, the machine restarted, or the session dropped | `super-dev resume` | Regenerates the recovery card and points you back to `.super-dev/SESSION_BRIEF.md` |
-| You only want the single next recommended step | `super-dev next` | Shows the single recommended next action for the current repo state |
-| A machine-side pipeline command was interrupted | `super-dev run --resume` | Continues the machine-side pipeline from the interrupted checkpoint |
-| You are still inside a confirmation gate and want to keep revising docs/UI/architecture | `super-dev resume`, then keep speaking naturally | Keeps the conversation inside the current governed gate instead of falling back to normal chat |
-| You want to redo UI | Update `output/*-uiux.md`, then run `super-dev resume` | The UI source of truth must change first so implementation stays aligned |
-| You want to redo architecture | Update `output/*-architecture.md`, then run `super-dev resume` | The technical source of truth must change first so tasks and implementation realign |
-| You really want to leave the current flow | Explicitly say “cancel this flow” or “start a new flow” | Super Dev only exits the governed flow when you explicitly say so |
+- The terminal is only for onboarding and upgrading.
+- The host is where research, the three core docs, approval gates, spec, implementation, quality gates, and delivery happen.
+- Auto-judgement is allowed during onboarding and upgrade, not during normal development flow.
+- `Integrated` and `runtime verified` are different states. Files existing does not prove the host actually follows the governed flow.
 
-When you already know where to continue, use the stage commands:
+Recommended first run:
+
+1. Run `super-dev` in the terminal.
+2. Let the installer detect hosts and write the required project-level and global protocol surfaces.
+3. Open the host and use `/super-dev` or `super-dev:`.
+4. Let the host finish research, PRD, Architecture, and UI/UX first.
+5. Only move to Spec and implementation after the docs are confirmed.
+
+SEEAI competition fast mode:
+
+- Entry: `/super-dev-seeai` or `super-dev-seeai:`
+- It still keeps `research -> docs -> docs confirm -> spec`
+- After Spec it goes straight into an integrated full-stack sprint, without a separate preview confirmation gate
+- Best for 30-minute showcase builds such as a polished landing page, mini-game, or focused demo tool
+
+Advanced/internal commands still exist, but they are no longer the public path:
 
 ```bash
-# Existing codebase (1 to N+1): analyze the current repo then join the pipeline
 super-dev init
-
-# Jump to any stage / resume from interruption / check status
-super-dev run frontend       # jump by name
-super-dev run 6              # jump by number (1-9)
-super-dev run --resume       # resume from last checkpoint
-super-dev run --status       # view current pipeline state
-```
-
-Stage reference table:
-
-| Number | Stage | Description |
-|--------|-------|-------------|
-| 1 | research | Competitor and market research |
-| 2 | prd | Product requirements document |
-| 3 | architecture | Architecture design |
-| 4 | uiux | UI/UX design |
-| 5 | spec | Task specification |
-| 6 | frontend | Frontend implementation |
-| 7 | backend | Backend implementation |
-| 8 | quality | Quality gates |
-| 9 | delivery | Delivery packaging |
-
-Auxiliary commands:
-
-```bash
-super-dev onboard             # interactive host onboarding
-super-dev onboard --dry-run   # preview changes without writing files
-super-dev onboard --stable-only  # onboard certified hosts only
-super-dev detect              # auto-detect hosts and recommend the default host
-super-dev doctor              # diagnostics with certification grading, primary repair action, and next step
+super-dev onboard
+super-dev detect
+super-dev doctor
+super-dev run --status
+super-dev run frontend
+super-dev review docs
 ```
 
 Delivery and governance commands:
@@ -325,7 +297,7 @@ Key review commands:
 - **Stage jumping**: `super-dev run <stage>` allows jumping to any stage at any time.
 - **UI revision loop**: when the frontend needs another pass, a formal revision loop can be triggered.
 - **Dual-mode delivery**: works for both greenfield (0-1) and iterative (1-N+1) projects.
-- **Continuation routing**: `super-dev resume`, `super-dev continue`, `super-dev next`, `start --json`, and `doctor --json` all share the same workflow state and action card semantics.
+- **Continuation routing**: internal recovery and status commands share the same workflow state and action card semantics.
 - **Session recovery card**: `.super-dev/SESSION_BRIEF.md` and `.super-dev/workflow-state.json` persist the current action, host first sentence, machine action, and continuity rules.
 - **Recent operational timeline**: workflow snapshots, semantic workflow events, and hook events are merged into one timeline that now surfaces in `SESSION_BRIEF`, Workflow Harness, proof-pack, and release readiness.
 - **Rework-first state handling**: docs confirmation, preview confirmation, UI redesign, architecture rework, and quality remediation all stay inside one governed state machine.
@@ -414,7 +386,7 @@ Configurable via `super-dev.yaml` policy section.
 
 ## How It Works
 
-1. User runs `super-dev` or `super-dev init` in the project directory.
+1. User runs `super-dev` in the project directory.
 2. The onboarding wizard connects Super Dev to the target host.
 3. User triggers Super Dev using the host's supported entry, such as `/super-dev requirement`, `super-dev: requirement`, Codex App/Desktop selecting `super-dev` from the `/` list, or Codex CLI typing `$super-dev`.
 4. The host enters the Super Dev pipeline; 11 expert agents are injected by stage.
@@ -470,13 +442,13 @@ This generates `.super-dev/WORKFLOW.md` and `output/*-bootstrap.md` to lock down
 ### 3. Pin a specific version
 
 ```bash
-pip install super-dev==2.3.3
+pip install super-dev==2.3.5
 ```
 
 ### 4. Install from GitHub tag
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.3.3
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.3.5
 ```
 
 ### 5. Source install for development
@@ -545,52 +517,42 @@ Super Dev officially documents 20 unified onboarding hosts plus 1 manual plugin 
 
 ### Unified CLI Hosts (9)
 
-| Host | Trigger | Onboard Command |
+| Host | Trigger | Terminal Entry |
 |------|---------|-----------------|
-| Claude Code | `/super-dev your requirement` | `super-dev onboard --host claude-code` |
-| Codex | App/Desktop: `/super-dev` (skill entry) / CLI: `$super-dev` / fallback: `super-dev: your requirement` | `super-dev onboard --host codex-cli` |
-| Gemini CLI | `/super-dev your requirement` | `super-dev onboard --host gemini-cli` |
-| OpenCode | `/super-dev your requirement` | `super-dev onboard --host opencode` |
-| Kiro CLI | `/super-dev your requirement` | `super-dev onboard --host kiro-cli` |
-| Cursor CLI | `/super-dev your requirement` | `super-dev onboard --host cursor-cli` |
-| Qoder CLI | `/super-dev your requirement` | `super-dev onboard --host qoder-cli` |
-| Copilot CLI | `super-dev: your requirement` | `super-dev onboard --host copilot-cli` |
-| CodeBuddy CLI | `/super-dev your requirement` | `super-dev onboard --host codebuddy-cli` |
+| Claude Code | `/super-dev your requirement` | `super-dev` |
+| Codex | App/Desktop: `/super-dev` (skill entry) / CLI: `$super-dev` / fallback: `super-dev: your requirement` | `super-dev` |
+| Gemini CLI | `/super-dev your requirement` | `super-dev` |
+| OpenCode | `/super-dev your requirement` | `super-dev` |
+| Kiro CLI | `/super-dev your requirement` | `super-dev` |
+| Cursor CLI | `/super-dev your requirement` | `super-dev` |
+| Qoder CLI | `/super-dev your requirement` | `super-dev` |
+| Copilot CLI | `super-dev: your requirement` | `super-dev` |
+| CodeBuddy CLI | `/super-dev your requirement` | `super-dev` |
 
 ### IDE Hosts (11)
 
-| Host | Trigger | Onboard Command |
+| Host | Trigger | Terminal Entry |
 |------|---------|-----------------|
-| Antigravity | `/super-dev your requirement` | `super-dev onboard --host antigravity` |
-| Cursor IDE | `/super-dev your requirement` | `super-dev onboard --host cursor` |
-| Windsurf | `/super-dev your requirement` | `super-dev onboard --host windsurf` |
-| Kiro IDE | `/super-dev your requirement` | `super-dev onboard --host kiro` |
-| Qoder IDE | `/super-dev your requirement` | `super-dev onboard --host qoder` |
-| Trae | `super-dev: your requirement` | `super-dev onboard --host trae` |
-| CodeBuddy IDE | `/super-dev your requirement` | `super-dev onboard --host codebuddy` |
-| Copilot (VS Code) | `super-dev: your requirement` | `super-dev onboard --host vscode-copilot` |
-| Roo Code | `super-dev: your requirement` | `super-dev onboard --host roo-code` |
-| Kilo Code | `super-dev: your requirement` | `super-dev onboard --host kilo-code` |
-| Cline | `super-dev: your requirement` | `super-dev onboard --host cline` |
+| Antigravity | `/super-dev your requirement` | `super-dev` |
+| Cursor IDE | `/super-dev your requirement` | `super-dev` |
+| Windsurf | `/super-dev your requirement` | `super-dev` |
+| Kiro IDE | `/super-dev your requirement` | `super-dev` |
+| Qoder IDE | `/super-dev your requirement` | `super-dev` |
+| Trae | `super-dev: your requirement` | `super-dev` |
+| CodeBuddy IDE | `/super-dev your requirement` | `super-dev` |
+| Copilot (VS Code) | `super-dev: your requirement` | `super-dev` |
+| Roo Code | `super-dev: your requirement` | `super-dev` |
+| Kilo Code | `super-dev: your requirement` | `super-dev` |
+| Cline | `super-dev: your requirement` | `super-dev` |
 
-### Onboarding Commands
+### Public Terminal Entry
 
 ```bash
-# Interactive selection
 super-dev
-
-# Specific host
-super-dev onboard --host claude-code --force --yes
-
-# Dry run (preview without writing files)
-super-dev onboard --host cursor --dry-run
-
-# Stable hosts only
-super-dev onboard --stable-only
-
-# Diagnostics
-super-dev doctor --host claude-code
+super-dev update
 ```
+
+Run `super-dev` to open the installer and choose the target host there. `onboard --host`, `doctor`, and other CLI commands remain available for maintenance, but they are no longer the normal end-user path.
 
 ### Per-Host Usage Details
 
@@ -599,7 +561,7 @@ super-dev doctor --host claude-code
 **Claude Code**
 
 ```bash
-super-dev onboard --host claude-code --force --yes
+super-dev
 ```
 
 Trigger location: launch Claude Code in the project directory, then trigger within the same session.
@@ -615,7 +577,7 @@ Notes:
 **Codex**
 
 ```bash
-super-dev onboard --host codex-cli --force --yes
+super-dev
 ```
 
 Trigger location: after onboarding, restart `codex`, then trigger in the new session.
@@ -637,7 +599,7 @@ Notes:
 **Gemini CLI**
 
 ```bash
-super-dev onboard --host gemini-cli --force --yes
+super-dev
 ```
 
 Trigger location: launch Gemini CLI in the project directory.
@@ -651,7 +613,7 @@ Notes:
 **Cursor CLI**
 
 ```bash
-super-dev onboard --host cursor-cli --force --yes
+super-dev
 ```
 
 Trigger location: launch Cursor CLI in the project directory.
@@ -665,7 +627,7 @@ Notes:
 **Kiro CLI**
 
 ```bash
-super-dev onboard --host kiro-cli --force --yes
+super-dev
 ```
 
 Trigger location: launch Kiro CLI in the project directory.
@@ -680,7 +642,7 @@ Notes:
 **OpenCode**
 
 ```bash
-super-dev onboard --host opencode --force --yes
+super-dev
 ```
 
 Trigger location: launch OpenCode in the project directory.
@@ -694,7 +656,7 @@ Notes:
 **Qoder CLI**
 
 ```bash
-super-dev onboard --host qoder-cli --force --yes
+super-dev
 ```
 
 Trigger location: launch Qoder CLI in the project directory.
@@ -709,24 +671,26 @@ Notes:
 **CodeBuddy CLI**
 
 ```bash
-super-dev onboard --host codebuddy-cli --force --yes
+super-dev
 ```
 
 Trigger location: launch CodeBuddy CLI in the project directory.
 Trigger command: `/super-dev your requirement`
+Competition mode: `/super-dev-seeai your competition brief`
 Restart required after onboarding: No.
 
 Notes:
 1. Type the command directly in the current CLI session.
 2. The primary official surfaces are `CODEBUDDY.md` + `.codebuddy/commands/` + `.codebuddy/skills/`, plus `~/.codebuddy/CODEBUDDY.md`.
 3. If the session was opened before onboarding, reload project rules before triggering.
+4. For hackathon-style work, prefer `/super-dev-seeai` so the host stays on the 30-minute fast path.
 
 #### IDE Hosts
 
 **Antigravity**
 
 ```bash
-super-dev onboard --host antigravity --force --yes
+super-dev
 ```
 
 Trigger location: open the Agent Chat / Prompt panel in Antigravity with the project workspace active.
@@ -742,7 +706,7 @@ Notes:
 **Cursor IDE**
 
 ```bash
-super-dev onboard --host cursor --force --yes
+super-dev
 ```
 
 Trigger location: open Agent Chat in Cursor with the target project as the active workspace.
@@ -756,7 +720,7 @@ Notes:
 **Windsurf**
 
 ```bash
-super-dev onboard --host windsurf --force --yes
+super-dev
 ```
 
 Trigger location: open Agent Chat or the Workflow entry in Windsurf within the project context.
@@ -770,7 +734,7 @@ Notes:
 **Kiro IDE**
 
 ```bash
-super-dev onboard --host kiro --force --yes
+super-dev
 ```
 
 Trigger location: open the Agent Chat / AI panel in Kiro IDE within the project context.
@@ -785,7 +749,7 @@ Notes:
 **Qoder IDE**
 
 ```bash
-super-dev onboard --host qoder --force --yes
+super-dev
 ```
 
 Trigger location: open Agent Chat in Qoder IDE within the current project.
@@ -800,7 +764,7 @@ Notes:
 **Trae**
 
 ```bash
-super-dev onboard --host trae --force --yes
+super-dev
 ```
 
 Trigger location: open Agent Chat in Trae IDE within the current project context.
@@ -816,27 +780,26 @@ Notes:
 **CodeBuddy IDE**
 
 ```bash
-super-dev onboard --host codebuddy --force --yes
+super-dev
 ```
 
 Trigger location: open Agent Chat in CodeBuddy IDE within the project context.
 Trigger command: `/super-dev your requirement`
+Competition mode: `/super-dev-seeai your competition brief`
 Restart required after onboarding: No.
 
 Notes:
 1. Use within a project-level Agent Chat; do not leave the project context.
 2. Let the host complete research before proceeding to documents and coding.
 3. Uses `CODEBUDDY.md` + `.codebuddy/rules/super-dev/RULE.mdc` + `.codebuddy/commands/` + `.codebuddy/agents/` + `.codebuddy/skills/` integration surfaces.
+4. For competition sprints, keep the same Agent Chat alive and avoid unnecessary sub-session switching.
 
 **Copilot (VS Code) / Roo Code / Kilo Code / Cline**
 
-These IDE hosts all use the same pattern: onboard with the respective `--host` flag, then trigger with `super-dev: your requirement` inside the IDE chat panel. No restart is required after onboarding.
+These IDE hosts all use the same pattern: run `super-dev` in the terminal, choose the target host in the installer, then trigger with `super-dev: your requirement` inside the IDE chat panel. No restart is required after onboarding.
 
 ```bash
-super-dev onboard --host vscode-copilot --force --yes
-super-dev onboard --host roo-code --force --yes
-super-dev onboard --host kilo-code --force --yes
-super-dev onboard --host cline --force --yes
+super-dev
 ```
 
 #### OpenClaw (Native Plugin)
@@ -866,6 +829,15 @@ or
 /super-dev your requirement
 ```
 
+Competition mode:
+```text
+super-dev-seeai: your competition brief
+```
+or
+```text
+/super-dev-seeai your competition brief
+```
+
 **13 registered tools:**
 
 | Tool | Purpose |
@@ -888,11 +860,14 @@ or
 1. The plugin bridges to `super-dev` CLI via subprocess, so `pip install super-dev` is required.
 2. Restart the OpenClaw Gateway or start a new session after installing for the plugin and skill to take effect.
 3. The plugin ships a built-in SKILL.md so the agent understands the pipeline protocol automatically.
-4. Run `super-dev doctor --host openclaw` to verify integration status.
+4. For hackathon-style work, prefer `super-dev-seeai:` or `/super-dev-seeai` to stay on the 30-minute competition contract.
+5. Run `super-dev doctor --host openclaw` to verify integration status.
 
 ---
 
-## Common Commands
+## Internal / Maintenance Commands
+
+These commands still exist for support, governance, and advanced maintenance. They are not part of the normal end-user path, which stays at `super-dev`, `super-dev update`, `/super-dev`, and `super-dev:`.
 
 ```bash
 # Pipeline stages

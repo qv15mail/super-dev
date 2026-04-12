@@ -228,7 +228,7 @@ def test_run_status_recommendation_treats_missing_scope_status_as_unknown() -> N
         quality_state={"status": "confirmed"},
     )
 
-    assert recommendation == "super-dev feature-checklist"
+    assert recommendation == "在宿主里继续当前流程，并优先补齐缺失范围与高优先级功能项"
 
 
 def test_run_status_uses_running_for_existing_confirmation_only_state(

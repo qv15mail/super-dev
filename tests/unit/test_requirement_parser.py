@@ -25,7 +25,8 @@ class TestRequirementParser:
         requirements = parser.parse_requirements("构建一个特别的新产品")
 
         spec_names = {item["spec_name"] for item in requirements}
-        assert "experience" in spec_names
+        # When no keyword matches, core + inferred features + operation are generated
+        assert "core" in spec_names
         assert "operation" in spec_names
 
     def test_detect_scenario(self, temp_project_dir: Path):

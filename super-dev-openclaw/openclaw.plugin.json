@@ -1,9 +1,9 @@
 {
   "id": "super-dev",
   "name": "Super Dev Pipeline",
-  "description": "AI development orchestration - research-first, commercial-grade delivery pipeline with 10 expert roles",
-  "version": "2.3.3",
-  "skills": ["./skills"],
+  "description": "AI development orchestration - research-first, commercial-grade delivery pipeline with SEEAI competition mode",
+  "version": "2.3.5",
+  "skills": ["./skills/super-dev", "./skills/super-dev-seeai"],
   "configSchema": {
     "type": "object",
     "additionalProperties": false,

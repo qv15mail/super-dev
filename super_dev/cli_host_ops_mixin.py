@@ -31,15 +31,28 @@ from . import __version__
 from .catalogs import (
     HOST_COMMAND_CANDIDATES,
     PRIMARY_HOST_TOOL_IDS,
-    SPECIAL_INSTALL_HOST_TOOL_IDS,
     host_detection_path_candidates,
     host_display_name,
     host_path_override_guide,
     host_runtime_validation_overrides,
 )
+from .cli_host_report_renderers import (
+    render_host_compatibility_markdown,
+    render_host_hardening_markdown,
+    render_host_parity_onepage_markdown,
+    render_host_runtime_validation_markdown,
+    render_host_surface_audit_markdown,
+    write_host_compatibility_report,
+    write_host_hardening_report,
+    write_host_runtime_validation_report,
+    write_host_surface_audit_report,
+)
 from .config import ConfigManager, ProjectConfig, get_config_manager
 from .harness_registry import derive_operational_focus, summarize_operational_harnesses
 from .hooks.manager import HookManager
+from .host_adapters import render_manual_install_guidance
+from .host_registry import HostInstallMode, get_display_name, get_install_mode
+from .integrations.install_manifest import record_install_manifest
 from .review_state import (
     describe_workflow_event,
     host_runtime_validation_file,
@@ -50,11 +63,20 @@ from .review_state import (
     save_host_runtime_validation,
     workflow_event_log_file,
 )
+from .runtime_evidence import (
+    HostRuntimeEvidence,
+    IntegrationStatus,
+    IntegrationStatusRecord,
+    RuntimeStatus,
+    RuntimeStatusRecord,
+    serialize_host_runtime_evidence,
+)
 from .terminal import normalize_terminal_text, output_mode_label, output_mode_reason
 from .workflow_state import (
     build_host_entry_prompts,
     build_host_flow_contract,
     build_host_flow_probe,
+    detect_flow_variant,
     load_framework_playbook_summary,
 )
 
@@ -67,7 +89,7 @@ class CliHostOpsMixin:
         return str(profile.trigger_command).replace("<需求描述>", "你的需求")
 
     def _is_manual_install_host(self, target: str | None) -> bool:
-        return bool(target) and target in SPECIAL_INSTALL_HOST_TOOL_IDS
+        return bool(target) and get_install_mode(target) == HostInstallMode.MANUAL
 
     def _print_manual_install_host_guidance(self, *, target: str, command_name: str) -> int:
         from .integrations import IntegrationManager
@@ -75,35 +97,29 @@ class CliHostOpsMixin:
         integration_manager = IntegrationManager(Path.cwd())
         docs = list(getattr(integration_manager, "OFFICIAL_DOCS_INDEX", {}).get(target, ()))
         host_name = self._host_label(target)
+        guidance = render_manual_install_guidance(
+            host_id=target,
+            command_name=command_name,
+            docs=docs,
+        )
+        if guidance is None:
+            return 0
         if not RICH_AVAILABLE:
             self.console.print(f"{host_name} 不走 super-dev {command_name} 统一安装流。")
-            self.console.print(
-                "请直接在宿主侧手动安装官方插件：openclaw plugins install @super-dev/openclaw-plugin"
-            )
+            plain = str(guidance.get("plain_fallback", "")).strip()
+            if plain:
+                self.console.print(plain)
             return 0
-
-        lines = [
-            f"{host_name} 不走 `super-dev {command_name}` 统一接入流。",
-            "请直接在宿主侧安装原生 npm 插件：",
-            "",
-            "`openclaw plugins install @super-dev/openclaw-plugin`",
-            "",
-            "安装完成后再回到 OpenClaw Agent 会话里使用 `super-dev:` 或 `/super-dev` 触发。",
-        ]
-        if command_name != "doctor":
-            lines.append("如需检查插件落地状态，可再执行 `super-dev doctor --host openclaw`。")
-        if docs:
-            lines.append("")
-            lines.append("官方文档:")
-            for url in docs[:2]:
-                lines.append(f"- {url}")
+        panel_kwargs: dict[str, Any] = {
+            "title": str(guidance.get("title", f"{host_name} 手动安装")),
+            "border_style": str(guidance.get("border_style", "yellow")),
+        }
+        if target == "openclaw":
+            panel_kwargs.update({"padding": (1, 2), "expand": True})
         self.console.print(
             Panel(
-                "\n".join(lines),
-                title=f"{host_name} 手动安装",
-                padding=(1, 2),
-                border_style="cyan",
-                expand=True,
+                "\n".join(guidance.get("lines", [])),
+                **panel_kwargs,
             )
         )
         return 0
@@ -202,6 +218,67 @@ class CliHostOpsMixin:
         for action in runtime_health.get("remediation", []):
             self.console.print(f"{indent}[dim]修复: {action}[/dim]")
 
+    def _auto_fix_runtime_install(self, runtime_health: dict[str, Any]) -> None:
+        """自动清理旧版本残留并重新安装。"""
+        import shutil
+
+        fixed: list[str] = []
+        failed: list[str] = []
+        current_version = runtime_health.get("current_version", __version__)
+
+        # 1. 删除旧的 super_dev 实体目录
+        for stale_dir in runtime_health.get("stale_package_dirs", []):
+            try:
+                shutil.rmtree(stale_dir)
+                fixed.append(f"已删除残留目录: {stale_dir}")
+            except Exception as exc:
+                failed.append(f"无法删除 {stale_dir}: {exc}")
+
+        # 2. 清理多余的 editable pth 文件（只保留当前版本）
+        editable_versions = runtime_health.get("editable_versions", [])
+        if len(editable_versions) > 1:
+            site_packages_entries = [
+                Path(entry).resolve()
+                for entry in sys.path
+                if isinstance(entry, str) and "site-packages" in entry
+            ]
+            for site_packages in site_packages_entries:
+                for pth_file in site_packages.glob("__editable__.super_dev-*.pth"):
+                    if current_version not in pth_file.name:
+                        try:
+                            pth_file.unlink()
+                            fixed.append(f"已删除旧 pth: {pth_file.name}")
+                        except Exception as exc:
+                            failed.append(f"无法删除 {pth_file.name}: {exc}")
+
+        # 3. 清理多余的 dist-info（只保留当前版本）
+        dist_info_versions = runtime_health.get("dist_info_versions", [])
+        if len(dist_info_versions) > 1:
+            site_packages_entries = [
+                Path(entry).resolve()
+                for entry in sys.path
+                if isinstance(entry, str) and "site-packages" in entry
+            ]
+            for site_packages in site_packages_entries:
+                for dist_info in site_packages.glob("super_dev-*.dist-info"):
+                    if current_version not in dist_info.name:
+                        try:
+                            shutil.rmtree(dist_info)
+                            fixed.append(f"已删除旧 dist-info: {dist_info.name}")
+                        except Exception as exc:
+                            failed.append(f"无法删除 {dist_info.name}: {exc}")
+
+        if fixed:
+            for msg in fixed:
+                self.console.print(f"  [green]✓[/green] {msg}")
+        if failed:
+            for msg in failed:
+                self.console.print(f"  [red]✗[/red] {msg}")
+        if not fixed and not failed:
+            self.console.print("  [dim]未发现需要清理的文件。[/dim]")
+        elif fixed and not failed:
+            self.console.print("  [green]修复完成。[/green]")
+
     def _host_label(self, target: str) -> str:
         return host_display_name(target)
 
@@ -271,9 +348,7 @@ class CliHostOpsMixin:
         overrides = host_runtime_validation_overrides(target)
         return [*overrides.get("pass_criteria", []), *common]
 
-    def _host_resume_checklist(
-        self, *, target: str, project_dir: Path | None = None
-    ) -> list[str]:
+    def _host_resume_checklist(self, *, target: str, project_dir: Path | None = None) -> list[str]:
         common = [
             "重开宿主或新开会话后，使用恢复探针而不是普通闲聊进入当前流程。",
             "确认宿主先读取 `.super-dev/SESSION_BRIEF.md`，并继续当前流程而不是重新开始。",
@@ -408,30 +483,32 @@ class CliHostOpsMixin:
                 term_height = self.console.size.height
             except Exception:
                 term_height = 24
-            # header(~10行) + footer(2行) + 表头(3行) + 状态(1行) = ~16行开销
-            max_visible = max(5, term_height - 16)
+            try:
+                term_width = self.console.size.width
+            except Exception:
+                term_width = 80
+            max_visible = max(5, term_height - 10)
+            compact = term_width < 100
 
             subtitle = (
-                "Space 勾选，Enter 安装，U 卸载选中，↑/↓ 移动，A 全选，C 仅 CLI，I 仅 IDE，R 清空，Esc 取消\n"
-                " >  当前光标   [✓] 已选中  [○] 未选中\n"
-                "slash 宿主用 /super-dev；非 slash 宿主用 super-dev: / super-dev："
+                "Space 勾选  Enter 安装  U 卸载  ↑↓ 移动  A 全选  R 清空  Esc 取消"
             )
             header = Panel(
-                f"{self._super_dev_ascii_banner()}\n\n{normalize_terminal_text(subtitle)}",
+                normalize_terminal_text(subtitle),
                 title="Super Dev",
                 expand=True,
+                padding=(0, 1),
             )
 
             table = Table(
-                title="选择宿主工具", show_header=True, header_style="bold cyan", expand=True
+                show_header=True, header_style="bold cyan", expand=True, padding=(0, 1)
             )
-            table.add_column("", min_width=3, max_width=4, justify="center")
-            table.add_column("#", min_width=3, max_width=4, style="cyan", justify="center")
-            table.add_column("宿主", style="bold", ratio=2)
-            table.add_column("认证", min_width=6, ratio=1)
-            table.add_column("触发", min_width=8, ratio=1)
-            table.add_column("协议", ratio=2, overflow="fold")
-            table.add_column("检测", min_width=4, max_width=8, justify="center")
+            table.add_column("", max_width=3, justify="center")
+            table.add_column("#", max_width=3, style="cyan", justify="center")
+            table.add_column("宿主", style="bold", ratio=3)
+            table.add_column("认证", ratio=2)
+            if not compact:
+                table.add_column("触发", ratio=2)
 
             # 滚动窗口：只显示光标附��的 max_visible 行
             total = len(available_targets)
@@ -448,38 +525,37 @@ class CliHostOpsMixin:
             for idx in range(start, end):
                 target = available_targets[idx]
                 profile = integration_manager.get_adapter_profile(target)
+                is_manual = self._is_manual_install_host(target)
                 selected_mark = "[✓]" if target in selected else "[○]"
                 pointer = " > " if idx == cursor else "   "
-                trigger = (
-                    "/super-dev" if integration_manager.supports_slash(target) else "super-dev:"
-                )
-                detected = "已检测" if target in detected_targets else ""
                 host_label = Text()
                 host_label.append(
                     f"{selected_mark} ", style="green" if target in selected else "dim"
                 )
-                host_label.append(target, style="bold white" if idx == cursor else "bold")
-                table.add_row(
-                    pointer,
-                    str(idx + 1),
-                    host_label,
-                    profile.certification_label,
-                    trigger,
-                    profile.host_protocol_summary or profile.host_protocol_mode,
-                    detected,
-                )
+                display_name = self._host_label(target)
+                if is_manual:
+                    display_name += " (手动)"
+                host_label.append(display_name, style="bold white" if idx == cursor else "bold")
+                row: list[object] = [pointer, str(idx + 1), host_label, profile.certification_label]
+                if not compact:
+                    trigger = (
+                        "/super-dev" if integration_manager.supports_slash(target) else "super-dev:"
+                    )
+                    row.append(trigger)
+                table.add_row(*row)
 
             # 滚动指示器
             scroll_info = ""
             if total > max_visible:
                 if start > 0:
-                    scroll_info += f"  ↑ 还有 {start} 项"
+                    scroll_info += f"  ↑ {start}"
                 if end < total:
-                    scroll_info += f"  ↓ 还有 {total - end} 项"
+                    scroll_info += f"  ↓ {total - end}"
 
-            selected_text = ", ".join(sorted(selected)) if selected else "未选择"
+            selected_names = [self._host_label(t) for t in available_targets if t in selected]
+            selected_text = ", ".join(selected_names) if selected_names else "未选择"
             footer = Text()
-            footer.append(f"当前选择 ({len(selected)}/{total}): ", style="cyan")
+            footer.append(f"已选 ({len(selected)}/{total}): ", style="cyan")
             footer.append(selected_text, style="bold white")
             if scroll_info:
                 footer.append(scroll_info, style="dim")
@@ -625,38 +701,44 @@ class CliHostOpsMixin:
 
         integration_manager = IntegrationManager(Path.cwd())
         detected_targets, _ = self._detect_host_targets(available_targets=available_targets)
-        intro = (
-            "安装后直接在宿主里触发。\n"
-            "大多数 slash 宿主使用 `/super-dev 你的需求`。\n"
-            "Codex App/Desktop 从 `/` 列表选择 `super-dev`，Codex CLI 输入 `$super-dev`。\n"
-            "非 slash 宿主使用 `super-dev: 你的需求` 或 `super-dev：你的需求`。\n"
-            f"当前版本内置 {len(available_targets)} 个宿主适配配置。"
-        )
-        self.console.print(Panel(intro, title="Super Dev 安装向导", padding=(1, 2), expand=True))
+        width = self.console.width
+        narrow = width < 60
+        compact = width < 100
 
-        table = Table(title="宿主选择", show_header=True, header_style="bold cyan", expand=True)
-        table.add_column("#", style="cyan", min_width=3, max_width=4, justify="center")
-        table.add_column("宿主", style="bold", ratio=2)
-        table.add_column("认证", min_width=8, ratio=1)
-        table.add_column("触发", min_width=8, ratio=1)
-        table.add_column("宿主协议", ratio=2, overflow="fold")
-        table.add_column("检测", min_width=6, max_width=8, justify="center")
+        intro = (
+            f"当前版本内置 {len(available_targets)} 个宿主适配。\n"
+            "slash 宿主: /super-dev  |  text 宿主: super-dev:  |  Codex: $super-dev"
+        )
+        self.console.print(Panel(intro, title="Super Dev 安装向导", padding=(0, 1), expand=True))
+
+        table = Table(show_header=True, header_style="bold cyan", expand=True, padding=(0, 1))
+        table.add_column("#", style="cyan", max_width=3, justify="center")
+        table.add_column("宿主", style="bold", ratio=3)
+        table.add_column("认证", ratio=2)
+        if not narrow:
+            table.add_column("触发", ratio=2)
+        if not compact:
+            table.add_column("检测", max_width=6, justify="center")
 
         for idx, target in enumerate(available_targets, 1):
             profile = integration_manager.get_adapter_profile(target)
+            is_manual = self._is_manual_install_host(target)
             if target == "codex-cli":
-                trigger = "App: /super-dev | CLI: $super-dev"
+                trigger = "$super-dev"
             else:
-                trigger = "/super-dev" if integration_manager.supports_slash(target) else "super-dev:"
-            detected = "已检测" if target in detected_targets else ""
-            table.add_row(
-                str(idx),
-                self._host_label(target),
-                profile.certification_label,
-                trigger,
-                profile.host_protocol_summary or profile.host_protocol_mode,
-                detected,
-            )
+                trigger = (
+                    "/super-dev" if integration_manager.supports_slash(target) else "super-dev:"
+                )
+            label = self._host_label(target)
+            if is_manual:
+                label = f"{label} [yellow](手动)[/yellow]"
+            row: list[str] = [str(idx), label, profile.certification_label]
+            if not narrow:
+                row.append(trigger)
+            if not compact:
+                detected = "✓" if target in detected_targets else ""
+                row.append(detected)
+            table.add_row(*row)
         self.console.print(table)
         self.console.print("[dim]输入编号（逗号分隔），直接回车表示全部[/dim]")
 
@@ -668,7 +750,7 @@ class CliHostOpsMixin:
             self.console.print("[cyan]Super Dev 安装入口[/cyan]")
             self.console.print("宿主负责编码与模型调用；Super Dev 负责流程、门禁、审计与交付标准。")
             self.console.print(
-                "slash 宿主输入 /super-dev；Codex App/Desktop 用 /super-dev，Codex CLI 用 $super-dev；非 slash 宿主输入 super-dev: 或 super-dev："
+                "接入完成后，slash 宿主优先输入 /super-dev；非 slash 宿主输入 super-dev: 或 super-dev："
             )
             if not runtime_health.get("healthy", False):
                 self.console.print(
@@ -679,14 +761,10 @@ class CliHostOpsMixin:
         integration_manager = IntegrationManager(Path.cwd())
         available_targets = self._public_host_targets(integration_manager=integration_manager)
         lines = [
-            "宿主负责编码、工具调用和模型能力。",
-            "Super Dev 负责 research → 三文档 → 确认门 → Spec → 前端优先 → 质量门禁 → 交付。",
-            "大多数 slash 宿主输入 `/super-dev 你的需求`；Codex App/Desktop 从 `/` 列表选择 `super-dev`，Codex CLI 输入 `$super-dev`；非 slash 宿主输入 `super-dev: 你的需求` 或 `super-dev：你的需求`。",
+            "[bold]标准模式[/bold]  /super-dev 你的需求  |  super-dev: 你的需求",
+            "[bold]赛事模式[/bold]  /super-dev-seeai 你的需求  |  super-dev-seeai: 你的需求",
             "",
             self._build_install_summary(available_targets=available_targets),
-            "",
-            "OpenClaw 不在这 20 个统一安装宿主内，请用户自行执行 `openclaw plugins install @super-dev/openclaw-plugin`。",
-            "如果宿主装在自定义目录，可设置 `SUPER_DEV_HOST_PATH_<HOST>=<安装路径>` 后再执行自动检测。",
         ]
         if getattr(args, "auto", False):
             lines.append("当前模式: 自动检测宿主。")
@@ -695,13 +773,13 @@ class CliHostOpsMixin:
         elif getattr(args, "all", False):
             lines.append("当前模式: 接入全部宿主。")
         self.console.print(
-            Panel("\n".join(lines), title="Super Dev 安装入口", padding=(1, 2), expand=True)
+            Panel("\n".join(lines), title="Super Dev", padding=(1, 1), expand=True)
         )
         if not runtime_health.get("healthy", False):
             self.console.print(
-                "[yellow]检测到当前 super-dev 安装存在旧版本残留，建议先修复运行时安装环境。[/yellow]"
+                "[yellow]检测到旧版本残留，正在自动清理...[/yellow]"
             )
-            self._print_runtime_install_health(runtime_health, indent="  ")
+            self._auto_fix_runtime_install(runtime_health)
             self.console.print("")
 
     def _detect_host_targets(
@@ -1013,13 +1091,19 @@ class CliHostOpsMixin:
                 host_report["checks"]["skill"] = {
                     "ok": skill_ok,
                     "file": str(primary_skill_file),
-                    "files": [str(item) for item in skill_files] if skill_files else [str(primary_skill_file)],
+                    "files": (
+                        [str(item) for item in skill_files]
+                        if skill_files
+                        else [str(primary_skill_file)]
+                    ),
                     "optional_files": [str(item) for item in optional_skill_files],
                     "compatibility_files": [str(item) for item in compatibility_skill_files],
                     "surface_available": surface_available,
-                    "mode": "official-project-and-user-skill-surface"
-                    if surface_available
-                    else "compatibility-surface-unavailable",
+                    "mode": (
+                        "official-project-and-user-skill-surface"
+                        if surface_available
+                        else "compatibility-surface-unavailable"
+                    ),
                 }
                 if surface_available and not skill_ok:
                     host_report["ready"] = False
@@ -1063,19 +1147,33 @@ class CliHostOpsMixin:
                 required_slash_files = surface_groups["required_slash"]
                 optional_slash_files = surface_groups["optional_slash"]
                 compatibility_slash_files = surface_groups["compatibility_slash"]
-                tracked_slash_files = required_slash_files or optional_slash_files or compatibility_slash_files
+                tracked_slash_files = (
+                    required_slash_files or optional_slash_files or compatibility_slash_files
+                )
                 if tracked_slash_files:
                     project_slash = next(
-                        (path for path in tracked_slash_files if str(path).startswith(str(project_dir))),
+                        (
+                            path
+                            for path in tracked_slash_files
+                            if str(path).startswith(str(project_dir))
+                        ),
                         None,
                     )
                     global_slash = next(
-                        (path for path in tracked_slash_files if not str(path).startswith(str(project_dir))),
+                        (
+                            path
+                            for path in tracked_slash_files
+                            if not str(path).startswith(str(project_dir))
+                        ),
                         None,
                     )
                     project_ok = bool(project_slash and project_slash.exists())
                     global_ok = bool(global_slash and global_slash.exists())
-                    slash_ok = all(path.exists() for path in required_slash_files) if required_slash_files else True
+                    slash_ok = (
+                        all(path.exists() for path in required_slash_files)
+                        if required_slash_files
+                        else True
+                    )
                     if required_slash_files:
                         scope = "project" if project_ok else ("global" if global_ok else "missing")
                     elif project_ok or global_ok:
@@ -1512,12 +1610,19 @@ class CliHostOpsMixin:
             if not isinstance(usage, dict):
                 usage = {}
             smoke_steps = usage.get("smoke_test_steps", [])
+            competition_smoke_steps = usage.get("competition_smoke_test_steps", [])
             post_steps = usage.get("post_onboard_steps", [])
             checks = {
                 "has_final_trigger": bool(str(usage.get("final_trigger", "")).strip()),
                 "has_smoke_prompt": "SMOKE_OK" in str(usage.get("smoke_test_prompt", "")),
                 "has_smoke_signal": "SMOKE_OK" in str(usage.get("smoke_success_signal", "")),
                 "has_smoke_steps": isinstance(smoke_steps, list) and len(smoke_steps) > 0,
+                "has_competition_smoke_prompt": "SEEAI_SMOKE_OK"
+                in str(usage.get("competition_smoke_test_prompt", "")),
+                "has_competition_smoke_signal": "SEEAI_SMOKE_OK"
+                in str(usage.get("competition_smoke_success_signal", "")),
+                "has_competition_smoke_steps": isinstance(competition_smoke_steps, list)
+                and len(competition_smoke_steps) > 0,
                 "has_post_onboard_steps": isinstance(post_steps, list) and len(post_steps) > 0,
             }
             host_pass = all(bool(item) for item in checks.values())
@@ -1808,7 +1913,12 @@ class CliHostOpsMixin:
                 )
             )
             self.console.print("")
+
             profile = integration_manager.get_adapter_profile(target)
+            manifest_paths: list[str] = []
+            has_project_surface = False
+            has_global_surface = False
+            has_runtime_surface = False
 
             if getattr(args, "dry_run", False):
                 surfaces = integration_manager.collect_managed_surface_paths(target=target)
@@ -1824,6 +1934,9 @@ class CliHostOpsMixin:
                 try:
                     written_files = integration_manager.setup(target=target, force=args.force)
                     integrate_written_count = len(written_files)
+                    if written_files:
+                        has_project_surface = True
+                        manifest_paths.extend(str(item) for item in written_files)
                     if written_files:
                         if detail:
                             for item in written_files:
@@ -1841,6 +1954,8 @@ class CliHostOpsMixin:
                         target=target, force=args.force
                     )
                     if global_protocol is not None:
+                        has_global_surface = True
+                        manifest_paths.append(str(global_protocol))
                         if detail:
                             self.console.print(
                                 f"  [green]✓[/green] 宿主协议: {global_protocol}",
@@ -1872,6 +1987,11 @@ class CliHostOpsMixin:
                                 name=target_skill_name,
                                 force=args.force,
                             )
+                            manifest_paths.append(str(install_result.path))
+                            if str(install_result.path).startswith(str(Path.home())):
+                                has_global_surface = True
+                            else:
+                                has_project_surface = True
                             if detail:
                                 self.console.print(
                                     f"  [green]✓[/green] Skill: {install_result.path}",
@@ -1902,9 +2022,7 @@ class CliHostOpsMixin:
                     if legacy_path.exists():
                         try:
                             legacy_path.unlink()
-                            self.console.print(
-                                f"  [green]✓[/green] 已清理旧版: {legacy_path.name}"
-                            )
+                            self.console.print(f"  [green]✓[/green] 已清理旧版: {legacy_path.name}")
                         except Exception:
                             pass
 
@@ -1920,6 +2038,8 @@ class CliHostOpsMixin:
                                 "  [dim]- /super-dev 映射已存在（可加 --force 覆盖）[/dim]"
                             )
                         else:
+                            has_project_surface = True
+                            manifest_paths.append(str(slash_file))
                             if detail:
                                 self.console.print(
                                     f"  [green]✓[/green] /super-dev 映射: {slash_file}",
@@ -1939,6 +2059,8 @@ class CliHostOpsMixin:
                             slash_file is None
                             or global_slash_file.resolve() != slash_file.resolve()
                         ):
+                            has_global_surface = True
+                            manifest_paths.append(str(global_slash_file))
                             if detail:
                                 self.console.print(
                                     f"  [green]✓[/green] 全局 /super-dev 映射: {global_slash_file}",
@@ -1948,13 +2070,58 @@ class CliHostOpsMixin:
                                 self.console.print(
                                     "  [green]✓[/green] 全局 /super-dev 映射: 已写入"
                                 )
+                        seeai_slash_file = integration_manager.setup_seeai_slash_command(
+                            target=target,
+                            force=args.force,
+                        )
+                        if seeai_slash_file is None:
+                            self.console.print(
+                                "  [dim]- /super-dev-seeai 映射已存在（可加 --force 覆盖）[/dim]"
+                            )
+                        else:
+                            has_project_surface = True
+                            manifest_paths.append(str(seeai_slash_file))
+                            if detail:
+                                self.console.print(
+                                    f"  [green]✓[/green] /super-dev-seeai 映射: {seeai_slash_file}",
+                                    soft_wrap=True,
+                                )
+                            else:
+                                self.console.print(
+                                    "  [green]✓[/green] /super-dev-seeai 映射: 已写入"
+                                )
+                        global_seeai_slash_file = (
+                            integration_manager.setup_global_seeai_slash_command(
+                                target=target,
+                                force=args.force,
+                            )
+                        )
+                        if global_seeai_slash_file is None:
+                            self.console.print(
+                                "  [dim]- 全局 /super-dev-seeai 映射已存在（可加 --force 覆盖）[/dim]"
+                            )
+                        elif (
+                            seeai_slash_file is None
+                            or global_seeai_slash_file.resolve() != seeai_slash_file.resolve()
+                        ):
+                            has_global_surface = True
+                            manifest_paths.append(str(global_seeai_slash_file))
+                            if detail:
+                                self.console.print(
+                                    f"  [green]✓[/green] 全局 /super-dev-seeai 映射: {global_seeai_slash_file}",
+                                    soft_wrap=True,
+                                )
+                            else:
+                                self.console.print(
+                                    "  [green]✓[/green] 全局 /super-dev-seeai 映射: 已写入"
+                                )
                     else:
                         self.console.print(
-                            "  [dim]- 该宿主不支持 /super-dev，已跳过 slash 映射[/dim]"
+                            "  [dim]- 该宿主不支持 /super-dev 或 /super-dev-seeai，已跳过 slash 映射[/dim]"
                         )
                 except Exception as exc:
                     has_error = True
-                    self.console.print(f"  [red]✗[/red] /super-dev 映射失败: {exc}")
+                    self.console.print(f"  [red]✗[/red] slash 映射失败: {exc}")
 
             self.console.print(f"  [cyan]主入口[/cyan]: {profile.primary_entry}")
             if profile.requires_restart_after_onboard:
@@ -2015,6 +2182,38 @@ class CliHostOpsMixin:
                     self.console.print(f"  [dim]- {item}[/dim]")
             else:
                 self.console.print("  [green]✓[/green] 宿主契约校验通过")
+                if not manifest_paths:
+                    managed_surfaces = integration_manager.collect_managed_surface_paths(
+                        target=target,
+                        skill_name=args.skill_name,
+                    )
+                    for surface_path in managed_surfaces.values():
+                        if surface_path.exists():
+                            manifest_paths.append(str(surface_path))
+                            if str(surface_path).startswith(str(Path.home())):
+                                has_global_surface = True
+                            else:
+                                has_project_surface = True
+                if target == "claude-code" and any(
+                    path.endswith(".claude/settings.local.json")
+                    or path.endswith(".claude/settings.json")
+                    for path in manifest_paths
+                ):
+                    has_runtime_surface = True
+                try:
+                    record_install_manifest(
+                        project_dir,
+                        host=target,
+                        family=integration_manager.host_family(target),
+                        scopes={
+                            "project": has_project_surface,
+                            "global": has_global_surface,
+                            "runtime": has_runtime_surface,
+                        },
+                        paths=manifest_paths,
+                    )
+                except Exception:
+                    pass
 
         self.console.print("")
         if args.dry_run:
@@ -2059,7 +2258,7 @@ class CliHostOpsMixin:
             Panel(
                 f"[bold green]Onboard 完成[/bold green]\n\n"
                 f"[bold]接下来这样用:[/bold]\n\n{steps_text}{resume_text}\n\n"
-                f"[dim]提示: 进入宿主后直接按当前入口触发 Super Dev；多数 slash 宿主使用 /super-dev，Codex App/Desktop 用 /super-dev，Codex CLI 用 $super-dev，文本宿主使用 super-dev: 你的需求[/dim]\n"
+                f"[dim]提示: 进入宿主后直接按当前入口触发 Super Dev；slash 宿主使用 /super-dev，文本宿主使用 super-dev: 你的需求[/dim]\n"
                 f"[dim]所有命令都在宿主内输入，无需回到终端[/dim]",
                 border_style="green",
                 expand=True,
@@ -2664,6 +2863,7 @@ class CliHostOpsMixin:
         detected_targets, detected_meta = self._detect_host_targets(
             available_targets=available_targets
         )
+        detected_targets = self._deduplicate_host_family(detected_targets)
 
         target = args.host
         selection_reason = "manual"
@@ -3199,14 +3399,18 @@ class CliHostOpsMixin:
         self.console.print("")
         self.console.print("[green]✓ 升级完成[/green]")
 
+        # 升级后自动清理旧版本残留
+        runtime_health = self._collect_runtime_install_health()
+        if not runtime_health.get("healthy", False):
+            self.console.print("[cyan]正在清理旧版本残留...[/cyan]")
+            self._auto_fix_runtime_install(runtime_health)
+
         # Auto-migrate using the newly installed version (new process)
         self.console.print("[cyan]正在自动迁移宿主配置到新版...[/cyan]")
         try:
             from . import cli as cli_module
 
-            migrate_result = cli_module.subprocess.run(
-                ["super-dev", "migrate"], check=False
-            )
+            migrate_result = cli_module.subprocess.run(["super-dev", "migrate"], check=False)
             if migrate_result.returncode == 0:
                 self.console.print("[green]✓ 宿主配置已迁移到新版[/green]")
             else:
@@ -3392,7 +3596,11 @@ class CliHostOpsMixin:
         )
 
     def _select_best_start_host(self, *, integration_manager, targets: list[str]) -> str:
-        return self._rank_host_targets(integration_manager=integration_manager, targets=targets)[0]
+        deduplicated = self._deduplicate_host_family(targets)
+        return self._rank_host_targets(
+            integration_manager=integration_manager,
+            targets=deduplicated,
+        )[0]
 
     def _recommended_start_hosts(self, *, integration_manager) -> list[dict[str, str]]:
         from .integrations import IntegrationManager
@@ -3795,9 +4003,10 @@ class CliHostOpsMixin:
                 lines.append(f"必验场景: {' / '.join(str(item) for item in validation[:3])}")
         if recent_snapshots:
             first = recent_snapshots[0]
-            step = str(first.get("current_step_label", "")).strip() or str(
-                first.get("status", "")
-            ).strip()
+            step = (
+                str(first.get("current_step_label", "")).strip()
+                or str(first.get("status", "")).strip()
+            )
             updated_at = str(first.get("updated_at", "")).strip() or "-"
             lines.append(f"最近一次: {updated_at} · {step}")
         if recent_events:
@@ -3815,9 +4024,10 @@ class CliHostOpsMixin:
         if recent_timeline:
             latest_timeline = recent_timeline[0]
             timeline_time = str(latest_timeline.get("timestamp", "")).strip() or "-"
-            timeline_title = str(latest_timeline.get("title", "")).strip() or str(
-                latest_timeline.get("kind", "")
-            ).strip()
+            timeline_title = (
+                str(latest_timeline.get("title", "")).strip()
+                or str(latest_timeline.get("kind", "")).strip()
+            )
             timeline_message = str(latest_timeline.get("message", "")).strip() or "-"
             lines.append(f"关键时间线: {timeline_time} · {timeline_title} · {timeline_message}")
         if harness_summaries:
@@ -3846,7 +4056,11 @@ class CliHostOpsMixin:
                 f"自然语言示例: {', '.join(str(item) for item in action_examples[:3])}",
             )
         if scenario_cards:
-            insert_at = 4 if user_action_shortcuts and action_examples else 3 if (user_action_shortcuts or action_examples) else 2
+            insert_at = (
+                4
+                if user_action_shortcuts and action_examples
+                else 3 if (user_action_shortcuts or action_examples) else 2
+            )
             scenario_lines = []
             for item in scenario_cards[:4]:
                 if not isinstance(item, dict):
@@ -3861,6 +4075,7 @@ class CliHostOpsMixin:
             target=target,
             instruction=continue_instruction or continue_prompt,
             supports_slash=self._supports_slash_for_prompt(target),
+            flow_variant=detect_flow_variant(project_dir),
         )
         entry_prompts = (
             entry_bundle.get("entry_prompts", {})
@@ -3881,7 +4096,7 @@ class CliHostOpsMixin:
             if fallback_prompt:
                 lines.append(f"回退恢复入口: {fallback_prompt}")
         if recommended_workflow_command:
-            lines.append(f"机器侧动作: {recommended_workflow_command}")
+            lines.append(f"系统建议动作: {recommended_workflow_command}")
         return [line for line in lines if line]
 
     def _build_session_resume_card(self, *, project_dir: Path, target: str) -> dict[str, Any]:
@@ -3931,6 +4146,7 @@ class CliHostOpsMixin:
             target=target,
             instruction=continue_instruction or continue_prompt,
             supports_slash=self._supports_slash_for_prompt(target),
+            flow_variant=detect_flow_variant(project_dir),
         )
         entry_prompts = (
             entry_prompt_bundle.get("entry_prompts", {})
@@ -3968,7 +4184,9 @@ class CliHostOpsMixin:
             "operational_focus": operational_focus if enabled else {},
             "recent_snapshots": recent_snapshots if enabled else [],
             "recent_events": recent_events if enabled else [],
-            "recent_hook_events": [item.to_dict() for item in recent_hook_events] if enabled else [],
+            "recent_hook_events": (
+                [item.to_dict() for item in recent_hook_events] if enabled else []
+            ),
             "recent_timeline": recent_timeline if enabled else [],
             "lines": self._build_session_resume_card_lines(project_dir=project_dir, target=target),
         }
@@ -4186,6 +4404,9 @@ class CliHostOpsMixin:
             "smoke_test_prompt": profile.smoke_test_prompt,
             "smoke_test_steps": list(profile.smoke_test_steps),
             "smoke_success_signal": profile.smoke_success_signal,
+            "competition_smoke_test_prompt": profile.competition_smoke_test_prompt,
+            "competition_smoke_test_steps": list(profile.competition_smoke_test_steps),
+            "competition_smoke_success_signal": profile.competition_smoke_success_signal,
             "supports_skill_slash_entry": profile.host == "codex-cli",
             "skill_slash_entry_command": "/super-dev" if profile.host == "codex-cli" else "",
             "skill_slash_entry_note": (
@@ -4224,6 +4445,42 @@ class CliHostOpsMixin:
         }
         return mapping.get(status, "待真人验收")
 
+    def _build_runtime_evidence_record(
+        self,
+        *,
+        host_id: str,
+        surface_ready: bool,
+        runtime_entry: dict[str, Any],
+    ) -> dict[str, Any]:
+        install_mode = get_install_mode(host_id)
+        if install_mode == HostInstallMode.MANUAL:
+            integration_status = IntegrationStatus.MANUAL
+        elif surface_ready:
+            integration_status = IntegrationStatus.PROJECT_AND_GLOBAL_INSTALLED
+        else:
+            integration_status = IntegrationStatus.MISSING
+        comment = str(runtime_entry.get("comment", "")).strip()
+        evidence = HostRuntimeEvidence(
+            host_id=host_id,
+            host_display_name=get_display_name(host_id) or host_id,
+            summary="integration and runtime evidence are tracked separately",
+            integration_status=IntegrationStatusRecord(
+                status=integration_status,
+                evidence=("surface audit passed",) if surface_ready else ("surface gaps detected",),
+                checked_at=str(runtime_entry.get("updated_at", "")).strip(),
+                source="surface-audit",
+                details="surface ready" if surface_ready else "surface needs repair",
+            ),
+            runtime_status=RuntimeStatusRecord(
+                status=RuntimeStatus(str(runtime_entry.get("status", "")).strip() or "pending"),
+                evidence=(comment,) if comment else (),
+                checked_at=str(runtime_entry.get("updated_at", "")).strip(),
+                source=str(runtime_entry.get("status_source", "")).strip() or "manual",
+                details=comment,
+            ),
+        )
+        return serialize_host_runtime_evidence(evidence)
+
     def _update_host_runtime_validation_state(
         self,
         *,
@@ -4238,11 +4495,13 @@ class CliHostOpsMixin:
         current = hosts.get(target, {})
         if not isinstance(current, dict):
             current = {}
+        timestamp = datetime.now(timezone.utc).isoformat()
         hosts[target] = {
             "status": status,
             "comment": comment.strip(),
             "actor": actor.strip() or "user",
-            "updated_at": current.get("updated_at", ""),
+            "updated_at": timestamp,
+            "status_source": str(current.get("status_source", "")).strip() or "manual",
         }
         file_path = save_host_runtime_validation(
             project_dir,
@@ -4262,232 +4521,10 @@ class CliHostOpsMixin:
         return self._sanitize_project_name(raw)
 
     def _render_host_compatibility_markdown(self, payload: dict[str, Any]) -> str:
-        compatibility = payload.get("compatibility", {})
-        report = payload.get("report", {})
-        selected_targets = payload.get("selected_targets", [])
-        detected_hosts = payload.get("detected_hosts", [])
-        if not isinstance(compatibility, dict):
-            compatibility = {}
-        if not isinstance(report, dict):
-            report = {}
-        if not isinstance(selected_targets, list):
-            selected_targets = []
-        if not isinstance(detected_hosts, list):
-            detected_hosts = []
-
-        lines = [
-            "# Host Compatibility Report",
-            "",
-            f"- Generated At (UTC): {datetime.now(timezone.utc).isoformat()}",
-            f"- Project Dir: {payload.get('project_dir', '')}",
-            f"- Detected Hosts: {', '.join(self._host_label(str(item)) for item in detected_hosts) if detected_hosts else '(none)'}",
-            f"- Selected Targets: {', '.join(self._host_label(str(item)) for item in selected_targets) if selected_targets else '(none)'}",
-            "",
-            "## Summary",
-            f"- Overall Score: {compatibility.get('overall_score', 0)}/100",
-            f"- Ready Hosts: {compatibility.get('ready_hosts', 0)}/{compatibility.get('total_hosts', 0)}",
-            f"- Enabled Checks: {', '.join(str(item) for item in compatibility.get('enabled_checks', []))}",
-            "",
-            "## Per-Host Scores",
-            "",
-            "| Host | Certification | Score | Ready | Passed/Total |",
-            "|---|---|---:|---|---:|",
-        ]
-
-        host_scores = compatibility.get("hosts", {})
-        if isinstance(host_scores, dict):
-            for target in selected_targets:
-                info = host_scores.get(target, {}) if isinstance(target, str) else {}
-                if not isinstance(info, dict):
-                    info = {}
-                usage_profiles = payload.get("usage_profiles", {})
-                certification = "-"
-                if isinstance(usage_profiles, dict):
-                    usage = usage_profiles.get(target, {})
-                    if isinstance(usage, dict):
-                        certification = str(usage.get("certification_label", "-"))
-                score = info.get("score", 0)
-                ready = "yes" if bool(info.get("ready", False)) else "no"
-                passed = int(info.get("passed", 0))
-                possible = int(info.get("possible", 0))
-                lines.append(
-                    f"| {self._host_label(target)} | {certification} | {score} | {ready} | {passed}/{possible} |"
-                )
-
-        lines.extend(["", "## Usage Guidance", ""])
-        usage_profiles = payload.get("usage_profiles", {})
-        if isinstance(usage_profiles, dict):
-            for target in selected_targets:
-                usage = usage_profiles.get(target, {}) if isinstance(target, str) else {}
-                if not isinstance(usage, dict):
-                    usage = {}
-                lines.append(f"### {target}")
-                lines.append(
-                    f"- Certification: {usage.get('certification_label', '-')} ({usage.get('certification_level', '-')})"
-                )
-                reason = usage.get("certification_reason", "")
-                if isinstance(reason, str) and reason.strip():
-                    lines.append(f"- Certification Reason: {reason}")
-                evidence = usage.get("certification_evidence", [])
-                if isinstance(evidence, list) and evidence:
-                    lines.append("- Certification Evidence:")
-                    for item in evidence:
-                        lines.append(f"  - {item}")
-                lines.append(f"- Primary Entry: {usage.get('primary_entry', '-')}")
-                lines.append(f"- Usage Mode: {usage.get('usage_mode', '-')}")
-                lines.append(f"- Trigger Command: {usage.get('trigger_command', '-')}")
-                lines.append(f"- Trigger Context: {usage.get('trigger_context', '-')}")
-                lines.append(f"- Restart Required: {usage.get('restart_required_label', '-')}")
-                precondition_label = usage.get("precondition_label", "")
-                if isinstance(precondition_label, str) and precondition_label.strip():
-                    lines.append(f"- Host Preconditions: {precondition_label}")
-                precondition_items = usage.get("precondition_items", [])
-                if isinstance(precondition_items, list) and precondition_items:
-                    lines.append("- Host Precondition Items:")
-                    for item in precondition_items:
-                        if not isinstance(item, dict):
-                            continue
-                        item_label = str(item.get("label", "")).strip()
-                        item_status = str(item.get("status", "")).strip()
-                        item_text = item_label or item_status
-                        if item_text:
-                            lines.append(f"  - {item_text}")
-                precondition_guidance = usage.get("precondition_guidance", [])
-                if isinstance(precondition_guidance, list) and precondition_guidance:
-                    lines.append("- Host Precondition Guidance:")
-                    for item in precondition_guidance:
-                        lines.append(f"  - {item}")
-                steps = usage.get("post_onboard_steps", [])
-                if isinstance(steps, list) and steps:
-                    lines.append("- Post Onboard Steps:")
-                    for step in steps:
-                        lines.append(f"  - {step}")
-                note = usage.get("notes", "")
-                if isinstance(note, str) and note.strip():
-                    lines.append(f"- Notes: {note}")
-                lines.append("")
-
-        lines.extend(["## Missing Items", ""])
-        hosts = report.get("hosts", {})
-        if isinstance(hosts, dict):
-            for target in selected_targets:
-                host = hosts.get(target, {}) if isinstance(target, str) else {}
-                if not isinstance(host, dict):
-                    continue
-                missing = host.get("missing", [])
-                if not isinstance(missing, list) or not missing:
-                    continue
-                lines.append(f"### {target}")
-                lines.append(f"- Missing: {', '.join(str(item) for item in missing)}")
-                suggestions = host.get("suggestions", [])
-                if isinstance(suggestions, list):
-                    for suggestion in suggestions:
-                        lines.append(f"- Suggestion: `{suggestion}`")
-                lines.append("")
-
-        return "\n".join(lines).rstrip() + "\n"
+        return render_host_compatibility_markdown(payload, host_label_fn=self._host_label)
 
     def _render_host_surface_audit_markdown(self, payload: dict[str, Any]) -> str:
-        report = payload.get("report", {})
-        compatibility = payload.get("compatibility", {})
-        selected_targets = payload.get("selected_targets", [])
-        detected_hosts = payload.get("detected_hosts", [])
-        usage_profiles = payload.get("usage_profiles", {})
-        repair_actions = payload.get("repair_actions", {})
-        if not isinstance(report, dict):
-            report = {}
-        if not isinstance(compatibility, dict):
-            compatibility = {}
-        if not isinstance(selected_targets, list):
-            selected_targets = []
-        if not isinstance(detected_hosts, list):
-            detected_hosts = []
-        if not isinstance(usage_profiles, dict):
-            usage_profiles = {}
-        if not isinstance(repair_actions, dict):
-            repair_actions = {}
-
-        lines = [
-            "# Host Surface Audit Report",
-            "",
-            f"- Generated At (UTC): {datetime.now(timezone.utc).isoformat()}",
-            f"- Project Dir: {payload.get('project_dir', '')}",
-            f"- Detected Hosts: {', '.join(str(item) for item in detected_hosts) if detected_hosts else '(none)'}",
-            f"- Selected Targets: {', '.join(str(item) for item in selected_targets) if selected_targets else '(none)'}",
-            f"- Overall Score: {compatibility.get('overall_score', 0)}/100",
-            "",
-        ]
-        if repair_actions:
-            lines.extend(["## Repair Actions", ""])
-            for target, actions in repair_actions.items():
-                if isinstance(actions, dict):
-                    action_text = ", ".join(f"{key}={value}" for key, value in actions.items())
-                    lines.append(f"- {target}: {action_text}")
-            lines.append("")
-
-        hosts = report.get("hosts", {})
-        if not isinstance(hosts, dict):
-            hosts = {}
-
-        for target in selected_targets:
-            host = hosts.get(target, {}) if isinstance(target, str) else {}
-            usage = usage_profiles.get(target, {}) if isinstance(target, str) else {}
-            if not isinstance(host, dict):
-                host = {}
-            if not isinstance(usage, dict):
-                usage = {}
-            checks = host.get("checks", {})
-            contract = checks.get("contract", {}) if isinstance(checks, dict) else {}
-            surfaces = contract.get("surfaces", {}) if isinstance(contract, dict) else {}
-            invalid_surfaces = (
-                contract.get("invalid_surfaces", {}) if isinstance(contract, dict) else {}
-            )
-            lines.extend(
-                [
-                    f"## {target}",
-                    "",
-                    f"- Ready: {'yes' if bool(host.get('ready', False)) else 'no'}",
-                    f"- Trigger: {usage.get('final_trigger', '-')}",
-                    f"- Protocol: {usage.get('host_protocol_summary', '-')}",
-                    "",
-                    "| Surface | Exists | Missing Markers | Path |",
-                    "|---|---|---|---|",
-                ]
-            )
-            if isinstance(surfaces, dict):
-                for surface_key, surface_info in surfaces.items():
-                    if not isinstance(surface_info, dict):
-                        continue
-                    exists = "yes" if bool(surface_info.get("exists", False)) else "no"
-                    missing = surface_info.get("missing_markers", [])
-                    missing_text = (
-                        ", ".join(str(item) for item in missing)
-                        if isinstance(missing, list) and missing
-                        else "-"
-                    )
-                    lines.append(
-                        f"| {surface_key} | {exists} | {missing_text} | {surface_info.get('path', '-')} |"
-                    )
-            suggestions = host.get("suggestions", [])
-            if isinstance(invalid_surfaces, dict) and invalid_surfaces:
-                lines.extend(["", "### Fix Guidance", ""])
-                for surface_key, surface_info in invalid_surfaces.items():
-                    if not isinstance(surface_info, dict):
-                        continue
-                    missing = surface_info.get("missing_markers", [])
-                    missing_text = (
-                        ", ".join(str(item) for item in missing)
-                        if isinstance(missing, list) and missing
-                        else "-"
-                    )
-                    lines.append(f"- `{surface_key}` -> {missing_text}")
-            if isinstance(suggestions, list) and suggestions:
-                lines.extend(["", "### Suggested Commands", ""])
-                for suggestion in suggestions:
-                    lines.append(f"- `{suggestion}`")
-            lines.append("")
-
-        return "\n".join(lines).rstrip() + "\n"
+        return render_host_surface_audit_markdown(payload, host_label_fn=self._host_label)
 
     def _build_host_runtime_validation_payload(
         self,
@@ -4564,14 +4601,24 @@ class CliHostOpsMixin:
                 {
                     "host": target,
                     "surface_ready": surface_ready,
+                    "integration_status": (
+                        "project_and_global_installed" if surface_ready else "repair_needed"
+                    ),
                     "ready_for_delivery": surface_ready and runtime_status == "passed",
                     "blocking_reason": blocking_reason,
                     "recommended_action": recommended_action,
+                    "runtime_status": runtime_status,
+                    "runtime_status_label": self._host_runtime_status_label(runtime_status),
                     "manual_runtime_status": runtime_status,
                     "manual_runtime_status_label": self._host_runtime_status_label(runtime_status),
                     "manual_runtime_comment": str(runtime_entry.get("comment", "")).strip(),
                     "manual_runtime_actor": str(runtime_entry.get("actor", "")).strip(),
                     "manual_runtime_updated_at": str(runtime_entry.get("updated_at", "")).strip(),
+                    "runtime_evidence": self._build_runtime_evidence_record(
+                        host_id=target,
+                        surface_ready=surface_ready,
+                        runtime_entry=runtime_entry,
+                    ),
                     "final_trigger": usage.get("final_trigger", "-"),
                     "host_protocol_mode": usage.get("host_protocol_mode", "-"),
                     "host_protocol_summary": usage.get("host_protocol_summary", "-"),
@@ -4583,7 +4630,9 @@ class CliHostOpsMixin:
                     ),
                     "smoke_test_prompt": usage.get("smoke_test_prompt", ""),
                     "smoke_success_signal": usage.get("smoke_success_signal", ""),
-                    "checks": host.get("checks", {}) if isinstance(host.get("checks", {}), dict) else {},
+                    "checks": (
+                        host.get("checks", {}) if isinstance(host.get("checks", {}), dict) else {}
+                    ),
                     "runtime_checklist": self._host_runtime_checklist(
                         target=target, usage=usage, project_dir=project_dir
                     ),
@@ -4643,146 +4692,7 @@ class CliHostOpsMixin:
         }
 
     def _render_host_runtime_validation_markdown(self, payload: dict[str, Any]) -> str:
-        hosts = payload.get("hosts", [])
-        if not isinstance(hosts, list):
-            hosts = []
-        lines = [
-            "# Host Runtime Validation Matrix",
-            "",
-            f"- Generated At (UTC): {payload.get('generated_at', '')}",
-            f"- Project Dir: {payload.get('project_dir', '')}",
-            f"- Detected Hosts: {', '.join(str(item) for item in payload.get('detected_hosts', [])) or '(none)'}",
-            "",
-        ]
-        summary = payload.get("summary", {})
-        if isinstance(summary, dict):
-            lines.extend(
-                [
-                    "## Summary",
-                    "",
-                    f"- Overall Status: {summary.get('overall_status', '-')}",
-                    f"- Fully Ready: {summary.get('fully_ready_count', 0)}/{summary.get('total_hosts', 0)}",
-                    f"- Surface Ready: {summary.get('surface_ready_count', 0)}/{summary.get('total_hosts', 0)}",
-                    f"- Runtime Passed: {summary.get('runtime_passed_count', 0)}",
-                    f"- Runtime Failed: {summary.get('runtime_failed_count', 0)}",
-                    f"- Runtime Pending: {summary.get('runtime_pending_count', 0)}",
-                    "",
-                ]
-            )
-        blockers = payload.get("blockers", [])
-        if isinstance(blockers, list):
-            lines.extend(["## Current Blockers", ""])
-            if blockers:
-                for item in blockers:
-                    if not isinstance(item, dict):
-                        continue
-                    lines.append(
-                        f"- **{item.get('host', '-')}** ({item.get('type', '-')}) {item.get('summary', '-')}"
-                    )
-            else:
-                lines.append("- 当前没有阻塞项。")
-            lines.extend(["", "## Recommended Next Actions", ""])
-            next_actions = summary.get("next_actions", []) if isinstance(summary, dict) else []
-            if isinstance(next_actions, list) and next_actions:
-                for item in next_actions:
-                    lines.append(f"- {item}")
-            else:
-                lines.append("- 当前宿主验收中心没有额外动作。")
-            lines.append("")
-        lines.extend(
-            [
-                "| Host | Surface Ready | Trigger | Protocol | Manual Runtime Status |",
-                "|---|---|---|---|---|",
-            ]
-        )
-        for host in hosts:
-            if not isinstance(host, dict):
-                continue
-            lines.append(
-                f"| {host.get('host', '-')} | {'yes' if bool(host.get('surface_ready', False)) else 'no'} | "
-                f"{host.get('final_trigger', '-')} | {host.get('host_protocol_summary', '-')} | {host.get('manual_runtime_status_label', '-')} |"
-            )
-
-        for host in hosts:
-            if not isinstance(host, dict):
-                continue
-            lines.extend(
-                [
-                    "",
-                    f"## {host.get('host', '-')}",
-                    "",
-                    f"- Trigger: {host.get('final_trigger', '-')}",
-                    f"- Protocol: {host.get('host_protocol_summary', '-')}",
-                    f"- Surface Ready: {'yes' if bool(host.get('surface_ready', False)) else 'no'}",
-                    f"- Manual Runtime Status: {host.get('manual_runtime_status_label', '-')}",
-                    f"- Host Preconditions: {host.get('precondition_label', '-')}",
-                    f"- Smoke Prompt: {host.get('smoke_test_prompt', '-')}",
-                    f"- Smoke Success Signal: {host.get('smoke_success_signal', '-')}",
-                    "",
-                    "### Runtime Checklist",
-                    "",
-                ]
-            )
-            resume_probe = host.get("resume_probe_prompt", "")
-            if isinstance(resume_probe, str) and resume_probe.strip():
-                lines.extend(["### Resume Probe Prompt", "", f"- {resume_probe.strip()}", ""])
-            framework_playbook = host.get("framework_playbook", {})
-            if isinstance(framework_playbook, dict) and framework_playbook:
-                lines.extend(
-                    [
-                        "### Framework Playbook",
-                        "",
-                        f"- Framework: {framework_playbook.get('framework', '-')}",
-                    ]
-                )
-                modules = framework_playbook.get("implementation_modules", [])
-                if isinstance(modules, list) and modules:
-                    lines.append(
-                        "- Implementation Modules: "
-                        + "；".join(str(item) for item in modules[:3])
-                    )
-                native_capabilities = framework_playbook.get("native_capabilities", [])
-                if isinstance(native_capabilities, list) and native_capabilities:
-                    lines.append(
-                        "- Native Capabilities: "
-                        + "；".join(str(item) for item in native_capabilities[:3])
-                    )
-                validation = framework_playbook.get("validation_surfaces", [])
-                if isinstance(validation, list) and validation:
-                    lines.append(
-                        "- Validation Surfaces: "
-                        + "；".join(str(item) for item in validation[:3])
-                    )
-                evidence = framework_playbook.get("delivery_evidence", [])
-                if isinstance(evidence, list) and evidence:
-                    lines.append(
-                        "- Delivery Evidence: "
-                        + "；".join(str(item) for item in evidence[:3])
-                    )
-                lines.append("")
-            comment = host.get("manual_runtime_comment", "")
-            if isinstance(comment, str) and comment.strip():
-                lines.extend(["### Runtime Validation Note", "", f"- {comment.strip()}", ""])
-            preconditions = host.get("precondition_guidance", [])
-            if isinstance(preconditions, list) and preconditions:
-                lines.extend(["", "### Host Precondition Guidance", ""])
-                for item in preconditions:
-                    lines.append(f"- {item}")
-            checklist = host.get("runtime_checklist", [])
-            if isinstance(checklist, list):
-                for item in checklist:
-                    lines.append(f"- {item}")
-            lines.extend(["", "### Pass Criteria", ""])
-            criteria = host.get("pass_criteria", [])
-            if isinstance(criteria, list):
-                for item in criteria:
-                    lines.append(f"- {item}")
-            resume_checklist = host.get("resume_checklist", [])
-            if isinstance(resume_checklist, list) and resume_checklist:
-                lines.extend(["", "### Resume Checklist", ""])
-                for item in resume_checklist:
-                    lines.append(f"- {item}")
-        return "\n".join(lines).rstrip() + "\n"
+        return render_host_runtime_validation_markdown(payload, host_label_fn=self._host_label)
 
     def _write_host_surface_audit_report(
         self,
@@ -4790,208 +4700,18 @@ class CliHostOpsMixin:
         project_dir: Path,
         payload: dict[str, Any],
     ) -> dict[str, Path]:
-        project_name = self._resolve_report_project_name(project_dir)
-        output_dir = project_dir / "output"
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        json_file = output_dir / f"{project_name}-host-surface-audit.json"
-        md_file = output_dir / f"{project_name}-host-surface-audit.md"
-        json_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        md_file.write_text(self._render_host_surface_audit_markdown(payload), encoding="utf-8")
-
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        history_dir = output_dir / "host-surface-audit-history"
-        history_dir.mkdir(parents=True, exist_ok=True)
-        history_json = history_dir / f"{project_name}-host-surface-audit-{stamp}.json"
-        history_md = history_dir / f"{project_name}-host-surface-audit-{stamp}.md"
-        history_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        history_md.write_text(self._render_host_surface_audit_markdown(payload), encoding="utf-8")
-
-        return {
-            "json": json_file,
-            "markdown": md_file,
-            "history_json": history_json,
-            "history_markdown": history_md,
-        }
+        return write_host_surface_audit_report(
+            project_dir=project_dir,
+            payload=payload,
+            resolve_project_name_fn=lambda pd: self._resolve_report_project_name(pd),
+            render_surface_audit_fn=lambda p: self._render_host_surface_audit_markdown(p),
+        )
 
     def _render_host_hardening_markdown(self, payload: dict[str, Any]) -> str:
-        compatibility = payload.get("compatibility", {})
-        selected_targets = payload.get("selected_targets", [])
-        hardening_results = payload.get("hardening_results", {})
-        if not isinstance(compatibility, dict):
-            compatibility = {}
-        if not isinstance(selected_targets, list):
-            selected_targets = []
-        if not isinstance(hardening_results, dict):
-            hardening_results = {}
-        lines = [
-            "# Host System Hardening Report",
-            "",
-            f"- Generated At (UTC): {datetime.now(timezone.utc).isoformat()}",
-            f"- Project Dir: {payload.get('project_dir', '')}",
-            f"- Selected Targets: {', '.join(str(item) for item in selected_targets) if selected_targets else '(none)'}",
-            f"- Compatibility Score: {compatibility.get('overall_score', 0)}/100",
-            f"- Flow Consistency: {compatibility.get('flow_consistency_score', 0)}/100",
-            f"- Official Doc Alignment: {((payload.get('official_compare_summary', {}) or {}).get('score', 0))}/100",
-            f"- Host Parity: {((payload.get('host_parity_summary', {}) or {}).get('score', 0))}/100",
-            f"- Host Gate Parity: {((payload.get('host_gate_summary', {}) or {}).get('score', 0))}/100",
-            f"- Host Runtime Script Parity: {((payload.get('host_runtime_script_summary', {}) or {}).get('score', 0))}/100",
-            f"- Host Recovery Parity: {((payload.get('host_recovery_summary', {}) or {}).get('score', 0))}/100",
-            "",
-        ]
-        for target in selected_targets:
-            item = hardening_results.get(target, {}) if isinstance(target, str) else {}
-            if not isinstance(item, dict):
-                item = {}
-            plan = item.get("plan", {})
-            contract = item.get("contract", {})
-            official_compare = item.get("official_compare", {})
-            gate_hosts = (payload.get("host_gate_summary", {}) or {}).get("hosts", {})
-            gate_info = gate_hosts.get(target, {}) if isinstance(gate_hosts, dict) else {}
-            runtime_script_hosts = (payload.get("host_runtime_script_summary", {}) or {}).get(
-                "hosts", {}
-            )
-            runtime_script_info = (
-                runtime_script_hosts.get(target, {})
-                if isinstance(runtime_script_hosts, dict)
-                else {}
-            )
-            recovery_hosts = (payload.get("host_recovery_summary", {}) or {}).get("hosts", {})
-            recovery_info = (
-                recovery_hosts.get(target, {}) if isinstance(recovery_hosts, dict) else {}
-            )
-            lines.extend([f"## {target}", ""])
-            lines.append(f"- Trigger: {plan.get('final_trigger', '-')}")
-            lines.append(f"- Trigger Mode: {plan.get('trigger_mode', '-')}")
-            lines.append(
-                f"- Contract OK: {'yes' if bool((contract or {}).get('ok', False)) else 'no'}"
-            )
-            if isinstance(gate_info, dict) and gate_info:
-                lines.append(
-                    f"- Gate Parity: {'yes' if bool(gate_info.get('passed', False)) else 'no'}"
-                )
-            if isinstance(runtime_script_info, dict) and runtime_script_info:
-                lines.append(
-                    f"- Runtime Script Parity: {'yes' if bool(runtime_script_info.get('passed', False)) else 'no'}"
-                )
-            if isinstance(recovery_info, dict) and recovery_info:
-                lines.append(
-                    f"- Recovery Parity: {'yes' if bool(recovery_info.get('passed', False)) else 'no'}"
-                )
-                commands = recovery_info.get("recommended_commands", [])
-                if isinstance(commands, list) and commands:
-                    lines.append("- Recovery Commands:")
-                    for cmd in commands:
-                        lines.append(f"  - {cmd}")
-            if isinstance(official_compare, dict) and official_compare:
-                lines.append(
-                    f"- Official Compare: {official_compare.get('status', 'unknown')} "
-                    f"({official_compare.get('reachable_urls', 0)}/{official_compare.get('checked_urls', 0)})"
-                )
-            written_files = item.get("written_files", [])
-            if isinstance(written_files, list) and written_files:
-                lines.append("- Updated Files:")
-                for path in written_files:
-                    lines.append(f"  - {path}")
-            required_steps = plan.get("required_steps", [])
-            if isinstance(required_steps, list) and required_steps:
-                lines.append("- Required Steps:")
-                for step in required_steps:
-                    lines.append(f"  - {step}")
-            skill_install = item.get("skill_install", {})
-            if isinstance(skill_install, dict) and bool(skill_install.get("required", False)):
-                lines.append(
-                    f"- Skill Install: {'ok' if bool(skill_install.get('installed', False)) else 'failed'}"
-                )
-                if skill_install.get("path"):
-                    lines.append(f"  - Path: {skill_install.get('path')}")
-                if skill_install.get("error"):
-                    lines.append(f"  - Error: {skill_install.get('error')}")
-            invalid = (contract or {}).get("invalid_surfaces", {})
-            if isinstance(invalid, dict) and invalid:
-                lines.append("- Invalid Surfaces:")
-                for surface_key in invalid.keys():
-                    lines.append(f"  - {surface_key}")
-            lines.append("")
-        return "\n".join(lines).rstrip() + "\n"
+        return render_host_hardening_markdown(payload, host_label_fn=self._host_label)
 
     def _render_host_parity_onepage_markdown(self, payload: dict[str, Any]) -> str:
-        selected_targets = payload.get("selected_targets", [])
-        if not isinstance(selected_targets, list):
-            selected_targets = []
-        hardening_results = payload.get("hardening_results", {})
-        if not isinstance(hardening_results, dict):
-            hardening_results = {}
-        parity_index = payload.get("host_parity_index", {})
-        if not isinstance(parity_index, dict):
-            parity_index = {}
-        lines = [
-            "# Host Parity Onepage",
-            "",
-            f"- Generated At (UTC): {datetime.now(timezone.utc).isoformat()}",
-            f"- Project Dir: {payload.get('project_dir', '')}",
-            f"- Host Parity Index: {parity_index.get('score', 0)}/100 "
-            f"(threshold {parity_index.get('threshold', 95.0)}, "
-            f"{'pass' if bool(parity_index.get('passed', False)) else 'fail'})",
-            "",
-            "| Host | Status | Failed Dimension | Next Command |",
-            "|---|---|---|---|",
-        ]
-        official_hosts = (payload.get("official_compare_summary", {}) or {}).get("hosts", {})
-        parity_hosts = (payload.get("host_parity_summary", {}) or {}).get("hosts", {})
-        gate_hosts = (payload.get("host_gate_summary", {}) or {}).get("hosts", {})
-        runtime_hosts = (payload.get("host_runtime_script_summary", {}) or {}).get("hosts", {})
-        recovery_hosts = (payload.get("host_recovery_summary", {}) or {}).get("hosts", {})
-        flow_hosts = (payload.get("compatibility", {}) or {}).get("hosts", {})
-        for target in selected_targets:
-            item = hardening_results.get(target, {}) if isinstance(target, str) else {}
-            contract = item.get("contract", {}) if isinstance(item, dict) else {}
-            recovery = recovery_hosts.get(target, {}) if isinstance(recovery_hosts, dict) else {}
-            recovery_commands = (
-                recovery.get("recommended_commands", []) if isinstance(recovery, dict) else []
-            )
-            dimensions: list[tuple[str, bool]] = []
-            dimensions.append(
-                ("official_compare", str((official_hosts or {}).get(target, "unknown")) == "passed")
-            )
-            dimensions.append(
-                (
-                    "host_parity",
-                    bool(((parity_hosts or {}).get(target, {}) or {}).get("passed", False)),
-                )
-            )
-            dimensions.append(
-                ("host_gate", bool(((gate_hosts or {}).get(target, {}) or {}).get("passed", False)))
-            )
-            dimensions.append(
-                (
-                    "runtime_script",
-                    bool(((runtime_hosts or {}).get(target, {}) or {}).get("passed", False)),
-                )
-            )
-            dimensions.append(
-                (
-                    "host_recovery",
-                    bool(((recovery_hosts or {}).get(target, {}) or {}).get("passed", False)),
-                )
-            )
-            dimensions.append(
-                (
-                    "flow_consistency",
-                    bool(((flow_hosts or {}).get(target, {}) or {}).get("flow_consistent", False)),
-                )
-            )
-            contract_ok = bool((contract or {}).get("ok", False))
-            status = "PASS" if contract_ok and all(ok for _, ok in dimensions) else "FAIL"
-            failed = [name for name, ok in dimensions if not ok]
-            failed_text = ", ".join(failed) if failed else "-"
-            next_command = (
-                recovery_commands[0]
-                if isinstance(recovery_commands, list) and recovery_commands
-                else "-"
-            )
-            lines.append(f"| {target} | {status} | {failed_text} | `{next_command}` |")
-        return "\n".join(lines).rstrip() + "\n"
+        return render_host_parity_onepage_markdown(payload, host_label_fn=self._host_label)
 
     def _write_host_hardening_report(
         self,
@@ -4999,36 +4719,13 @@ class CliHostOpsMixin:
         project_dir: Path,
         payload: dict[str, Any],
     ) -> dict[str, Path]:
-        project_name = self._resolve_report_project_name(project_dir)
-        output_dir = project_dir / "output"
-        output_dir.mkdir(parents=True, exist_ok=True)
-        json_file = output_dir / f"{project_name}-host-hardening.json"
-        md_file = output_dir / f"{project_name}-host-hardening.md"
-        onepage_file = output_dir / f"{project_name}-host-parity-onepage.md"
-        json_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        md_file.write_text(self._render_host_hardening_markdown(payload), encoding="utf-8")
-        onepage_file.write_text(
-            self._render_host_parity_onepage_markdown(payload), encoding="utf-8"
+        return write_host_hardening_report(
+            project_dir=project_dir,
+            payload=payload,
+            resolve_project_name_fn=lambda pd: self._resolve_report_project_name(pd),
+            render_hardening_fn=lambda p: self._render_host_hardening_markdown(p),
+            render_parity_onepage_fn=lambda p: self._render_host_parity_onepage_markdown(p),
         )
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        history_dir = output_dir / "host-hardening-history"
-        history_dir.mkdir(parents=True, exist_ok=True)
-        history_json = history_dir / f"{project_name}-host-hardening-{stamp}.json"
-        history_md = history_dir / f"{project_name}-host-hardening-{stamp}.md"
-        history_onepage = history_dir / f"{project_name}-host-parity-onepage-{stamp}.md"
-        history_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        history_md.write_text(self._render_host_hardening_markdown(payload), encoding="utf-8")
-        history_onepage.write_text(
-            self._render_host_parity_onepage_markdown(payload), encoding="utf-8"
-        )
-        return {
-            "json": json_file,
-            "markdown": md_file,
-            "onepage_markdown": onepage_file,
-            "history_json": history_json,
-            "history_markdown": history_md,
-            "history_onepage_markdown": history_onepage,
-        }
 
     def _write_host_runtime_validation_report(
         self,
@@ -5036,31 +4733,12 @@ class CliHostOpsMixin:
         project_dir: Path,
         payload: dict[str, Any],
     ) -> dict[str, Path]:
-        project_name = self._resolve_report_project_name(project_dir)
-        output_dir = project_dir / "output"
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        json_file = output_dir / f"{project_name}-host-runtime-validation.json"
-        md_file = output_dir / f"{project_name}-host-runtime-validation.md"
-        json_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        md_file.write_text(self._render_host_runtime_validation_markdown(payload), encoding="utf-8")
-
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        history_dir = output_dir / "host-runtime-validation-history"
-        history_dir.mkdir(parents=True, exist_ok=True)
-        history_json = history_dir / f"{project_name}-host-runtime-validation-{stamp}.json"
-        history_md = history_dir / f"{project_name}-host-runtime-validation-{stamp}.md"
-        history_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        history_md.write_text(
-            self._render_host_runtime_validation_markdown(payload), encoding="utf-8"
+        return write_host_runtime_validation_report(
+            project_dir=project_dir,
+            payload=payload,
+            resolve_project_name_fn=lambda pd: self._resolve_report_project_name(pd),
+            render_runtime_validation_fn=lambda p: self._render_host_runtime_validation_markdown(p),
         )
-
-        return {
-            "json": json_file,
-            "markdown": md_file,
-            "history_json": history_json,
-            "history_markdown": history_md,
-        }
 
     def _write_host_compatibility_report(
         self,
@@ -5068,26 +4746,9 @@ class CliHostOpsMixin:
         project_dir: Path,
         payload: dict[str, Any],
     ) -> dict[str, Path]:
-        project_name = self._resolve_report_project_name(project_dir)
-        output_dir = project_dir / "output"
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        json_file = output_dir / f"{project_name}-host-compatibility.json"
-        md_file = output_dir / f"{project_name}-host-compatibility.md"
-        json_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        md_file.write_text(self._render_host_compatibility_markdown(payload), encoding="utf-8")
-
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        history_dir = output_dir / "host-compatibility-history"
-        history_dir.mkdir(parents=True, exist_ok=True)
-        history_json = history_dir / f"{project_name}-host-compatibility-{stamp}.json"
-        history_md = history_dir / f"{project_name}-host-compatibility-{stamp}.md"
-        history_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        history_md.write_text(self._render_host_compatibility_markdown(payload), encoding="utf-8")
-
-        return {
-            "json": json_file,
-            "markdown": md_file,
-            "history_json": history_json,
-            "history_markdown": history_md,
-        }
+        return write_host_compatibility_report(
+            project_dir=project_dir,
+            payload=payload,
+            resolve_project_name_fn=lambda pd: self._resolve_report_project_name(pd),
+            render_compatibility_fn=lambda p: self._render_host_compatibility_markdown(p),
+        )

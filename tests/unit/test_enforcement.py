@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -24,9 +25,19 @@ class TestHostHooksConfigurator:
 
         assert "PreToolUse" in hooks
         assert "PostToolUse" in hooks
-        assert len(hooks["PreToolUse"]) >= 1
-        assert hooks["PreToolUse"][0]["matcher"] == "Write|Edit"
+        assert len(hooks["PreToolUse"]) >= 3
+        matchers = {entry["matcher"] for entry in hooks["PreToolUse"]}
+        assert "Write|Edit" in matchers
+        assert cfg.SENSITIVE_READ_MATCHER in matchers
+        assert "Bash" in matchers
         assert hooks["PostToolUse"][0]["matcher"] == "Bash"
+        sensitive_entry = next(
+            entry for entry in hooks["PreToolUse"] if entry["matcher"] == cfg.SENSITIVE_READ_MATCHER
+        )
+        bash_entry = next(entry for entry in hooks["PreToolUse"] if entry["matcher"] == "Bash")
+        assert ".ssh" in sensitive_entry["hooks"][0]["command"]
+        assert ".env" in sensitive_entry["hooks"][0]["command"]
+        assert "id_rsa" in bash_entry["hooks"][0]["command"]
 
     def test_generate_hooks_config_unknown_host(self, project_dir: Path):
         from super_dev.enforcement.host_hooks import HostHooksConfigurator
@@ -68,10 +79,13 @@ class TestHostHooksConfigurator:
         data = json.loads(settings_path.read_text(encoding="utf-8"))
         # Original permission preserved
         assert data["permissions"]["allow"] == ["Read"]
-        # Original Bash hook preserved + Write|Edit added
+        # Original Bash hook preserved + PreToolUse guards merged in
         matchers = {e["matcher"] for e in data["hooks"]["PreToolUse"]}
         assert "Bash" in matchers
         assert "Write|Edit" in matchers
+        assert HostHooksConfigurator.SENSITIVE_READ_MATCHER in matchers
+        bash_entry = next(e for e in data["hooks"]["PreToolUse"] if e["matcher"] == "Bash")
+        assert len(bash_entry["hooks"]) == 2
 
     def test_install_hooks_does_not_duplicate(self, project_dir: Path):
         from super_dev.enforcement.host_hooks import HostHooksConfigurator
@@ -84,6 +98,8 @@ class TestHostHooksConfigurator:
         data = json.loads(settings_path.read_text(encoding="utf-8"))
         pre_matchers = [e["matcher"] for e in data["hooks"]["PreToolUse"]]
         assert pre_matchers.count("Write|Edit") == 1
+        assert pre_matchers.count(HostHooksConfigurator.SENSITIVE_READ_MATCHER) == 1
+        assert pre_matchers.count("Bash") == 1
 
     def test_install_hooks_unsupported_host_raises(self, project_dir: Path):
         from super_dev.enforcement.host_hooks import HostHooksConfigurator
@@ -91,6 +107,98 @@ class TestHostHooksConfigurator:
         cfg = HostHooksConfigurator(project_dir)
         with pytest.raises(ValueError, match="Unsupported host"):
             cfg.install_hooks(host="unknown")
+
+    def test_sensitive_read_guard_blocks_secret_paths_but_not_examples(self, project_dir: Path):
+        from super_dev.enforcement.host_hooks import HostHooksConfigurator
+
+        cfg = HostHooksConfigurator(project_dir)
+        pre_tool_use = cfg.generate_hooks_config(host="claude-code")["PreToolUse"]
+        guard = next(
+            entry for entry in pre_tool_use if entry["matcher"] == cfg.SENSITIVE_READ_MATCHER
+        )["hooks"][0]["command"]
+
+        blocked = subprocess.run(
+            guard,
+            input=json.dumps({"tool_input": {"file_path": "~/.ssh/id_rsa"}}),
+            text=True,
+            shell=True,
+            capture_output=True,
+        )
+        allowed = subprocess.run(
+            guard,
+            input=json.dumps({"tool_input": {"file_path": "./.env.example"}}),
+            text=True,
+            shell=True,
+            capture_output=True,
+        )
+
+        assert blocked.returncode == 0
+        assert '"decision": "block"' in blocked.stdout
+        assert ".ssh/id_rsa" in blocked.stdout
+        assert allowed.returncode == 0
+        assert allowed.stdout.strip() == "{}"
+
+    def test_bash_guard_blocks_secret_file_reads_and_env_prints(self, project_dir: Path):
+        from super_dev.enforcement.host_hooks import HostHooksConfigurator
+
+        cfg = HostHooksConfigurator(project_dir)
+        pre_tool_use = cfg.generate_hooks_config(host="claude-code")["PreToolUse"]
+        bash_guard = next(entry for entry in pre_tool_use if entry["matcher"] == "Bash")["hooks"][
+            0
+        ]["command"]
+
+        file_read = subprocess.run(
+            bash_guard,
+            input=json.dumps({"tool_input": {"command": "cat ~/.ssh/id_rsa"}}),
+            text=True,
+            shell=True,
+            capture_output=True,
+        )
+        file_transform = subprocess.run(
+            bash_guard,
+            input=json.dumps({"tool_input": {"command": "base64 ~/.aws/credentials"}}),
+            text=True,
+            shell=True,
+            capture_output=True,
+        )
+        env_print = subprocess.run(
+            bash_guard,
+            input=json.dumps({"tool_input": {"command": "echo $OPENAI_API_KEY"}}),
+            text=True,
+            shell=True,
+            capture_output=True,
+        )
+        env_script = subprocess.run(
+            bash_guard,
+            input=json.dumps(
+                {
+                    "tool_input": {
+                        "command": "python3 -c 'import os; print(os.environ.get(\"AWS_SECRET_ACCESS_KEY\"))'"
+                    }
+                }
+            ),
+            text=True,
+            shell=True,
+            capture_output=True,
+        )
+        safe = subprocess.run(
+            bash_guard,
+            input=json.dumps({"tool_input": {"command": "cat README.md"}}),
+            text=True,
+            shell=True,
+            capture_output=True,
+        )
+
+        assert file_read.returncode == 0
+        assert ".ssh" in file_read.stdout
+        assert file_transform.returncode == 0
+        assert ".aws" in file_transform.stdout.lower()
+        assert env_print.returncode == 0
+        assert "openai_api_key" in env_print.stdout.lower()
+        assert env_script.returncode == 0
+        assert "aws_secret_access_key" in env_script.stdout.lower()
+        assert safe.returncode == 0
+        assert safe.stdout.strip() == "{}"
 
     def test_get_status(self, project_dir: Path):
         from super_dev.enforcement.host_hooks import HostHooksConfigurator

@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+import datetime
 import json
+import subprocess
 from pathlib import Path
 from typing import Any
+
+try:
+    from rich.table import Table
+
+    RICH_AVAILABLE = True
+except ImportError:
+    RICH_AVAILABLE = False
 
 from .config import ConfigManager
 from .proof_pack import ProofPackBuilder
@@ -446,3 +455,383 @@ class CliReleaseQualityMixin:
             pass
 
         return 0
+
+    # ------------------------------------------------------------------
+    # history — list past pipeline runs
+    # ------------------------------------------------------------------
+
+    def _cmd_history(self, args) -> int:
+        """列出过去的流水线运行记录。"""
+        project_dir = Path.cwd()
+        history_dir = project_dir / ".super-dev" / "workflow-history"
+        events_file = project_dir / ".super-dev" / "workflow-events.jsonl"
+
+        # Collect run records from workflow-history snapshots
+        records: list[dict[str, Any]] = []
+
+        if history_dir.exists():
+            for snapshot_file in sorted(
+                history_dir.glob("workflow-state-*.json"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            ):
+                try:
+                    payload = json.loads(snapshot_file.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                status_raw = str(
+                    payload.get("status", "") or payload.get("workflow_status", "")
+                ).strip()
+                run_id = payload.get("run_id", snapshot_file.stem)
+                phase = str(payload.get("current_step_label", "")).strip() or status_raw
+                quality_score = payload.get("quality_score", "")
+                timestamp = str(payload.get("updated_at", "")).strip()
+                records.append(
+                    {
+                        "run_id": run_id,
+                        "phase": phase,
+                        "status": status_raw,
+                        "quality_score": quality_score,
+                        "timestamp": timestamp,
+                    }
+                )
+
+        # Also parse workflow-events.jsonl for additional entries
+        if events_file.exists():
+            seen_ids: set[str] = {r["run_id"] for r in records}
+            try:
+                lines = events_file.read_text(encoding="utf-8").splitlines()
+            except Exception:
+                lines = []
+            for line in reversed(lines):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    evt = json.loads(line)
+                except Exception:
+                    continue
+                evt_id = evt.get("source_path", "") + evt.get("timestamp", "")
+                if evt_id in seen_ids:
+                    continue
+                seen_ids.add(evt_id)
+                records.append(
+                    {
+                        "run_id": evt.get("event", ""),
+                        "phase": evt.get("current_step_label", ""),
+                        "status": evt.get("status", ""),
+                        "quality_score": "",
+                        "timestamp": evt.get("timestamp", ""),
+                    }
+                )
+
+        # Also check for latest.json
+        latest_file = history_dir / "latest.json" if history_dir.exists() else None
+        if latest_file and latest_file.exists():
+            try:
+                payload = json.loads(latest_file.read_text(encoding="utf-8"))
+                run_id = payload.get("run_id", "latest")
+                phase = str(payload.get("current_step_label", "")).strip()
+                status_raw = str(
+                    payload.get("status", "") or payload.get("workflow_status", "")
+                ).strip()
+                quality_score = payload.get("quality_score", "")
+                timestamp = str(payload.get("updated_at", "")).strip()
+                # Avoid duplicate if latest already in history
+                if not any(r["run_id"] == run_id and r["timestamp"] == timestamp for r in records):
+                    records.insert(
+                        0,
+                        {
+                            "run_id": run_id,
+                            "phase": phase or status_raw,
+                            "status": status_raw,
+                            "quality_score": quality_score,
+                            "timestamp": timestamp,
+                        },
+                    )
+            except Exception:
+                pass
+
+        # Filter by status
+        status_filter = getattr(args, "status", None)
+        if status_filter:
+            status_lower = status_filter.lower()
+            filtered: list[dict[str, Any]] = []
+            for rec in records:
+                rec_status = rec["status"].lower()
+                if status_lower == "success" and "success" in rec_status:
+                    filtered.append(rec)
+                elif status_lower == "failed" and ("fail" in rec_status or "error" in rec_status):
+                    filtered.append(rec)
+                elif status_lower == "running" and (
+                    "running" in rec_status or "progress" in rec_status
+                ):
+                    filtered.append(rec)
+            records = filtered
+
+        # Sort by timestamp descending
+        records.sort(key=lambda r: r["timestamp"], reverse=True)
+
+        # Apply limit
+        limit = max(1, getattr(args, "limit", 10))
+        records = records[:limit]
+
+        if not records:
+            self.console.print("[yellow]未找到历史流水线运行记录[/yellow]")
+            self.console.print("  提示: 运行一次流水线后，记录会自动保存在 .super-dev/workflow-history/")
+            return 0
+
+        if RICH_AVAILABLE:
+            table = Table(title="Pipeline History")
+            table.add_column("Run ID", style="cyan", max_width=36)
+            table.add_column("Phase", style="white")
+            table.add_column("Status", style="white")
+            table.add_column("Quality", justify="right")
+            table.add_column("Timestamp", style="dim")
+            for rec in records:
+                status_style = self._status_style(rec["status"])
+                table.add_row(
+                    str(rec["run_id"])[:36],
+                    str(rec["phase"])[:40],
+                    f"[{status_style}]{rec['status']}[/{status_style}]",
+                    str(rec["quality_score"]) if rec["quality_score"] else "-",
+                    rec["timestamp"][:25],
+                )
+            self.console.print(table)
+        else:
+            for rec in records:
+                self.console.print(
+                    f"  {rec['run_id'][:36]}  {rec['phase'][:40]}  "
+                    f"{rec['status']}  {rec['quality_score'] or '-'}  {rec['timestamp'][:25]}"
+                )
+
+        return 0
+
+    @staticmethod
+    def _status_style(status: str) -> str:
+        """Return a Rich style string for a status value."""
+        s = status.lower()
+        if "success" in s or "done" in s or "complete" in s:
+            return "green"
+        if "fail" in s or "error" in s:
+            return "red"
+        if "running" in s or "progress" in s:
+            return "yellow"
+        return "white"
+
+    # ------------------------------------------------------------------
+    # cost — show LLM cost report
+    # ------------------------------------------------------------------
+
+    def _cmd_cost(self, _args) -> int:
+        """显示流水线各阶段的 LLM 调用耗时与 token 消耗。"""
+        project_dir = Path.cwd()
+
+        # Load pipeline cost from .super-dev/metrics/pipeline-cost.json
+        cost_data: dict[str, Any] | None = None
+        cost_path = project_dir / ".super-dev" / "metrics" / "pipeline-cost.json"
+        if cost_path.exists():
+            try:
+                cost_data = json.loads(cost_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        # Also check for pipeline metrics in output/
+        metrics_data: dict[str, Any] | None = None
+        output_dir = project_dir / "output"
+        if output_dir.exists():
+            candidates = sorted(
+                output_dir.glob("*-pipeline-metrics.json"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+            if candidates:
+                try:
+                    metrics_data = json.loads(candidates[0].read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+
+        if not cost_data and not metrics_data:
+            self.console.print("[yellow]未找到成本或指标数据[/yellow]")
+            self.console.print(
+                "  提示: 运行一次流水线后，成本数据会自动保存在 .super-dev/metrics/"
+            )
+            self.console.print("  查看指标: super-dev metrics")
+            return 0
+
+        # Build a unified table from available data
+        rows: list[dict[str, str]] = []
+
+        if cost_data and cost_data.get("phases"):
+            for name, phase in cost_data["phases"].items():
+                duration = float(phase.get("duration_seconds", 0))
+                files_read = int(phase.get("files_read", 0))
+                files_written = int(phase.get("files_written", 0))
+                cmds = int(phase.get("commands_executed", 0))
+                # Estimate tokens based on file operations (rough heuristic)
+                estimated_tokens = (files_read + files_written) * 500 + cmds * 200
+                # Rough cost estimate at ~$0.01 per 1K tokens
+                cost_estimate = estimated_tokens / 1000 * 0.01
+                rows.append(
+                    {
+                        "phase": name,
+                        "duration": f"{duration:.2f}s",
+                        "estimated_tokens": f"{estimated_tokens:,}",
+                        "files_read": str(files_read),
+                        "files_written": str(files_written),
+                        "cost_estimate": f"${cost_estimate:.4f}",
+                    }
+                )
+            # Add total row
+            total_duration = float(cost_data.get("total_duration", 0))
+            total_tokens = sum(int(r["estimated_tokens"].replace(",", "")) for r in rows)
+            total_cost = total_tokens / 1000 * 0.01
+            rows.append(
+                {
+                    "phase": "[bold]TOTAL[/bold]",
+                    "duration": f"{total_duration:.2f}s",
+                    "estimated_tokens": f"{total_tokens:,}",
+                    "files_read": "",
+                    "files_written": "",
+                    "cost_estimate": f"${total_cost:.4f}",
+                }
+            )
+
+        if metrics_data:
+            self.console.print(f"[cyan]Pipeline Metrics[/cyan]  project={metrics_data.get('project_name', '')}")
+            self.console.print(
+                f"  success={metrics_data.get('success', False)}  "
+                f"success_rate={metrics_data.get('success_rate', 0)}%  "
+                f"total_duration={metrics_data.get('total_duration_seconds', 0)}s"
+            )
+            if metrics_data.get("started_at"):
+                self.console.print(f"  started: {metrics_data['started_at']}")
+            if metrics_data.get("finished_at"):
+                self.console.print(f"  finished: {metrics_data['finished_at']}")
+
+        if not rows:
+            self.console.print("[yellow]成本数据中无阶段明细[/yellow]")
+            return 0
+
+        if RICH_AVAILABLE:
+            table = Table(title="Pipeline Cost Report")
+            table.add_column("Phase", style="cyan")
+            table.add_column("Duration", justify="right")
+            table.add_column("Est. Tokens", justify="right")
+            table.add_column("Files Read", justify="right")
+            table.add_column("Files Written", justify="right")
+            table.add_column("Cost Est.", justify="right", style="green")
+            for row in rows:
+                table.add_row(
+                    row["phase"],
+                    row["duration"],
+                    row["estimated_tokens"],
+                    row["files_read"],
+                    row["files_written"],
+                    row["cost_estimate"],
+                )
+            self.console.print(table)
+        else:
+            for row in rows:
+                self.console.print(
+                    f"  {row['phase']:<20} {row['duration']:>10} "
+                    f"{row['estimated_tokens']:>12} {row['cost_estimate']:>10}"
+                )
+
+        self.console.print(
+            "\n  [dim]Note: Token counts and costs are rough estimates based on file operations.[/dim]"
+        )
+        return 0
+
+    # ------------------------------------------------------------------
+    # diff — show pipeline changes
+    # ------------------------------------------------------------------
+
+    def _cmd_diff(self, args) -> int:
+        """对比当前与上一阶段的文件变更。"""
+        project_dir = Path.cwd()
+        output_dir = project_dir / "output"
+
+        phase_filter = getattr(args, "phase", None)
+
+        if not output_dir.exists():
+            self.console.print("[yellow]未找到 output 目录，请先执行流水线[/yellow]")
+            return 0
+
+        # Collect files from output/
+        files: list[dict[str, Any]] = []
+        for item in sorted(output_dir.rglob("*")):
+            if not item.is_file():
+                continue
+            if item.name.startswith("."):
+                continue
+            stat = item.stat()
+            rel_path = str(item.relative_to(output_dir))
+
+            # Apply phase filter
+            if phase_filter and phase_filter.lower() not in rel_path.lower():
+                continue
+
+            files.append(
+                {
+                    "path": rel_path,
+                    "size": stat.st_size,
+                    "modified": stat.st_mtime,
+                }
+            )
+
+        if not files:
+            self.console.print("[yellow]output 目录中无产物文件[/yellow]")
+            return 0
+
+        # Sort by modification time descending
+        files.sort(key=lambda f: f["modified"], reverse=True)
+
+        # Display file listing
+        if RICH_AVAILABLE:
+            table = Table(title="Output Artifacts")
+            table.add_column("File", style="cyan")
+            table.add_column("Size", justify="right")
+            table.add_column("Modified", style="dim")
+            for f in files[:50]:  # Cap display
+                mtime = datetime.datetime.fromtimestamp(
+                    f["modified"], tz=datetime.timezone.utc
+                ).strftime("%Y-%m-%d %H:%M:%S UTC")
+                size_str = self._format_file_size(f["size"])
+                table.add_row(f["path"], size_str, mtime)
+            self.console.print(table)
+        else:
+            for f in files[:50]:
+                mtime = datetime.datetime.fromtimestamp(
+                    f["modified"], tz=datetime.timezone.utc
+                ).strftime("%Y-%m-%d %H:%M:%S UTC")
+                size_str = self._format_file_size(f["size"])
+                self.console.print(f"  {f['path']:<50} {size_str:>10}  {mtime}")
+
+        # Try git diff on output directory
+        try:
+            result = subprocess.run(
+                ["git", "diff", "--stat", "--", "output/"],
+                capture_output=True,
+                text=True,
+                cwd=str(project_dir),
+                timeout=10,
+            )
+            if result.stdout.strip():
+                self.console.print("\n[cyan]Git Diff (output/):[/cyan]")
+                self.console.print(result.stdout.strip())
+            else:
+                self.console.print("\n[dim]No uncommitted changes detected in output/ via git.[/dim]")
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            self.console.print("\n[dim]Git not available or timed out.[/dim]")
+
+        return 0
+
+    @staticmethod
+    def _format_file_size(size: int) -> str:
+        """Format file size in human-readable form."""
+        if size < 1024:
+            return f"{size} B"
+        if size < 1024 * 1024:
+            return f"{size / 1024:.1f} KB"
+        return f"{size / (1024 * 1024):.1f} MB"

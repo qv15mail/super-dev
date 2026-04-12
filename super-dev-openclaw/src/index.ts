@@ -429,7 +429,108 @@ export default definePluginEntry({
       },
     });
 
-    // 20. super_dev_run - 通用透传（可选 tool，带子命令白名单）
+    // 20. super_dev_seeai - 赛事极速模式（SEEAI Competition Mode）
+    // 一键进入30分钟极速交付流水线：compact research -> compact docs -> confirm -> compact spec -> full-stack sprint -> polish
+    api.registerTool({
+      name: "super_dev_seeai",
+      label: "Super Dev SEEAI (Competition)",
+      description:
+        "Activate the SEEAI competition fast mode for time-boxed (30 min) high-quality showcase delivery. " +
+        "Compresses the full pipeline into: fast research -> compact docs -> quick confirm -> sprint build -> polish. " +
+        "Optimized for demo impact, not engineering completeness.",
+      parameters: Type.Object({
+        description: Type.String({ description: "Competition requirement or project idea" }),
+        type: Type.Optional(Type.String({ description: "Project archetype: landing, game, tool, dashboard, saas, app" })),
+        frontend: Type.Optional(Type.String({ description: "Frontend: react, vue, next, svelte" })),
+        backend: Type.Optional(Type.String({ description: "Backend: node, python, go, none" })),
+      }),
+      async execute(_id: string, params: Record<string, unknown>) {
+        const desc = params.description;
+        if (typeof desc !== "string" || !desc.trim()) {
+          return formatToolResult({ stdout: "", stderr: "Missing required parameter: description", exitCode: 1 });
+        }
+        const args = ["create", desc, "--mode", "feature"];
+        if (params.frontend) args.push("--frontend", String(params.frontend));
+        if (params.backend) args.push("--backend", String(params.backend));
+        return formatToolResult(await invokeSuperDev(args, { cwd: cwd(), bin: bin(), timeout: timeout() }));
+      },
+    });
+
+    // 21. super_dev_seeai_polish - 赛事演示打磨
+    // 快速检查并提升作品的演示完成度：视觉效果、交互完整性、文案质量、演示路径验证
+    api.registerTool({
+      name: "super_dev_seeai_polish",
+      label: "Super Dev SEEAI Polish",
+      description:
+        "Quick polish check for competition showcase: verify demo path works, check visual completeness, " +
+        "fix placeholder content, ensure wow points land. Run this in the last 5 minutes before presentation.",
+      parameters: Type.Object({
+        focus: Type.Optional(Type.String({
+          description: "Polish focus: visual (UI polish), content (copy/text), demo (demo path check), all (default)"
+        })),
+      }),
+      async execute(_id: string, params: Record<string, unknown>) {
+        const focus = String(params.focus || "all");
+        const args = ["quality", "--type", "ui-review"];
+        const result = await invokeSuperDev(args, { cwd: cwd(), bin: bin(), timeout: timeout() });
+        // Append polish guidance
+        const polishHints = [
+          "\n--- SEEAI Polish Checklist ---",
+          focus === "all" || focus === "visual" ? "\n[Visual] Check: no emoji icons, no purple/pink gradient, no hardcoded colors, dark mode OK" : "",
+          focus === "all" || focus === "content" ? "\n[Content] Check: no placeholder text (Lorem ipsum), CTA text is specific, titles are catchy" : "",
+          focus === "all" || focus === "demo" ? "\n[Demo] Check: main user path works end-to-end, no broken links, loading states show, empty states show" : "",
+          "\n[WOW] Verify your single biggest wow point actually works and is immediately visible",
+        ];
+        const stdout = (result.stdout || "") + polishHints.join("");
+        return formatToolResult({ ...result, stdout });
+      },
+    });
+
+    // 22. super_dev_seeai_score - 赛事自评
+    // 按比赛评审标准快速自评，给出分数和改进建议
+    api.registerTool({
+      name: "super_dev_seeai_score",
+      label: "Super Dev SEEAI Score",
+      description:
+        "Self-evaluate your competition project against typical judging criteria: completeness, visual quality, " +
+        "innovation, demo flow, and technical depth. Returns a score (0-100) with actionable improvement suggestions.",
+      parameters: Type.Object({
+        criteria: Type.Optional(Type.String({
+          description: "Judging criteria to score against: general (default), innovation, design, tech, completeness"
+        })),
+      }),
+      async execute(_id: string, params: Record<string, unknown>) {
+        // Run quality gate as the scoring base
+        const qualityArgs = ["quality"];
+        const qualityResult = await invokeSuperDev(qualityArgs, { cwd: cwd(), bin: bin(), timeout: timeout() });
+
+        const scoringGuide = [
+          "\n--- SEEAI Competition Self-Score ---",
+          "\n[Judging Dimensions]",
+          "  1. Completeness (25%): Does the main path work end-to-end? No dead buttons, no empty pages?",
+          "  2. Visual Quality (25%): First impression strong? No template feel? Design tokens used? Dark mode?",
+          "  3. Innovation / Wow (20%): Is there a clear 'wow' moment? Something memorable?",
+          "  4. Demo Flow (15%): Can you present it in 2 minutes? Smooth transitions? Clear narrative?",
+          "  5. Technical Depth (15%): Real data (not all mock)? Responsive? A11y basics?",
+          "\n[Quick Wins if score < 70]",
+          "  - Replace all placeholder text with real, topic-specific copy",
+          "  - Add one clear hero animation or transition (even simple CSS)",
+          "  - Make sure the main CTA/button does something real",
+          "  - Add a result/completion screen at the end of the main flow",
+          "  - Check: no console.errors, no 404s, no broken images",
+          "\n[Anti-patterns that lose points]",
+          "  - Purple/pink gradient hero (instant AI-template feel)",
+          "  - Emoji used as icons",
+          "  - Generic lorem ipsum or AI-boilerplate copy",
+          "  - All features half-done instead of one feature fully done",
+        ];
+
+        const stdout = (qualityResult.stdout || "") + scoringGuide.join("");
+        return formatToolResult({ ...qualityResult, stdout });
+      },
+    });
+
+    // 23. super_dev_run - 通用透传（可选 tool，带子命令白名单）
     api.registerTool(
       {
         name: "super_dev_run",

@@ -14,12 +14,12 @@ import subprocess
 import time
 import uuid
 from collections import defaultdict, deque
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Mapping, Sequence
-
+from typing import Any
 
 LOGGER = logging.getLogger(__name__)
 SUPPORTED_EXECUTORS = {"claude-code", "codex", "auto"}

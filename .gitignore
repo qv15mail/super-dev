@@ -65,9 +65,7 @@ artifacts/
 
 # Host runtime / onboarding artifacts (project-local generated files)
 /.agent/
-/.claude/
 /.codebuddy/
-/.cursor/
 /.gemini/
 /.iflow/
 /.kimi/
@@ -77,8 +75,6 @@ artifacts/
 /.trae/
 /.windsurf/
 /GEMINI.md
-/AGENTS.md
-/CLAUDE.md
 
 # Local logs and media
 logs/

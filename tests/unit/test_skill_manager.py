@@ -84,7 +84,9 @@ class TestSkillManager:
         removed = manager.uninstall("super-dev-core", target)
         assert not removed.exists()
 
-    def test_codex_builtin_skill_is_mirrored_to_compatibility_surface(self, temp_project_dir: Path, monkeypatch):
+    def test_codex_builtin_skill_is_mirrored_to_compatibility_surface(
+        self, temp_project_dir: Path, monkeypatch
+    ):
         fake_home = temp_project_dir / "fake-home"
         fake_home.mkdir(parents=True, exist_ok=True)
         monkeypatch.setenv("HOME", str(fake_home))
@@ -113,7 +115,9 @@ class TestSkillManager:
         assert "$super-dev" in metadata_content
         assert "slash skill list" in metadata_content
         assert "allow_implicit_invocation: true" in metadata_content
-        assert {"super-dev", "super-dev-core"}.issubset(set(manager.list_installed("codex-cli")))
+        assert {"super-dev", "super-dev-core", "super-dev-seeai"}.issubset(
+            set(manager.list_installed("codex-cli"))
+        )
 
         manager.uninstall("super-dev", "codex-cli")
         assert not primary_skill.exists()
@@ -121,7 +125,39 @@ class TestSkillManager:
         assert not compatibility_skill.exists()
         assert not compatibility_legacy_skill.exists()
 
-    def test_codex_compatibility_mirror_uses_codex_home_when_set(self, temp_project_dir: Path, monkeypatch):
+    def test_codex_builtin_skill_installs_seeai_metadata(self, temp_project_dir: Path, monkeypatch):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
+        manager = SkillManager(temp_project_dir)
+
+        manager.install(source="super-dev", target="codex-cli", name="super-dev")
+
+        seeai_skill = fake_home / ".agents" / "skills" / "super-dev-seeai" / "SKILL.md"
+        metadata_file = (
+            fake_home / ".agents" / "skills" / "super-dev-seeai" / "agents" / "openai.yaml"
+        )
+        assert seeai_skill.exists()
+        assert metadata_file.exists()
+        seeai_content = seeai_skill.read_text(encoding="utf-8")
+        assert "$super-dev-seeai" in seeai_content
+        assert "比赛短文档模板" in seeai_content
+        assert "首轮输出模板（强制）" in seeai_content
+        assert "`P0 主路径`" in seeai_content
+        assert "# 作品目标" in seeai_content
+        assert "官网类" in seeai_content
+        assert "默认技术栈：React/Vite 或 Next.js + Tailwind + Framer Motion" in seeai_content
+        assert "默认 sprint：先做可玩的主循环，再补积分/胜负反馈" in seeai_content
+        assert "题型识别提示" in seeai_content
+        assert "品牌、产品发布、活动宣传、首屏、官网、落地页" in seeai_content
+        assert "时间不够时，优先删功能，不要删完成度" in seeai_content
+        metadata_content = metadata_file.read_text(encoding="utf-8")
+        assert 'display_name: "Super Dev SEEAI"' in metadata_content
+        assert "$super-dev-seeai" in metadata_content
+
+    def test_codex_compatibility_mirror_uses_codex_home_when_set(
+        self, temp_project_dir: Path, monkeypatch
+    ):
         fake_home = temp_project_dir / "fake-home"
         codex_home = temp_project_dir / "custom-codex-home"
         fake_home.mkdir(parents=True, exist_ok=True)

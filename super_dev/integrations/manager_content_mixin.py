@@ -58,11 +58,15 @@ class IntegrationManagerContentMixin:
             "- If slash arguments are empty, ask the user to restate the requirement and stay inside Super Dev mode.\n\n"
             "## Local Orchestration Fallback\n"
             "```bash\n"
-            "super-dev create \"$ARGUMENTS\"\n"
+            'super-dev create "$ARGUMENTS"\n'
             "super-dev spec list\n"
             "```\n\n"
         )
-        rules = self._generic_cli_rules(target) if target == "kiro-cli" else self._generic_ide_rules(target)
+        rules = (
+            self._generic_cli_rules(target)
+            if target == "kiro-cli"
+            else self._generic_ide_rules(target)
+        )
         return frontmatter + input_block + rules
 
     def _build_codebuddy_rule_content(self) -> str:
@@ -96,7 +100,9 @@ class IntegrationManagerContentMixin:
             stop = existing.index(end, start) + len(end)
             updated = f"{existing[:start]}{managed}{existing[stop:]}"
         elif existing.strip():
-            spacer = "" if existing.endswith("\n\n") else ("\n" if existing.endswith("\n") else "\n\n")
+            spacer = (
+                "" if existing.endswith("\n\n") else ("\n" if existing.endswith("\n") else "\n\n")
+            )
             updated = f"{existing}{spacer}{managed}"
         else:
             updated = managed
@@ -119,7 +125,7 @@ class IntegrationManagerContentMixin:
             return False
         start = existing.index(begin)
         stop = existing.index(end, start) + len(end)
-        if stop < len(existing) and existing[stop:stop + 1] == "\n":
+        if stop < len(existing) and existing[stop : stop + 1] == "\n":
             stop += 1
         updated = existing[:start] + existing[stop:]
         updated = updated.strip()
@@ -132,10 +138,18 @@ class IntegrationManagerContentMixin:
     def setup_slash_command(self, target: str, force: bool = False) -> Path | None:
         return self.setup_slash_command_for_scope(target=target, force=force, scope="project")
 
+    def setup_seeai_slash_command(self, target: str, force: bool = False) -> Path | None:
+        return self.setup_seeai_slash_command_for_scope(target=target, force=force, scope="project")
+
     def setup_global_slash_command(self, target: str, force: bool = False) -> Path | None:
         return self.setup_slash_command_for_scope(target=target, force=force, scope="global")
 
-    def setup_slash_command_for_scope(self, target: str, force: bool = False, scope: str = "project") -> Path | None:
+    def setup_global_seeai_slash_command(self, target: str, force: bool = False) -> Path | None:
+        return self.setup_seeai_slash_command_for_scope(target=target, force=force, scope="global")
+
+    def setup_slash_command_for_scope(
+        self, target: str, force: bool = False, scope: str = "project"
+    ) -> Path | None:
         if not self.supports_slash(target):
             return None
         command_file = self.resolve_slash_command_path(
@@ -148,6 +162,29 @@ class IntegrationManagerContentMixin:
         command_file.parent.mkdir(parents=True, exist_ok=True)
         command_content = self._append_flow_contract(
             content=self._build_slash_command_content(target),
+            relative=command_file.name,
+        )
+        command_file.write_text(command_content, encoding="utf-8")
+        return command_file
+
+    def setup_seeai_slash_command_for_scope(
+        self,
+        target: str,
+        force: bool = False,
+        scope: str = "project",
+    ) -> Path | None:
+        if not self.supports_slash(target):
+            return None
+        command_file = self.resolve_seeai_slash_command_path(
+            target=target,
+            scope=scope,
+            project_dir=self.project_dir,
+        )
+        if command_file.exists() and not force:
+            return None
+        command_file.parent.mkdir(parents=True, exist_ok=True)
+        command_content = self._append_flow_contract(
+            content=self._build_seeai_slash_command_content(target),
             relative=command_file.name,
         )
         command_file.write_text(command_content, encoding="utf-8")
@@ -177,7 +214,23 @@ class IntegrationManagerContentMixin:
         raise ValueError(f"Unsupported slash scope: {scope}")
 
     @classmethod
+    def resolve_seeai_slash_command_path(
+        cls,
+        *,
+        target: str,
+        scope: str,
+        project_dir: Path | None = None,
+    ) -> Path:
+        base = cls.resolve_slash_command_path(target=target, scope=scope, project_dir=project_dir)
+        return base.with_name(base.name.replace("super-dev", "super-dev-seeai"))
+
+    @classmethod
     def supports_slash(cls, target: str) -> bool:
+        from ..host_registry import get_host_definition
+        from ..host_registry import supports_slash as registry_supports_slash
+
+        if get_host_definition(target) is not None:
+            return registry_supports_slash(target)
         return target in cls.SLASH_COMMAND_FILES and target not in cls.NO_SLASH_TARGETS
 
     @classmethod
@@ -203,7 +256,10 @@ class IntegrationManagerContentMixin:
         if target == "claude-code" and relative == ".claude-plugin/marketplace.json":
             return self._build_claude_repo_marketplace_content()
 
-        if target == "claude-code" and relative == "plugins/super-dev-claude/.claude-plugin/plugin.json":
+        if (
+            target == "claude-code"
+            and relative == "plugins/super-dev-claude/.claude-plugin/plugin.json"
+        ):
             return self._build_claude_plugin_manifest_content()
 
         if target == "claude-code" and relative == "plugins/super-dev-claude/README.md":
@@ -215,17 +271,32 @@ class IntegrationManagerContentMixin:
         if target == "codex-cli" and relative == ".agents/plugins/marketplace.json":
             return self._build_codex_repo_marketplace_content()
 
-        if target == "codex-cli" and relative == "plugins/super-dev-codex/.codex-plugin/plugin.json":
+        if (
+            target == "codex-cli"
+            and relative == "plugins/super-dev-codex/.codex-plugin/plugin.json"
+        ):
             return self._build_codex_plugin_manifest_content()
 
         if target == "codex-cli" and relative == "plugins/super-dev-codex/README.md":
             return self._build_codex_plugin_readme_content()
 
-        if target == "codex-cli" and relative == "plugins/super-dev-codex/skills/super-dev/SKILL.md":
+        if (
+            target == "codex-cli"
+            and relative == "plugins/super-dev-codex/skills/super-dev/SKILL.md"
+        ):
             return self._build_codex_plugin_skill_content(skill_name="super-dev")
 
-        if target == "codex-cli" and relative == "plugins/super-dev-codex/skills/super-dev-core/SKILL.md":
+        if (
+            target == "codex-cli"
+            and relative == "plugins/super-dev-codex/skills/super-dev-core/SKILL.md"
+        ):
             return self._build_codex_plugin_skill_content(skill_name="super-dev-core")
+
+        if (
+            target == "codex-cli"
+            and relative == "plugins/super-dev-codex/skills/super-dev-seeai/SKILL.md"
+        ):
+            return self._build_codex_plugin_skill_content(skill_name="super-dev-seeai")
 
         if target == "codebuddy" and relative.endswith(".codebuddy/rules/super-dev/RULE.mdc"):
             return self._build_codebuddy_rule_content()
@@ -236,12 +307,20 @@ class IntegrationManagerContentMixin:
         if target == "trae":
             return self._trae_rules()
 
-        if relative.endswith("/skills/super-dev-core/SKILL.md") or relative.endswith("/skills/super-dev/SKILL.md"):
+        if (
+            relative.endswith("/skills/super-dev-core/SKILL.md")
+            or relative.endswith("/skills/super-dev/SKILL.md")
+            or relative.endswith("/skills/super-dev-seeai/SKILL.md")
+        ):
             return self._build_embedded_skill_content(target=target, relative=relative)
 
         # Route command files to slash command content generator
         if relative.endswith("/commands/super-dev.md"):
             return self._build_slash_command_content(target)
+        if relative.endswith("/commands/super-dev-seeai.md") or relative.endswith(
+            "/workflows/super-dev-seeai.md"
+        ):
+            return self._build_seeai_slash_command_content(target)
 
         if target in {"cursor", "cursor-cli"}:
             rules_body = (
@@ -323,7 +402,7 @@ class IntegrationManagerContentMixin:
     def _build_codex_agents_content(self) -> str:
         return (
             "# Super Dev for Codex CLI\n\n"
-            "Treat Codex App/Desktop selecting `super-dev` from the `/` list, Codex CLI explicit `$super-dev`, and natural-language `super-dev:` / `super-dev：` messages as valid Super Dev entry points.\n\n"
+            "Treat Codex App/Desktop selecting `super-dev` or `super-dev-seeai` from the `/` list, Codex CLI explicit `$super-dev` / `$super-dev-seeai`, and natural-language `super-dev:` / `super-dev：` / `super-dev-seeai:` / `super-dev-seeai：` messages as valid Super Dev entry points.\n\n"
             "If the repository already contains active Super Dev workflow context, the first natural-language requirement in a new session must also continue Super Dev rather than normal chat.\n\n"
             "## Direct Activation Rule\n"
             "- Do not spend a turn saying you will read the skill first, explain the skill, or decide whether to enter the workflow.\n"
@@ -333,6 +412,10 @@ class IntegrationManagerContentMixin:
             "- Codex App/Desktop: prefer selecting `super-dev` from the `/` list. This is the enabled Skill entry, not a custom project slash command file.\n"
             "- Codex CLI: prefer explicit `$super-dev`.\n"
             "- Natural-language fallback for both surfaces: `super-dev: <需求描述>` or `super-dev：<需求描述>` through AGENTS.md.\n\n"
+            "## SEEAI Competition Mode\n"
+            "- If the user triggers `super-dev-seeai`, enter the SEEAI competition-fast contract instead of the standard long chain.\n"
+            "- SEEAI keeps research -> compact docs -> docs confirmation -> compact spec, then goes directly into a full-stack sprint and final polish.\n"
+            "- SEEAI still requires real files in `output/`, but the documents must stay compact and competition-oriented.\n\n"
             "## Required execution\n"
             "1. First reply: state that Super Dev pipeline mode is active and the current phase is `research`.\n"
             "2. Read `knowledge/` and `output/knowledge-cache/*-knowledge-bundle.json` when available.\n"
@@ -438,11 +521,27 @@ class IntegrationManagerContentMixin:
             "- `.agents/plugins/marketplace.json`\n\n"
             "The plugin skill should behave exactly like the main Codex Super Dev workflow:\n\n"
             "- App/Desktop slash list entry: `super-dev`\n"
+            "- App/Desktop SEEAI slash list entry: `super-dev-seeai`\n"
             "- CLI explicit skill mention: `$super-dev`\n"
+            "- CLI explicit SEEAI skill mention: `$super-dev-seeai`\n"
             "- AGENTS fallback: `super-dev: <需求描述>`\n"
         )
 
     def _build_codex_plugin_skill_content(self, *, skill_name: str) -> str:
+        if skill_name == "super-dev-seeai":
+            return (
+                "---\n"
+                "name: super-dev-seeai\n"
+                "description: Super Dev SEEAI Codex App/Desktop competition entry.\n"
+                "when_to_use: Use when the user wants the fast competition flow inside Codex App/Desktop.\n"
+                f"version: {__version__}\n"
+                "---\n\n"
+                "# Super Dev SEEAI for Codex Plugin\n\n"
+                "- Treat this as the competition-fast mode for showcase builds.\n"
+                "- Enter research first, then compact PRD / architecture / UIUX, wait for docs confirmation, create compact Spec, and move into one integrated build sprint.\n"
+                "- Do not expand back into the standard preview gate unless the user explicitly switches modes.\n"
+                "- Keep the result demoable, visually intentional, and runnable.\n"
+            )
         if skill_name == "super-dev-core":
             return (
                 "---\n"
@@ -593,11 +692,17 @@ class IntegrationManagerContentMixin:
             "You are the CodeBuddy agent that activates Super Dev governance mode.\n\n"
             "## Purpose\n"
             "- Treat `/super-dev ...` as the entry point into the Super Dev pipeline.\n"
+            "- Treat `/super-dev-seeai ...` and `super-dev-seeai: ...` as the entry points into the SEEAI competition-fast pipeline.\n"
             "- Enforce the sequence: research -> three core docs -> wait for confirmation -> Spec/tasks -> frontend runtime verification -> backend/tests/delivery.\n"
             "- Use the local Python `super-dev` CLI for governance artifacts, checks, and delivery reports.\n"
             "- Use CodeBuddy native tools for browsing, coding, terminal execution, and debugging.\n\n"
+            "## SEEAI Competition Mode\n"
+            "- In SEEAI mode, keep research -> compact docs -> docs confirmation -> compact spec, then go straight into one integrated full-stack sprint.\n"
+            "- Bias toward one project-bound Agent Chat, fast P0/P1/P2 scoping, and strong demoability within a 30-minute timebox.\n"
+            "- If slash command indexing lags, continue in the same session with `super-dev-seeai: <需求>` instead of switching out of the mode.\n\n"
             "## First Response Contract\n"
             "- On the first reply after `/super-dev ...`, explicitly say Super Dev pipeline mode is active.\n"
+            "- On the first reply after `/super-dev-seeai ...` or `super-dev-seeai: ...`, explicitly say Super Dev SEEAI competition mode is active.\n"
             "- If the repository already has active Super Dev workflow context, the first natural-language requirement in a new host session must also continue Super Dev rather than plain chat.\n"
             "- Explicitly say the current phase is `research`.\n"
             "- Explicitly state that you will read `knowledge/` and `output/knowledge-cache/*-knowledge-bundle.json` first when present.\n"
@@ -627,7 +732,12 @@ class IntegrationManagerContentMixin:
         )
 
     def _build_embedded_skill_content(self, target: str, relative: str) -> str:
-        skill_name = "super-dev" if "/skills/super-dev/SKILL.md" in relative else "super-dev-core"
+        if "/skills/super-dev-seeai/SKILL.md" in relative:
+            skill_name = "super-dev-seeai"
+        else:
+            skill_name = (
+                "super-dev" if "/skills/super-dev/SKILL.md" in relative else "super-dev-core"
+            )
         template = SkillTemplate.for_builtin(skill_name, target)
         return template.render(target)
 
@@ -660,7 +770,7 @@ class IntegrationManagerContentMixin:
                 "- 未完成 research 阶段前不得直接进入编码\n\n"
                 "## 执行命令\n"
                 "```bash\n"
-                "super-dev create \"$ARGUMENTS\"\n"
+                'super-dev create "$ARGUMENTS"\n'
                 "super-dev spec list\n"
                 "```\n"
             )
@@ -701,7 +811,7 @@ class IntegrationManagerContentMixin:
             "6. 再实现后端、联调、测试、质量门禁与可审计交付清单。\n\n"
             "## 执行命令（优先）\n"
             "```bash\n"
-            "super-dev create \"$ARGUMENTS\"\n"
+            'super-dev create "$ARGUMENTS"\n'
             "super-dev spec list\n"
             "```\n\n"
             "## 实现阶段要求\n"
@@ -726,13 +836,116 @@ class IntegrationManagerContentMixin:
             "- 在宿主会话中执行本流程，确保上下文连续与结果可审计。\n"
         )
 
+    def _build_seeai_slash_command_content(self, target: str) -> str:
+        host_notes = ""
+        if target in {"codebuddy", "codebuddy-cli"}:
+            host_notes = (
+                "## CodeBuddy 比赛专项适配\n"
+                "- 优先固定在同一个项目级 Agent Chat / CLI 会话里完成半小时冲刺，避免来回切换子会话造成上下文损耗。\n"
+                "- 如果 `/super-dev-seeai` 没有立刻出现在命令列表，直接在同一会话里输入 `super-dev-seeai: <需求>` 继续，不要换模式。\n"
+                "- 比赛态默认按 P0/P1/P2 取舍：P0 先保证主演示路径能跑，P1 再补一个 wow 交互，P2 只在剩余时间充足时追加。\n\n"
+            )
+        elif target == "openclaw":
+            host_notes = (
+                "## OpenClaw 比赛专项适配\n"
+                "- 插件安装后优先新开一个绑定当前项目的 Agent 会话，再触发 SEEAI，避免 Gateway 还没刷新规则。\n"
+                "- 如果 `/super-dev-seeai` 尚未出现在命令面板，直接使用 `super-dev-seeai: <需求>` 文本入口，不要等待命令索引刷新。\n"
+                "- OpenClaw 比赛态只在 sprint 末段再调用质量/状态 Tool 做收口，中段优先把主作品做出来，减少工具切换打断。\n\n"
+            )
+        return (
+            f"# /super-dev-seeai ({target})\n\n"
+            "在当前项目触发 Super Dev SEEAI 赛事极速版。\n\n"
+            "## 输入\n"
+            "- 需求描述: `$ARGUMENTS`\n"
+            "- 如果未提供参数，先要求用户补全需求后再执行。\n\n"
+            "## SEEAI 定位\n"
+            "- 面向比赛或超短时间盒交付，例如精美官网、小游戏、展示型工具或单功能 demo。\n"
+            "- 保留 research / 三文档 / docs confirm / spec，但全部压缩成比赛快版。\n"
+            "- Spec 确认后直接进入前后端一体化快速开发，不再拆 preview confirm。\n"
+            "- 若宿主会更新 `.super-dev/workflow-state.json`，必须显式写入 `flow_variant = seeai`，确保恢复和继续提示仍然回到 SEEAI 模式。\n\n"
+            "## 半小时时间盒\n"
+            "- 0-4 分钟：fast research，锁定评审场景、竞品风格和作品 wow 点。\n"
+            "- 4-8 分钟：输出 compact research / PRD / architecture / UIUX。\n"
+            "- 8-10 分钟：等用户确认文档和方向，不展开长讨论。\n"
+            "- 10-12 分钟：生成 compact Spec / tasks，只保留最小可交付路径。\n"
+            "- 12-27 分钟：一体化 full-stack sprint，先把主展示面做成，再补最小必要后端/数据层。\n"
+            "- 27-30 分钟：polish、demo 路径检查、讲解词和亮点总结。\n\n"
+            "## 首轮输出模板\n"
+            "- `作品类型`：官网类 / 小游戏类 / 工具类，三选一。\n"
+            "- `评委 wow 点`：本次作品最值得被记住的一个亮点。\n"
+            "- `P0 主路径`：半小时内必须真实跑通的一条演示路径。\n"
+            "- `主动放弃项`：本轮明确不做的部分，避免范围失控。\n"
+            "- `关键假设`：只有在用户没说清时才写，最多 1 到 2 条。\n"
+            "- 如果需求不缺关键输入，不要长时间澄清，直接进入 fast research。\n\n"
+            "## 范围裁剪规则\n"
+            "- P0：必须完成一个可演示主路径，首页/主玩法/主工具流程必须能跑。\n"
+            "- P1：补一个明显 wow 点，例如强主视觉、动画、排行榜、分享页、彩蛋交互。\n"
+            "- P2：只有在剩余时间充足时才加扩展能力，例如真数据库、登录、复杂后台。\n\n"
+            "## 比赛短文档模板\n"
+            "- `research.md`：题目理解、评委 wow 点、参考风格、主动放弃项。\n"
+            "- `prd.md`：P0 主路径、P1 wow 点、P2 可选项、非目标。\n"
+            "- `architecture.md`：页面/玩法主循环、技术栈、最小后端、降级方案。\n"
+            "- `uiux.md`：视觉关键词、主 KV、页面骨架、关键动效。\n"
+            "- `spec`：只保留一个 sprint 清单，按 `P0 -> P1 -> polish` 排序。\n\n"
+            "### 推荐标题骨架\n"
+            "- `research.md`：`# 题目理解` `# 参考风格` `# Wow 点` `# 主动放弃项`\n"
+            "- `prd.md`：`# 作品目标` `# P0 主路径` `# P1 Wow 点` `# P2 可选项` `# 非目标`\n"
+            "- `architecture.md`：`# 主循环` `# 技术栈` `# 数据流` `# 最小后端` `# 降级方案`\n"
+            "- `uiux.md`：`# 视觉方向` `# 首屏/主界面` `# 关键交互` `# 动效重点` `# 设计 Token`\n"
+            "- `spec`：`# Sprint Checklist` 下只列 `P0`、`P1`、`Polish`\n\n"
+            "## 作品类型决策\n"
+            "- 官网类题：优先主视觉、品牌叙事、首屏信息密度和滚动节奏。\n"
+            "  默认技术栈：React/Vite 或 Next.js + Tailwind + Framer Motion。\n"
+            "  默认 sprint：Hero/首屏 -> 亮点区/叙事 -> CTA/滚动动效 -> 最终 polish。\n"
+            "- 小游戏类题：优先核心玩法循环、反馈感、积分/胜负和再次游玩闭环。\n"
+            "  默认技术栈：HTML Canvas + Vanilla JS；复杂玩法再上 Phaser。\n"
+            "  默认 sprint：主循环可玩 -> 积分/胜负反馈 -> 特效/音效 -> 复玩和 polish。\n"
+            "- 工具类题：优先一个高价值主流程、输入输出清晰、结果页直观。\n\n"
+            "  默认技术栈：React + Vite + Tailwind；必要时补最小 Express/Fastify 后端。\n"
+            "  默认 sprint：输入页/主流程 -> 结果页 -> 分享/导出等演示加分项 -> 最终 polish。\n\n"
+            "## 题型识别提示\n"
+            "- 提到品牌、官网、落地页、活动宣传、首屏，默认按官网类处理。\n"
+            "- 提到玩法、得分、胜负、闯关、点击反馈，默认按小游戏类处理。\n"
+            "- 提到生成、分析、查询、输入输出、结果页、效率提升，默认按工具类处理。\n"
+            "- 如果需求跨多类，先选最容易让评委记住的那一类做主轴。\n\n"
+            "## 降级策略\n"
+            "- 如果真实后端会拖慢交付，优先用本地 mock、JSON、内存态或静态数据把演示路径跑通。\n"
+            "- 如果鉴权、支付、上传等不是评审主轴，优先做高保真演示流，不强行接完整生产链路。\n"
+            "- 如果时间吃紧，砍掉次要页面和长尾功能，保住视觉完成度、主流程和讲解效果。\n\n"
+            f"{host_notes}"
+            "## 必须执行的顺序\n"
+            "1. 先做 fast research，快速吸收竞品、参考作品与评审导向，并写入 `output/*-research.md`\n"
+            "2. 再生成 compact `output/*-prd.md`、`output/*-architecture.md`、`output/*-uiux.md`\n"
+            "3. 三份 compact 文档完成后，必须先等待用户明确确认\n"
+            "4. 用户确认后，再创建 compact Spec / tasks\n"
+            "5. Spec 之后直接进入 full-stack sprint：先做主展示前端，再补最小必要后端/数据层，然后统一 polish\n"
+            "6. 最后输出 demo 路径、亮点总结与如何讲解这个作品\n\n"
+            "## 设计与质量要求\n"
+            "- 速度优先，但不能做成未抛光的半成品。\n"
+            "- 默认追求高展示性、强主视觉、明确 wow 点，但保持题型适配，不强制所有作品都是营销页。\n"
+            "- 文案、按钮、交互、主流程必须可演示，禁止明显占位和 AI slop。\n"
+            "- 功能图标只能来自 Lucide / Heroicons / Tabler，禁止 emoji。\n"
+            "- 时间不够时优先删功能，不要删完成度；至少保住一个 wow 点和一条主演示路径。\n\n"
+            "## 禁止事项\n"
+            "- 不要跳过 research / 三文档 / docs confirm / spec。\n"
+            "- 不要把 SEEAI 模式扩回标准 Super Dev 的 preview gate / 长质量闭环。\n"
+            "- 不要在文档确认前直接开工。\n"
+            "\n## Super Dev SEEAI Flow Contract\n"
+            "- SUPER_DEV_SEEAI_FLOW_CONTRACT_V1\n"
+            "- PHASE_CHAIN: research>docs>docs_confirm>spec>build_fullstack>polish>handoff\n"
+            "- DOC_CONFIRM_GATE: required\n"
+            "- PREVIEW_CONFIRM_GATE: omitted\n"
+            "- QUALITY_STYLE: speed_with_showcase_quality\n"
+        )
+
     def _generic_cli_rules(self, target: str) -> str:
         if target == "codex-cli":
             trigger_lines = (
                 "## Trigger\n"
                 "- Codex App/Desktop preferred: choose `super-dev` from the `/` list. This is the enabled Skill entry rather than a project custom slash file.\n"
                 "- Codex CLI preferred: `$super-dev`.\n"
-                '- AGENTS-driven natural-language fallback: `super-dev: <需求描述>` or `super-dev：<需求描述>`.\n'
+                "- AGENTS-driven natural-language fallback: `super-dev: <需求描述>` or `super-dev：<需求描述>`.\n"
+                "- SEEAI competition mode: App/Desktop choose `super-dev-seeai`, CLI use `$super-dev-seeai`, or say `super-dev-seeai: <需求描述>` / `super-dev-seeai：<需求描述>`.\n"
                 '- Local orchestration fallback: `super-dev "<需求描述>"`\n'
                 "- The terminal entry does not directly talk to the live Codex host session.\n\n"
             )
@@ -740,13 +953,15 @@ class IntegrationManagerContentMixin:
             trigger_lines = (
                 "## Trigger\n"
                 '- Preferred: `/super-dev "<需求描述>"`\n'
+                '- SEEAI competition mode: `/super-dev-seeai "<需求描述>"`\n'
                 '- Terminal entry (local orchestration only): `super-dev "<需求描述>"`\n'
                 "- Terminal entry does not directly talk to the host model session.\n\n"
             )
         else:
             trigger_lines = (
                 "## Trigger\n"
-                '- Preferred: say `super-dev: <需求描述>` or `super-dev：<需求描述>` in the host chat so AGENTS.md + super-dev-core Skill can govern the workflow.\n'
+                "- Preferred: say `super-dev: <需求描述>` or `super-dev：<需求描述>` in the host chat so AGENTS.md + super-dev-core Skill can govern the workflow.\n"
+                "- SEEAI competition mode: say `super-dev-seeai: <需求描述>` or `super-dev-seeai：<需求描述>` in the host chat.\n"
                 '- Local orchestration fallback: `super-dev "<需求描述>"`\n'
                 "- Do not rely on `/super-dev` in this host.\n\n"
             )
@@ -760,6 +975,7 @@ class IntegrationManagerContentMixin:
             "## Runtime Contract\n"
             "- Treat Super Dev as a local Python CLI plus host-side rules/skills, not as a separate model provider.\n"
             "- When the user triggers Super Dev, enter the protocol immediately instead of treating it as normal chat.\n"
+            "- When the user triggers `super-dev-seeai`, switch to the SEEAI competition-fast contract: research -> compact docs -> docs confirmation -> compact spec -> full-stack sprint -> polish/handoff.\n"
             "- Use host-native web/search/browse for research and host-native editing/execution for implementation.\n"
             "- Use local `super-dev` commands to generate/update documents, spec artifacts, quality reports, and delivery outputs.\n\n"
             f"{self._first_response_contract_en()}"
@@ -808,11 +1024,7 @@ class IntegrationManagerContentMixin:
     def _generic_ide_rules(self, target: str) -> str:
         windsurf_frontmatter = ""
         if target == "windsurf":
-            windsurf_frontmatter = (
-                "---\n"
-                "trigger: always_on\n"
-                "---\n\n"
-            )
+            windsurf_frontmatter = "---\n" "trigger: always_on\n" "---\n\n"
         return (
             f"{windsurf_frontmatter}"
             f"# Super Dev IDE Rules ({target})\n\n"
@@ -823,6 +1035,7 @@ class IntegrationManagerContentMixin:
             "## Runtime Contract\n"
             "- Treat Super Dev as the local Python workflow tool plus this host rule file, not as a separate coding engine.\n"
             "- When the user says `/super-dev ...`, `super-dev: ...`, or `super-dev：...`, immediately enter the Super Dev pipeline.\n"
+            "- When the user says `/super-dev-seeai ...`, `super-dev-seeai: ...`, or `super-dev-seeai：...`, enter the SEEAI competition-fast contract.\n"
             "- Use host-native browse/search/web for research and host-native editing/terminal for implementation.\n"
             "- Use local `super-dev` commands when you need to generate or refresh documents, spec artifacts, quality reports, or delivery manifests.\n\n"
             f"{self._first_response_contract_en()}"
@@ -834,6 +1047,7 @@ class IntegrationManagerContentMixin:
             "## Working Agreement\n"
             "- If the host supports browse/search/web, research similar products first and write the findings into output/*-research.md.\n"
             "- Generate PRD, architecture and UIUX documents before coding, write them into output/* files, then pause and ask the user to confirm the three documents.\n"
+            "- In SEEAI mode, keep the same document gate, but compress the documents and go straight from Spec into one integrated full-stack sprint without a separate preview gate.\n"
             "- If the user requests revisions, update the documents first and ask again; do not create Spec or code before confirmation.\n"
             "- If the user requests a UI redesign or says the UI is unsatisfactory, first update `output/*-uiux.md`, then redo the frontend, and rerun frontend runtime + UI review before continuing.\n"
             "- If the user requests architecture changes, first update `output/*-architecture.md`, then realign tasks and implementation before continuing.\n"
@@ -873,8 +1087,10 @@ class IntegrationManagerContentMixin:
             "# Super Dev Trae Rules\n\n"
             "## Critical Trigger Switch\n"
             "- If a user message starts with `super-dev:` or `super-dev：`, immediately switch into Super Dev pipeline mode.\n"
+            "- If a user message starts with `super-dev-seeai:` or `super-dev-seeai：`, immediately switch into Super Dev SEEAI competition mode.\n"
             "- If the repository already has active Super Dev workflow context, the first natural-language requirement in a new session must also continue Super Dev.\n"
             "- Do not treat `super-dev:` or `super-dev：` as normal chat, brainstorming, or generic coding mode.\n"
+            "- Do not treat `super-dev-seeai:` or `super-dev-seeai：` as ordinary chat either; they are competition-mode entries.\n"
             "- After `super-dev:` or `super-dev：` is seen, do not start implementation directly.\n"
             "- Your first reply must say `SMOKE_OK` when the user is smoke-testing, or explicitly say Super Dev pipeline mode is active.\n"
             "- Your first reply must explicitly say the current phase is `research`.\n"
@@ -1109,8 +1325,8 @@ super-dev skill install super-dev --target antigravity  # 安装 Skill
             "Antigravity remains the execution host for model reasoning, browsing, terminal work, and code changes.\n"
             "Super Dev is the governance layer and local Python toolchain.\n\n"
             "## Trigger\n"
-            "- Preferred: `/super-dev \"<需求描述>\"`\n"
-            "- Fallback in local terminal only: `super-dev \"<需求描述>\"`\n"
+            '- Preferred: `/super-dev "<需求描述>"`\n'
+            '- Fallback in local terminal only: `super-dev "<需求描述>"`\n'
             "- The terminal fallback does not replace the Antigravity host session.\n\n"
             "## Required First Response Contract\n"
             f"{self._first_response_contract_en()}"

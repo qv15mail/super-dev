@@ -514,9 +514,12 @@ class CliSpecMixin:
         if not getattr(args, "knowledge_action", None):
             self.console.print(
                 "[yellow]请指定知识命令，如: "
-                "super-dev knowledge stats / evolve / weights[/yellow]"
+                "super-dev knowledge stats / evolve / weights / search[/yellow]"
             )
             return 1
+
+        if args.knowledge_action == "search":
+            return self._cmd_knowledge_search(args)
 
         analyzer = KnowledgeEvolutionAnalyzer(project_dir)
 
@@ -529,6 +532,118 @@ class CliSpecMixin:
 
         self.console.print("[yellow]未知的知识命令[/yellow]")
         return 1
+
+    def _cmd_knowledge_search(self, args) -> int:
+        """搜索知识库"""
+        import re
+
+        from rich.table import Table
+
+        project_dir = Path.cwd()
+        knowledge_dir = project_dir / "knowledge"
+
+        if not knowledge_dir.is_dir():
+            self.console.print("[red]未找到 knowledge/ 目录[/red]")
+            return 1
+
+        query = args.query.strip()
+        if not query:
+            self.console.print("[red]请输入搜索关键词[/red]")
+            return 1
+
+        limit = getattr(args, "limit", 10)
+        domain_filter = getattr(args, "domain", None)
+
+        query_lower = query.lower()
+        query_words = [w for w in re.split(r"\s+", query_lower) if w]
+        results: list[dict] = []
+
+        # Scan knowledge/ for markdown files
+        scan_dir = knowledge_dir / domain_filter if domain_filter else knowledge_dir
+        if not scan_dir.is_dir():
+            self.console.print(f"[red]知识域不存在: {domain_filter}[/red]")
+            return 1
+
+        for md_file in sorted(scan_dir.rglob("*.md")):
+            rel_path = md_file.relative_to(knowledge_dir)
+            file_name = md_file.name
+            file_stem = md_file.stem
+
+            # Score: filename match
+            score = 0.0
+            for w in query_words:
+                if w in file_name.lower() or w in file_stem.lower():
+                    score += 2.0
+
+            # Score: content match
+            try:
+                content = md_file.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+
+            content_lower = content.lower()
+            for w in query_words:
+                count = content_lower.count(w)
+                score += min(count * 0.5, 5.0)
+
+            if score <= 0:
+                continue
+
+            # Extract preview lines around first match
+            preview_lines: list[str] = []
+            for i, line in enumerate(content.splitlines()):
+                if any(w in line.lower() for w in query_words):
+                    start = max(0, i - 1)
+                    end = min(len(content.splitlines()), i + 2)
+                    preview_lines = content.splitlines()[start:end]
+                    break
+
+            preview = " [...] ".join(
+                line.strip()[:120] for line in preview_lines
+            ) if preview_lines else ""
+
+            results.append({
+                "path": str(rel_path),
+                "domain": str(rel_path.parts[0]) if len(rel_path.parts) > 1 else "",
+                "score": score,
+                "preview": preview,
+            })
+
+        # Sort by score descending and limit
+        results.sort(key=lambda r: r["score"], reverse=True)
+        results = results[:limit]
+
+        if not results:
+            self.console.print(f"[yellow]未找到与 '{query}' 相关的知识文件[/yellow]")
+            return 0
+
+        # Display results with Rich table
+        self.console.print(f"\n[bold]知识库搜索结果: '{query}'[/bold]\n")
+
+        table = Table(show_header=True, header_style="bold cyan")
+        table.add_column("#", style="dim", width=3)
+        table.add_column("文件路径", style="cyan")
+        table.add_column("域", style="green", width=15)
+        table.add_column("相关度", style="yellow", width=8)
+        table.add_column("预览", style="white", max_width=60)
+
+        for idx, r in enumerate(results, 1):
+            table.add_row(
+                str(idx),
+                r["path"],
+                r["domain"],
+                f"{r['score']:.1f}",
+                r["preview"][:100] + ("..." if len(r["preview"]) > 100 else ""),
+            )
+
+        self.console.print(table)
+        self.console.print(
+            f"\n[dim]共找到 {len(results)} 条结果"
+            + (f" (限定域: {domain_filter})" if domain_filter else "")
+            + "[/dim]\n"
+        )
+
+        return 0
 
     def _cmd_knowledge_stats(self, args, analyzer) -> int:
         """查看知识文件使用统计"""

@@ -93,28 +93,11 @@ class CliAnalysisMixin:
         self.console.print(f"  工作流契约: {workflow_file}")
         self.console.print(f"  Bootstrap 摘要: {summary_file}")
 
-        # Auto-detect and setup hosts
-        project_dir = Path.cwd()
-        try:
-            from .integrations import IntegrationManager
-
-            manager = IntegrationManager(project_dir)
-            for host_target in ["claude-code", "cursor"]:
-                try:
-                    files = manager.setup(target=host_target, force=True)
-                    if files:
-                        self.console.print(f"  [green]✓[/green] 已自动安装到 {host_target}")
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
         self.console.print("\n[dim]下一步:[/dim]")
-        self.console.print("  在宿主中按宿主模型触发 Super Dev:")
-        self.console.print("    /super-dev <你的需求>        (原生 slash 宿主)")
-        self.console.print("    Codex App/Desktop: 从 / 列表选 super-dev")
-        self.console.print("    Codex CLI: $super-dev")
-        self.console.print("    super-dev: <你的需求>        (自然语言回退入口)")
+        self.console.print("  1. 终端输入 super-dev，进入宿主接入引导")
+        self.console.print("  2. 接入完成后，在宿主里触发 Super Dev:")
+        self.console.print("     /super-dev <你的需求>       (slash 宿主)")
+        self.console.print("     super-dev: <你的需求>       (text 宿主)")
 
         return 0
 
@@ -149,8 +132,8 @@ class CliAnalysisMixin:
         self.console.print(f"  Bootstrap 摘要: {summary_file}")
         self.console.print("")
         self.console.print("[cyan]下一步:[/cyan]")
-        self.console.print('  1. 运行 super-dev start --idea "你的需求"')
-        self.console.print("  2. 或直接在已接入宿主中按宿主模型触发（Codex App/Desktop 用 / 列表，Codex CLI 用 $super-dev，其余宿主按 /super-dev 或 super-dev:）")
+        self.console.print("  1. 运行 super-dev，进入宿主接入引导")
+        self.console.print("  2. 接入后在宿主中使用 /super-dev 或 super-dev:")
         return 0
 
     def _bootstrap_project_contract(self, project_dir: Path, config) -> tuple[Path, Path]:
@@ -220,13 +203,11 @@ The following surfaces are now the project bootstrap contract:
 ## Trigger Rules
 
 - Native slash hosts: `/super-dev <需求描述>`
-- Codex App/Desktop: choose `super-dev` from the `/` list
-- Codex CLI: `$super-dev`
 - Text-trigger fallback hosts: `super-dev: <需求描述>` or `super-dev：<需求描述>`
 
 ## Bootstrap Guidance
 
-Use `super-dev start --idea "<需求描述>"` for the shortest guided path.
+Use `super-dev` to open the onboarding flow, then trigger inside the host.
 
 If the repository already has a host onboarded, trigger Super Dev directly inside the host.
 

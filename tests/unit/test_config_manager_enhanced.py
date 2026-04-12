@@ -7,6 +7,7 @@
 
 import textwrap
 import yaml
+from super_dev import __version__
 from super_dev.config.manager import ConfigManager, ProjectConfig
 
 
@@ -19,7 +20,7 @@ class TestProjectConfig:
         config = ProjectConfig(name="test")
         assert config.name == "test"
         assert config.description == ""
-        assert config.version == "2.3.3"
+        assert config.version == __version__
         assert config.platform == "web"
         assert config.frontend == "next"
         assert config.backend == "node"

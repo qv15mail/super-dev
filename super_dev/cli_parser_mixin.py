@@ -66,7 +66,15 @@ class CliParserMixin:
             ),
         )
 
-        parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
+        parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+        parser.add_argument(
+            "-v",
+            "--verbose",
+            action="count",
+            default=0,
+            help="增加日志详细度 (-v=INFO, -vv=DEBUG)",
+        )
+        parser.add_argument("--quiet", action="store_true", help="只显示错误")
 
         # 子命令
         subparsers = parser.add_subparsers(
@@ -539,7 +547,7 @@ class CliParserMixin:
         config_parser = subparsers.add_parser(
             "config", help="配置管理", description="查看和修改项目配置"
         )
-        config_parser.add_argument("action", choices=["get", "set", "list"], help="操作")
+        config_parser.add_argument("action", choices=["get", "set", "list", "validate"], help="操作")
         config_parser.add_argument("key", nargs="?", help="配置键")
         config_parser.add_argument("value", nargs="?", help="配置值")
 
@@ -1378,6 +1386,16 @@ class CliParserMixin:
         knowledge_weights_parser.add_argument(
             "--json", action="store_true", help="以 JSON 格式输出"
         )
+        knowledge_search_parser = knowledge_subparsers.add_parser(
+            "search", help="搜索知识库", description="在知识库中搜索关键词"
+        )
+        knowledge_search_parser.add_argument("query", help="搜索关键词")
+        knowledge_search_parser.add_argument(
+            "--domain", help="限定知识域 (frontend, backend, security...)"
+        )
+        knowledge_search_parser.add_argument(
+            "--limit", type=int, default=10, help="结果数量 (默认: 10)"
+        )
 
         # task 命令 - 独立执行/查看 Spec 任务闭环
         task_parser = subparsers.add_parser(
@@ -1864,6 +1882,24 @@ class CliParserMixin:
             help="从 UIUX 规范生成 tailwind.config.ts",
         )
 
+        # guard 命令 - 实时治理守护
+        guard_parser = subparsers.add_parser(
+            "guard",
+            help="实时治理守护",
+            description="监控文件变更并实时验证治理规则",
+        )
+        guard_parser.add_argument(
+            "--no-watch",
+            action="store_true",
+            help="单次扫描，不持续监控",
+        )
+        guard_parser.add_argument(
+            "--interval",
+            type=float,
+            default=2.0,
+            help="检查间隔（秒）",
+        )
+
         # completion 命令 - shell 补全脚本
         completion_parser = subparsers.add_parser(
             "completion",
@@ -1887,7 +1923,69 @@ class CliParserMixin:
         subparsers.add_parser(
             "migrate",
             help="迁移项目到最新版本",
-            description="将 2.2.0+ 项目配置迁移到 2.3.4（更新配置、规则文件与 hooks）",
+            description="将 2.2.0+ 项目配置迁移到 2.3.5（更新配置、规则文件与 hooks）",
+        )
+
+        # rollback 命令 - 回退到指定阶段或检查点
+        rollback_parser = subparsers.add_parser(
+            "rollback",
+            help="回退到指定阶段或检查点",
+            description="将项目状态恢复到之前的流水线检查点",
+        )
+        rollback_parser.add_argument(
+            "--phase",
+            help="回退到指定阶段 (research, drafting, frontend, etc.)",
+        )
+        rollback_parser.add_argument(
+            "--last",
+            action="store_true",
+            help="回退到上一个检查点",
+        )
+        rollback_parser.add_argument(
+            "--list",
+            action="store_true",
+            help="列出可用的检查点",
+        )
+
+        # replay 命令 - 回放流水线执行过程
+        replay_parser = subparsers.add_parser(
+            "replay",
+            help="回放流水线执行过程",
+            description="逐步查看流水线各阶段的执行详情和变更",
+        )
+        replay_parser.add_argument(
+            "--run-id",
+            help="指定运行 ID (默认最近一次)",
+        )
+
+        # history 命令 — 查看历史流水线运行
+        history_parser = subparsers.add_parser(
+            "history",
+            help="查看历史流水线运行",
+            description="列出过去的流水线运行记录",
+        )
+        history_parser.add_argument(
+            "--limit", type=int, default=10, help="显示条数（默认 10）"
+        )
+        history_parser.add_argument(
+            "--status", choices=["success", "failed", "running"], help="按状态过滤"
+        )
+
+        # cost 命令 — LLM 调用费用报告
+        subparsers.add_parser(
+            "cost",
+            help="LLM 调用费用报告",
+            description="显示流水线各阶段的 LLM 调用耗时与 token 消耗",
+        )
+
+        # diff 命令 — 查看流水线阶段变更
+        diff_parser = subparsers.add_parser(
+            "diff",
+            help="查看流水线阶段变更",
+            description="对比当前与上一阶段的文件变更",
+        )
+        diff_parser.add_argument(
+            "--phase", help="指定阶段对比"
         )
 
         return parser

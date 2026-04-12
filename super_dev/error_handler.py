@@ -1,15 +1,16 @@
 """
-开发：Excellent（11964948@qq.com）
-功能：统一错误处理 — 所有 CLI 命令的错误都经过这里
-作用：将 Python 异常转换为用户友好的错误信息，隐藏 traceback
-创建时间：2026-03-31
-最后修改：2026-03-31
+统一错误处理 — 所有 CLI 命令的错误都经过这里。
+
+将 Python 异常转换为用户友好的错误信息，隐藏 traceback。
+支持通过 i18n 模块进行中英双语切换。
 """
 
 from __future__ import annotations
 
 import json
 import logging
+
+from .i18n import t
 
 logger = logging.getLogger("super_dev.error_handler")
 
@@ -38,7 +39,7 @@ def handle_cli_error(error: Exception, command: str = "") -> int:
 
     # ── 用户中断 ──────────────────────────────────────────────
     if isinstance(error, KeyboardInterrupt):
-        console.print("\n[yellow]已取消[/yellow]")
+        console.print(f"[yellow]{t('error:user_interrupted')}[/yellow]")
         return EXIT_INTERRUPTED
 
     # ── 已知的 Super Dev 异常 ─────────────────────────────────
@@ -53,12 +54,12 @@ def handle_cli_error(error: Exception, command: str = "") -> int:
     # ── 文件系统 ──────────────────────────────────────────────
     if isinstance(error, FileNotFoundError):
         path = getattr(error, "filename", None) or str(error)
-        console.print(f"[red]文件不存在: {path}[/red]")
+        console.print(f"[red]{t('error:file_not_found', path=path)}[/red]")
         return EXIT_ERROR
 
     if isinstance(error, PermissionError):
         path = getattr(error, "filename", None) or str(error)
-        console.print(f"[red]权限不足: {path}[/red]")
+        console.print(f"[red]{t('error:permission_denied', path=path)}[/red]")
         return EXIT_ERROR
 
     if isinstance(error, IsADirectoryError):
@@ -68,7 +69,9 @@ def handle_cli_error(error: Exception, command: str = "") -> int:
 
     # ── 配置解析 ──────────────────────────────────────────────
     if isinstance(error, json.JSONDecodeError):
-        console.print(f"[red]配置文件格式错误 (JSON): {error.msg}, 行 {error.lineno}[/red]")
+        console.print(
+            f"[red]{t('error:config_format', msg=f'{error.msg}, 行 {error.lineno}')}[/red]"
+        )
         return EXIT_ERROR
 
     try:
@@ -85,20 +88,20 @@ def handle_cli_error(error: Exception, command: str = "") -> int:
 
     # ── 网络 ──────────────────────────────────────────────────
     if isinstance(error, ConnectionError):
-        console.print("[red]网络连接失败[/red]")
+        console.print(f"[red]{t('error:network_failure')}[/red]")
         return EXIT_ERROR
 
     if isinstance(error, TimeoutError):
-        console.print("[red]操作超时[/red]")
+        console.print(f"[red]{t('error:timeout')}[/red]")
         return EXIT_ERROR
 
     # ── 使用错误 ──────────────────────────────────────────────
     if isinstance(error, ValueError | TypeError):
-        console.print(f"[red]参数错误: {error}[/red]")
+        console.print(f"[red]{t('error:invalid_args', detail=error)}[/red]")
         return EXIT_USAGE
 
     # ── 兜底 ──────────────────────────────────────────────────
-    console.print(f"[red]发生错误: {error}[/red]")
+    console.print(f"[red]{t('error:unknown', detail=error)}[/red]")
     logger.error(
         "CLI 命令异常: %s — %s: %s",
         command,

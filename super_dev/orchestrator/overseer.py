@@ -286,6 +286,26 @@ class Overseer:
             self._report.pipeline_halted = True
             self._report.halt_reason = f"Critical deviation in phase {phase}"
 
+            # Webhook notification on overseer halt
+            try:
+                from ..webhooks import send_webhook
+
+                send_webhook(
+                    "overseer_halt",
+                    {
+                        "phase": phase,
+                        "halt_reason": self._report.halt_reason,
+                        "verdict": report.verdict.value,
+                        "quality_score": report.quality_score,
+                        "deviations": [
+                            d.to_dict() for d in report.deviations
+                        ],
+                        "project": self.project_name,
+                    },
+                )
+            except Exception:
+                pass
+
         self._report.checkpoints.append(report)
         self._update_report_summary()
         self._save_report()

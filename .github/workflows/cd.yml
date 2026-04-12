@@ -34,10 +34,10 @@ jobs:
       name: development
       url: https://dev.super-dev.example.com
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Configure kubectl
-        uses: azure/k8s-set-context@v3
+        uses: azure/k8s-set-context@v4
         with:
           method: kubeconfig
           kubeconfig: ${{ secrets.KUBE_CONFIG_DEV }}
@@ -62,10 +62,10 @@ jobs:
       name: production
       url: https://super-dev.example.com
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Configure kubectl
-        uses: azure/k8s-set-context@v3
+        uses: azure/k8s-set-context@v4
         with:
           method: kubeconfig
           kubeconfig: ${{ secrets.KUBE_CONFIG_PROD }}
@@ -86,7 +86,7 @@ jobs:
       - name: Health check
         run: |
           for i in {1..30}; do
-            if curl -f https://super-dev.example.com/health; then
+            if curl -f https://super-dev.example.com/api/health; then
               echo "Health check passed"
               exit 0
             fi
@@ -99,5 +99,17 @@ jobs:
       - name: Rollback on failure
         if: failure()
         run: |
-          kubectl apply -f backup-${{ github.sha }}.yaml
           kubectl rollout undo deployment/super-dev -n prod
+
+      - name: Rollback notification
+        if: failure()
+        run: |
+          echo "## ⚠️ Production Deployment Rollback" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The deployment to **production** failed and was rolled back to the previous version." >> $GITHUB_STEP_SUMMARY
+          echo "Please investigate the failure and retry the deployment." >> $GITHUB_STEP_SUMMARY

@@ -17,20 +17,20 @@ const COPY = {
   zh: {
     openSource: 'MIT 开源',
     title: 'AI 能写代码，Super Dev 让项目能交付。',
-    body: '辅助用户在 Claude Code、Cursor、Codex、Trae 等开发工具中，更标准地完成商业交付。接手项目时先看代码库地图、范围覆盖率、依赖图和改动影响范围，再按 research、三文档、确认门、Spec、前端验证、质量门禁和交付标准推进。',
-    points: ['适配主流 CLI 与 IDE 宿主', '代码库理解、范围覆盖审计、影响分析与回归守卫一体化', '支持随时回到 docs、frontend、backend、quality 等阶段继续推进'],
+    body: '终端只负责接入和升级，真正的 research、三文档、确认门、Spec、实现和交付都留在宿主里。Super Dev 把这些宿主上的能力重新组织成一条可审计的商业交付流水线。',
+    points: ['终端只保留 super-dev / super-dev update', '宿主内统一使用 /super-dev 或 super-dev:', '接入完成度与运行成熟度分开展示'],
     docs: '查看文档',
-    installNote: '支持 pip 或 uv 安装，安装后终端输入 super-dev 进入宿主接入引导。',
-    releaseNote: '2.3.4 新增 Plan-Execute 执行引擎、Overseer 监督者和 Claude Code + Codex 混合审查模式。感谢 staruhub 的 PR。',
+    installNote: '支持 pip 或 uv 安装。安装后终端输入 super-dev 进入宿主接入引导；日常使用回到宿主里的 /super-dev 或 super-dev:。',
+    releaseNote: 'v2.3.5: 新增 SEEAI 赛事模式 + WorkBuddy 正式接入 + 安全防护增强 + 安装界面响应式优化 + 旧版残留自动修复',
   },
   en: {
     openSource: 'MIT Open Source',
     title: 'AI can write code. Super Dev helps teams ship it properly.',
-    body: 'Use Super Dev inside Claude Code, Cursor, Codex, Trae, and similar tools to move from requirement to delivery through one governed path: repo map, scope coverage, dependency graph, impact analysis, research, the three core docs, approval, spec, frontend validation, quality gates, and delivery standards.',
-    points: ['Works across major CLI and IDE hosts', 'Combines codebase intelligence, scope audit, impact analysis, and regression guard', 'Can return to docs, frontend, backend, and quality phases without restarting from zero'],
+    body: 'The terminal only handles onboarding and upgrade. The real research, three core docs, approval gates, spec, implementation, and delivery stay inside the host. Super Dev turns those host capabilities into one governed delivery pipeline.',
+    points: ['The terminal only exposes super-dev and super-dev update', 'Inside the host, use /super-dev or super-dev:', 'Integration readiness and runtime maturity are shown separately'],
     docs: 'Read Docs',
-    installNote: 'Install with pip or uv, then run super-dev in the terminal to open the host onboarding flow.',
-    releaseNote: 'Version 2.3.4 adds the Plan-Execute engine, the Overseer observer, and a Claude Code + Codex hybrid review mode. Thanks to staruhub for the PR.',
+    installNote: 'Install with pip or uv, then run super-dev in the terminal to open host onboarding. Daily use moves back into /super-dev or super-dev: inside the host.',
+    releaseNote: 'v2.3.5: New SEEAI competition mode + WorkBuddy unified install + security hardening + responsive install UI + auto-fix stale installations',
   },
 } as const;
 
@@ -48,7 +48,7 @@ export function HeroSection({ locale = 'zh' }: { locale?: SiteLocale }) {
       <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-14 px-4 pb-20 sm:px-6 lg:grid lg:grid-cols-[minmax(0,1fr)_520px] lg:items-center lg:gap-16 lg:pb-24">
         <div className="flex flex-col gap-7">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="version">v2.3.4</Badge>
+            <Badge variant="version">v2.3.5</Badge>
             <Badge variant="certified">{copy.openSource}</Badge>
             <a
               href={GITHUB_REPO_URL}

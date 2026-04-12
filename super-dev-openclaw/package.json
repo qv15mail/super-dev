@@ -1,6 +1,6 @@
 {
   "name": "@super-dev/openclaw-plugin",
-  "version": "2.3.3",
+  "version": "2.3.5",
   "description": "Super Dev pipeline governance plugin for OpenClaw - research-first, commercial-grade AI coding delivery",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -8,7 +8,8 @@
     "README.md",
     "src",
     "dist",
-    "skills",
+    "skills/super-dev",
+    "skills/super-dev-seeai",
     "openclaw.plugin.json"
   ],
   "openclaw": {

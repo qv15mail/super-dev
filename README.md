@@ -19,9 +19,9 @@
 
 ## 版本
 
-当前版本：`2.3.4`
+当前版本：`2.3.5`
 
-- 发布说明：[v2.3.4 更新内容](docs/releases/2.3.4.md)
+- 发布说明：[v2.3.5 更新内容](docs/releases/2.3.5.md)
 - 官网更新历史：[superdev.goder.ai/changelog](https://superdev.goder.ai/changelog)
 
 ---
@@ -70,95 +70,57 @@
 
 ## 快速开始
 
-先记住这 5 个入口，其中旧的直达写法仍然保留：
+普通用户只需要记住 2 个终端命令：
 
 ```bash
-# 安装引导 / 已有项目下一步
+# 进入宿主接入引导
 super-dev
 
-# 旧写法仍可用：直接从需求描述进入完整流水线
-super-dev "做一个在线教育平台"
-
-# 0-1：为当前机器选择宿主并给出第一句触发词
-super-dev start --idea "做一个在线教育平台"
-
-# 第二天回来 / 重开宿主：恢复当前流程
-super-dev resume
-
-# 已有流程：继续当前流程，而不是重新开始普通聊天
-super-dev continue
-
-# 状态不清楚时：只问系统“下一步”
-super-dev next
+# 更新到最新版，并迁移已接入宿主
+super-dev update
 ```
 
-使用方式：
+接入完成后，正常使用都回到宿主里：
 
-- 当前目录还没接入时，裸跑 `super-dev` 会进入安装引导。
-- 当前目录已经有 Super Dev 上下文时，裸跑 `super-dev` 会直接进入“恢复当前流程”路由。
-- `super-dev "..."` 仍然是直达完整流水线的快捷入口，适合你已经明确要让 Super Dev 直接开工的场景。
-- `super-dev start --idea "..."` 会自动检测宿主、给出推荐宿主、触发词、重开提示和第一句该发什么。
-- `super-dev resume` 最适合下班回来、第二天继续、重开电脑、重开宿主后的真实恢复场景。
-- `super-dev continue` / `super-dev next` 会直接告诉你当前动作、用户下一步、宿主第一句、机器侧动作。
+```text
+/super-dev 你的需求
+super-dev: 你的需求
+/super-dev-seeai 比赛需求
+super-dev-seeai: 比赛需求
+```
 
-现实场景怎么继续：
+正确心智：
 
-| 场景 | 先做什么 | 为什么 |
-|------|----------|--------|
-| 下班了，第二天回来继续开发 | `super-dev resume` | 直接恢复当前流程、当前动作、宿主第一句和机器侧下一步 |
-| 宿主关了、电脑重启了、会话断了 | `super-dev resume` | 重新生成恢复卡，并提醒先看 `.super-dev/SESSION_BRIEF.md` |
-| 只是不知道现在卡在哪一步 | `super-dev next` | 只输出当前仓库唯一推荐的下一步 |
-| 流水线命令跑到一半被打断 | `super-dev run --resume` | 从上次中断阶段继续执行机器侧流水线 |
-| 当前在确认门，想继续补 PRD / 架构 / UI | `super-dev resume` 后按提示继续说自然语言 | 会继续留在当前确认门，而不是开启普通聊天 |
-| 明确要返工 UI | 先更新 `output/*-uiux.md`，再 `super-dev resume` | 先改 UI 真源，再让后续前端实现沿同一套 UI 契约继续 |
-| 明确要返工架构 | 先更新 `output/*-architecture.md`，再 `super-dev resume` | 先改技术真源，再让 Spec / 实现重新对齐 |
-| 只想离开当前流程，重新聊别的 | 明确说“取消当前流程”或“重新开始一条新流程” | 系统只在你明确退出时才离开当前 Super Dev 流程 |
+- 终端只负责接入与升级
+- 宿主才负责 research、三文档、确认门、Spec、实现、质量门禁与交付
+- 自动判断会在接入/升级阶段发生，但不会在普通开发流程里越层改宿主配置
+- `已接入` 与 `已验证` 是两回事：文件落盘不代表宿主已经真实跑通
 
-如果你已经明确知道要从哪里接着做，再用这些命令：
+推荐上手顺序：
+
+1. 终端运行 `super-dev`
+2. 让安装器自动检测宿主并写入项目级/全局级协议面
+3. 打开宿主，在宿主里输入 `/super-dev` 或 `super-dev:`
+4. 让宿主先完成 research、PRD、Architecture、UI/UX
+5. 文档确认后再进入 Spec 与实现
+
+SEEAI 赛事极速版：
+
+- 入口：`/super-dev-seeai` 或 `super-dev-seeai:`
+- 仍然保留 `research -> 三文档 -> docs confirm -> spec`
+- 但 `spec` 之后直接进入前后端一体化快速开发，不再拆预览确认门
+- 适合 30 分钟左右的官网、小游戏、展示型工具、单页 demo
+
+高级/内部命令仍然保留，但不再是普通用户主路径：
 
 ```bash
-# 1-N+1 已有项目：分析现有代码库后接入流水线
 super-dev init
-
-# 跳转到任意阶段 / 从中断处继续 / 查看状态
-super-dev run frontend       # 按名称跳转
-super-dev run 6              # 按编号跳转（1-9）
-super-dev run --resume       # 从中断处继续
-super-dev run --status       # 查看当前流程状态
-```
-
-阶段编号对照：
-
-| 编号 | 阶段 | 说明 |
-|------|------|------|
-| 1 | research | 同类产品研究 |
-| 2 | prd | 产品需求文档 |
-| 3 | architecture | 架构设计 |
-| 4 | uiux | UI/UX 设计 |
-| 5 | spec | 任务规格 |
-| 6 | frontend | 前端实现 |
-| 7 | backend | 后端实现 |
-| 8 | quality | 质量门禁 |
-| 9 | delivery | 交付打包 |
-
-辅助命令：
-
-```bash
 super-dev onboard             # 宿主接入引导
-super-dev onboard --dry-run   # 预览接入变更，不实际写入
-super-dev onboard --stable-only  # 仅接入已认证宿主
 super-dev detect              # 自动检测宿主与推荐默认宿主
-super-dev detect --auto       # 自动检测并安装到所有宿主
 super-dev doctor              # 诊断检查（显示认证等级、主修复动作和下一步）
-```
-
-快速接入（推荐）：
-
-```bash
-super-dev init my-project
-super-dev init --template ecommerce   # 使用项目模板 (ecommerce/saas/dashboard/mobile/api/blog/miniapp)
-super-dev detect --auto               # 自动检测并安装到所有宿主
-# 然后按宿主模型触发: Claude 用 /super-dev，Codex App/Desktop 用 / 列表里的 super-dev，Codex CLI 用 $super-dev，其他非 slash 宿主用 super-dev:
+super-dev run --status        # 查看内部流程状态
+super-dev run frontend        # 强制跳到特定阶段
+super-dev review docs         # 手动更新确认门状态
 ```
 
 治理与知识命令（2.2.0 新增）：
@@ -268,7 +230,7 @@ UI/UX 文档不再只是建议，而是会冻结成一份真正的 UI 契约：
 - **阶段跳转**：`super-dev run <阶段>` 可随时跳转到任意阶段
 - **UI 改版回路**：UI 不满意时可发起正式改版回路（`review ui`），先更新 UIUX 文档再重做前端
 - **适配 0-1 与 1-N+1**：新建项目走完整流水线，已有项目走增量分析路径
-- **继续当前流程路由**：`super-dev resume` / `super-dev continue` / `super-dev next` / `start --json` / `doctor --json` 都共享同一套 workflow state 与 action card
+- **继续当前流程路由**：内部恢复与状态命令共享同一套 workflow state 与 action card
 - **恢复状态卡**：`.super-dev/SESSION_BRIEF.md` 和 `.super-dev/workflow-state.json` 会沉淀“当前动作 / 宿主第一句 / 机器侧动作 / 连续性规则”
 - **关键时间线**：流程快照、语义事件、Hook 事件会汇总成统一的 recent timeline，进入 `SESSION_BRIEF`、Workflow Harness、proof-pack 与 release readiness
 - **返工优先级**：文档确认门、预览确认门、UI 改版、架构返工、质量整改都进入统一状态机，不再靠用户记命令
@@ -428,18 +390,19 @@ super-dev
 
 - slash 宿主：`/super-dev 你的需求`
 - 非 slash 宿主：`super-dev: 你的需求`
+- 比赛极速版：`/super-dev-seeai 比赛需求` 或 `super-dev-seeai: 比赛需求`
 - 需要真人验收时，可执行：`super-dev integrate validate --target <host>`
 
 ### 3. 指定版本安装
 
 ```bash
-pip install super-dev==2.3.4
+pip install super-dev==2.3.5
 ```
 
 ### 4. GitHub 指定标签安装
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.3.4
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.3.5
 ```
 
 ### 5. 源码开发安装
@@ -581,7 +544,7 @@ super-dev bootstrap --name my-project --platform web --frontend next --backend n
 
 `Super Dev` 的运行方式可以概括为一条固定链路：
 
-1. 用户在项目目录执行 `super-dev` 或 `super-dev init`
+1. 用户在项目目录执行 `super-dev`
 2. 安装引导把 Super Dev 接入到目标宿主
 3. 用户在宿主里输入 `/super-dev 需求` 或 `super-dev: 需求`
 4. 宿主进入 Super Dev 流水线，11 个专家 Agent 按阶段注入，知识推送引擎自动推送相关约束
@@ -610,7 +573,7 @@ super-dev bootstrap --name my-project --platform web --frontend next --backend n
 
 ## 架构概览
 
-Super Dev 2.3.4 架构由四层组成：**宿主接入层**（20 个统一接入宿主 + 1 个 OpenClaw 手动插件宿主）、**知识治理层**（306 索引 / 渐进式加载 / 自演化）、**编排引擎层**（9 阶段流水线 / 11 专家 + Overseer / 验证规则引擎）、**交付审计层**（DORA 度量 / ADR / 一致性检测 / proof-pack）。
+Super Dev 2.3.5 架构由四层组成：**宿主接入层**（20 个统一接入宿主 + 1 个 OpenClaw 手动插件宿主）、**知识治理层**（306 索引 / 渐进式加载 / 自演化）、**编排引擎层**（9 阶段流水线 / 11 专家 + Overseer / 验证规则引擎）、**交付审计层**（DORA 度量 / ADR / 一致性检测 / proof-pack）。
 
 ### 一、系统高阶流转架构
 
@@ -641,33 +604,33 @@ Super Dev 2.3.4 架构由四层组成：**宿主接入层**（20 个统一接入
 
 ### 统一 CLI 宿主（9 个）
 
-| 宿主 | 触发方式 | 安装命令 |
+| 宿主 | 触发方式 | 终端入口 |
 |------|----------|----------|
-| Claude Code | `/super-dev 需求` | `super-dev onboard --host claude-code` |
-| Codex | App/Desktop: `/super-dev`（skill 入口） / CLI: `$super-dev` / 回退: `super-dev: 需求` | `super-dev onboard --host codex-cli` |
-| Gemini CLI | `/super-dev 需求` | `super-dev onboard --host gemini-cli` |
-| OpenCode | `/super-dev 需求` | `super-dev onboard --host opencode` |
-| Kiro CLI | `/super-dev 需求` | `super-dev onboard --host kiro-cli` |
-| Cursor CLI | `/super-dev 需求` | `super-dev onboard --host cursor-cli` |
-| Qoder CLI | `/super-dev 需求` | `super-dev onboard --host qoder-cli` |
-| Copilot CLI | `super-dev: 需求` | `super-dev onboard --host copilot-cli` |
-| CodeBuddy CLI | `/super-dev 需求` | `super-dev onboard --host codebuddy-cli` |
+| Claude Code | `/super-dev 需求` | `super-dev` |
+| Codex | App/Desktop: `/super-dev`（skill 入口） / CLI: `$super-dev` / 回退: `super-dev: 需求` | `super-dev` |
+| Gemini CLI | `/super-dev 需求` | `super-dev` |
+| OpenCode | `/super-dev 需求` | `super-dev` |
+| Kiro CLI | `/super-dev 需求` | `super-dev` |
+| Cursor CLI | `/super-dev 需求` | `super-dev` |
+| Qoder CLI | `/super-dev 需求` | `super-dev` |
+| Copilot CLI | `super-dev: 需求` | `super-dev` |
+| CodeBuddy CLI | `/super-dev 需求` | `super-dev` |
 
 ### IDE 宿主（11 个）
 
-| 宿主 | 触发方式 | 安装命令 |
+| 宿主 | 触发方式 | 终端入口 |
 |------|----------|----------|
-| Antigravity | `/super-dev 需求` | `super-dev onboard --host antigravity` |
-| Cursor | `/super-dev 需求` | `super-dev onboard --host cursor` |
-| Windsurf | `/super-dev 需求` | `super-dev onboard --host windsurf` |
-| Kiro | `/super-dev 需求` | `super-dev onboard --host kiro` |
-| Qoder | `/super-dev 需求` | `super-dev onboard --host qoder` |
-| Trae | `super-dev: 需求` | `super-dev onboard --host trae` |
-| CodeBuddy | `/super-dev 需求` | `super-dev onboard --host codebuddy` |
-| Copilot (VS Code) | `super-dev: 需求` | `super-dev onboard --host vscode-copilot` |
-| Roo Code | `super-dev: 需求` | `super-dev onboard --host roo-code` |
-| Kilo Code | `super-dev: 需求` | `super-dev onboard --host kilo-code` |
-| Cline | `super-dev: 需求` | `super-dev onboard --host cline` |
+| Antigravity | `/super-dev 需求` | `super-dev` |
+| Cursor | `/super-dev 需求` | `super-dev` |
+| Windsurf | `/super-dev 需求` | `super-dev` |
+| Kiro | `/super-dev 需求` | `super-dev` |
+| Qoder | `/super-dev 需求` | `super-dev` |
+| Trae | `super-dev: 需求` | `super-dev` |
+| CodeBuddy | `/super-dev 需求` | `super-dev` |
+| Copilot (VS Code) | `super-dev: 需求` | `super-dev` |
+| Roo Code | `super-dev: 需求` | `super-dev` |
+| Kilo Code | `super-dev: 需求` | `super-dev` |
+| Cline | `super-dev: 需求` | `super-dev` |
 
 ---
 
@@ -677,7 +640,7 @@ Super Dev 2.3.4 架构由四层组成：**宿主接入层**（20 个统一接入
 
 安装：
 ```bash
-super-dev onboard --host claude-code --force --yes
+super-dev
 ```
 
 触发位置：
@@ -686,6 +649,10 @@ super-dev onboard --host claude-code --force --yes
 触发命令：
 ```text
 /super-dev 你的需求
+```
+比赛模式：
+```text
+/super-dev-seeai 比赛需求
 ```
 
 接入后是否需要重启：否
@@ -700,7 +667,7 @@ super-dev onboard --host claude-code --force --yes
 
 安装：
 ```bash
-super-dev onboard --host codex-cli --force --yes
+super-dev
 ```
 
 触发位置：
@@ -729,7 +696,7 @@ Codex CLI: $super-dev
 
 安装：
 ```bash
-super-dev onboard --host gemini-cli --force --yes
+super-dev
 ```
 
 触发位置：
@@ -750,7 +717,7 @@ super-dev onboard --host gemini-cli --force --yes
 
 安装：
 ```bash
-super-dev onboard --host opencode --force --yes
+super-dev
 ```
 
 触发位置：
@@ -771,7 +738,7 @@ super-dev onboard --host opencode --force --yes
 
 安装：
 ```bash
-super-dev onboard --host kiro-cli --force --yes
+super-dev
 ```
 
 触发位置：
@@ -793,7 +760,7 @@ super-dev onboard --host kiro-cli --force --yes
 
 安装：
 ```bash
-super-dev onboard --host cursor-cli --force --yes
+super-dev
 ```
 
 触发位置：
@@ -814,7 +781,7 @@ super-dev onboard --host cursor-cli --force --yes
 
 安装：
 ```bash
-super-dev onboard --host qoder-cli --force --yes
+super-dev
 ```
 
 触发位置：
@@ -836,7 +803,7 @@ super-dev onboard --host qoder-cli --force --yes
 
 安装：
 ```bash
-super-dev onboard --host copilot-cli --force --yes
+super-dev
 ```
 
 触发位置：
@@ -857,7 +824,7 @@ super-dev onboard --host copilot-cli --force --yes
 
 安装：
 ```bash
-super-dev onboard --host codebuddy-cli --force --yes
+super-dev
 ```
 
 触发位置：
@@ -874,12 +841,13 @@ super-dev onboard --host codebuddy-cli --force --yes
 1. 在当前 CLI 会话中直接输入即可。
 2. 官方主面是 `CODEBUDDY.md` + `.codebuddy/commands/` + `.codebuddy/skills/`，并补充 `~/.codebuddy/CODEBUDDY.md`。
 3. 如果会话已提前打开，建议重新加载项目规则后再试。
+4. 黑客松/比赛场景优先使用 `/super-dev-seeai`，让宿主按半小时节奏压缩 research、三文档、Spec 和一体化开发。
 
 #### 10. Antigravity
 
 安装：
 ```bash
-super-dev onboard --host antigravity --force --yes
+super-dev
 ```
 
 触发位置：
@@ -902,7 +870,7 @@ super-dev onboard --host antigravity --force --yes
 
 安装：
 ```bash
-super-dev onboard --host cursor --force --yes
+super-dev
 ```
 
 触发位置：
@@ -911,6 +879,10 @@ super-dev onboard --host cursor --force --yes
 触发命令：
 ```text
 /super-dev 你的需求
+```
+比赛模式：
+```text
+/super-dev-seeai 比赛需求
 ```
 
 接入后是否需要重启：否
@@ -923,7 +895,7 @@ super-dev onboard --host cursor --force --yes
 
 安装：
 ```bash
-super-dev onboard --host windsurf --force --yes
+super-dev
 ```
 
 触发位置：
@@ -944,7 +916,7 @@ super-dev onboard --host windsurf --force --yes
 
 安装：
 ```bash
-super-dev onboard --host kiro --force --yes
+super-dev
 ```
 
 触发位置：
@@ -966,7 +938,7 @@ super-dev onboard --host kiro --force --yes
 
 安装：
 ```bash
-super-dev onboard --host qoder --force --yes
+super-dev
 ```
 
 触发位置：
@@ -988,7 +960,7 @@ super-dev onboard --host qoder --force --yes
 
 安装：
 ```bash
-super-dev onboard --host trae --force --yes
+super-dev
 ```
 
 触发位置：
@@ -1011,7 +983,7 @@ super-dev: 你的需求
 
 安装：
 ```bash
-super-dev onboard --host codebuddy --force --yes
+super-dev
 ```
 
 触发位置：
@@ -1028,12 +1000,13 @@ super-dev onboard --host codebuddy --force --yes
 1. 建议在项目级 Agent Chat 中使用，不要脱离项目上下文。
 2. 先让宿主完成 research，再继续文档和编码。
 3. 当前按 `CODEBUDDY.md` + `.codebuddy/rules/super-dev/RULE.mdc` + `.codebuddy/commands/` + `.codebuddy/agents/` + `.codebuddy/skills/` 接入。
+4. 比赛场景建议固定在同一个 Agent Chat，会比频繁切换子会话更稳。
 
 #### 17. Copilot (VS Code)
 
 安装：
 ```bash
-super-dev onboard --host vscode-copilot --force --yes
+super-dev
 ```
 
 触发位置：
@@ -1055,7 +1028,7 @@ super-dev: 你的需求
 
 安装：
 ```bash
-super-dev onboard --host roo-code --force --yes
+super-dev
 ```
 
 触发位置：
@@ -1077,7 +1050,7 @@ super-dev: 你的需求
 
 安装：
 ```bash
-super-dev onboard --host kilo-code --force --yes
+super-dev
 ```
 
 触发位置：
@@ -1099,7 +1072,7 @@ super-dev: 你的需求
 
 安装：
 ```bash
-super-dev onboard --host cline --force --yes
+super-dev
 ```
 
 触发位置：
@@ -1145,6 +1118,14 @@ super-dev: 你的需求
 ```text
 /super-dev 你的需求
 ```
+比赛模式：
+```text
+super-dev-seeai: 比赛需求
+```
+或
+```text
+/super-dev-seeai 比赛需求
+```
 
 插件提供 20 个专用 Tool：
 
@@ -1175,7 +1156,8 @@ super-dev: 你的需求
 1. 插件通过 CLI subprocess 桥接调用 `super-dev`，因此必须先 `pip install super-dev`。
 2. 安装后建议重启 OpenClaw Gateway 或新开会话，让 Plugin 和 Skill 生效。
 3. 插件内嵌 SKILL.md，OpenClaw Agent 会自动理解流水线协议。
-4. 使用 `super-dev doctor --host openclaw` 检查集成状态。
+4. 比赛场景优先使用 `super-dev-seeai:` 或 `/super-dev-seeai`，按半小时节奏快速产出可演示作品。
+5. 使用 `super-dev doctor --host openclaw` 检查集成状态。
 
 ---
 

@@ -8,22 +8,40 @@ from pathlib import Path
 import yaml
 
 from . import __version__
+from .integrations import IntegrationManager
+from .integrations.install_manifest import load_install_manifest, record_install_manifest
 
 
 def _detect_onboarded_hosts(project_dir: Path) -> list[str]:
     """检测项目中已经接入过的宿主。"""
-    from .integrations.manager import IntegrationManager
-
     mgr = IntegrationManager(project_dir=project_dir)
-    detected: list[str] = []
-    for target_name, target_obj in mgr.TARGETS.items():
-        for rel in target_obj.files:
-            if rel in target_obj.optional_files:
+    manifest = load_install_manifest(project_dir)
+    manifest_targets = manifest.get("targets", {})
+    if isinstance(manifest_targets, dict) and manifest_targets:
+        resolved: list[str] = []
+        for raw_target, item in manifest_targets.items():
+            if not isinstance(item, dict):
                 continue
-            full = project_dir / rel
-            if full.exists():
-                detected.append(target_name)
-                break
+            target = str(item.get("host", "")).strip() or str(raw_target).strip()
+            if target in mgr.TARGETS and target not in resolved:
+                resolved.append(target)
+        if resolved:
+            return resolved
+
+    families: dict[str, list[str]] = {}
+    for target_name in mgr.TARGETS:
+        markers = IntegrationManager.target_detection_markers(target_name)
+        if not markers:
+            continue
+        if any((project_dir / marker).exists() for marker in markers):
+            family = IntegrationManager.host_family(target_name)
+            families.setdefault(family, []).append(target_name)
+
+    detected: list[str] = []
+    for family, candidates in families.items():
+        preferred = IntegrationManager.preferred_target_for_family(family, candidates)
+        if preferred in mgr.TARGETS and preferred not in detected:
+            detected.append(preferred)
     return detected
 
 
@@ -75,13 +93,13 @@ def migrate_project(project_dir: Path) -> list[str]:
     detected_hosts = _detect_onboarded_hosts(project_dir)
 
     if detected_hosts:
-        from .integrations.manager import IntegrationManager
         from .skills.manager import SkillManager
 
         mgr = IntegrationManager(project_dir=project_dir)
         sm = SkillManager(project_dir=project_dir)
 
         for target in detected_hosts:
+            written: list[Path] = []
             try:
                 written = mgr.setup(target=target, force=True)
                 if written:
@@ -94,6 +112,8 @@ def migrate_project(project_dir: Path) -> list[str]:
                 if mgr.supports_slash(target):
                     mgr.setup_slash_command(target=target, force=True)
                     mgr.setup_global_slash_command(target=target, force=True)
+                    mgr.setup_seeai_slash_command(target=target, force=True)
+                    mgr.setup_global_seeai_slash_command(target=target, force=True)
             except Exception:
                 pass
 
@@ -118,6 +138,34 @@ def migrate_project(project_dir: Path) -> list[str]:
                 except Exception as exc:
                     changes.append(f"{target} Skill 更新失败: {exc}")
 
+            try:
+                manifest_paths = [str(path) for path in written] if written else []
+                global_protocol = mgr.resolve_global_protocol_path(target)
+                if global_protocol is not None and global_protocol.exists():
+                    manifest_paths.append(str(global_protocol))
+                global_slash = mgr.resolve_global_slash_command_path(target)
+                if global_slash is not None and global_slash.exists():
+                    manifest_paths.append(str(global_slash))
+                record_install_manifest(
+                    project_dir,
+                    host=target,
+                    family=mgr.host_family(target),
+                    scopes={
+                        "project": bool(written),
+                        "global": bool(
+                            (global_protocol is not None and global_protocol.exists())
+                            or (global_slash is not None and global_slash.exists())
+                        ),
+                        "runtime": target == "claude-code"
+                        and any(
+                            path.endswith(".claude/settings.local.json") for path in manifest_paths
+                        ),
+                    },
+                    paths=manifest_paths,
+                )
+            except Exception:
+                pass
+
         # Claude Code 特有清理
         if "claude-code" in detected_hosts:
             _cleanup_claude_code_legacy(project_dir, changes)
@@ -127,17 +175,6 @@ def migrate_project(project_dir: Path) -> list[str]:
     if not memory_dir.exists():
         memory_dir.mkdir(parents=True, exist_ok=True)
         changes.append("已创建 .super-dev/memory/ 目录")
-
-    # 4. 安装 enforcement hooks
-    try:
-        from .enforcement import HostHooksConfigurator
-
-        configurator = HostHooksConfigurator(project_dir)
-        settings_path = configurator.install_hooks(host="claude-code")
-        if settings_path.exists():
-            changes.append("已安装 enforcement hooks")
-    except Exception:
-        pass  # enforcement 是可选的
 
     if not changes:
         changes.append("项目已是最新版本，无需迁移")

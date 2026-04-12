@@ -11,6 +11,7 @@ from zipfile import ZipFile
 
 import pytest
 
+from super_dev import __version__
 from super_dev.deployers.delivery import ArtifactSpec, DeliveryPackager
 
 # ---------------------------------------------------------------------------
@@ -119,7 +120,7 @@ class TestDeliveryPackagerInit:
 
     def test_default_version(self, tmp_path):
         packager = DeliveryPackager(tmp_path, "test")
-        assert packager.version == "2.3.3"
+        assert packager.version == __version__
 
     def test_custom_version(self, tmp_path):
         packager = DeliveryPackager(tmp_path, "test", version="3.0.0")

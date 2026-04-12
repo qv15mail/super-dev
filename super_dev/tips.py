@@ -37,29 +37,29 @@ TIPS: list[dict[str, str]] = [
     # 审查
     {
         "trigger": "review",
-        "text": "用 super-dev review --state ui 做 UI 审查，不要跳过",
+        "text": "遇到 UI 修改意见时，继续留在当前宿主会话里处理，不要重新开普通聊天",
     },
     {
         "trigger": "review",
-        "text": "用 super-dev quality 运行质量门禁检查",
+        "text": "质量或安全问题修完后，回到宿主里明确说明已整改完成，再继续当前流程",
     },
     # 交付
     {
         "trigger": "delivery",
-        "text": "运行 super-dev release proof-pack 生成完整交付证据",
+        "text": "准备交付时，在宿主里继续当前流程，补齐 proof-pack、发布演练和交付证据",
     },
     {
         "trigger": "delivery",
-        "text": "运行 super-dev release readiness 确认发布就绪",
+        "text": "不要在交付阶段重新开题；继续沿当前 Super Dev 流程补齐最后的发布闭环",
     },
     # 通用
     {
         "trigger": "general",
-        "text": "用 super-dev status 查看当前 pipeline 状态",
+        "text": "日常使用回到宿主里说“继续当前流程”或“现在下一步是什么”",
     },
     {
         "trigger": "general",
-        "text": "用 super-dev doctor --fix 自动修复安装问题",
+        "text": "只有安装、接入或升级时再回终端；日常开发不要离开宿主工作流",
     },
     {
         "trigger": "general",

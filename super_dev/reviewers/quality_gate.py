@@ -755,6 +755,24 @@ class QualityGateChecker:
         # 检查是否通过：必须达到阈值，且必检项不能失败
         passed = total_score >= threshold and not critical_failures
 
+        # Webhook notification on quality gate failure
+        if not passed:
+            try:
+                from ..webhooks import send_webhook
+
+                send_webhook(
+                    "quality_fail",
+                    {
+                        "score": total_score,
+                        "threshold": threshold,
+                        "critical_failures": critical_failures,
+                        "scenario": "0-1" if self.is_zero_to_one else "1-N+1",
+                        "project": self.name,
+                    },
+                )
+            except Exception:
+                pass
+
         # 生成改进建议
         recommendations = self._generate_recommendations(checks)
 

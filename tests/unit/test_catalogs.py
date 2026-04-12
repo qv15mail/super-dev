@@ -30,6 +30,7 @@ from super_dev.catalogs import (
     SPECIAL_INSTALL_HOST_TOOL_IDS,
     host_detection_path_candidates,
     host_override_path_candidates,
+    host_runtime_validation_overrides,
     normalize_host_tool_id,
 )
 from super_dev.config import ConfigManager
@@ -105,6 +106,7 @@ def test_host_tool_catalog_ids_unique():
         "qoder",
         "trae",
         "openclaw",
+        "workbuddy",
     }.issubset(set(ids))
 
 
@@ -121,11 +123,13 @@ def test_host_tool_category_map_is_complete():
 
 
 def test_primary_product_host_scope_is_locked():
-    assert len(PRIMARY_HOST_TOOL_IDS) == 20
-    assert len(PRODUCT_HOST_TOOL_IDS) == 21
+    assert len(PRIMARY_HOST_TOOL_IDS) == 21
+    assert len(PRODUCT_HOST_TOOL_IDS) == 22
     assert SPECIAL_INSTALL_HOST_TOOL_IDS == ("openclaw",)
     assert "openclaw" not in PRIMARY_HOST_TOOL_IDS
     assert "openclaw" in PRODUCT_HOST_TOOL_IDS
+    assert "workbuddy" in PRIMARY_HOST_TOOL_IDS
+    assert "workbuddy" in PRODUCT_HOST_TOOL_IDS
     assert "antigravity" in PRIMARY_HOST_TOOL_IDS
 
 
@@ -139,6 +143,7 @@ def test_primary_product_host_scope_is_locked():
         ("cursor", "cursor"),
         ("cursor cli", "cursor-cli"),
         ("vscode", "vscode-copilot"),
+        ("腾讯虾", "workbuddy"),
     ],
 )
 def test_normalize_host_tool_id_supports_product_aliases(alias: str, expected: str):
@@ -158,17 +163,31 @@ def test_alias_entries_do_not_shadow_canonical_host_ids():
         assert host_set.isdisjoint(set(aliases))
 
 
+def test_runtime_validation_overrides_prefer_special_host_adapters():
+    overrides = host_runtime_validation_overrides("openclaw")
+
+    assert overrides["runtime_checklist"]
+    assert overrides["pass_criteria"]
+    assert overrides["resume_checklist"]
+    assert any("比赛入口" in item or "super-dev-seeai" in item for item in overrides["runtime_checklist"])
+
+
 def test_host_usage_guide_tracks_primary_product_hosts():
     guide_path = Path(__file__).resolve().parents[2] / "docs" / "HOST_USAGE_GUIDE.md"
     content = guide_path.read_text(encoding="utf-8")
     lines = content.splitlines()
 
-    assert "当前版本默认提供 `20` 个统一接入宿主，外加 `OpenClaw` 这种独立手动安装宿主。" in content
-    assert "OpenClaw 不在这 20 个统一安装宿主内" in content or "OpenClaw" in content
+    assert (
+        "当前版本默认提供 `21` 个统一接入宿主，外加 `OpenClaw` 这类独立手动安装宿主。"
+        in content
+    )
+    assert "OpenClaw" in content
+    assert "WorkBuddy" in content
 
     # 只提取宿主表的行（包含 Slash/非Slash/协议列的行）
     table_rows = [
-        line for line in lines
+        line
+        for line in lines
         if line.startswith("| ")
         and not line.startswith("| 宿主 ")
         and not line.startswith("| ---")
@@ -177,13 +196,14 @@ def test_host_usage_guide_tracks_primary_product_hosts():
     ]
     assert len(table_rows) >= len(PRIMARY_HOST_TOOL_IDS)
 
-    host_names = [row.split("|")[1].strip() for row in table_rows[:20]]
+    host_names = [row.split("|")[1].strip() for row in table_rows[:21]]
     assert host_names == [
         "Antigravity",
         "Claude Code",
         "Cline",
         "CodeBuddy CLI",
         "CodeBuddy IDE",
+        "WorkBuddy",
         "Copilot CLI",
         "Cursor CLI",
         "Cursor IDE",
@@ -213,7 +233,9 @@ def test_host_override_path_candidates_support_explicit_env_override(temp_projec
     assert str(custom_path) in candidates
 
 
-def test_host_detection_path_candidates_include_override_and_registry(temp_project_dir, monkeypatch):
+def test_host_detection_path_candidates_include_override_and_registry(
+    temp_project_dir, monkeypatch
+):
     custom_path = temp_project_dir / "custom" / "Trae.exe"
     custom_path.parent.mkdir(parents=True, exist_ok=True)
     custom_path.write_text("", encoding="utf-8")
@@ -221,7 +243,10 @@ def test_host_detection_path_candidates_include_override_and_registry(temp_proje
     registry_path = temp_project_dir / "registry" / "Trae.exe"
     registry_path.parent.mkdir(parents=True, exist_ok=True)
     registry_path.write_text("", encoding="utf-8")
-    monkeypatch.setattr("super_dev.catalogs._windows_registry_path_candidates", lambda host_id: [str(registry_path)] if host_id == "trae" else [])
+    monkeypatch.setattr(
+        "super_dev.catalogs._windows_registry_path_candidates",
+        lambda host_id: [str(registry_path)] if host_id == "trae" else [],
+    )
 
     probes = host_detection_path_candidates("trae")
 

@@ -16,6 +16,7 @@ class HostHooksConfigurator:
     """为 AI coding host 生成和安装执行 hooks。"""
 
     SUPPORTED_HOSTS = ("claude-code",)
+    SENSITIVE_READ_MATCHER = "Read|Grep|Glob|LS|mcp__acp__Read|mcp__acp__Grep|mcp__acp__Glob|mcp__acp__LS"
 
     def __init__(self, project_dir: Path):
         self.project_dir = project_dir
@@ -135,6 +136,201 @@ class HostHooksConfigurator:
             " if 'npm run' in cmd or 'pytest' in cmd else {}))\""
         )
 
+        secret_read_guard_cmd = """python3 -c "$(cat <<'PY'
+import fnmatch
+import json
+import os
+import sys
+
+data = json.loads(sys.stdin.read())
+tool_input = data.get("tool_input", {})
+if not isinstance(tool_input, dict):
+    tool_input = {}
+
+values: list[str] = []
+for key in ("file_path", "path", "directory", "cwd", "pattern", "glob"):
+    value = tool_input.get(key)
+    if value:
+        values.append(str(value))
+
+for key in ("paths", "file_paths"):
+    value = tool_input.get(key)
+    if isinstance(value, list):
+        values.extend(str(item) for item in value if item)
+
+home = os.path.expanduser("~").replace("\\\\", "/").rstrip("/")
+safe_suffixes = (".example", ".sample", ".template", ".dist", ".md")
+sensitive_rules = (
+    f"{home}/.ssh/*",
+    f"{home}/.aws/*",
+    f"{home}/.kube/*",
+    f"{home}/.gnupg/*",
+    f"{home}/.docker/*",
+    f"{home}/.config/gcloud/*",
+    f"{home}/.config/gh/*",
+    f"{home}/.config/sops/*",
+    f"{home}/.npmrc",
+    f"{home}/.pypirc",
+    f"{home}/.netrc",
+    f"{home}/.git-credentials",
+    f"{home}/.codex/auth.json",
+    f"{home}/.claude.json",
+    "*/.env",
+    "*/.env.*",
+    "*/.envrc",
+    "*/secrets/*",
+    "*/credentials/*",
+    "*/id_rsa",
+    "*/id_dsa",
+    "*/id_ecdsa",
+    "*/id_ed25519",
+    "*.pem",
+    "*.p12",
+    "*.pfx",
+    "*.key",
+    "*/auth.json",
+    "*/credentials.json",
+)
+config_like_secret_dirs = ("/.aws/", "/.kube/", "/.docker/", "/.config/gcloud/", "/.config/sops/")
+
+matched: list[str] = []
+for raw in values:
+    candidate = os.path.expanduser(str(raw)).replace("\\\\", "/").rstrip("/")
+    base = os.path.basename(candidate).lower()
+    if not candidate or candidate.lower().endswith(safe_suffixes):
+        continue
+    if any(fnmatch.fnmatch(candidate, rule) for rule in sensitive_rules):
+        matched.append(candidate)
+        continue
+    if base in {"credentials", "config", "config.json"} and any(
+        segment in candidate.lower() for segment in config_like_secret_dirs
+    ):
+        matched.append(candidate)
+
+matched = list(dict.fromkeys(matched))[:3]
+if matched:
+    print(
+        json.dumps(
+            {
+                "decision": "block",
+                "reason": "Super Dev: blocked read/glob/grep on sensitive secret location(s): "
+                + ", ".join(matched),
+            }
+        )
+    )
+else:
+    print("{}")
+PY
+)" """
+
+        bash_secret_guard_cmd = """python3 -c "$(cat <<'PY'
+import json
+import re
+import sys
+
+data = json.loads(sys.stdin.read())
+tool_input = data.get("tool_input", {})
+if not isinstance(tool_input, dict):
+    tool_input = {}
+
+command = str(tool_input.get("command", "") or "")
+lower = command.lower().replace("\\\\", "/")
+read_op = re.search(r"(^|[;&|()\\s])(cat|less|more|head|tail|grep|rg|sed|awk|find|ls|tree|bat|nl)\\b", lower)
+transform_op = re.search(
+    r"(^|[;&|()\\s])(cp|mv|tar|zip|unzip|gzip|base64|xxd|openssl|scp|rsync)\\b",
+    lower,
+)
+env_secret_op = re.search(
+    r"(^|[;&|()\\s])(printenv|env|echo|export|python|python3|node|ruby|perl|curl|wget|nc|ncat|ssh|scp|rsync)\\b",
+    lower,
+)
+sensitive_markers = (
+    "~/.ssh",
+    "/.ssh/",
+    "~/.aws",
+    "/.aws/",
+    "~/.kube",
+    "/.kube/",
+    "~/.docker",
+    "/.docker/",
+    "~/.gnupg",
+    "/.gnupg/",
+    "~/.config/gcloud",
+    "/.config/gcloud/",
+    "~/.config/sops",
+    "/.config/sops/",
+    ".npmrc",
+    ".pypirc",
+    ".netrc",
+    ".git-credentials",
+    ".codex/auth.json",
+    ".claude.json",
+    "/.env",
+    " secrets/",
+    " credentials/",
+    "id_rsa",
+    "id_dsa",
+    "id_ecdsa",
+    "id_ed25519",
+    ".pem",
+    ".p12",
+    ".pfx",
+    ".key",
+    "auth.json",
+    "credentials.json",
+)
+env_secret_markers = (
+    "openai_api_key",
+    "anthropic_api_key",
+    "gemini_api_key",
+    "google_api_key",
+    "google_application_credentials",
+    "azure_openai_api_key",
+    "aws_access_key_id",
+    "aws_secret_access_key",
+    "aws_session_token",
+    "gh_token",
+    "github_token",
+    "gitlab_token",
+    "slack_bot_token",
+    "notion_api_key",
+    "linear_api_key",
+    "figma_api_key",
+    "huggingface_token",
+    "hf_token",
+    "sentry_auth_token",
+    "vercel_token",
+    "cloudflare_api_token",
+    "tavily_api_key",
+)
+matched = [marker for marker in sensitive_markers if marker in lower][:3]
+if (read_op or transform_op) and matched:
+    print(
+        json.dumps(
+            {
+                "decision": "block",
+                "reason": "Super Dev: blocked bash command that accesses sensitive secret location(s): "
+                + ", ".join(matched),
+            }
+        )
+    )
+else:
+    env_matches = [marker for marker in env_secret_markers if marker in lower][:3]
+    if env_secret_op and env_matches:
+        print(
+            json.dumps(
+                {
+                    "decision": "block",
+                    "reason": "Super Dev: blocked bash command that prints, exports, or transmits sensitive environment variable(s): "
+                    + ", ".join(env_matches),
+                }
+            )
+        )
+    else:
+        print("{}")
+PY
+)" """
+
         return {
             "PreToolUse": [
                 {
@@ -143,6 +339,26 @@ class HostHooksConfigurator:
                         {
                             "type": "command",
                             "command": emoji_check_cmd,
+                            "timeout": 5,
+                        }
+                    ],
+                },
+                {
+                    "matcher": self.SENSITIVE_READ_MATCHER,
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": secret_read_guard_cmd,
+                            "timeout": 5,
+                        }
+                    ],
+                },
+                {
+                    "matcher": "Bash",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": bash_secret_guard_cmd,
                             "timeout": 5,
                         }
                     ],
@@ -189,16 +405,47 @@ class HostHooksConfigurator:
     def _merge_hooks(existing: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
         """Merge incoming hooks into existing without duplicating.
 
-        Strategy: for each hook phase (PreToolUse, PostToolUse, etc.),
-        add incoming entries whose *matcher* does not already appear.
+        Strategy:
+        - if matcher does not exist, append the full incoming entry
+        - if matcher already exists, merge the nested hooks list and de-duplicate by command
         """
         merged = dict(existing)
         for phase, entries in incoming.items():
             if phase not in merged or not merged[phase]:
                 merged[phase] = entries
                 continue
-            existing_matchers = {e.get("matcher") for e in merged[phase] if isinstance(e, dict)}
             for entry in entries:
-                if entry.get("matcher") not in existing_matchers:
+                matcher = entry.get("matcher") if isinstance(entry, dict) else None
+                matched_entry = next(
+                    (
+                        existing_entry
+                        for existing_entry in merged[phase]
+                        if isinstance(existing_entry, dict) and existing_entry.get("matcher") == matcher
+                    ),
+                    None,
+                )
+                if not matched_entry:
                     merged[phase].append(entry)
+                    continue
+
+                existing_hooks = matched_entry.get("hooks")
+                incoming_hooks = entry.get("hooks") if isinstance(entry, dict) else None
+                if not isinstance(existing_hooks, list) or not isinstance(incoming_hooks, list):
+                    continue
+
+                existing_commands = {
+                    (
+                        str(hook.get("type", "")),
+                        str(hook.get("command", "")),
+                    )
+                    for hook in existing_hooks
+                    if isinstance(hook, dict)
+                }
+                for hook in incoming_hooks:
+                    if not isinstance(hook, dict):
+                        continue
+                    signature = (str(hook.get("type", "")), str(hook.get("command", "")))
+                    if signature not in existing_commands:
+                        existing_hooks.append(hook)
+                        existing_commands.add(signature)
         return merged

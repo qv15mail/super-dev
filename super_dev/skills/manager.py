@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..catalogs import HOST_TOOL_IDS
+from ..host_registry import HostInstallMode, get_install_mode
 from .skill_template import SkillTemplate
 
 
@@ -37,6 +38,30 @@ class SkillManager:
     LEGACY_SKILL_ALIASES = {
         "codex-cli": ["super-dev-core"],
     }
+    SUPPLEMENTAL_BUILTIN_SKILLS = {
+        "codex-cli": ["super-dev-seeai"],
+        "claude-code": ["super-dev-seeai"],
+        "antigravity": ["super-dev-seeai"],
+        "cline": ["super-dev-seeai"],
+        "codebuddy-cli": ["super-dev-seeai"],
+        "codebuddy": ["super-dev-seeai"],
+        "copilot-cli": ["super-dev-seeai"],
+        "cursor-cli": ["super-dev-seeai"],
+        "cursor": ["super-dev-seeai"],
+        "gemini-cli": ["super-dev-seeai"],
+        "kiro-cli": ["super-dev-seeai"],
+        "kiro": ["super-dev-seeai"],
+        "kilo-code": ["super-dev-seeai"],
+        "openclaw": ["super-dev-seeai"],
+        "opencode": ["super-dev-seeai"],
+        "workbuddy": ["super-dev-seeai"],
+        "qoder-cli": ["super-dev-seeai"],
+        "qoder": ["super-dev-seeai"],
+        "roo-code": ["super-dev-seeai"],
+        "trae": ["super-dev-seeai"],
+        "vscode-copilot": ["super-dev-seeai"],
+        "windsurf": ["super-dev-seeai"],
+    }
 
     # Official user-level skill paths confirmed by vendor docs.
     OFFICIAL_TARGET_PATHS = {
@@ -51,6 +76,7 @@ class SkillManager:
         "kiro": "~/.kiro/skills",
         "openclaw": "~/.openclaw/skills",
         "opencode": "~/.config/opencode/skills",
+        "workbuddy": "~/.workbuddy/skills",
         "qoder-cli": "~/.qoder/skills",
         "qoder": "~/.qoder/skills",
         "roo-code": "~/.roo/skills",
@@ -82,11 +108,17 @@ class SkillManager:
 
     @classmethod
     def coverage_gaps(cls) -> dict[str, list[str]]:
-        declared = set(HOST_TOOL_IDS)
+        manual_hosts = {
+            host_id
+            for host_id in HOST_TOOL_IDS
+            if get_install_mode(host_id) == HostInstallMode.MANUAL
+        }
+        declared = set(HOST_TOOL_IDS) - manual_hosts
         target_keys = set(cls.TARGET_PATHS)
+        comparable_target_keys = target_keys - manual_hosts
         return {
-            "missing_in_skill_targets": sorted(declared - target_keys),
-            "extra_in_skill_targets": sorted(target_keys - declared),
+            "missing_in_skill_targets": sorted(declared - comparable_target_keys),
+            "extra_in_skill_targets": sorted(comparable_target_keys - declared),
         }
 
     def list_targets(self) -> list[str]:
@@ -107,10 +139,24 @@ class SkillManager:
     def compatibility_skill_names(cls, target: str, requested_name: str | None = None) -> list[str]:
         canonical = cls.default_skill_name(target)
         names: list[str] = []
-        for item in [canonical, requested_name, *cls.LEGACY_SKILL_ALIASES.get(target, [])]:
+        legacy_aliases = cls.LEGACY_SKILL_ALIASES.get(target, [])
+        explicit_nonstandard = (
+            isinstance(requested_name, str)
+            and requested_name.strip()
+            and requested_name not in {canonical, *legacy_aliases}
+        )
+        include_legacy = requested_name in {None, canonical, *legacy_aliases}
+        seed = [requested_name] if explicit_nonstandard else [canonical, requested_name]
+        if include_legacy:
+            seed.extend(legacy_aliases)
+        for item in seed:
             if isinstance(item, str) and item.strip() and item not in names:
                 names.append(item)
         return names
+
+    @classmethod
+    def supplemental_builtin_skills(cls, target: str) -> list[str]:
+        return list(cls.SUPPLEMENTAL_BUILTIN_SKILLS.get(target, []))
 
     @classmethod
     def target_path_kind(cls, target: str) -> str:
@@ -184,6 +230,20 @@ class SkillManager:
                     force=force,
                     writer=lambda mirror_dir, alias_name=alias: self._write_builtin_skill(
                         mirror_dir, alias_name, target
+                    ),
+                )
+            for extra_name in self.supplemental_builtin_skills(target):
+                if extra_name in {skill_name, *self.compatibility_skill_names(target, skill_name)}:
+                    continue
+                extra_dir = base / extra_name
+                self._prepare_target_dir(extra_dir, force=force)
+                self._write_builtin_skill(extra_dir, extra_name, target)
+                self._mirror_skill_install(
+                    target=target,
+                    skill_name=extra_name,
+                    force=force,
+                    writer=lambda mirror_dir, extra_skill=extra_name: self._write_builtin_skill(
+                        mirror_dir, extra_skill, target
                     ),
                 )
             return SkillInstallResult(
@@ -360,16 +420,24 @@ class SkillManager:
         (target_dir / "SKILL.md").write_text(skill_content, encoding="utf-8")
 
         if target == "codex-cli":
+            display_name = "Super Dev SEEAI" if skill_name == "super-dev-seeai" else "Super Dev"
+            short_description = (
+                "Competition-fast governed delivery mode for Codex."
+                if skill_name == "super-dev-seeai"
+                else "Research-first governed delivery pipeline for Codex."
+            )
+            default_prompt = (
+                "In Codex CLI use $super-dev-seeai. In Codex app choose super-dev-seeai from the slash skill list. Continue the SEEAI competition flow for the current request."
+                if skill_name == "super-dev-seeai"
+                else "In Codex CLI use $super-dev. In Codex app choose super-dev from the slash skill list. Continue the Super Dev pipeline for the current request."
+            )
             metadata_dir = target_dir / "agents"
             metadata_dir.mkdir(parents=True, exist_ok=True)
             openai_yaml = (
                 "interface:\n"
-                '  display_name: "Super Dev"\n'
-                '  short_description: "Research-first governed'
-                ' delivery pipeline for Codex."\n'
-                '  default_prompt: "In Codex CLI use $super-dev.'
-                ' In Codex app choose super-dev from the slash skill list.'
-                ' Continue the Super Dev pipeline for the current request."\n'
+                f'  display_name: "{display_name}"\n'
+                f'  short_description: "{short_description}"\n'
+                f'  default_prompt: "{default_prompt}"\n'
                 "policy:\n"
                 "  allow_implicit_invocation: true\n"
             )

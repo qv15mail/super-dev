@@ -20,8 +20,9 @@ const COPY = {
     matrixTitle: '宿主矩阵',
     protocol: '协议面',
     trigger: '触发',
-    maturity: '成熟度',
-    labels: { certified: '认证', compatible: '兼容', experimental: '实验性' },
+    integration: '接入完成度',
+    runtime: '运行成熟度',
+    labels: { certified: '高', compatible: '中', experimental: '待验证' },
   },
   en: {
     eyebrow: 'Host Support',
@@ -34,8 +35,9 @@ const COPY = {
     matrixTitle: 'Host matrix',
     protocol: 'Protocol surface',
     trigger: 'Trigger',
-    maturity: 'Maturity',
-    labels: { certified: 'Certified', compatible: 'Compatible', experimental: 'Experimental' },
+    integration: 'Integration',
+    runtime: 'Runtime',
+    labels: { certified: 'High', compatible: 'Medium', experimental: 'Pending' },
   },
 } as const;
 
@@ -100,7 +102,8 @@ export function HostCompatSection({ locale = 'zh' }: { locale?: SiteLocale }) {
                   <th className="px-3 py-2 font-medium">Host</th>
                   <th className="px-3 py-2 font-medium">{copy.trigger}</th>
                   <th className="px-3 py-2 font-medium">{copy.protocol}</th>
-                  <th className="px-3 py-2 font-medium">{copy.maturity}</th>
+                  <th className="px-3 py-2 font-medium">{copy.integration}</th>
+                  <th className="px-3 py-2 font-medium">{copy.runtime}</th>
                 </tr>
               </thead>
               <tbody>
@@ -109,7 +112,8 @@ export function HostCompatSection({ locale = 'zh' }: { locale?: SiteLocale }) {
                     <td className="rounded-l-xl px-3 py-3 font-mono text-text-primary">{host.name}</td>
                     <td className="px-3 py-3 font-mono text-accent-blue">{host.trigger === 'slash' ? '/super-dev' : 'super-dev:'}</td>
                     <td className="px-3 py-3 text-text-secondary">{host.protocol}</td>
-                    <td className="rounded-r-xl px-3 py-3"><Badge variant={STATUS_BADGE_VARIANT[host.status]}>{copy.labels[host.status]}</Badge></td>
+                    <td className="px-3 py-3"><Badge variant={STATUS_BADGE_VARIANT[host.integration]}>{copy.labels[host.integration]}</Badge></td>
+                    <td className="rounded-r-xl px-3 py-3"><Badge variant={STATUS_BADGE_VARIANT[host.runtime]}>{copy.labels[host.runtime]}</Badge></td>
                   </tr>
                 ))}
               </tbody>

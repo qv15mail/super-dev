@@ -27,14 +27,18 @@ class ProjectConfig:
 
     name: str
     description: str = ""
-    version: str = "2.3.4"
+    version: str = "2.3.5"
     author: str = ""
     license: str = "MIT"
 
     # 技术栈
     platform: str = "web"  # web, mobile(H5/APP), wechat(miniapp), desktop
-    frontend: str = "next"  # 扩展支持：next, remix, react-vite, gatsby, nuxt, vue-vite, angular, sveltekit, astro, solid, qwik
-    backend: str = "node"  # node, python, go, java, rust, php, ruby, csharp, kotlin, swift, elixir, scala, dart
+    frontend: str = (
+        "next"  # 扩展支持：next, remix, react-vite, gatsby, nuxt, vue-vite, angular, sveltekit, astro, solid, qwik
+    )
+    backend: str = (
+        "node"  # node, python, go, java, rust, php, ruby, csharp, kotlin, swift, elixir, scala, dart
+    )
     database: str = "postgresql"  # postgresql, mysql, mongodb, redis
 
     # 前端配置 (扩展)
@@ -50,30 +54,39 @@ class ProjectConfig:
     knowledge_cache_ttl_seconds: int = 1800  # 知识缓存 TTL（秒）
 
     # 工作流配置
-    phases: list[str] = field(default_factory=lambda: [
-        "discovery", "intelligence", "drafting",
-        "redteam", "qa", "delivery", "deployment"
-    ])
+    phases: list[str] = field(
+        default_factory=lambda: [
+            "discovery",
+            "intelligence",
+            "drafting",
+            "redteam",
+            "qa",
+            "delivery",
+            "deployment",
+        ]
+    )
 
     # 专家配置
-    experts: list[str] = field(default_factory=lambda: [
-        "PM", "ARCHITECT", "UI", "UX", "SECURITY", "CODE"
-    ])
+    experts: list[str] = field(
+        default_factory=lambda: ["PM", "ARCHITECT", "UI", "UX", "SECURITY", "CODE"]
+    )
 
     # 质量门禁
     quality_gate: int = 80
     host_compatibility_min_score: int = 80
     host_compatibility_min_ready_hosts: int = 1
-    host_profile_targets: list[str] = field(default_factory=list)  # 目标宿主画像（用于质量门禁和运营看板）
+    host_profile_targets: list[str] = field(
+        default_factory=list
+    )  # 目标宿主画像（用于质量门禁和运营看板）
     host_profile_enforce_selected: bool = False  # 仅按 host_profile_targets 计算宿主兼容性
 
     # Plan-Execute 与 Overseer 配置
     execution_mode: str = "standard"  # standard | plan-execute
     overseer_enabled: bool = False  # 启用 Overseer 质量监督
     codex_review_enabled: bool = False  # 启用 Codex 独立审查（Claude-Codex 混合模式）
-    codex_review_phases: list[str] = field(default_factory=lambda: [
-        "drafting", "redteam", "qa"
-    ])  # 哪些阶段触发 Codex 审查
+    codex_review_phases: list[str] = field(
+        default_factory=lambda: ["drafting", "redteam", "qa"]
+    )  # 哪些阶段触发 Codex 审查
     overseer_halt_on_critical: bool = True  # Overseer 发现 Critical 偏差时暂停流水线
     plan_failure_budget: int = 3  # Plan-Execute 步骤默认失败预算
 
@@ -91,7 +104,7 @@ class ConfigManager:
     DEFAULT_CONFIG: dict[str, Any] = {
         "name": "my-project",
         "description": "A Super Dev project",
-        "version": "2.3.4",
+        "version": "2.3.5",
         "platform": "web",
         "frontend": "next",  # 默认使用 Next.js
         "backend": "node",
@@ -156,6 +169,21 @@ class ConfigManager:
             loaded = yaml.safe_load(f)
         data = loaded if isinstance(loaded, dict) else {}
 
+        # Validate against schema (warnings only, not blocking)
+        try:
+            from .schema_validator import validate_config
+
+            schema_errors = validate_config(data)
+            if schema_errors:
+                import logging
+
+                logging.getLogger("super_dev.config").warning(
+                    "Config schema validation warnings: %s",
+                    "; ".join(schema_errors),
+                )
+        except Exception:
+            pass
+
         # 合并默认配置
         config_data: dict[str, Any] = {**self.DEFAULT_CONFIG, **data}
 
@@ -178,7 +206,8 @@ class ConfigManager:
 
         # 转换为字典（排除 None 值）
         data = {
-            k: v for k, v in config_to_save.__dict__.items()
+            k: v
+            for k, v in config_to_save.__dict__.items()
             if v is not None and not k.startswith("_")
         }
 
@@ -234,19 +263,13 @@ class ConfigManager:
         converted_kwargs: dict[str, Any] = {}
         for key, value in kwargs.items():
             if key == "knowledge_allowed_domains" and isinstance(value, str):
-                converted_kwargs[key] = [
-                    item.strip() for item in value.split(",") if item.strip()
-                ]
+                converted_kwargs[key] = [item.strip() for item in value.split(",") if item.strip()]
                 continue
             if key == "language_preferences" and isinstance(value, str):
-                converted_kwargs[key] = [
-                    item.strip() for item in value.split(",") if item.strip()
-                ]
+                converted_kwargs[key] = [item.strip() for item in value.split(",") if item.strip()]
                 continue
             if key == "host_profile_targets" and isinstance(value, str):
-                converted_kwargs[key] = [
-                    item.strip() for item in value.split(",") if item.strip()
-                ]
+                converted_kwargs[key] = [item.strip() for item in value.split(",") if item.strip()]
                 continue
             if key == "host_profile_enforce_selected" and isinstance(value, str):
                 lowered = value.strip().lower()
@@ -265,9 +288,7 @@ class ConfigManager:
                 converted_kwargs[key] = lowered in {"1", "true", "yes", "y", "on"}
                 continue
             if key == "codex_review_phases" and isinstance(value, str):
-                converted_kwargs[key] = [
-                    item.strip() for item in value.split(",") if item.strip()
-                ]
+                converted_kwargs[key] = [item.strip() for item in value.split(",") if item.strip()]
                 continue
             if key in type_converters and isinstance(value, str):
                 try:
@@ -356,13 +377,15 @@ class ConfigManager:
             errors.append("host_profile_targets 必须是字符串列表")
         else:
             invalid_targets = [
-                item for item in config.host_profile_targets
+                item
+                for item in config.host_profile_targets
                 if not isinstance(item, str) or not item.strip()
             ]
             if invalid_targets:
                 errors.append("host_profile_targets 包含非法项")
             unsupported_targets = [
-                item for item in config.host_profile_targets
+                item
+                for item in config.host_profile_targets
                 if isinstance(item, str) and item.strip() and item not in HOST_TOOL_IDS
             ]
             if unsupported_targets:
@@ -385,7 +408,8 @@ class ConfigManager:
             errors.append("language_preferences 必须是字符串列表")
         else:
             invalid_language_items = [
-                item for item in config.language_preferences
+                item
+                for item in config.language_preferences
                 if not isinstance(item, str) or not item.strip()
             ]
             if invalid_language_items:
@@ -394,7 +418,8 @@ class ConfigManager:
             errors.append("knowledge_allowed_domains 必须是字符串列表")
         else:
             invalid_items = [
-                item for item in config.knowledge_allowed_domains
+                item
+                for item in config.knowledge_allowed_domains
                 if not isinstance(item, str) or not item.strip()
             ]
             if invalid_items:
@@ -413,9 +438,17 @@ class ConfigManager:
         "platform": {"type": "str", "required": True, "allowed": list(PLATFORM_IDS)},
         "frontend": {"type": "str", "required": True, "allowed": list(FULL_FRONTEND_TEMPLATE_IDS)},
         "backend": {"type": "str", "required": True, "allowed": list(PIPELINE_BACKEND_IDS)},
-        "database": {"type": "str", "required": False, "allowed": ["postgresql", "mysql", "mongodb", "redis", "sqlite", ""]},
+        "database": {
+            "type": "str",
+            "required": False,
+            "allowed": ["postgresql", "mysql", "mongodb", "redis", "sqlite", ""],
+        },
         "quality_gate": {"type": "int", "required": False, "min": 0, "max": 100},
-        "execution_mode": {"type": "str", "required": False, "allowed": ["standard", "plan-execute"]},
+        "execution_mode": {
+            "type": "str",
+            "required": False,
+            "allowed": ["standard", "plan-execute"],
+        },
         "plan_failure_budget": {"type": "int", "required": False, "min": 1, "max": 10},
         "host_compatibility_min_score": {"type": "int", "required": False, "min": 0, "max": 100},
         "host_compatibility_min_ready_hosts": {"type": "int", "required": False, "min": 0},
@@ -423,7 +456,9 @@ class ConfigManager:
         "output_dir": {"type": "str", "required": False},
     }
 
-    def validate_schema(self, data: dict[str, Any] | None = None) -> tuple[bool, list[dict[str, str]]]:
+    def validate_schema(
+        self, data: dict[str, Any] | None = None
+    ) -> tuple[bool, list[dict[str, str]]]:
         """
         对配置进行深度 schema 校验。
 
@@ -445,12 +480,16 @@ class ConfigManager:
             field_type = rules.get("type", "str")
 
             # Required check
-            if rules.get("required") and (value is None or (isinstance(value, str) and not value.strip())):
-                issues.append({
-                    "field": field_name,
-                    "severity": "error",
-                    "message": f"必填字段 '{field_name}' 未设置或为空",
-                })
+            if rules.get("required") and (
+                value is None or (isinstance(value, str) and not value.strip())
+            ):
+                issues.append(
+                    {
+                        "field": field_name,
+                        "severity": "error",
+                        "message": f"必填字段 '{field_name}' 未设置或为空",
+                    }
+                )
                 continue
 
             if value is None:
@@ -458,18 +497,22 @@ class ConfigManager:
 
             # Type check
             if field_type == "str" and not isinstance(value, str):
-                issues.append({
-                    "field": field_name,
-                    "severity": "error",
-                    "message": f"'{field_name}' 应为字符串，实际为 {type(value).__name__}",
-                })
+                issues.append(
+                    {
+                        "field": field_name,
+                        "severity": "error",
+                        "message": f"'{field_name}' 应为字符串，实际为 {type(value).__name__}",
+                    }
+                )
                 continue
             if field_type == "int" and not isinstance(value, int):
-                issues.append({
-                    "field": field_name,
-                    "severity": "error",
-                    "message": f"'{field_name}' 应为整数，实际为 {type(value).__name__}",
-                })
+                issues.append(
+                    {
+                        "field": field_name,
+                        "severity": "error",
+                        "message": f"'{field_name}' 应为整数，实际为 {type(value).__name__}",
+                    }
+                )
                 continue
 
             # String constraints
@@ -477,58 +520,72 @@ class ConfigManager:
                 min_len = rules.get("min_length")
                 max_len = rules.get("max_length")
                 if min_len is not None and len(value) < min_len:
-                    issues.append({
-                        "field": field_name,
-                        "severity": "error",
-                        "message": f"'{field_name}' 长度不能少于 {min_len} 个字符",
-                    })
+                    issues.append(
+                        {
+                            "field": field_name,
+                            "severity": "error",
+                            "message": f"'{field_name}' 长度不能少于 {min_len} 个字符",
+                        }
+                    )
                 if max_len is not None and len(value) > max_len:
-                    issues.append({
-                        "field": field_name,
-                        "severity": "warning",
-                        "message": f"'{field_name}' 长度超过推荐的 {max_len} 个字符",
-                    })
+                    issues.append(
+                        {
+                            "field": field_name,
+                            "severity": "warning",
+                            "message": f"'{field_name}' 长度超过推荐的 {max_len} 个字符",
+                        }
+                    )
                 pattern = rules.get("pattern")
                 if pattern and not re.match(pattern, value):
-                    issues.append({
-                        "field": field_name,
-                        "severity": "error",
-                        "message": f"'{field_name}' 格式不符合要求（期望: {pattern}）",
-                    })
+                    issues.append(
+                        {
+                            "field": field_name,
+                            "severity": "error",
+                            "message": f"'{field_name}' 格式不符合要求（期望: {pattern}）",
+                        }
+                    )
                 allowed = rules.get("allowed")
                 if allowed and value and value not in allowed:
-                    issues.append({
-                        "field": field_name,
-                        "severity": "error",
-                        "message": f"'{field_name}' 值 '{value}' 不在允许的列表中",
-                    })
+                    issues.append(
+                        {
+                            "field": field_name,
+                            "severity": "error",
+                            "message": f"'{field_name}' 值 '{value}' 不在允许的列表中",
+                        }
+                    )
 
             # Integer constraints
             if isinstance(value, int):
                 min_val = rules.get("min")
                 max_val = rules.get("max")
                 if min_val is not None and value < min_val:
-                    issues.append({
-                        "field": field_name,
-                        "severity": "error",
-                        "message": f"'{field_name}' 值 {value} 小于最小值 {min_val}",
-                    })
+                    issues.append(
+                        {
+                            "field": field_name,
+                            "severity": "error",
+                            "message": f"'{field_name}' 值 {value} 小于最小值 {min_val}",
+                        }
+                    )
                 if max_val is not None and value > max_val:
-                    issues.append({
-                        "field": field_name,
-                        "severity": "error",
-                        "message": f"'{field_name}' 值 {value} 大于最大值 {max_val}",
-                    })
+                    issues.append(
+                        {
+                            "field": field_name,
+                            "severity": "error",
+                            "message": f"'{field_name}' 值 {value} 大于最大值 {max_val}",
+                        }
+                    )
 
         # Check for unknown fields
         valid_fields = {f.name for f in dataclasses.fields(ProjectConfig)}
         for key in data:
             if key not in valid_fields and not key.startswith("_"):
-                issues.append({
-                    "field": key,
-                    "severity": "warning",
-                    "message": f"未知配置字段 '{key}'，可能已废弃或拼写错误",
-                })
+                issues.append(
+                    {
+                        "field": key,
+                        "severity": "warning",
+                        "message": f"未知配置字段 '{key}'，可能已废弃或拼写错误",
+                    }
+                )
 
         has_errors = any(i["severity"] == "error" for i in issues)
         return not has_errors, issues
@@ -543,10 +600,16 @@ class ConfigManager:
             "to_version": "2.0",
             "description": "从 v1.0 迁移到 v2.0：新增 host 兼容性配置",
             "transforms": {
-                "host_compatibility_min_score": lambda data: data.get("host_compatibility_min_score", 80),
-                "host_compatibility_min_ready_hosts": lambda data: data.get("host_compatibility_min_ready_hosts", 1),
+                "host_compatibility_min_score": lambda data: data.get(
+                    "host_compatibility_min_score", 80
+                ),
+                "host_compatibility_min_ready_hosts": lambda data: data.get(
+                    "host_compatibility_min_ready_hosts", 1
+                ),
                 "host_profile_targets": lambda data: data.get("host_profile_targets", []),
-                "host_profile_enforce_selected": lambda data: data.get("host_profile_enforce_selected", False),
+                "host_profile_enforce_selected": lambda data: data.get(
+                    "host_profile_enforce_selected", False
+                ),
             },
             "removals": [],
         },
@@ -557,7 +620,9 @@ class ConfigManager:
             "transforms": {
                 "language_preferences": lambda data: data.get("language_preferences", []),
                 "knowledge_allowed_domains": lambda data: data.get("knowledge_allowed_domains", []),
-                "knowledge_cache_ttl_seconds": lambda data: data.get("knowledge_cache_ttl_seconds", 1800),
+                "knowledge_cache_ttl_seconds": lambda data: data.get(
+                    "knowledge_cache_ttl_seconds", 1800
+                ),
                 "ui_library": lambda data: data.get("ui_library"),
                 "style_solution": lambda data: data.get("style_solution"),
                 "state_management": lambda data: data.get("state_management", []),
@@ -580,15 +645,19 @@ class ConfigManager:
                 "execution_mode": lambda data: data.get("execution_mode", "standard"),
                 "overseer_enabled": lambda data: data.get("overseer_enabled", False),
                 "codex_review_enabled": lambda data: data.get("codex_review_enabled", False),
-                "codex_review_phases": lambda data: data.get("codex_review_phases", ["drafting", "redteam", "qa"]),
-                "overseer_halt_on_critical": lambda data: data.get("overseer_halt_on_critical", True),
+                "codex_review_phases": lambda data: data.get(
+                    "codex_review_phases", ["drafting", "redteam", "qa"]
+                ),
+                "overseer_halt_on_critical": lambda data: data.get(
+                    "overseer_halt_on_critical", True
+                ),
                 "plan_failure_budget": lambda data: data.get("plan_failure_budget", 3),
             },
             "removals": [],
         },
     ]
 
-    def migrate_config(self, target_version: str = "2.3.4") -> tuple[bool, list[str]]:
+    def migrate_config(self, target_version: str = "2.3.5") -> tuple[bool, list[str]]:
         """
         将配置文件从当前版本迁移到目标版本。
 
@@ -643,6 +712,7 @@ class ConfigManager:
             # Backup original
             backup_path = self.config_path.with_suffix(".yaml.bak")
             import shutil
+
             shutil.copy2(self.config_path, backup_path)
             logs.append(f"原配置已备份到 {backup_path}")
 
@@ -860,20 +930,24 @@ class ConfigManager:
         for env_name in ("development", "staging", "production"):
             env_file = self.project_dir / f"super-dev.{env_name}.yaml"
             status = "configured" if env_file.exists() else "default"
-            envs.append({
-                "name": env_name,
-                "status": status,
-                "file": str(env_file) if env_file.exists() else "",
-            })
+            envs.append(
+                {
+                    "name": env_name,
+                    "status": status,
+                    "file": str(env_file) if env_file.exists() else "",
+                }
+            )
         # Check for custom environments
         for f in self.project_dir.glob("super-dev.*.yaml"):
             env_name = f.stem.replace("super-dev.", "")
             if env_name not in ("development", "staging", "production"):
-                envs.append({
-                    "name": env_name,
-                    "status": "custom",
-                    "file": str(f),
-                })
+                envs.append(
+                    {
+                        "name": env_name,
+                        "status": "custom",
+                        "file": str(f),
+                    }
+                )
         return envs
 
 

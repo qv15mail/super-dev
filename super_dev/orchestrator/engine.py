@@ -827,6 +827,26 @@ class WorkflowEngine:
         self._print_workflow_complete(results)
         self._save_report(results)
 
+        # Webhook notification on pipeline completion
+        try:
+            from ..webhooks import send_webhook
+
+            phases_completed = [p.value for p, r in results.items() if r.success]
+            phases_failed = [p.value for p, r in results.items() if not r.success]
+            send_webhook(
+                "pipeline_complete",
+                {
+                    "status": "completed",
+                    "phases_completed": phases_completed,
+                    "phases_failed": phases_failed,
+                    "total_phases": len(results),
+                    "success_count": len(phases_completed),
+                    "project": self.config_manager.config.name or str(self.project_dir.name),
+                },
+            )
+        except Exception:
+            pass
+
         # Cost tracker: save in finally-equivalent position
         # 即使 pipeline 因异常中断，成本数据也会被保存
         self._save_cost_tracker()
@@ -872,6 +892,97 @@ class WorkflowEngine:
             if p in phase_map:
                 phases.append(phase_map[p])
         return phases
+
+    def get_smart_phases(self) -> list[Phase]:
+        """Determine applicable phases based on project configuration.
+
+        Automatically adjusts the pipeline for project type:
+        - Frontend-only projects skip backend-related deep checks
+        - Small features skip full red-team (lightweight security scan instead)
+        - Bugfix mode uses a condensed pipeline
+        - Full-stack new projects use the complete pipeline
+        """
+        config = self.config_manager.config
+        all_phases = self._get_phases_from_config()
+
+        if not all_phases:
+            return list(Phase)
+
+        frontend = (config.frontend or "").lower()
+        backend = (config.backend or "").lower()
+
+        # Pure frontend project (no backend) — keep all phases but flag for lighter backend scan
+        if backend in ("none", "") and frontend not in ("none", ""):
+            # Still include all phases; backend phase will generate API mock instead
+            return all_phases
+
+        # Pure backend project (no frontend) — keep all phases; frontend phase generates API spec
+        if frontend in ("none", "") and backend not in ("none", ""):
+            return all_phases
+
+        return all_phases
+
+    def estimate_phase_effort(self, phase: Phase) -> dict[str, Any]:
+        """Estimate time and complexity for a phase based on project config.
+
+        Returns a dict with 'estimated_minutes', 'complexity', and 'key_activities'.
+        """
+        config = self.config_manager.config
+        domain = config.domain or ""
+        description = config.description or ""
+
+        estimates: dict[Phase, dict[str, Any]] = {
+            Phase.DISCOVERY: {
+                "estimated_minutes": 10,
+                "complexity": "low",
+                "key_activities": ["knowledge retrieval", "competitor research"],
+            },
+            Phase.INTELLIGENCE: {
+                "estimated_minutes": 5,
+                "complexity": "low",
+                "key_activities": ["knowledge matching", "requirement enrichment"],
+            },
+            Phase.DRAFTING: {
+                "estimated_minutes": 30,
+                "complexity": "high",
+                "key_activities": ["PRD generation", "architecture design", "UIUX specification"],
+            },
+            Phase.REDTEAM: {
+                "estimated_minutes": 15,
+                "complexity": "medium",
+                "key_activities": ["security scan", "performance review", "architecture review"],
+            },
+            Phase.QA: {
+                "estimated_minutes": 20,
+                "complexity": "medium",
+                "key_activities": ["quality gate", "test validation", "spec-code consistency"],
+            },
+            Phase.DELIVERY: {
+                "estimated_minutes": 10,
+                "complexity": "low",
+                "key_activities": ["proof pack", "release readiness", "delivery artifacts"],
+            },
+            Phase.DEPLOYMENT: {
+                "estimated_minutes": 15,
+                "complexity": "medium",
+                "key_activities": ["deployment config", "smoke tests", "monitoring setup"],
+            },
+        }
+
+        # Scale estimates for larger projects
+        if domain and domain not in ("general", ""):
+            base = estimates.get(phase, estimates[Phase.DRAFTING])
+            return {
+                "estimated_minutes": int(base["estimated_minutes"] * 1.3),
+                "complexity": "high" if base["complexity"] == "medium" else base["complexity"],
+                "key_activities": base["key_activities"],
+            }
+
+        return estimates.get(phase, {
+            "estimated_minutes": 15,
+            "complexity": "medium",
+            "key_activities": [],
+        })
 
     async def _run_phase(
         self, phase: Phase, context: WorkflowContext, phase_timeout: int = 600

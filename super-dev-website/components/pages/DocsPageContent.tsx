@@ -95,14 +95,14 @@ const zhContent: Content = {
   heroKicker: 'Documentation Center',
   heroTitle: '安装、接入、触发、流水线和交付，都从这里开始。',
   heroBody:
-    '这份文档说明安装方式、宿主接入、触发方式、流水线、代码库理解、回归守卫、知识库、门禁和交付要求。',
+    '先记住终端里的两个命令，再回到宿主里的两个触发。其余流程都应该在宿主里完成，而不是靠用户记大量 CLI 命令。',
   heroStats: [
-    { label: '宿主总数', value: '20+1' },
+    { label: '宿主总数', value: '21+1' },
     { label: '专家 Agent', value: '10' },
     { label: '核心阶段', value: '9 段' },
   ],
   sections: [
-    { id: 'highlights', label: 'v2.3.4 新功能', icon: Zap },
+    { id: 'highlights', label: 'v2.3.5 新功能', icon: Zap },
     { id: 'governance', label: '产品定位', icon: BookOpen },
     { id: 'install', label: '安装方式', icon: Package },
     { id: 'surfaces', label: '接入面', icon: Boxes },
@@ -124,11 +124,11 @@ const zhContent: Content = {
   ],
   installTitle: '安装方式',
   installBody:
-    '先把工具装好，再进入宿主接入引导。安装阶段只需要弄清三件事：会安装什么、不会安装什么、下一步怎么触发宿主开始工作。',
+    '终端只负责接入和升级。安装阶段只需要弄清三件事：会写哪些协议面、不会安装哪些宿主本体、接入后在宿主里输入什么。',
   installBullets: [
     'pip 或 uv 会自动安装 Super Dev 的 Python 依赖。',
     '不会自动安装 Claude Code、Cursor、Trae、Gemini CLI、VS Code Copilot 等宿主本体。',
-    '终端输入 super-dev 后，会进入宿主安装引导，并把 20 个统一接入宿主的对应协议面写入宿主和项目；OpenClaw 仍是单独的手动插件宿主。',
+    '终端输入 super-dev 后，会进入宿主安装引导，并按宿主自动判断项目级与全局级协议面；OpenClaw 仍是单独的手动插件宿主。',
   ],
   installCode:
     'pip install -U super-dev\n# 或\nuv tool install super-dev\n\n# 打开安装引导\nsuper-dev\n\n# OpenClaw 用户额外安装\nopenclaw plugins install @super-dev/openclaw-plugin\n# 或安装 ClawHub Skill\nclawhub install super-dev\n\n# 更新到最新版\nsuper-dev update',
@@ -171,7 +171,7 @@ const zhContent: Content = {
     },
   ],
   matrixTitle: '宿主矩阵',
-  matrixBody: '这张矩阵列出每个宿主的触发方式、协议面和成熟度，方便在接入、排障和团队规范时统一判断。',
+  matrixBody: '这张矩阵把接入完成度和运行成熟度分开展示，避免把“文件已落盘”误看成“宿主已真实跑通”。',
   matrixGroups: [
     {
       category: 'CLI',
@@ -224,22 +224,22 @@ const zhContent: Content = {
     { step: '09', title: '交付与发布演练', body: '交付包 ready、演练 passed、release readiness 通过后才算完成。' },
   ],
   controlTitle: '流程控制',
-  controlBody: '如果项目已经进入中后段，不需要从头再跑。你可以查看当前状态，回到某个阶段，直接跳到某个阶段，或者手动确认关键门后继续推进。',
+  controlBody: '公开主路径里，不再要求用户记住一串终端治理命令。安装完成后，继续、返工、确认、补充，都优先在宿主里用自然语言推进。',
   controlCards: [
     {
-      title: '回到三文档阶段',
-      body: '用户补需求、业务范围变化、或者需要重做方案时，直接回到 docs 阶段更新三文档，再继续后续流程。',
-      code: 'super-dev run prd\nsuper-dev run architecture\nsuper-dev run uiux\n# 或直接回到三文档阶段\nsuper-dev jump docs',
+      title: '继续改三文档',
+      body: '用户补需求、业务范围变化、或者需要重做方案时，不用回终端跳阶段，直接在宿主里继续围绕三文档修改。',
+      code: '/super-dev 这里补一下业务范围，先继续改 PRD / Architecture / UIUX，不要开始编码\n\nsuper-dev: 这个方案还不对，继续改三文档并等待我再次确认',
     },
     {
-      title: '回到前端 / 后端 / 质量阶段',
-      body: 'UI 重做、接口调整、交付前复检，都可以从对应阶段重新顺序推进，不必从 research 再跑一遍。',
-      code: 'super-dev run frontend\nsuper-dev run backend\nsuper-dev run quality',
+      title: '继续当前阶段',
+      body: 'UI 重做、接口调整、交付前复检，都优先在宿主里继续当前流程，不再把普通用户赶回终端。',
+      code: '/super-dev 继续当前流程\n/super-dev 现在下一步是什么\n\nsuper-dev: 继续当前流程，不要重新开题',
     },
     {
-      title: '跳转与确认',
-      body: '如果你已经明确目标阶段，可以直接 jump；如果只是要清掉某个关键门，则使用 confirm。',
-      code: 'super-dev status\nsuper-dev jump quality\nsuper-dev confirm docs --comment "三文档已确认"\nsuper-dev confirm preview --comment "前端预览已确认"\nsuper-dev run --resume',
+      title: '确认关键门',
+      body: '文档确认、前端预览确认、UI 改版闭环、架构返工闭环、质量整改闭环，都优先在宿主里明确回复。',
+      code: '/super-dev 文档确认，可以继续\n/super-dev 前端预览确认，可以继续\n\nsuper-dev: UI 改版已完成，继续当前流程\nsuper-dev: 质量整改已完成，继续当前流程',
     },
   ],
   operationsTitle: '知识库与门禁',
@@ -272,42 +272,22 @@ const zhContent: Content = {
     },
   ],
   commandsTitle: '常用命令',
-  commandsBody: '这里整理最常用的命令组：安装与引导、宿主接入、范围覆盖审计、代码库理解、影响分析、回归守卫、缺陷修复、确认门、质量检查、发布检查和更新。',
+  commandsBody: '公开主路径只保留终端的安装/升级入口，以及宿主内的继续与确认表达。其余 CLI 命令仍然存在，但属于维护/治理能力，不是普通用户日常操作面。',
   commands: [
     {
-      title: '安装与引导',
-      code: 'pip install -U super-dev\n# 或\nuv tool install super-dev\n\n# 进入宿主安装引导\nsuper-dev',
+      title: '终端公开入口',
+      code: 'pip install -U super-dev\n# 或\nuv tool install super-dev\n\nsuper-dev          # 进入宿主安装引导\nsuper-dev update   # 更新到最新版',
       filename: 'Terminal',
     },
     {
-      title: '宿主接入与修复',
-      code: 'super-dev onboard --host claude-code --force --yes\nsuper-dev doctor --host trae --repair --force\nsuper-dev integrate validate --auto\nsuper-dev detect --json',
-      filename: 'Host Operations',
+      title: '宿主内正常使用',
+      code: '/super-dev 你的需求\n/super-dev 继续当前流程\n/super-dev 现在下一步是什么\n/super-dev 文档确认，可以继续\n\nsuper-dev: 你的需求\nsuper-dev: 继续当前流程\nsuper-dev: 质量整改已完成，继续当前流程',
+      filename: 'Host Conversation',
     },
     {
-      title: '代码库理解与影响分析',
-      code: 'super-dev repo-map\nsuper-dev feature-checklist\nsuper-dev dependency-graph\nsuper-dev impact "修改登录流程" --files services/auth.py\nsuper-dev regression-guard "修改登录流程" --files services/auth.py',
-      filename: 'Codebase Intelligence',
-    },
-    {
-      title: '缺陷修复路径',
-      code: 'super-dev fix "修复登录接口 500 并补充回归验证"',
-      filename: 'Bugfix Mode',
-    },
-    {
-      title: 'Spec 质量与脚手架',
-      code: 'super-dev spec propose add-billing --title "..." --description "..." --no-scaffold\nsuper-dev spec scaffold add-billing\nsuper-dev spec quality add-billing\nsuper-dev spec quality add-billing --json',
-      filename: 'Spec Quality',
-    },
-    {
-      title: '确认与恢复',
-      code: 'super-dev review docs --status confirmed --comment "三文档已确认"\nsuper-dev run --resume',
-      filename: 'Pipeline Gates',
-    },
-    {
-      title: '流程控制',
-      code: 'super-dev status\nsuper-dev run research\nsuper-dev run prd\nsuper-dev run architecture\nsuper-dev run uiux\nsuper-dev run frontend\nsuper-dev run backend\nsuper-dev run quality\nsuper-dev jump docs\nsuper-dev jump quality\nsuper-dev confirm docs --comment "三文档已确认"',
-      filename: 'Workflow Control',
+      title: '维护 / 治理能力',
+      code: 'super-dev onboard --host claude-code --force --yes\nsuper-dev doctor --host trae --repair --force\nsuper-dev integrate validate --auto\nsuper-dev feature-checklist\nsuper-dev product-audit\nsuper-dev release proof-pack\nsuper-dev release readiness',
+      filename: 'Internal Maintenance',
     },
     {
       title: '质量 / 发布 / 更新',
@@ -324,16 +304,16 @@ const zhContent: Content = {
     '先用 smoke 触发语句。',
     '如果宿主直接开始开发，优先判断当前会话没有重新加载规则。',
   ],
-  highlightsTitle: 'v2.3.4 新功能亮点',
-  highlightsBody: '2.3.4 聚焦编排执行能力升级：引入 Plan-Execute 执行引擎、Overseer 监督者，以及 Claude Code + Codex 混合审查模式。感谢 staruhub 的 PR。',
+  highlightsTitle: 'v2.3.5 新功能亮点',
+  highlightsBody: '2.3.5 聚焦赛事模式与宿主生态：新增 SEEAI 赛事模式、WorkBuddy 正式接入、安全防护增强（敏感文件守卫 + API 认证）、安装界面响应式优化、旧版残留自动修复、需求解析器增强。',
   highlightsCards: [
-    { title: '感谢 staruhub', body: '本次 2.3.4 核心能力来自 staruhub 提交并合入的 PR #10，补齐了编排执行与监督能力。' },
-    { title: 'Plan-Execute 执行引擎', body: '新增结构化执行计划、拓扑波次排序、步骤状态机、验证门和失败预算，让编排过程可追踪、可恢复、可收敛。' },
-    { title: 'Overseer 监督者', body: '新增独立观察者角色，能在阶段与步骤检查点持续监控计划偏差、质量下降和未解决审查项。' },
-    { title: 'Claude + Codex 混合审查', body: '支持 Claude Code 负责实现、Codex 独立审查，审查结果进入统一治理与验证闭环。' },
-    { title: '编排配置扩展', body: '新增 execution_mode、overseer_enabled、codex_review_enabled、codex_review_phases 等配置项。' },
-    { title: '落盘计划状态', body: '执行计划可持久化到 .super-dev/plans/，便于恢复、诊断与后续审计。' },
-    { title: '版本口径已统一', body: '首页、更新历史、文档页和版本真源已同步到 2.3.4。' },
+    { title: '新增 SEEAI 赛事模式', body: '行动驱动的竞赛快速交付循环：需求→拆解→联网搜索→方案文档→Spec→写码→跑起来→反馈循环。' },
+    { title: 'WorkBuddy 正式接入', body: 'WorkBuddy 从手动安装升级为统一安装宿主，Skill 自动安装到 ~/.workbuddy/skills/，21+1 宿主生态。' },
+    { title: '安装界面响应式', body: '砍掉冗长的宿主协议列，三级窗口自适应（窄/标准/宽），交互选择器精简为 1 行快捷键。' },
+    { title: '安全防护增强', body: '新增敏感文件读取守卫 hook、Web API Key 认证、运行存储自动淘汰。' },
+    { title: '旧版残留自动修复', body: 'super-dev 和 super-dev update 检测到残留自动清理，不再需要手动操作。' },
+    { title: 'rollback / replay / diff', body: '新增流水线回退、执行历史回放和阶段对比命令。' },
+    { title: '需求解析器增强', body: '支持目标用户提取、核心功能推导、商业约束识别、技术栈偏好检测。' },
   ],
   smokeTitle: 'Smoke 验收',
   smokeCode:
@@ -344,14 +324,14 @@ const enContent: Content = {
   heroKicker: 'Documentation Center',
   heroTitle: 'Start with install, host onboarding, triggers, pipeline, and delivery.',
   heroBody:
-    'This documentation covers installation, host onboarding, triggers, pipeline stages, codebase intelligence, regression guard, local knowledge, workflow gates, and delivery requirements.',
+    'Start with the two terminal commands, then move back to the two in-host triggers. The rest of the workflow should happen inside the host, not through a long CLI command catalog.',
   heroStats: [
-    { label: 'Hosts', value: '20+1' },
-    { label: 'Trigger modes', value: '3' },
+    { label: 'Hosts', value: '21+1' },
+    { label: 'Trigger modes', value: '2' },
     { label: 'Core phases', value: '9' },
   ],
   sections: [
-    { id: 'highlights', label: 'v2.3.4 Highlights', icon: Zap },
+    { id: 'highlights', label: 'v2.3.5 Highlights', icon: Zap },
     { id: 'governance', label: 'Positioning', icon: BookOpen },
     { id: 'install', label: 'Installation', icon: Package },
     { id: 'surfaces', label: 'Integration Surfaces', icon: Boxes },
@@ -373,11 +353,11 @@ const enContent: Content = {
   ],
   installTitle: 'Installation',
   installBody:
-    'Install the tool first, then enter the host onboarding flow. This section covers what gets installed and what to run next.',
+    'The terminal only handles onboarding and upgrade. This section covers which protocol surfaces get written, which host apps are not installed for you, and what to type next inside the host.',
   installBullets: [
     'pip or uv automatically install Super Dev and its Python dependencies.',
     'They do not install Claude Code, Cursor, Trae, Gemini CLI, VS Code Copilot, or any host application.',
-    'Running super-dev opens the installer and writes the required protocol surfaces for 20 unified hosts; OpenClaw remains a separate manual plugin host.',
+    'Running super-dev opens the installer and automatically decides the project-level and global protocol surfaces needed for each onboarded host; OpenClaw remains a separate manual plugin host.',
   ],
   installCode:
     'pip install -U super-dev\n# or\nuv tool install super-dev\n\n# open the installer\nsuper-dev\n\n# OpenClaw users: install plugin or skill\nopenclaw plugins install @super-dev/openclaw-plugin\n# or\nclawhub install super-dev\n\n# update later\nsuper-dev update',
@@ -420,7 +400,7 @@ const enContent: Content = {
     },
   ],
   matrixTitle: 'Host matrix',
-  matrixBody: 'This matrix lists trigger style, protocol surface, and maturity for each supported host.',
+  matrixBody: 'This matrix separates integration readiness from runtime maturity so “files were written” is not confused with “the host is truly validated”.',
   matrixGroups: [
     {
       category: 'CLI',
@@ -473,22 +453,22 @@ const enContent: Content = {
     { step: '09', title: 'Delivery & release rehearsal', body: 'Only finish after the delivery package is ready and release rehearsal passes.' },
   ],
   controlTitle: 'Workflow control',
-  controlBody: 'If the project is already in a later stage, you do not need to restart from zero. Inspect the current state, return to a phase, jump to a phase, or manually clear a gate and continue.',
+  controlBody: 'The public path no longer expects end users to memorize a long list of terminal workflow commands. After install, continue, revise, confirm, and recover primarily inside the host conversation.',
   controlCards: [
     {
-      title: 'Return to the three core docs',
-      body: 'When scope changes or the user adds requirements, move back to docs and update the PRD / Architecture / UI/UX set before continuing.',
-      code: 'super-dev run prd\nsuper-dev run architecture\nsuper-dev run uiux\n# or return to the docs stage\nsuper-dev jump docs',
+      title: 'Keep revising the three core docs',
+      body: 'When scope changes or the user adds requirements, keep the work inside the host and continue revising PRD / Architecture / UI/UX instead of bouncing back to terminal flow-control commands.',
+      code: '/super-dev Add the missing scope and keep revising PRD / Architecture / UI/UX. Do not start coding.\n\nsuper-dev: The plan is still wrong. Keep revising the three core docs and wait for confirmation again.',
     },
     {
-      title: 'Return to frontend / backend / quality',
-      body: 'Use phase control when the UI needs another pass, APIs must be realigned, or quality checks must be rerun before release.',
-      code: 'super-dev run frontend\nsuper-dev run backend\nsuper-dev run quality',
+      title: 'Continue the current stage',
+      body: 'When UI, APIs, or release checks need another pass, keep the user in the host conversation and continue the same Super Dev flow.',
+      code: '/super-dev Continue the current flow\n/super-dev What is the next step right now?\n\nsuper-dev: Continue the current flow. Do not restart the project from scratch.',
     },
     {
-      title: 'Jump and confirm',
-      body: 'Use jump when you already know the target phase. Use confirm when a workflow gate must be cleared manually.',
-      code: 'super-dev status\nsuper-dev jump quality\nsuper-dev confirm docs --comment "core docs approved"\nsuper-dev confirm preview --comment "preview approved"\nsuper-dev run --resume',
+      title: 'Clear the key gates in-host',
+      body: 'Docs approval, preview approval, UI revision closure, architecture revision closure, and quality remediation closure should all be expressed inside the host first.',
+      code: '/super-dev The core docs are approved. Continue.\n/super-dev The frontend preview is approved. Continue.\n\nsuper-dev: UI revision is finished. Continue the current flow.\nsuper-dev: Quality remediation is finished. Continue the current flow.',
     },
   ],
   operationsTitle: 'Knowledge and gates',
@@ -521,42 +501,22 @@ const enContent: Content = {
     },
   ],
   commandsTitle: 'Commands',
-  commandsBody: 'Keep the critical commands visible: install, onboarding, scope coverage audit, codebase intelligence, impact analysis, regression guard, bugfix, approval, quality, release checks, and update.',
+  commandsBody: 'The public path keeps only terminal install/update plus in-host continuation and confirmation. The rest of the CLI still exists for maintenance and governance, but it is not the normal end-user operating surface.',
   commands: [
     {
-      title: 'Install & bootstrap',
-      code: 'pip install -U super-dev\n# or\nuv tool install super-dev\n\n# open the host installer\nsuper-dev',
+      title: 'Public terminal entrypoints',
+      code: 'pip install -U super-dev\n# or\nuv tool install super-dev\n\nsuper-dev          # open the host installer\nsuper-dev update   # update to the latest version',
       filename: 'Terminal',
     },
     {
-      title: 'Onboarding & repair',
-      code: 'super-dev onboard --host claude-code --force --yes\nsuper-dev doctor --host trae --repair --force\nsuper-dev integrate validate --auto\nsuper-dev detect --json',
-      filename: 'Host Operations',
+      title: 'Normal usage inside the host',
+      code: '/super-dev your requirement\n/super-dev Continue the current flow\n/super-dev What is the next step right now?\n/super-dev The core docs are approved. Continue.\n\nsuper-dev: your requirement\nsuper-dev: Continue the current flow\nsuper-dev: Quality remediation is finished. Continue the current flow.',
+      filename: 'Host Conversation',
     },
     {
-      title: 'Codebase intelligence & impact',
-      code: 'super-dev repo-map\nsuper-dev feature-checklist\nsuper-dev dependency-graph\nsuper-dev impact "Change the login flow" --files services/auth.py\nsuper-dev regression-guard "Change the login flow" --files services/auth.py',
-      filename: 'Codebase Intelligence',
-    },
-    {
-      title: 'Bugfix mode',
-      code: 'super-dev fix "Fix login 500 and add regression verification"',
-      filename: 'Bugfix Mode',
-    },
-    {
-      title: 'Spec quality and scaffolding',
-      code: 'super-dev spec propose add-billing --title "..." --description "..." --no-scaffold\nsuper-dev spec scaffold add-billing\nsuper-dev spec quality add-billing\nsuper-dev spec quality add-billing --json',
-      filename: 'Spec Quality',
-    },
-    {
-      title: 'Approve & resume',
-      code: 'super-dev review docs --status confirmed --comment "core docs approved"\nsuper-dev run --resume',
-      filename: 'Pipeline Gates',
-    },
-    {
-      title: 'Workflow control',
-      code: 'super-dev status\nsuper-dev run research\nsuper-dev run prd\nsuper-dev run architecture\nsuper-dev run uiux\nsuper-dev run frontend\nsuper-dev run backend\nsuper-dev run quality\nsuper-dev jump docs\nsuper-dev jump quality\nsuper-dev confirm docs --comment "core docs approved"',
-      filename: 'Workflow Control',
+      title: 'Maintenance & governance',
+      code: 'super-dev onboard --host claude-code --force --yes\nsuper-dev doctor --host trae --repair --force\nsuper-dev integrate validate --auto\nsuper-dev feature-checklist\nsuper-dev product-audit\nsuper-dev release proof-pack\nsuper-dev release readiness',
+      filename: 'Internal Maintenance',
     },
     {
       title: 'Quality / release / update',
@@ -573,16 +533,15 @@ const enContent: Content = {
     'Use a smoke prompt before trying the real requirement.',
     'If the host starts coding immediately, assume the current session did not reload the rules.',
   ],
-  highlightsTitle: 'v2.3.4 Highlights',
-  highlightsBody: 'Version 2.3.4 upgrades orchestration with the Plan-Execute engine, the Overseer observer, and a Claude Code + Codex hybrid review mode. Thanks to staruhub for the PR.',
+  highlightsTitle: 'v2.3.5 Highlights',
+  highlightsBody: 'Version 2.3.5 focuses on competition mode and host ecosystem: SEEAI flow rewrite, WorkBuddy unified install, responsive install UI, security hardening, and auto-fix for stale installations.',
   highlightsCards: [
-    { title: 'Thanks to staruhub', body: 'The core capabilities in 2.3.4 come from PR #10 by staruhub, now merged into main.' },
-    { title: 'Plan-Execute Engine', body: 'Adds structured execution plans, topological wave sorting, step state tracking, verification gates, and failure budgets.' },
-    { title: 'Overseer Observer', body: 'Adds an independent observer role that monitors drift, quality regressions, and unresolved review items at checkpoints.' },
-    { title: 'Claude + Codex Hybrid Review', body: 'Lets Claude Code implement while Codex performs independent review that is tracked inside the governed pipeline.' },
-    { title: 'Expanded Orchestrator Config', body: 'Adds execution_mode, overseer_enabled, codex_review_enabled, codex_review_phases, and related controls.' },
-    { title: 'Persisted Plan State', body: 'Execution plans can be written to .super-dev/plans/ for recovery, debugging, and auditability.' },
-    { title: 'Version Alignment', body: 'Homepage, changelog, docs, and version sources are now aligned to 2.3.4.' },
+    { title: 'SEEAI Competition Mode', body: 'New action-driven competition mode: Requirements > Decompose > Search > Solution Doc > Spec > Code > Run > Feedback Loop.' },
+    { title: 'WorkBuddy Unified Install', body: 'WorkBuddy promoted from manual to unified install host. Skills auto-installed to ~/.workbuddy/skills/. 21+1 host ecosystem.' },
+    { title: 'Responsive Install UI', body: 'Removed verbose protocol column, three-tier responsive layout for narrow/standard/wide terminals.' },
+    { title: 'Security Hardening', body: 'New secret-read-guard hook, Web API Key auth, and run store auto-eviction.' },
+    { title: 'Auto-Fix Stale Installs', body: 'super-dev and super-dev update automatically clean leftover pth/dist-info/package dirs.' },
+    { title: 'rollback / replay / diff', body: 'New pipeline rollback to checkpoints, execution history replay, and stage diff commands.' },
   ],
   smokeTitle: 'Smoke validation',
   smokeCode:
@@ -635,7 +594,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             <div className="max-w-[860px]">
               <div className="mb-5 flex flex-wrap items-center gap-2">
                 <Badge variant="version">{content.heroKicker}</Badge>
-                <Badge variant="certified">v2.3.4</Badge>
+                <Badge variant="certified">v2.3.5</Badge>
                 <Badge variant="compatible">{locale === 'en' ? 'Bilingual' : '中英双语'}</Badge>
               </div>
               <h1 className="max-w-[900px] text-4xl font-bold leading-[1.08] tracking-tight text-text-primary sm:text-5xl lg:text-[3.5rem]">

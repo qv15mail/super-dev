@@ -4,14 +4,24 @@
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
 from ..catalogs import HOST_TOOL_CATEGORY_MAP, HOST_TOOL_IDS
+from ..host_adapters import (
+    SpecialAdapterContext,
+    build_special_usage_profile,
+    get_adapter_mode_override,
+    get_competition_smoke_extra_steps,
+    get_special_install_surfaces,
+)
+from ..host_registry import get_protocol_mode, get_protocol_summary
 from .manager_content_mixin import IntegrationManagerContentMixin
 
 
@@ -55,6 +65,9 @@ class HostAdapterProfile:
     smoke_test_prompt: str
     smoke_test_steps: list[str]
     smoke_success_signal: str
+    competition_smoke_test_prompt: str
+    competition_smoke_test_steps: list[str]
+    competition_smoke_success_signal: str
     precondition_status: str
     precondition_label: str
     precondition_guidance: list[str]
@@ -81,6 +94,8 @@ class IntegrationManager(IntegrationManagerContentMixin):
 
     TEXT_TRIGGER_PREFIX = "super-dev:"
     TEXT_TRIGGER_PREFIX_FULLWIDTH = "super-dev："
+    SEEAI_TEXT_TRIGGER_PREFIX = "super-dev-seeai:"
+    SEEAI_TEXT_TRIGGER_PREFIX_FULLWIDTH = "super-dev-seeai："
     CODEX_AGENTS_BEGIN = "<!-- BEGIN SUPER DEV CODEX -->"
     CODEX_AGENTS_END = "<!-- END SUPER DEV CODEX -->"
     OPENCODE_AGENTS_BEGIN = "<!-- BEGIN SUPER DEV OPENCODE -->"
@@ -93,6 +108,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "cline",
         "kilo-code",
         "vscode-copilot",
+        "workbuddy",
     }
     HOST_USAGE_LOCATIONS: dict[str, str] = {
         "antigravity": "打开 Antigravity 的 Agent Chat / Prompt 面板，并确保当前工作区就是目标项目。",
@@ -116,6 +132,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "qoder": "打开 Qoder IDE 的 Agent Chat，在当前项目内触发。",
         "trae": "打开 Trae Agent Chat，在当前项目上下文内直接触发。",
         "openclaw": "在 OpenClaw Agent 对话面板中，确保当前工作区为目标项目后触发。",
+        "workbuddy": "打开 WorkBuddy 当前任务/对话会话，并确保工作目录或授权文件夹指向目标项目后触发。",
     }
     HOST_USAGE_NOTES: dict[str, list[str]] = {
         "antigravity": [
@@ -140,11 +157,13 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "在当前 CLI 会话中直接输入即可。",
             "如果会话早于接入动作启动，建议重开会话后再试。",
             "官方文档已公开 `CODEBUDDY.md`、`.codebuddy/commands/`、`.codebuddy/skills/` 与 `~/.codebuddy/CODEBUDDY.md` / `~/.codebuddy/skills/`。",
+            "比赛场景优先使用 `/super-dev-seeai` 或 `super-dev-seeai:`，让宿主按半小时时间盒压缩 research / 文档 / spec / 一体化开发。",
         ],
         "codebuddy": [
             "建议在项目级 Agent Chat 中使用，不要脱离项目上下文。",
             "先让宿主完成 research，再继续文档和编码。",
             "官方文档已公开 `CODEBUDDY.md`、`.codebuddy/rules/`、`.codebuddy/commands/`、`.codebuddy/agents/`、`.codebuddy/skills/` 与对应用户级目录。",
+            "比赛模式下优先固定一个 Agent Chat，使用 `/super-dev-seeai` 或 `super-dev-seeai:`，减少切换子会话带来的上下文损耗。",
         ],
         "codex-cli": [
             "Codex 官方不走自定义项目 slash；桌面端请从 `/` 列表选择 `super-dev`，那是启用 Skill 的展示入口。",
@@ -226,9 +245,16 @@ class IntegrationManager(IntegrationManagerContentMixin):
         ],
         "openclaw": [
             "OpenClaw 通过原生 Plugin SDK 集成，安装插件后 10 个专用 Tool 自动注册。",
-            "项目内会写入 `.openclaw/rules/super-dev.md` 和 `.openclaw/commands/super-dev.md`。",
-            "用户级 Skill 会安装到 `~/.openclaw/skills/super-dev-core/SKILL.md`。",
+            "项目内会写入 `.openclaw/rules/super-dev.md`、`.openclaw/commands/super-dev.md` 与 `.openclaw/commands/super-dev-seeai.md`。",
+            "用户级 Skill 会安装到 `~/.openclaw/skills/super-dev-core/SKILL.md` 与 `~/.openclaw/skills/super-dev-seeai/SKILL.md`。",
             "安装后建议重启 OpenClaw Gateway 或开启新会话，让 Plugin 和 Skill 一起生效。",
+            "比赛场景优先使用 `/super-dev-seeai` 或 `super-dev-seeai:`，把精力集中在 30 分钟内可讲解、可展示的主作品。",
+        ],
+        "workbuddy": [
+            "WorkBuddy 当前按手动接入宿主建模，不走 `super-dev install/setup` 自动写项目规则文件。",
+            "官方公开能力集中在自然语言任务、Skills 扩展、MCP、右侧文件/变更侧栏与本地文件夹授权。",
+            "当前主入口是 `super-dev: <需求描述>`；比赛模式使用 `super-dev-seeai: <需求描述>`。",
+            "建议在 WorkBuddy 的技能市场/技能导入能力中手动启用 Super Dev 标准版与 SEEAI 比赛版，再在同一个任务会话中连续执行。",
         ],
     }
     HOST_PRECONDITION_GUIDANCE: dict[str, list[str]] = {
@@ -268,9 +294,11 @@ class IntegrationManager(IntegrationManagerContentMixin):
         ],
         "codebuddy": [
             "CodeBuddy IDE 触发前确认当前 Agent Chat 位于目标项目上下文。",
+            "比赛模式建议固定同一个 Agent Chat，并优先准备主展示路径需要的素材和上下文。",
         ],
         "codebuddy-cli": [
             "CodeBuddy CLI 触发前确认当前终端已进入目标项目目录。",
+            "比赛模式优先使用当前已加载规则的会话，避免重新开多个 CLI 会话打散时间盒。",
         ],
         "copilot-cli": [
             "Copilot CLI 触发前确认当前终端已进入目标项目目录，并让新的会话读取 `.github/copilot-instructions.md`。",
@@ -298,7 +326,50 @@ class IntegrationManager(IntegrationManagerContentMixin):
         ],
         "openclaw": [
             "OpenClaw 触发前确认当前工作区就是目标项目，并确保 super-dev CLI 已安装在 PATH 中。",
+            "比赛模式若 slash 索引尚未刷新，直接退回 `super-dev-seeai: <需求>`，不要等待命令面板刷新。",
         ],
+        "workbuddy": [
+            "WorkBuddy 触发前确认当前授权目录或工作目录已经指向目标项目。",
+            "确认当前任务会话已启用 Super Dev 相关 Skills；比赛模式优先启用 SEEAI 版本。",
+        ],
+    }
+    HOST_FAMILY_MAP: dict[str, str] = {
+        "antigravity": "antigravity",
+        "claude-code": "claude",
+        "cline": "cline",
+        "codebuddy-cli": "codebuddy",
+        "codebuddy": "codebuddy",
+        "codex-cli": "codex",
+        "copilot-cli": "copilot-cli",
+        "cursor-cli": "cursor",
+        "cursor": "cursor",
+        "windsurf": "windsurf",
+        "gemini-cli": "gemini",
+        "kilo-code": "kilo-code",
+        "kiro-cli": "kiro",
+        "kiro": "kiro",
+        "qoder-cli": "qoder",
+        "qoder": "qoder",
+        "roo-code": "roo-code",
+        "vscode-copilot": "vscode-copilot",
+        "opencode": "opencode",
+        "trae": "trae",
+        "openclaw": "openclaw",
+        "workbuddy": "workbuddy",
+    }
+    PREFERRED_FAMILY_TARGETS: dict[str, str] = {
+        "codebuddy": "codebuddy-cli",
+        "cursor": "cursor-cli",
+        "kiro": "kiro-cli",
+        "qoder": "qoder-cli",
+    }
+    SHARED_DETECTION_FILES: set[str] = {
+        "AGENTS.md",
+        "CODEBUDDY.md",
+        "GEMINI.md",
+        ".github/copilot-instructions.md",
+        ".cursor/rules/super-dev.mdc",
+        ".kiro/steering/super-dev.md",
     }
 
     TARGETS: dict[str, IntegrationTarget] = {
@@ -402,7 +473,11 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "qoder-cli": IntegrationTarget(
             name="qoder-cli",
             description="Qoder CLI 项目规则注入",
-            files=["AGENTS.md", ".qoder/rules/super-dev.md", ".qoder/skills/super-dev-core/SKILL.md"],
+            files=[
+                "AGENTS.md",
+                ".qoder/rules/super-dev.md",
+                ".qoder/skills/super-dev-core/SKILL.md",
+            ],
         ),
         "roo-code": IntegrationTarget(
             name="roo-code",
@@ -417,7 +492,11 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "opencode": IntegrationTarget(
             name="opencode",
             description="OpenCode 项目规则 + 命令 + Skill 注入",
-            files=["AGENTS.md", ".opencode/commands/super-dev.md", ".opencode/skills/super-dev-core/SKILL.md"],
+            files=[
+                "AGENTS.md",
+                ".opencode/commands/super-dev.md",
+                ".opencode/skills/super-dev-core/SKILL.md",
+            ],
         ),
         "cursor": IntegrationTarget(
             name="cursor",
@@ -432,7 +511,11 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "qoder": IntegrationTarget(
             name="qoder",
             description="Qoder IDE 规则 + 命令注入",
-            files=["AGENTS.md", ".qoder/rules/super-dev.md", ".qoder/skills/super-dev-core/SKILL.md"],
+            files=[
+                "AGENTS.md",
+                ".qoder/rules/super-dev.md",
+                ".qoder/skills/super-dev-core/SKILL.md",
+            ],
         ),
         "trae": IntegrationTarget(
             name="trae",
@@ -443,6 +526,11 @@ class IntegrationManager(IntegrationManagerContentMixin):
             name="openclaw",
             description="OpenClaw Agent 平台原生插件集成",
             files=[".openclaw/rules/super-dev.md"],
+        ),
+        "workbuddy": IntegrationTarget(
+            name="workbuddy",
+            description="WorkBuddy 桌面工作台手动技能接入",
+            files=[],
         ),
     }
     SLASH_COMMAND_FILES: dict[str, str] = {
@@ -474,7 +562,74 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "kilo-code",
         "trae",
         "vscode-copilot",
+        "workbuddy",
     }
+
+    @classmethod
+    def host_family(cls, target: str) -> str:
+        return cls.HOST_FAMILY_MAP.get(target, target)
+
+    @classmethod
+    def preferred_target_for_family(cls, family: str, candidates: list[str] | None = None) -> str:
+        preferred = cls.PREFERRED_FAMILY_TARGETS.get(family, family)
+        if candidates and preferred not in candidates:
+            return sorted(candidates)[0]
+        return preferred
+
+    @classmethod
+    def family_targets(cls, family: str) -> list[str]:
+        return [
+            target
+            for target, current_family in cls.HOST_FAMILY_MAP.items()
+            if current_family == family
+        ]
+
+    @classmethod
+    def target_detection_markers(cls, target: str) -> list[str]:
+        integration = cls.TARGETS[target]
+        markers: list[str] = [
+            relative for relative in integration.files if relative not in cls.SHARED_DETECTION_FILES
+        ]
+        slash_file = cls.SLASH_COMMAND_FILES.get(target)
+        if slash_file and slash_file not in markers:
+            markers.append(slash_file)
+        return markers
+
+    def install_manifest_path(self) -> Path:
+        return self.project_dir / ".super-dev" / "install-manifest.json"
+
+    def load_install_manifest(self) -> dict[str, Any]:
+        file_path = self.install_manifest_path()
+        if not file_path.exists():
+            return {"version": 1, "targets": {}, "updated_at": ""}
+        try:
+            payload = json.loads(file_path.read_text(encoding="utf-8"))
+        except Exception:
+            return {"version": 1, "targets": {}, "updated_at": ""}
+        if not isinstance(payload, dict):
+            return {"version": 1, "targets": {}, "updated_at": ""}
+        targets = payload.get("targets", {})
+        if not isinstance(targets, dict):
+            targets = {}
+        return {
+            "version": int(payload.get("version", 1) or 1),
+            "targets": targets,
+            "updated_at": str(payload.get("updated_at", "")).strip(),
+        }
+
+    def save_install_manifest(self, payload: dict[str, Any]) -> Path:
+        current = self.load_install_manifest()
+        current.update(payload)
+        current["version"] = int(current.get("version", 1) or 1)
+        current["updated_at"] = datetime.now(timezone.utc).isoformat()
+        file_path = self.install_manifest_path()
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(
+            json.dumps(current, ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        return file_path
+
     OFFICIAL_DOCS_INDEX: dict[str, tuple[str, ...]] = {
         "antigravity": ("https://antigravity.im/documentation",),
         "claude-code": (
@@ -566,6 +721,11 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "openclaw": (
             "https://docs.openclaw.ai/plugins/building-plugins",
             "https://docs.openclaw.ai/tools/skills",
+        ),
+        "workbuddy": (
+            "https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Product-Guide",
+            "https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/MCP-Guide",
+            "https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Right-Sidebar",
         ),
     }
     OFFICIAL_DOCS: dict[str, str] = {
@@ -728,6 +888,15 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "官方文档公开 Plugin 与 Skills 开发指南",
             ],
         },
+        "workbuddy": {
+            "level": "experimental",
+            "reason": "WorkBuddy 当前官方公开的是桌面任务工作台、Skills、MCP 与本地文件操作能力，适合接入 Super Dev 合同，但本地规则/命令文件面尚未公开，因此先按手动技能宿主建模。",
+            "evidence": [
+                "官方文档公开 WorkBuddy 支持自然语言任务、Skills 扩展、MCP 与本地文件夹授权执行",
+                "官方文档公开右侧边栏可查看当前工作目录文件树与变更结果",
+                "Super Dev 已为 WorkBuddy 建立标准模式与 SEEAI 比赛模式的自然语言触发与验收指引",
+            ],
+        },
         "vscode-copilot": {
             "level": "experimental",
             "reason": "VS Code Copilot 仅支持 .github/copilot-instructions.md 作为项目指令面，不支持自定义 Skill 或 slash 命令，因此接入深度有限。",
@@ -744,9 +913,13 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "experimental": "Experimental",
     }
     TEXT_TRIGGER_PREFIXES: tuple[str, str] = (TEXT_TRIGGER_PREFIX, TEXT_TRIGGER_PREFIX_FULLWIDTH)
+    SEEAI_TEXT_TRIGGER_PREFIXES: tuple[str, str] = (
+        SEEAI_TEXT_TRIGGER_PREFIX,
+        SEEAI_TEXT_TRIGGER_PREFIX_FULLWIDTH,
+    )
     CONTRACT_TRIGGER_GROUPS: dict[str, tuple[str, ...]] = {
-        "slash": ("/super-dev",),
-        "text": TEXT_TRIGGER_PREFIXES,
+        "slash": ("/super-dev", "/super-dev-seeai"),
+        "text": TEXT_TRIGGER_PREFIXES + SEEAI_TEXT_TRIGGER_PREFIXES,
     }
     CONTRACT_DOC_GROUP: tuple[str, ...] = (
         "output/*-research.md",
@@ -820,7 +993,10 @@ class IntegrationManager(IntegrationManagerContentMixin):
 
     def _append_flow_contract(self, *, content: str, relative: str) -> str:
         normalized = content or ""
-        if "SUPER_DEV_FLOW_CONTRACT_V1" in normalized:
+        if (
+            "SUPER_DEV_FLOW_CONTRACT_V1" in normalized
+            or "SUPER_DEV_SEEAI_FLOW_CONTRACT_V1" in normalized
+        ):
             return normalized
         if str(relative).endswith(".toml"):
             return f"{normalized.rstrip()}\n\n{self._flow_contract_toml_block()}"
@@ -829,23 +1005,25 @@ class IntegrationManager(IntegrationManagerContentMixin):
     def _first_response_contract_zh(self) -> str:
         return (
             "## 首轮响应契约（首次触发必须执行）\n"
-            "- 当用户通过宿主支持的 Super Dev 入口触发（例如 `/super-dev ...`、`$super-dev`、`super-dev: ...` 或 `super-dev：...`）后，第一轮回复必须明确：已进入 Super Dev 流水线，而不是普通聊天。\n"
+            "- 当用户通过宿主支持的 Super Dev 入口触发（例如 `/super-dev ...`、`$super-dev`、`super-dev: ...`、`super-dev：...`、`/super-dev-seeai ...`、`$super-dev-seeai`、`super-dev-seeai: ...` 或 `super-dev-seeai：...`）后，第一轮回复必须明确：已进入对应的 Super Dev 流水线，而不是普通聊天。\n"
             "- 如果仓库里已经存在 `super-dev.yaml`、`.super-dev/WORKFLOW.md`、`output/*`、`.super-dev/review-state/*` 或未完成的 run state，新会话里的第一次自然语言需求也必须默认继续 Super Dev 流程，而不是退回普通聊天。\n"
             "- 第一轮回复前，优先读取 `.super-dev/WORKFLOW.md` 与 `output/*-bootstrap.md`（若存在），把其中的初始化契约视为当前仓库的显式 bootstrap 规则。\n"
             "- 第一轮回复必须明确当前阶段是 `research`，会先读取 `knowledge/` 与 `output/knowledge-cache/*-knowledge-bundle.json`（若存在），再用宿主原生联网研究同类产品。\n"
-            "- 第一轮回复必须明确后续顺序：research -> 三份核心文档 -> 等待用户确认 -> Spec / tasks -> 前端优先并运行验证 -> 后端 / 测试 / 交付。\n"
-            "- 第一轮回复必须明确承诺：三份核心文档完成后会暂停并等待用户确认；未经确认不会创建 Spec，也不会开始编码。\n\n"
+            "- 标准模式的后续顺序是：research -> 三份核心文档 -> 等待用户确认 -> Spec / tasks -> 前端优先并运行验证 -> 后端 / 测试 / 交付。\n"
+            "- SEEAI 模式的后续顺序是：research -> 比赛短版三文档 -> 等待用户确认 -> compact Spec -> full-stack sprint -> polish / handoff。\n"
+            "- 两种模式都必须明确承诺：三份核心文档完成后会暂停并等待用户确认；未经确认不会创建 Spec，也不会开始编码。\n\n"
         )
 
     def _first_response_contract_en(self) -> str:
         return (
             "## First-Response Contract\n"
-            "- On the first reply after a host-supported Super Dev entry (for example `/super-dev ...`, `$super-dev`, `super-dev: ...`, or `super-dev：...`), explicitly state that Super Dev pipeline mode is now active rather than normal chat mode.\n"
+            "- On the first reply after a host-supported Super Dev entry (for example `/super-dev ...`, `$super-dev`, `super-dev: ...`, `super-dev：...`, `/super-dev-seeai ...`, `$super-dev-seeai`, `super-dev-seeai: ...`, or `super-dev-seeai：...`), explicitly state that the matching Super Dev mode is now active rather than normal chat mode.\n"
             "- If the repository already contains `super-dev.yaml`, `.super-dev/WORKFLOW.md`, `output/*`, `.super-dev/review-state/*`, or an unfinished run state, the first natural-language requirement in a new host session must also default to continuing Super Dev rather than plain chat.\n"
             "- Before the first reply, read `.super-dev/WORKFLOW.md` and `output/*-bootstrap.md` when present, and treat them as the explicit bootstrap contract for this repository.\n"
             "- The first reply must explicitly state that the current phase is `research`, and that you will read `knowledge/` plus `output/knowledge-cache/*-knowledge-bundle.json` first when available before similar-product research.\n"
-            "- The first reply must explicitly state the next sequence: research -> three core documents -> wait for user confirmation -> Spec / tasks -> frontend first with runtime verification -> backend / tests / delivery.\n"
-            "- The first reply must explicitly promise that you will stop after the three core documents and wait for approval before creating Spec or writing code.\n\n"
+            "- In standard mode, the next sequence is research -> three core documents -> wait for user confirmation -> Spec / tasks -> frontend first with runtime verification -> backend / tests / delivery.\n"
+            "- In SEEAI mode, the next sequence is research -> compact competition docs -> wait for user confirmation -> compact Spec -> full-stack sprint -> polish / handoff.\n"
+            "- Both modes must explicitly promise that they will stop after the three core documents and wait for approval before creating Spec or writing code.\n\n"
         )
 
     @classmethod
@@ -942,6 +1120,9 @@ class IntegrationManager(IntegrationManagerContentMixin):
             smoke_test_prompt=str(smoke["smoke_test_prompt"]),
             smoke_test_steps=list(smoke["smoke_test_steps"]),
             smoke_success_signal=str(smoke["smoke_success_signal"]),
+            competition_smoke_test_prompt=str(smoke["competition_smoke_test_prompt"]),
+            competition_smoke_test_steps=list(smoke["competition_smoke_test_steps"]),
+            competition_smoke_success_signal=str(smoke["competition_smoke_success_signal"]),
             precondition_status=str(preconditions["status"]),
             precondition_label=str(preconditions["label"]),
             precondition_guidance=list(preconditions["guidance"]),
@@ -1314,7 +1495,9 @@ class IntegrationManager(IntegrationManagerContentMixin):
         skill_name: str = "super-dev-core",
         project_dir: Path | None = None,
     ) -> Path | None:
-        paths = cls.expected_skill_paths(target=target, skill_name=skill_name, project_dir=project_dir)
+        paths = cls.expected_skill_paths(
+            target=target, skill_name=skill_name, project_dir=project_dir
+        )
         return paths[0] if paths else None
 
     @classmethod
@@ -1398,10 +1581,11 @@ class IntegrationManager(IntegrationManagerContentMixin):
 
         normalized = surface_path.as_posix()
 
-        if normalized.endswith("/plugins/marketplace.json") or normalized.endswith(
-            "/.codex-plugin/plugin.json"
-        ) or normalized.endswith("/.claude-plugin/plugin.json") or normalized.endswith(
-            "/.claude-plugin/marketplace.json"
+        if (
+            normalized.endswith("/plugins/marketplace.json")
+            or normalized.endswith("/.codex-plugin/plugin.json")
+            or normalized.endswith("/.claude-plugin/plugin.json")
+            or normalized.endswith("/.claude-plugin/marketplace.json")
         ):
             return []
 
@@ -1410,7 +1594,10 @@ class IntegrationManager(IntegrationManagerContentMixin):
         ):
             return []
 
-        if "/plugins/super-dev-codex/skills/" in normalized or "/plugins/super-dev-claude/skills/" in normalized:
+        if (
+            "/plugins/super-dev-codex/skills/" in normalized
+            or "/plugins/super-dev-claude/skills/" in normalized
+        ):
             return []
 
         if surface_key.startswith("project-slash:") or surface_key.startswith("global-slash:"):
@@ -1581,13 +1768,13 @@ class IntegrationManager(IntegrationManagerContentMixin):
         compatibility_skill_paths: list[Path] = []
         for path in skill_paths:
             resolved = str(path.resolve())
-            if resolved in {str(item.resolve()) for item in groups["official_project"].values()} or resolved in {
-                str(item.resolve()) for item in groups["official_user"].values()
-            }:
+            if resolved in {
+                str(item.resolve()) for item in groups["official_project"].values()
+            } or resolved in {str(item.resolve()) for item in groups["official_user"].values()}:
                 official_skill_paths.append(path)
-            elif resolved in {str(item.resolve()) for item in groups["optional_project"].values()} or resolved in {
-                str(item.resolve()) for item in groups["optional_user"].values()
-            }:
+            elif resolved in {
+                str(item.resolve()) for item in groups["optional_project"].values()
+            } or resolved in {str(item.resolve()) for item in groups["optional_user"].values()}:
                 optional_skill_paths.append(path)
             else:
                 compatibility_skill_paths.append(path)
@@ -1608,13 +1795,13 @@ class IntegrationManager(IntegrationManagerContentMixin):
             if slash_path is None:
                 continue
             resolved = str(slash_path.resolve())
-            if resolved in {str(item.resolve()) for item in groups["official_project"].values()} or resolved in {
-                str(item.resolve()) for item in groups["official_user"].values()
-            }:
+            if resolved in {
+                str(item.resolve()) for item in groups["official_project"].values()
+            } or resolved in {str(item.resolve()) for item in groups["official_user"].values()}:
                 required_slash_paths.append(slash_path)
-            elif resolved in {str(item.resolve()) for item in groups["optional_project"].values()} or resolved in {
-                str(item.resolve()) for item in groups["optional_user"].values()
-            }:
+            elif resolved in {
+                str(item.resolve()) for item in groups["optional_project"].values()
+            } or resolved in {str(item.resolve()) for item in groups["optional_user"].values()}:
                 optional_slash_paths.append(slash_path)
             else:
                 compatibility_slash_paths.append(slash_path)
@@ -1682,6 +1869,9 @@ class IntegrationManager(IntegrationManagerContentMixin):
 
     def _adapter_mode(self, *, target: str, category: str, integration_files: list[str]) -> str:
         first_file = integration_files[0] if integration_files else ""
+        adapter_override = get_adapter_mode_override(target)
+        if adapter_override:
+            return adapter_override
         if category == "cli":
             return "native-cli-session"
         if first_file.startswith(".super-dev/skills/"):
@@ -1693,6 +1883,18 @@ class IntegrationManager(IntegrationManagerContentMixin):
     def _usage_profile(self, *, target: str, category: str) -> dict[str, object]:
         usage_location = self.HOST_USAGE_LOCATIONS.get(target, "")
         usage_notes = list(self.HOST_USAGE_NOTES.get(target, []))
+        special_usage = build_special_usage_profile(
+            SpecialAdapterContext(
+                target=target,
+                category=category,
+                usage_location=usage_location,
+                usage_notes=tuple(usage_notes),
+                text_trigger_prefix=self.TEXT_TRIGGER_PREFIX,
+                seeai_text_trigger_prefix=self.SEEAI_TEXT_TRIGGER_PREFIX,
+            )
+        )
+        if special_usage is not None:
+            return special_usage
         if target == "codex-cli":
             return {
                 "usage_mode": "agents-and-skill",
@@ -1739,7 +1941,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
         if target == "claude-code":
             return {
                 "usage_mode": "native-slash-and-skill",
-                "primary_entry": "在 Claude Code 当前项目会话里优先使用 `/super-dev \"<需求描述>\"`；底层由项目根 `CLAUDE.md`、项目级 `.claude/skills/super-dev/`、用户级 `~/.claude/skills/` 驱动，`.claude/commands/` 与 `.claude/agents/` 作为兼容增强面保留。",
+                "primary_entry": '在 Claude Code 当前项目会话里优先使用 `/super-dev "<需求描述>"`；底层由项目根 `CLAUDE.md`、项目级 `.claude/skills/super-dev/`、用户级 `~/.claude/skills/` 驱动，`.claude/commands/` 与 `.claude/agents/` 作为兼容增强面保留。',
                 "trigger_command": '/super-dev "<需求描述>"',
                 "entry_variants": [
                     {
@@ -1915,8 +2117,13 @@ class IntegrationManager(IntegrationManagerContentMixin):
             self.TEXT_TRIGGER_PREFIX
             + " 请先不要开始编码，只回复 SMOKE_OK，并确认已读取当前项目中的 Super Dev 规则。"
         )
+        competition_trigger = (
+            self.SEEAI_TEXT_TRIGGER_PREFIX
+            + " 请先不要开始编码，只回复 SEEAI_SMOKE_OK，并说明你会按半小时比赛链路执行：先 fast research、再 compact 三文档、确认后 compact Spec、然后 full-stack sprint。"
+        )
         if self.supports_slash(target):
             trigger = '/super-dev "请先不要开始编码，只回复 SMOKE_OK，并确认已读取当前项目中的 Super Dev 规则。"'
+            competition_trigger = '/super-dev-seeai "请先不要开始编码，只回复 SEEAI_SMOKE_OK，并说明你会按半小时比赛链路执行：先 fast research、再 compact 三文档、确认后 compact Spec、然后 full-stack sprint。"'
         if target == "codex-cli":
             steps = [
                 "完成接入后先重启 codex。",
@@ -1924,17 +2131,32 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 f"优先在 Codex 会话输入：{trigger}",
                 "如果你想显式调用官方 Skill，可输入 `$super-dev`；如果桌面端 `/` 列表里出现 `super-dev`，也可以直接选择它。",
             ]
+            competition_steps = [
+                "完成接入后先重启 codex。",
+                "进入已接入 Super Dev 的项目目录。",
+                f"优先在 Codex 会话输入：{competition_trigger}",
+                "如果你想显式调用官方 SEEAI Skill，可输入 `$super-dev-seeai`；如果桌面端 `/` 列表里出现 `super-dev-seeai`，也可以直接选择它。",
+            ]
         else:
             steps = [
                 "进入已接入 Super Dev 的项目目录或工作区。",
                 f"在宿主正确的聊天/会话入口输入：{trigger}",
             ]
+            competition_steps = [
+                "进入已接入 Super Dev 的项目目录或工作区。",
+                f"在宿主正确的聊天/会话入口输入：{competition_trigger}",
+            ]
         if category == "ide":
             steps.insert(1, "确认当前 Agent Chat/Workflow 绑定的是目标项目。")
+            competition_steps.insert(1, "确认当前 Agent Chat/Workflow 绑定的是目标项目。")
+        competition_steps.extend(get_competition_smoke_extra_steps(target))
         return {
             "smoke_test_prompt": trigger,
             "smoke_test_steps": steps,
             "smoke_success_signal": "宿主回复 SMOKE_OK，并明确表示已读取当前项目内的 Super Dev 规则/AGENTS/命令映射，且没有直接开始编码。",
+            "competition_smoke_test_prompt": competition_trigger,
+            "competition_smoke_test_steps": competition_steps,
+            "competition_smoke_success_signal": "宿主回复 SEEAI_SMOKE_OK，并在首轮明确给出作品类型、wow 点、P0 主路径、主动放弃项，同时表示将按半小时比赛链路执行：fast research -> compact 三文档 -> docs confirm -> compact Spec -> full-stack sprint。",
         }
 
     def _precondition_profile(self, *, target: str) -> dict[str, object]:
@@ -2013,6 +2235,14 @@ class IntegrationManager(IntegrationManagerContentMixin):
         }
 
     def _protocol_profile(self, *, target: str) -> dict[str, str]:
+        registry_mode = str(get_protocol_mode(target) or "").strip()
+        registry_summary = str(get_protocol_summary(target) or "").strip()
+        if registry_mode or registry_summary:
+            return {
+                "mode": registry_mode or "custom",
+                "summary": registry_summary or registry_mode or "custom host protocol",
+            }
+
         mapping = {
             "claude-code": {
                 "mode": "official-skill",
@@ -2098,10 +2328,19 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "mode": "official-skill",
                 "summary": "官方 Plugin SDK + Skills",
             },
+            "workbuddy": {
+                "mode": "manual-skill",
+                "summary": "官方自然语言任务 + Skills + MCP + 文件侧栏",
+            },
         }
         return mapping.get(target, {"mode": "none", "summary": ""})
 
     def _install_surfaces(self, *, target: str) -> dict[str, list[str]]:
+        adapter_surfaces = get_special_install_surfaces(target)
+        if adapter_surfaces is not None:
+            adapter_surfaces.setdefault("optional_project_surfaces", [])
+            adapter_surfaces.setdefault("optional_user_surfaces", [])
+            return adapter_surfaces
         by_target: dict[str, dict[str, list[str]]] = {
             "claude-code": {
                 "official_project_surfaces": [
@@ -2135,35 +2374,6 @@ class IntegrationManager(IntegrationManagerContentMixin):
                     "~/.gemini/skills/super-dev-core/SKILL.md",
                 ],
                 "observed_compatibility_surfaces": [],
-            },
-            "codebuddy-cli": {
-                "official_project_surfaces": [
-                    "CODEBUDDY.md",
-                    ".codebuddy/commands/super-dev.md",
-                    ".codebuddy/skills/super-dev-core/SKILL.md",
-                ],
-                "official_user_surfaces": [
-                    "~/.codebuddy/CODEBUDDY.md",
-                    "~/.codebuddy/commands/super-dev.md",
-                    "~/.codebuddy/skills/super-dev-core/SKILL.md",
-                ],
-                "observed_compatibility_surfaces": [".codebuddy/AGENTS.md"],
-            },
-            "codebuddy": {
-                "official_project_surfaces": [
-                    "CODEBUDDY.md",
-                    ".codebuddy/rules/super-dev/RULE.mdc",
-                    ".codebuddy/commands/super-dev.md",
-                    ".codebuddy/agents/super-dev-core.md",
-                    ".codebuddy/skills/super-dev-core/SKILL.md",
-                ],
-                "official_user_surfaces": [
-                    "~/.codebuddy/CODEBUDDY.md",
-                    "~/.codebuddy/commands/super-dev.md",
-                    "~/.codebuddy/agents/super-dev-core.md",
-                    "~/.codebuddy/skills/super-dev-core/SKILL.md",
-                ],
-                "observed_compatibility_surfaces": [".codebuddy/rules.md", ".codebuddy/AGENTS.md"],
             },
             "vscode-copilot": {
                 "official_project_surfaces": [".github/copilot-instructions.md"],
@@ -2344,16 +2554,6 @@ class IntegrationManager(IntegrationManagerContentMixin):
                     "~/.trae/skills/super-dev-core/SKILL.md",
                 ],
             },
-            "openclaw": {
-                "official_project_surfaces": [
-                    ".openclaw/rules/super-dev.md",
-                    ".openclaw/commands/super-dev.md",
-                ],
-                "official_user_surfaces": [
-                    "~/.openclaw/skills/super-dev-core/SKILL.md",
-                ],
-                "observed_compatibility_surfaces": [],
-            },
         }
         surfaces = by_target.get(
             target,
@@ -2377,20 +2577,23 @@ class IntegrationManager(IntegrationManagerContentMixin):
         integration = self.TARGETS[target]
         for relative in integration.files:
             file_path = self.project_dir / relative
-            if target in {"codex-cli", "opencode", "qoder", "qoder-cli"} and relative == "AGENTS.md":
+            if (
+                target in {"codex-cli", "opencode", "qoder", "qoder-cli"}
+                and relative == "AGENTS.md"
+            ):
                 begin = (
                     self.CODEX_AGENTS_BEGIN
                     if target == "codex-cli"
-                    else self.OPENCODE_AGENTS_BEGIN
-                    if target == "opencode"
-                    else self.QODER_AGENTS_BEGIN
+                    else (
+                        self.OPENCODE_AGENTS_BEGIN
+                        if target == "opencode"
+                        else self.QODER_AGENTS_BEGIN
+                    )
                 )
                 end = (
                     self.CODEX_AGENTS_END
                     if target == "codex-cli"
-                    else self.OPENCODE_AGENTS_END
-                    if target == "opencode"
-                    else self.QODER_AGENTS_END
+                    else self.OPENCODE_AGENTS_END if target == "opencode" else self.QODER_AGENTS_END
                 )
                 block_content = self._append_flow_contract(
                     content=self._build_file_content(target=target, relative=relative),
@@ -2439,7 +2642,35 @@ class IntegrationManager(IntegrationManagerContentMixin):
             except Exception:
                 pass  # Graceful degradation — enforcement is optional
 
+        written_files.extend(self._setup_seeai_mode_surfaces(target=target, force=force))
+
         return written_files
+
+    def _setup_seeai_mode_surfaces(self, *, target: str, force: bool) -> list[Path]:
+        written: list[Path] = []
+        if self.supports_slash(target):
+            seeai_slash = self.setup_seeai_slash_command(target=target, force=force)
+            if seeai_slash is not None:
+                written.append(seeai_slash)
+
+        if target == "codex-cli":
+            extra_files = [
+                ".agents/skills/super-dev-seeai/SKILL.md",
+                "plugins/super-dev-codex/skills/super-dev-seeai/SKILL.md",
+            ]
+            for relative in extra_files:
+                file_path = self.project_dir / relative
+                if file_path.exists() and not force:
+                    continue
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                content = self._append_flow_contract(
+                    content=self._build_file_content(target=target, relative=relative),
+                    relative=relative,
+                )
+                file_path.write_text(content, encoding="utf-8")
+                written.append(file_path)
+
+        return written
 
     def setup_global_protocol(self, target: str, force: bool = False) -> Path | None:
         protocol_file = self.resolve_global_protocol_path(target)

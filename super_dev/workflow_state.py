@@ -5,12 +5,14 @@ from pathlib import Path
 from typing import Any
 
 from .frameworks import summarize_framework_playbook
+from .host_adapters import get_special_flow_probe
 from .review_state import (
     load_architecture_revision,
     load_docs_confirmation,
     load_preview_confirmation,
     load_quality_revision,
     load_ui_revision,
+    load_workflow_state,
 )
 
 PHASE_CHAIN: tuple[tuple[str, str, str], ...] = (
@@ -70,16 +72,21 @@ def build_host_entry_prompts(
     target: str,
     instruction: str,
     supports_slash: bool = False,
+    flow_variant: str = "standard",
 ) -> dict[str, Any]:
     escaped = instruction.replace('"', '\\"')
-    fallback = f"super-dev: {instruction}"
+    normalized_variant = str(flow_variant).strip().lower()
+    slash_command = "/super-dev-seeai" if normalized_variant == "seeai" else "/super-dev"
+    cli_skill = "$super-dev-seeai" if normalized_variant == "seeai" else "$super-dev"
+    fallback_prefix = "super-dev-seeai:" if normalized_variant == "seeai" else "super-dev:"
+    fallback = f"{fallback_prefix} {instruction}"
     if target == "codex-cli":
         return {
             "preferred_entry": "app_desktop",
             "preferred_entry_label": "App/Desktop",
             "entry_prompts": {
-                "app_desktop": f'/super-dev "{escaped}"',
-                "cli": f'$super-dev "{escaped}"',
+                "app_desktop": f'{slash_command} "{escaped}"',
+                "cli": f'{cli_skill} "{escaped}"',
                 "fallback": fallback,
             },
         }
@@ -88,7 +95,7 @@ def build_host_entry_prompts(
             "preferred_entry": "slash",
             "preferred_entry_label": "Slash",
             "entry_prompts": {
-                "slash": f'/super-dev "{escaped}"',
+                "slash": f'{slash_command} "{escaped}"',
                 "fallback": fallback,
             },
         }
@@ -137,6 +144,11 @@ def build_host_flow_probe(target: str) -> dict[str, Any]:
             ],
             "success_signal": "三种入口最终都进入同一条 Super Dev 流程，并且多轮修改、确认和恢复时保持在流程内。",
         }
+    adapter_probe = get_special_flow_probe(target)
+    if adapter_probe is not None:
+        probe = dict(adapter_probe)
+        probe["steps"] = list(probe.get("steps", ()))
+        return probe
     return {
         "enabled": False,
         "title": "",
@@ -212,6 +224,18 @@ def _has_any(candidates: list[Path]) -> bool:
     return any(path.exists() for path in candidates)
 
 
+def detect_flow_variant(project_dir: Path) -> str:
+    payload = load_workflow_state(project_dir) or {}
+    for key in ("flow_variant", "entry_variant", "pipeline_variant", "mode_variant"):
+        value = str(payload.get(key, "")).strip().lower()
+        if value == "seeai":
+            return "seeai"
+    current_step = str(payload.get("current_step_label", "")).strip().lower()
+    if "seeai" in current_step:
+        return "seeai"
+    return "standard"
+
+
 def _latest_json(files: list[Path]) -> tuple[dict[str, Any], str]:
     if not files:
         return {}, ""
@@ -223,7 +247,9 @@ def _latest_json(files: list[Path]) -> tuple[dict[str, Any], str]:
     return payload if isinstance(payload, dict) else {}, str(latest)
 
 
-def _normalize_review_payload(payload: dict[str, Any] | None, *, default_status: str = "pending_review") -> dict[str, Any]:
+def _normalize_review_payload(
+    payload: dict[str, Any] | None, *, default_status: str = "pending_review"
+) -> dict[str, Any]:
     payload = payload or {}
     return {
         "status": str(payload.get("status", "")).strip() or default_status,
@@ -235,7 +261,9 @@ def _normalize_review_payload(payload: dict[str, Any] | None, *, default_status:
     }
 
 
-def _build_action_card(*, workflow_status: str, recommended_command: str, blocker: str) -> dict[str, Any]:
+def _build_action_card(
+    *, workflow_status: str, recommended_command: str, blocker: str
+) -> dict[str, Any]:
     default_exit = "只有用户明确说取消当前流程、重新开始或切回普通聊天，才允许离开当前流程。"
     mapping: dict[str, dict[str, Any]] = {
         "missing_research": {
@@ -342,7 +370,9 @@ def _build_action_card(*, workflow_status: str, recommended_command: str, blocke
     action["blocker"] = blocker
     action["exit_condition"] = default_exit
     action["examples"] = [str(item).strip() for item in examples if str(item).strip()]
-    action["shortcuts"] = workflow_mode_shortcuts(str(action.get("mode", "")), examples=action["examples"])
+    action["shortcuts"] = workflow_mode_shortcuts(
+        str(action.get("mode", "")), examples=action["examples"]
+    )
     action["continuity_rules"] = workflow_continuity_rules(workflow_status)
     return action
 
@@ -350,7 +380,9 @@ def _build_action_card(*, workflow_status: str, recommended_command: str, blocke
 def build_workflow_scenario_cards(summary: dict[str, Any]) -> list[dict[str, Any]]:
     workflow_status = str(summary.get("workflow_status", "")).strip()
     workflow_mode = str(summary.get("workflow_mode", "")).strip() or "continue"
-    recommended_command = str(summary.get("recommended_command", "")).strip() or "super-dev run --resume"
+    recommended_command = (
+        str(summary.get("recommended_command", "")).strip() or "在宿主里说“继续当前流程”"
+    )
     action_card = summary.get("action_card")
     action_title = ""
     action_examples: list[str] = []
@@ -413,7 +445,7 @@ def build_workflow_scenario_cards(summary: dict[str, Any]) -> list[dict[str, Any
             "title": "第二天回来继续开发",
             "when": "关掉宿主、重启电脑、第二天继续时",
             "user_message": "继续当前流程",
-            "cli_command": "super-dev resume",
+            "cli_command": "回到宿主里说“继续当前流程”",
             "recommended": workflow_mode in {"continue", "revise", "release"},
         },
         {
@@ -421,7 +453,7 @@ def build_workflow_scenario_cards(summary: dict[str, Any]) -> list[dict[str, Any
             "title": "我只想知道现在先做什么",
             "when": "不想自己判断流程状态时",
             "user_message": "下一步",
-            "cli_command": "super-dev next",
+            "cli_command": "回到宿主里说“现在下一步是什么”",
             "recommended": False,
         },
     ]
@@ -430,8 +462,12 @@ def build_workflow_scenario_cards(summary: dict[str, Any]) -> list[dict[str, Any
         cards.append(
             {
                 "id": "current_gate_or_stage",
-                "title": stage_specific_titles.get(workflow_status, action_title or "按当前流程继续"),
-                "when": stage_specific_when.get(workflow_status, "当前流程还没结束，需要继续推进时"),
+                "title": stage_specific_titles.get(
+                    workflow_status, action_title or "按当前流程继续"
+                ),
+                "when": stage_specific_when.get(
+                    workflow_status, "当前流程还没结束，需要继续推进时"
+                ),
                 "user_message": user_message,
                 "cli_command": recommended_command,
                 "recommended": workflow_mode == "revise" or workflow_status.startswith("waiting_"),
@@ -444,8 +480,9 @@ def build_workflow_scenario_cards(summary: dict[str, Any]) -> list[dict[str, Any
             "title": "本地流程跑到一半中断后恢复",
             "when": "run / pipeline 中途失败、终端断开或想接着跑时",
             "user_message": "恢复本地流程",
-            "cli_command": "super-dev run --resume",
-            "recommended": workflow_status in {"missing_backend", "missing_quality", "missing_delivery"},
+            "cli_command": "回到宿主里说“继续当前流程，不要重新开题”",
+            "recommended": workflow_status
+            in {"missing_backend", "missing_quality", "missing_delivery"},
         }
     )
 
@@ -464,6 +501,7 @@ def detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = None
     project_dir = Path(project_dir).resolve()
     output_dir = project_dir / "output"
     changes_dir = project_dir / ".super-dev" / "changes"
+    flow_variant = detect_flow_variant(project_dir)
 
     research_done = any(output_dir.glob("*-research.md"))
     prd_done = any(output_dir.glob("*-prd.md"))
@@ -472,7 +510,9 @@ def detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = None
     docs_done = prd_done and architecture_done and uiux_done
     spec_done = any(changes_dir.glob("*/proposal.md")) and any(changes_dir.glob("*/tasks.md"))
 
-    frontend_runtime_payload, frontend_runtime_path = _latest_json(sorted(output_dir.glob("*-frontend-runtime.json")))
+    frontend_runtime_payload, frontend_runtime_path = _latest_json(
+        sorted(output_dir.glob("*-frontend-runtime.json"))
+    )
     frontend_runtime_passed = bool(frontend_runtime_payload.get("passed", False))
     frontend_done = frontend_runtime_passed
 
@@ -485,15 +525,23 @@ def detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = None
             project_dir / "backend" / "go.mod",
         ]
     )
-    quality_done = any(output_dir.glob("*-quality-gate.md")) or any(output_dir.glob("*-ui-review.md"))
+    quality_done = any(output_dir.glob("*-quality-gate.md")) or any(
+        output_dir.glob("*-ui-review.md")
+    )
 
     delivery_manifest_payload, delivery_manifest_path = _latest_json(
-        sorted((output_dir / "delivery").glob("*-delivery-manifest.json")) if (output_dir / "delivery").exists() else []
+        sorted((output_dir / "delivery").glob("*-delivery-manifest.json"))
+        if (output_dir / "delivery").exists()
+        else []
     )
-    delivery_manifest_ready = str(delivery_manifest_payload.get("status", "")).strip().lower() == "ready"
+    delivery_manifest_ready = (
+        str(delivery_manifest_payload.get("status", "")).strip().lower() == "ready"
+    )
 
     rehearsal_payload, rehearsal_report_path = _latest_json(
-        sorted((output_dir / "rehearsal").glob("*-rehearsal-report.json")) if (output_dir / "rehearsal").exists() else []
+        sorted((output_dir / "rehearsal").glob("*-rehearsal-report.json"))
+        if (output_dir / "rehearsal").exists()
+        else []
     )
     rehearsal_report_passed = bool(rehearsal_payload.get("passed", False))
     delivery_done = delivery_manifest_ready and rehearsal_report_passed
@@ -532,15 +580,32 @@ def detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = None
 
     explicit_docs_revision_requested = docs_confirmation["status"] == "revision_requested"
     explicit_ui_revision_requested = ui_revision["status"] == "revision_requested"
-    explicit_architecture_revision_requested = architecture_revision["status"] == "revision_requested"
+    explicit_architecture_revision_requested = (
+        architecture_revision["status"] == "revision_requested"
+    )
     explicit_quality_revision_requested = quality_revision["status"] == "revision_requested"
     explicit_preview_revision_requested = preview_confirmation["status"] == "revision_requested"
 
     docs_confirmed = docs_confirmation["status"] == "confirmed"
     preview_confirmed = preview_confirmation["status"] == "confirmed"
-    docs_confirmation_waiting = docs_done and not (docs_confirmed or spec_done or frontend_done or backend_done or quality_done or delivery_done)
-    preview_confirmation_waiting = frontend_done and not (
-        preview_confirmed or backend_done or quality_done or delivery_done or explicit_preview_revision_requested
+    docs_confirmation_waiting = docs_done and not (
+        docs_confirmed
+        or spec_done
+        or frontend_done
+        or backend_done
+        or quality_done
+        or delivery_done
+    )
+    preview_confirmation_waiting = (
+        flow_variant != "seeai"
+        and frontend_done
+        and not (
+            preview_confirmed
+            or backend_done
+            or quality_done
+            or delivery_done
+            or explicit_preview_revision_requested
+        )
     )
 
     run = run or {}
@@ -550,7 +615,9 @@ def detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = None
     if run_status in {"running", "cancelling"}:
         completed = set(run.get("completed_phases") or [])
         requested = run.get("requested_phases") or []
-        running_phase = next((phase_id for phase_id in requested if phase_id not in completed), None)
+        running_phase = next(
+            (phase_id for phase_id in requested if phase_id not in completed), None
+        )
 
     def _stage_status(done: bool, *, waiting: bool = False, running: bool = False) -> str:
         if done:
@@ -565,20 +632,30 @@ def detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = None
         {
             "id": "research",
             "name": "同类产品研究",
-            "status": _stage_status(research_done, running=running_phase in {"discovery", "intelligence"} and not research_done),
+            "status": _stage_status(
+                research_done,
+                running=running_phase in {"discovery", "intelligence"} and not research_done,
+            ),
             "description": PHASE_CHAIN[0][2],
         },
         {
             "id": "core_docs",
             "name": "三份核心文档",
-            "status": _stage_status(docs_done, running=running_phase == "drafting" and not docs_done),
+            "status": _stage_status(
+                docs_done, running=running_phase == "drafting" and not docs_done
+            ),
             "description": PHASE_CHAIN[1][2],
         },
         {
             "id": "confirmation_gate",
             "name": "等待用户确认",
             "status": _stage_status(
-                docs_confirmed or spec_done or frontend_done or backend_done or quality_done or delivery_done,
+                docs_confirmed
+                or spec_done
+                or frontend_done
+                or backend_done
+                or quality_done
+                or delivery_done,
                 waiting=docs_confirmation_waiting or explicit_docs_revision_requested,
             ),
             "description": PHASE_CHAIN[2][2],
@@ -586,13 +663,22 @@ def detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = None
         {
             "id": "spec",
             "name": "Spec 与任务清单",
-            "status": _stage_status(spec_done, running=running_phase == "drafting" and docs_done and docs_confirmed and not spec_done),
+            "status": _stage_status(
+                spec_done,
+                running=running_phase == "drafting"
+                and docs_done
+                and docs_confirmed
+                and not spec_done,
+            ),
             "description": PHASE_CHAIN[3][2],
         },
         {
             "id": "frontend",
             "name": "前端实现与运行验证",
-            "status": _stage_status(frontend_done, running=running_phase == "delivery" and spec_done and not frontend_done),
+            "status": _stage_status(
+                frontend_done,
+                running=running_phase == "delivery" and spec_done and not frontend_done,
+            ),
             "description": PHASE_CHAIN[4][2],
         },
         {
@@ -609,7 +695,10 @@ def detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = None
             "name": "后端实现与联调",
             "status": _stage_status(
                 backend_done,
-                running=running_phase == "delivery" and frontend_done and preview_confirmed and not backend_done,
+                running=running_phase == "delivery"
+                and frontend_done
+                and preview_confirmed
+                and not backend_done,
             ),
             "description": PHASE_CHAIN[6][2],
         },
@@ -632,82 +721,96 @@ def detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = None
             "description": PHASE_CHAIN[8][2],
         },
     ]
-    current_stage = next((stage for stage in stages if stage["status"] in {"running", "waiting", "pending"}), stages[-1])
+    current_stage = next(
+        (stage for stage in stages if stage["status"] in {"running", "waiting", "pending"}),
+        stages[-1],
+    )
     if all(stage["status"] == "completed" for stage in stages):
         current_stage = stages[-1]
 
     blocker = ""
     checkpoint_status = "ready"
-    recommended_command = "super-dev run --status"
+    recommended_command = "在宿主里说“继续当前流程”"
     evidence = "未检测到更高优先级阻断项"
     if explicit_docs_revision_requested:
         blocker = "用户已要求修改三份核心文档，当前应先修正文档并再次提交确认。"
         checkpoint_status = "waiting_docs_confirmation"
-        recommended_command = 'super-dev review docs --status confirmed --comment "三文档已确认"'
+        recommended_command = "在宿主里继续修正文档；确认后直接说“文档确认，可以继续”"
         evidence = "docs confirmation revision_requested"
     elif explicit_preview_revision_requested:
         blocker = "当前预览评审要求继续修改前端，应先更新 UI/前端实现并再次提交预览确认。"
         checkpoint_status = "waiting_preview_confirmation"
-        recommended_command = 'super-dev review preview --status confirmed --comment "前端预览已确认"'
+        recommended_command = "在宿主里继续修改前端；确认后直接说“前端预览确认，可以继续”"
         evidence = "preview confirmation revision_requested"
     elif explicit_ui_revision_requested:
-        blocker = "当前存在 UI 改版请求，应先更新 output/*-uiux.md，并重新执行前端运行验证与 UI review。"
+        blocker = (
+            "当前存在 UI 改版请求，应先更新 output/*-uiux.md，并重新执行前端运行验证与 UI review。"
+        )
         checkpoint_status = "waiting_ui_revision"
-        recommended_command = 'super-dev review ui --status confirmed --comment "UI 改版已通过"'
+        recommended_command = "在宿主里完成 UI 改版后直接说“UI 改版已完成，继续当前流程”"
         evidence = "ui revision requested"
     elif explicit_architecture_revision_requested:
         blocker = "当前存在架构返工请求，应先更新 output/*-architecture.md，并同步调整实现方案与任务拆解。"
         checkpoint_status = "waiting_architecture_revision"
-        recommended_command = 'super-dev review architecture --status confirmed --comment "架构返工已通过"'
+        recommended_command = "在宿主里完成架构返工后直接说“架构调整已完成，继续当前流程”"
         evidence = "architecture revision requested"
     elif explicit_quality_revision_requested:
         blocker = "当前存在质量返工请求，应先修复质量/安全问题，并重新执行 quality gate 与 release proof-pack。"
         checkpoint_status = "waiting_quality_revision"
-        recommended_command = 'super-dev review quality --status confirmed --comment "质量返工已通过"'
+        recommended_command = "在宿主里完成质量整改后直接说“质量整改已完成，继续当前流程”"
         evidence = "quality revision requested"
     elif docs_confirmation_waiting:
         blocker = "三份核心文档已生成，当前必须等待用户确认或提出修改意见。"
         checkpoint_status = "waiting_docs_confirmation"
-        recommended_command = 'super-dev review docs --status confirmed --comment "三文档已确认"'
+        recommended_command = "在宿主里确认三文档；如果通过，直接说“文档确认，可以继续”"
         evidence = "docs confirmation pending"
     elif preview_confirmation_waiting:
         blocker = "前端预览已可演示，当前必须先等待用户确认预览或提出继续修改。"
         checkpoint_status = "waiting_preview_confirmation"
-        recommended_command = 'super-dev review preview --status confirmed --comment "前端预览已确认"'
+        recommended_command = "在宿主里确认前端预览；如果通过，直接说“前端预览确认，可以继续”"
         evidence = "preview confirmation pending"
     elif not research_done:
         blocker = "当前尚未完成同类产品研究。"
         checkpoint_status = "missing_research"
-        recommended_command = 'super-dev start --idea "请在这里填写需求"'
+        recommended_command = "在宿主里启动 Super Dev，先做 research，再产出三文档"
         evidence = "缺少 output/*-research.md"
     elif not docs_done:
         blocker = "当前尚未完成 PRD、架构、UIUX 三份核心文档。"
         checkpoint_status = "missing_core_docs"
-        recommended_command = 'super-dev start --idea "请在这里填写需求"'
+        recommended_command = "在宿主里继续 Super Dev，先补齐 PRD、Architecture、UIUX"
         evidence = "缺少 output/*-prd.md / *-architecture.md / *-uiux.md"
     elif not spec_done:
         blocker = "当前尚未创建 Spec proposal 与 tasks.md。"
         checkpoint_status = "missing_spec"
-        recommended_command = "super-dev run --phase spec"
+        recommended_command = "在宿主里说“文档确认，可以继续，开始 Spec 与任务拆解”"
         evidence = "缺少 .super-dev/changes/*/proposal.md / tasks.md"
     elif not frontend_done:
         blocker = "当前尚未完成前端实现与运行验证。"
         checkpoint_status = "missing_frontend"
-        recommended_command = "super-dev run --phase frontend"
+        if flow_variant == "seeai":
+            recommended_command = "在宿主里说“继续当前 SEEAI 流程，开始一体化快速开发”"
+        else:
+            recommended_command = "在宿主里说“继续当前流程，进入前端实现与运行验证”"
         evidence = "缺少通过的 output/*-frontend-runtime.json"
     elif not backend_done:
         blocker = "当前尚未完成后端实现与联调。"
         checkpoint_status = "missing_backend"
-        recommended_command = "super-dev run --phase backend"
+        if flow_variant == "seeai":
+            recommended_command = "在宿主里说“继续当前 SEEAI 流程，补齐必要后端并统一 polish”"
+        else:
+            recommended_command = "在宿主里说“前端预览已确认，继续后端实现与联调”"
         evidence = "缺少 backend 实现证据"
     elif not quality_done:
         blocker = "当前尚未完成红队 / UI / 质量门禁。"
         checkpoint_status = "missing_quality"
-        recommended_command = "super-dev run --phase quality"
+        if flow_variant == "seeai":
+            recommended_command = "在宿主里说“继续当前 SEEAI 流程，做最终 polish 和演示检查”"
+        else:
+            recommended_command = "在宿主里说“继续当前流程，进入质量门禁与发布前检查”"
         evidence = "缺少 quality gate / ui review 证据"
     elif not delivery_done:
         checkpoint_status = "missing_delivery"
-        recommended_command = "super-dev run --phase delivery"
+        recommended_command = "在宿主里说“继续当前流程，补齐交付证据和发布产物”"
         if not delivery_manifest_ready:
             blocker = "当前交付包仍未达到 ready 状态。"
             evidence = "delivery manifest not ready"
@@ -717,10 +820,17 @@ def detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = None
         else:
             blocker = "当前尚未完成交付包与部署产物。"
             evidence = "delivery artifacts incomplete"
-    elif run_status in {"failed", "running", "waiting_confirmation", "waiting_ui_revision", "waiting_architecture_revision", "waiting_quality_revision"}:
+    elif run_status in {
+        "failed",
+        "running",
+        "waiting_confirmation",
+        "waiting_ui_revision",
+        "waiting_architecture_revision",
+        "waiting_quality_revision",
+    }:
         checkpoint_status = run_status
         blocker = "当前仓库存在运行态、确认门或返工门，需要先沿当前流程继续。"
-        recommended_command = "super-dev run --resume"
+        recommended_command = "在宿主里说“继续当前流程，不要重新开题”"
         evidence = f"run_status={run_status}"
 
     action_card = _build_action_card(
@@ -761,6 +871,7 @@ def detect_pipeline_summary(project_dir: Path, run: dict[str, Any] | None = None
         "phase_results_count": len(run_results) if isinstance(run_results, list) else 0,
         "workflow_status": checkpoint_status,
         "workflow_mode": str(action_card.get("mode", "")).strip() or "continue",
+        "flow_variant": flow_variant,
         "recommended_command": recommended_command,
         "evidence": evidence,
         "action_card": action_card,

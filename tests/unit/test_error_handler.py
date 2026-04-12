@@ -6,6 +6,7 @@ import pytest
 
 from super_dev.error_handler import EXIT_ERROR, EXIT_INTERRUPTED, EXIT_USAGE, handle_cli_error
 from super_dev.exceptions import ConfigurationError, SuperDevError
+from super_dev.i18n import get_locale, set_locale
 
 
 class TestHandleCliError:
@@ -79,3 +80,49 @@ class TestHandleCliError:
             assert code == EXIT_ERROR
         except ImportError:
             pytest.skip("pyyaml not installed")
+
+
+class TestErrorHandlerI18n:
+    """Verify error_handler uses i18n for user-facing messages."""
+
+    def setup_method(self):
+        self._original = get_locale()
+
+    def teardown_method(self):
+        set_locale(self._original)
+
+    def test_chinese_error_messages_by_default(self, capsys):
+        set_locale("zh")
+        handle_cli_error(FileNotFoundError(2, "No such file", "/tmp/test.txt"))
+        output = capsys.readouterr().out
+        assert "文件不存在" in output
+
+    def test_english_error_messages_when_locale_is_en(self, capsys):
+        set_locale("en")
+        handle_cli_error(FileNotFoundError(2, "No such file", "/tmp/test.txt"))
+        output = capsys.readouterr().out
+        assert "File not found" in output
+
+    def test_english_network_failure(self, capsys):
+        set_locale("en")
+        handle_cli_error(ConnectionError("refused"))
+        output = capsys.readouterr().out
+        assert "Network connection failed" in output
+
+    def test_english_timeout(self, capsys):
+        set_locale("en")
+        handle_cli_error(TimeoutError("timed out"))
+        output = capsys.readouterr().out
+        assert "Operation timed out" in output
+
+    def test_chinese_cancelled(self, capsys):
+        set_locale("zh")
+        handle_cli_error(KeyboardInterrupt())
+        output = capsys.readouterr().out
+        assert "已取消" in output
+
+    def test_english_cancelled(self, capsys):
+        set_locale("en")
+        handle_cli_error(KeyboardInterrupt())
+        output = capsys.readouterr().out
+        assert "Cancelled" in output

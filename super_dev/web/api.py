@@ -23,7 +23,7 @@ from typing import Any, Literal, cast
 from urllib.parse import urlencode
 
 import uvicorn
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Security
+from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException, Query, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.security import APIKeyHeader
@@ -73,6 +73,7 @@ from super_dev.harness_registry import (
 )
 from super_dev.hook_harness import HookHarnessBuilder
 from super_dev.hooks.manager import HookManager
+from super_dev.host_registry import HostInstallMode, get_display_name, get_install_mode
 from super_dev.integrations.manager import IntegrationManager
 from super_dev.operational_harness import OperationalHarnessBuilder
 from super_dev.orchestrator import Phase, WorkflowContext, WorkflowEngine
@@ -105,12 +106,23 @@ from super_dev.review_state import (
     workflow_event_log_file,
     workflow_state_file,
 )
+from super_dev.runtime_evidence import (
+    HostRuntimeEvidence,
+    IntegrationStatus,
+    IntegrationStatusRecord,
+    RuntimeStatus,
+    RuntimeStatusRecord,
+    serialize_host_runtime_evidence,
+)
 from super_dev.skills import SkillManager
+from super_dev.web.rate_limit import RateLimitMiddleware
+from super_dev.workflow_contract import get_agent_team, get_workflow_contract
 from super_dev.workflow_harness import WorkflowHarnessBuilder
 from super_dev.workflow_state import (
     build_host_entry_prompts,
     build_host_flow_contract,
     build_host_flow_probe,
+    detect_flow_variant,
     detect_pipeline_summary,
     load_framework_playbook_summary,
     workflow_continuity_rules,
@@ -135,6 +147,19 @@ def _validate_project_dir(project_dir: str) -> Path:
         raise HTTPException(status_code=400, detail="project_dir 不允许包含 .. 路径遍历")
     normalized = Path(project_dir).resolve()
     return normalized
+
+
+def _validate_run_id(run_id: str) -> str:
+    """验证 run_id，防止路径遍历和注入攻击。
+
+    run_id 只允许字母数字、连字符和下划线。
+    """
+    if not run_id or not re.match(r"^[a-zA-Z0-9_-]+$", run_id):
+        raise HTTPException(
+            status_code=400,
+            detail="run_id 只允许包含字母、数字、连字符和下划线",
+        )
+    return run_id
 
 
 def _public_host_targets(*, integration_manager: IntegrationManager) -> list[str]:
@@ -337,16 +362,47 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization", "X-Request-ID", "X-Super-Dev-Key"],
 )
 
+app.add_middleware(RateLimitMiddleware)
+
+# ── API Versioning ───────────────────────────────────────
+# /api/v1/ is the canonical versioned prefix.
+# Legacy /api/ routes remain for backward compatibility but are deprecated.
+v1_router = APIRouter(prefix="/api/v1")
+
 # ==================== API Key 认证 ====================
 
 API_KEY_HEADER = APIKeyHeader(name="X-Super-Dev-Key", auto_error=False)
 
 
-def get_api_key(api_key: str | None = Security(API_KEY_HEADER)) -> str | None:
-    """验证 API Key（仅在设置了 SUPER_DEV_API_KEY 环境变量时生效）"""
+def get_api_key(api_key: str | None = Security(API_KEY_HEADER)) -> str:
+    """验证 API Key.
+
+    写入端点强制要求 API Key:
+    - 如果设置了 SUPER_DEV_API_KEY 环境变量, 则必须提供匹配的 key
+    - 如果未设置环境变量, 则生成一次性 key 并写入启动日志 (仅限开发环境)
+    - 生产环境必须设置 SUPER_DEV_API_KEY
+    """
     expected_key = os.environ.get("SUPER_DEV_API_KEY")
-    if expected_key and api_key != expected_key:
-        raise HTTPException(status_code=401, detail="Invalid API key")
+    if not expected_key:
+        _generated = os.environ.get("SUPER_DEV_GENERATED_KEY", "")
+        if not _generated:
+            import secrets
+
+            _generated = secrets.token_urlsafe(32)
+            os.environ["SUPER_DEV_GENERATED_KEY"] = _generated
+            logging.getLogger("super_dev.web").warning(
+                "SUPER_DEV_API_KEY not set. Generated one-time key for this session. "
+                "Set SUPER_DEV_API_KEY in production!"
+            )
+        expected_key = _generated
+    if api_key != expected_key:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error": "invalid_api_key",
+                "message": "Valid X-Super-Dev-Key header required. Set SUPER_DEV_API_KEY env var.",
+            },
+        )
     return api_key
 
 
@@ -354,6 +410,19 @@ def get_api_key(api_key: str | None = Security(API_KEY_HEADER)) -> str | None:
 
 _RUN_STORE: dict[str, dict[str, Any]] = {}
 _RUN_STORE_LOCK = Lock()
+_RUN_STORE_MAX = 1000
+
+
+def _evict_run_store() -> None:
+    """Evict oldest in-memory run states when store exceeds max size."""
+    if len(_RUN_STORE) <= _RUN_STORE_MAX:
+        return
+    # Remove oldest entries (first N inserted) to stay under limit
+    overflow = len(_RUN_STORE) - _RUN_STORE_MAX
+    keys_to_remove = list(_RUN_STORE.keys())[:overflow]
+    for key in keys_to_remove:
+        _RUN_STORE.pop(key, None)
+
 
 CICDPlatform = Literal["github", "gitlab", "jenkins", "azure", "bitbucket", "all"]
 VALID_CICD_PLATFORMS: set[str] = set(CICD_PLATFORM_IDS)
@@ -508,6 +577,7 @@ def _store_run_state(run_id: str, persist_dir: Path | None = None, **fields: Any
         run["status_normalized"] = _normalize_run_status(run.get("status"))
         if persist_dir is not None:
             _persist_run_state(persist_dir, run_id, run)
+        _evict_run_store()
 
 
 def _get_run_state(run_id: str, project_dir: Path | None = None) -> dict[str, Any] | None:
@@ -655,11 +725,110 @@ def _default_host_commands(host_id: str, *, supports_slash: bool) -> dict[str, s
         "bugfix": 'super-dev fix "修复当前项目中的关键问题并补充回归验证"',
         "run": 'super-dev "你的需求"',
         "slash": '/super-dev "你的需求"' if supports_slash else "",
+        "seeai_slash": '/super-dev-seeai "比赛需求"' if supports_slash else "",
         "skill_slash": "/super-dev" if host_id == "codex-cli" else "",
+        "seeai_skill_slash": "/super-dev-seeai" if host_id == "codex-cli" else "",
         "skill": "$super-dev" if host_id == "codex-cli" else skill_name,
+        "seeai_skill": "$super-dev-seeai" if host_id == "codex-cli" else "super-dev-seeai",
         "trigger": trigger,
+        "seeai_trigger": (
+            "App/Desktop: /super-dev-seeai | CLI: $super-dev-seeai | 回退: super-dev-seeai: 比赛需求"
+            if host_id == "codex-cli"
+            else ('/super-dev-seeai "比赛需求"' if supports_slash else "super-dev-seeai: 比赛需求")
+        ),
     }
     return commands
+
+
+def _competition_mode_payload(host_id: str, *, supports_slash: bool) -> dict[str, Any]:
+    contract = get_workflow_contract("seeai")
+    if host_id == "codex-cli":
+        trigger = "App/Desktop: /super-dev-seeai | CLI: $super-dev-seeai | 回退: super-dev-seeai: 比赛需求"
+    elif supports_slash:
+        trigger = '/super-dev-seeai "比赛需求"'
+    else:
+        trigger = "super-dev-seeai: 比赛需求"
+
+    payload: dict[str, Any] = {
+        "enabled": True,
+        "name": "SEEAI",
+        "timebox_minutes": contract.sprint_horizon_minutes,
+        "trigger": trigger,
+        "phase_chain": [phase.key for phase in contract.phase_chain],
+        "agent_team": [agent.key for agent in get_agent_team("seeai")],
+        "summary": "比赛快链路：保留 research/三文档/spec，但压缩成半小时内可展示的成品交付。",
+        "scope_rule": "先保主路径，再做 wow 点，最后才补额外工程深度。",
+        "degrade_rule": "后端或外部集成拖慢节奏时，优先 mock / 本地数据 / 高保真演示流。",
+        "first_response_template": [
+            "作品类型",
+            "评委 wow 点",
+            "P0 主路径",
+            "主动放弃项",
+            "关键假设",
+        ],
+        "timebox_breakdown": [
+            "0-4 分钟：fast research",
+            "4-8 分钟：compact 文档",
+            "8-10 分钟：docs confirm",
+            "10-12 分钟：compact spec",
+            "12-27 分钟：full-stack sprint",
+            "27-30 分钟：polish/handoff",
+        ],
+        "archetype_detection_hints": [
+            "品牌、官网、落地页、活动宣传、首屏 -> 官网类",
+            "玩法、得分、胜负、闯关、点击反馈 -> 小游戏类",
+            "生成、分析、查询、输入输出、结果页、效率提升 -> 工具类",
+        ],
+        "compact_doc_sections": {
+            "research": ["题目理解", "参考风格", "Wow 点", "主动放弃项"],
+            "prd": ["作品目标", "P0 主路径", "P1 Wow 点", "P2 可选项", "非目标"],
+            "architecture": ["主循环", "技术栈", "数据流", "最小后端", "降级方案"],
+            "uiux": ["视觉方向", "首屏/主界面", "关键交互", "动效重点", "设计 Token"],
+            "spec": ["P0", "P1", "Polish"],
+        },
+        "quality_floor": list(contract.quality_floor),
+        "archetype_playbooks": {
+            "landing_page": {
+                "label": "官网类",
+                "default_stack": "React/Vite 或 Next.js + Tailwind + Framer Motion",
+                "sprint_plan": ["Hero/首屏", "亮点区/品牌叙事", "CTA/滚动动效", "最终 polish"],
+                "focus": "主视觉、信息密度、滚动节奏、首屏转化",
+            },
+            "mini_game": {
+                "label": "小游戏类",
+                "default_stack": "HTML Canvas + Vanilla JS；复杂玩法再上 Phaser",
+                "sprint_plan": ["主循环可玩", "积分/胜负反馈", "特效/音效", "复玩和 polish"],
+                "focus": "玩法闭环、反馈感、积分胜负、再次游玩",
+            },
+            "tool": {
+                "label": "工具类",
+                "default_stack": "React + Vite + Tailwind；必要时补最小 Express/Fastify 后端",
+                "sprint_plan": ["输入页/主流程", "结果页", "分享/导出", "最终 polish"],
+                "focus": "高价值主流程、输入输出清晰、结果页直观",
+            },
+        },
+        "host_tips": [],
+    }
+
+    if host_id in {"codebuddy", "codebuddy-cli"}:
+        payload["host_tips"] = [
+            "固定在同一个项目上下文会话里完成比赛冲刺，减少子会话切换。",
+            "如果 slash 列表刷新慢，直接回退到 super-dev-seeai: 继续。",
+            "按 P0/P1/P2 控制范围，先保住主演示路径。",
+        ]
+    elif host_id == "openclaw":
+        payload["host_tips"] = [
+            "安装插件后优先新开一个绑定当前项目的 Agent 会话。",
+            "如果 /super-dev-seeai 尚未出现在命令面板，直接使用 super-dev-seeai:。",
+            "中段优先做主作品，末段再调用 Tool 做质量与状态收口。",
+        ]
+    else:
+        payload["host_tips"] = [
+            "先保住一个可演示主路径，再补一个明显 wow 点。",
+            "真实后端来不及时，优先用 mock / 本地数据保持演示完整。",
+        ]
+
+    return payload
 
 
 def _build_host_tool_catalog_payload() -> list[dict[str, Any]]:
@@ -675,6 +844,9 @@ def _build_host_tool_catalog_payload() -> list[dict[str, Any]]:
                 "id": host_id,
                 "name": item["name"],
                 "category": HOST_TOOL_CATEGORY_MAP.get(host_id, "ide"),
+                "install_mode": (
+                    get_install_mode(host_id).value if get_install_mode(host_id) is not None else ""
+                ),
                 "certification_level": profile.certification_level,
                 "certification_label": profile.certification_label,
                 "certification_reason": profile.certification_reason,
@@ -707,6 +879,9 @@ def _build_host_tool_catalog_payload() -> list[dict[str, Any]]:
                 "smoke_test_prompt": profile.smoke_test_prompt,
                 "smoke_test_steps": list(profile.smoke_test_steps),
                 "smoke_success_signal": profile.smoke_success_signal,
+                "competition_smoke_test_prompt": profile.competition_smoke_test_prompt,
+                "competition_smoke_test_steps": list(profile.competition_smoke_test_steps),
+                "competition_smoke_success_signal": profile.competition_smoke_success_signal,
                 "supports_skill_slash_entry": host_id == "codex-cli",
                 "skill_slash_entry_command": "/super-dev" if host_id == "codex-cli" else "",
                 "skill_slash_entry_note": (
@@ -716,6 +891,9 @@ def _build_host_tool_catalog_payload() -> list[dict[str, Any]]:
                 ),
                 "flow_contract": build_host_flow_contract(host_id),
                 "flow_probe": build_host_flow_probe(host_id),
+                "competition_mode": _competition_mode_payload(
+                    host_id, supports_slash=supports_slash
+                ),
                 "notes": profile.notes,
                 "commands": _default_host_commands(host_id, supports_slash=supports_slash),
             }
@@ -830,10 +1008,12 @@ def _build_resume_probe_prompt(project_dir: Path, target: str, usage: dict[str, 
     if not instruction:
         return ""
     trigger = str(usage.get("trigger_command", "")).strip()
+    flow_variant = detect_flow_variant(project_dir)
     entry_bundle = build_host_entry_prompts(
         target=target,
         instruction=instruction,
         supports_slash=bool("/super-dev" in trigger),
+        flow_variant=flow_variant,
     )
     preferred_entry = str(entry_bundle.get("preferred_entry", "")).strip()
     prompts = entry_bundle.get("entry_prompts", {})
@@ -877,10 +1057,13 @@ def _build_session_resume_card(
     preferred_entry_label = ""
     summary: dict[str, Any] = {}
     if enabled:
+        summary = _detect_pipeline_summary(project_dir)
         entry_bundle = build_host_entry_prompts(
             target=target,
             instruction=instruction,
             supports_slash=bool("/super-dev" in str(usage.get("trigger_command", "")).strip()),
+            flow_variant=str(summary.get("flow_variant", "")).strip()
+            or detect_flow_variant(project_dir),
         )
         raw_entry_prompts = entry_bundle.get("entry_prompts", {})
         if isinstance(raw_entry_prompts, dict):
@@ -891,9 +1074,8 @@ def _build_session_resume_card(
             }
         preferred_entry = str(entry_bundle.get("preferred_entry", "")).strip()
         preferred_entry_label = str(entry_bundle.get("preferred_entry_label", "")).strip()
-        summary = _detect_pipeline_summary(project_dir)
         recommended_workflow_command = (
-            str(summary.get("recommended_command", "")).strip() or "super-dev run --resume"
+            str(summary.get("recommended_command", "")).strip() or "在宿主里说“继续当前流程”"
         )
         workflow_mode = str(summary.get("workflow_mode", "")).strip()
         if workflow_mode:
@@ -931,7 +1113,9 @@ def _build_session_resume_card(
     recent_events = load_recent_workflow_events(project_dir, limit=3) if enabled else []
     recent_hook_events = HookManager.load_recent_history(project_dir, limit=3) if enabled else []
     recent_timeline = load_recent_operational_timeline(project_dir, limit=5) if enabled else []
-    harness_summaries = summarize_operational_harnesses(project_dir, write_reports=False) if enabled else []
+    harness_summaries = (
+        summarize_operational_harnesses(project_dir, write_reports=False) if enabled else []
+    )
     operational_focus = derive_operational_focus(project_dir) if enabled else {}
     scenario_cards = list(summary.get("scenario_cards") or []) if enabled else []
     lines = []
@@ -971,9 +1155,10 @@ def _build_session_resume_card(
                 lines.append(f"必验场景: {' / '.join(str(item) for item in validation[:3])}")
         if recent_snapshots:
             first = recent_snapshots[0]
-            step = str(first.get("current_step_label", "")).strip() or str(
-                first.get("status", "")
-            ).strip()
+            step = (
+                str(first.get("current_step_label", "")).strip()
+                or str(first.get("status", "")).strip()
+            )
             updated_at = str(first.get("updated_at", "")).strip() or "-"
             lines.append(f"最近一次: {updated_at} · {step}")
         if recent_events:
@@ -991,9 +1176,10 @@ def _build_session_resume_card(
         if recent_timeline:
             latest_timeline = recent_timeline[0]
             timeline_time = str(latest_timeline.get("timestamp", "")).strip() or "-"
-            timeline_title = str(latest_timeline.get("title", "")).strip() or str(
-                latest_timeline.get("kind", "")
-            ).strip()
+            timeline_title = (
+                str(latest_timeline.get("title", "")).strip()
+                or str(latest_timeline.get("kind", "")).strip()
+            )
             timeline_message = str(latest_timeline.get("message", "")).strip() or "-"
             lines.append(f"关键时间线: {timeline_time} · {timeline_title} · {timeline_message}")
         if harness_summaries:
@@ -1034,7 +1220,7 @@ def _build_session_resume_card(
             for offset, line in enumerate(scenario_lines):
                 lines.insert(insert_at + offset, line)
         if recommended_workflow_command:
-            lines.append(f"机器侧动作: {recommended_workflow_command}")
+            lines.append(f"系统建议动作: {recommended_workflow_command}")
         lines = [line for line in lines if line]
     return {
         "enabled": enabled,
@@ -1044,8 +1230,12 @@ def _build_session_resume_card(
         "entry_prompts": entry_prompts if enabled else {},
         "session_brief_path": session_brief_path,
         "workflow_state_path": workflow_state_path,
-        "workflow_event_log_path": str(workflow_event_log_file(project_dir).resolve()) if enabled else "",
-        "hook_history_path": str(HookManager.hook_history_file(project_dir).resolve()) if enabled else "",
+        "workflow_event_log_path": (
+            str(workflow_event_log_file(project_dir).resolve()) if enabled else ""
+        ),
+        "hook_history_path": (
+            str(HookManager.hook_history_file(project_dir).resolve()) if enabled else ""
+        ),
         "framework_playbook": framework_playbook if enabled else {},
         "operational_harnesses": harness_summaries if enabled else [],
         "operational_focus": operational_focus if enabled else {},
@@ -1055,6 +1245,7 @@ def _build_session_resume_card(
         "recent_timeline": recent_timeline if enabled else [],
         "workflow_mode": workflow_mode if enabled else "",
         "workflow_mode_label": workflow_mode_display if enabled else "",
+        "flow_variant": str(summary.get("flow_variant", "")).strip() if enabled else "",
         "action_title": action_title if enabled else "",
         "action_examples": action_examples if enabled else [],
         "user_action_shortcuts": user_action_shortcuts if enabled else [],
@@ -1402,9 +1593,7 @@ def _collect_host_diagnostics(
         invalid_optional_surfaces = {
             key: value
             for key, value in surface_audit.items()
-            if value.get("exists")
-            and not value.get("required")
-            and value.get("missing_markers")
+            if value.get("exists") and not value.get("required") and value.get("missing_markers")
         }
         host_report["checks"]["contract"] = {
             "ok": not invalid_required_surfaces,
@@ -1461,13 +1650,19 @@ def _collect_host_diagnostics(
             host_report["checks"]["skill"] = {
                 "ok": skill_ok,
                 "file": skill_path,
-                "files": [str(item) for item in skill_files] if skill_files else ([skill_path] if skill_path else []),
+                "files": (
+                    [str(item) for item in skill_files]
+                    if skill_files
+                    else ([skill_path] if skill_path else [])
+                ),
                 "optional_files": [str(item) for item in optional_skill_files],
                 "compatibility_files": [str(item) for item in compatibility_skill_files],
                 "surface_available": surface_available,
-                "mode": "official-project-and-user-skill-surface"
-                if surface_available
-                else "compatibility-surface-unavailable",
+                "mode": (
+                    "official-project-and-user-skill-surface"
+                    if surface_available
+                    else "compatibility-surface-unavailable"
+                ),
             }
             if surface_available and not skill_ok:
                 host_report["ready"] = False
@@ -1511,19 +1706,33 @@ def _collect_host_diagnostics(
             required_slash_files = surface_groups["required_slash"]
             optional_slash_files = surface_groups["optional_slash"]
             compatibility_slash_files = surface_groups["compatibility_slash"]
-            tracked_slash_files = required_slash_files or optional_slash_files or compatibility_slash_files
+            tracked_slash_files = (
+                required_slash_files or optional_slash_files or compatibility_slash_files
+            )
             if tracked_slash_files:
                 project_slash_file = next(
-                    (path for path in tracked_slash_files if str(path).startswith(str(project_dir))),
+                    (
+                        path
+                        for path in tracked_slash_files
+                        if str(path).startswith(str(project_dir))
+                    ),
                     None,
                 )
                 global_slash_file = next(
-                    (path for path in tracked_slash_files if not str(path).startswith(str(project_dir))),
+                    (
+                        path
+                        for path in tracked_slash_files
+                        if not str(path).startswith(str(project_dir))
+                    ),
                     None,
                 )
                 project_ok = bool(project_slash_file and project_slash_file.exists())
                 global_ok = bool(global_slash_file and global_slash_file.exists())
-                slash_ok = all(path.exists() for path in required_slash_files) if required_slash_files else True
+                slash_ok = (
+                    all(path.exists() for path in required_slash_files)
+                    if required_slash_files
+                    else True
+                )
                 if required_slash_files:
                     scope = "project" if project_ok else ("global" if global_ok else "missing")
                 elif project_ok or global_ok:
@@ -1626,6 +1835,9 @@ def _serialize_host_usage_profile(
         "smoke_test_prompt": profile.smoke_test_prompt,
         "smoke_test_steps": list(profile.smoke_test_steps),
         "smoke_success_signal": profile.smoke_success_signal,
+        "competition_smoke_test_prompt": profile.competition_smoke_test_prompt,
+        "competition_smoke_test_steps": list(profile.competition_smoke_test_steps),
+        "competition_smoke_success_signal": profile.competition_smoke_success_signal,
         "supports_skill_slash_entry": target == "codex-cli",
         "skill_slash_entry_command": "/super-dev" if target == "codex-cli" else "",
         "skill_slash_entry_note": (
@@ -1667,6 +1879,42 @@ def _host_runtime_status_label(status: str) -> str:
     return mapping.get(status, "待真人验收")
 
 
+def _build_runtime_evidence_record(
+    *,
+    host_id: str,
+    surface_ready: bool,
+    runtime_entry: dict[str, Any],
+) -> dict[str, Any]:
+    install_mode = get_install_mode(host_id)
+    if install_mode == HostInstallMode.MANUAL:
+        integration_status = IntegrationStatus.MANUAL
+    elif surface_ready:
+        integration_status = IntegrationStatus.PROJECT_AND_GLOBAL_INSTALLED
+    else:
+        integration_status = IntegrationStatus.MISSING
+    comment = str(runtime_entry.get("comment", "")).strip()
+    evidence = HostRuntimeEvidence(
+        host_id=host_id,
+        host_display_name=get_display_name(host_id) or host_id,
+        summary="integration and runtime evidence are tracked separately",
+        integration_status=IntegrationStatusRecord(
+            status=integration_status,
+            evidence=("surface audit passed",) if surface_ready else ("surface gaps detected",),
+            checked_at=str(runtime_entry.get("updated_at", "")).strip(),
+            source="surface-audit",
+            details="surface ready" if surface_ready else "surface needs repair",
+        ),
+        runtime_status=RuntimeStatusRecord(
+            status=RuntimeStatus(str(runtime_entry.get("status", "")).strip() or "pending"),
+            evidence=(comment,) if comment else (),
+            checked_at=str(runtime_entry.get("updated_at", "")).strip(),
+            source=str(runtime_entry.get("status_source", "")).strip() or "manual",
+            details=comment,
+        ),
+    )
+    return serialize_host_runtime_evidence(evidence)
+
+
 def _update_host_runtime_validation_state(
     *,
     project_dir: Path,
@@ -1680,11 +1928,13 @@ def _update_host_runtime_validation_state(
     current = hosts.get(host, {})
     if not isinstance(current, dict):
         current = {}
+    timestamp = datetime.now(timezone.utc).isoformat()
     hosts[host] = {
         "status": status,
         "comment": comment.strip(),
         "actor": actor.strip() or "user",
-        "updated_at": current.get("updated_at", ""),
+        "updated_at": timestamp,
+        "status_source": str(current.get("status_source", "")).strip() or "manual",
     }
     file_path = save_host_runtime_validation(project_dir, {"hosts": hosts})
     updated = _load_host_runtime_validation_state(project_dir=project_dir)
@@ -1765,11 +2015,11 @@ def _build_host_runtime_validation_payload(
         entries.append(
             {
                 "host": target,
-                "checks": host.get("checks", {}) if isinstance(host.get("checks", {}), dict) else {},
+                "checks": (
+                    host.get("checks", {}) if isinstance(host.get("checks", {}), dict) else {}
+                ),
                 "missing": (
-                    host.get("missing", [])
-                    if isinstance(host.get("missing", []), list)
-                    else []
+                    host.get("missing", []) if isinstance(host.get("missing", []), list) else []
                 ),
                 "suggestions": (
                     host.get("suggestions", [])
@@ -1777,14 +2027,24 @@ def _build_host_runtime_validation_payload(
                     else []
                 ),
                 "surface_ready": surface_ready,
+                "integration_status": (
+                    "project_and_global_installed" if surface_ready else "repair_needed"
+                ),
                 "ready_for_delivery": surface_ready and runtime_status == "passed",
                 "blocking_reason": blocking_reason,
                 "recommended_action": recommended_action,
+                "runtime_status": runtime_status,
+                "runtime_status_label": _host_runtime_status_label(runtime_status),
                 "manual_runtime_status": runtime_status,
                 "manual_runtime_status_label": _host_runtime_status_label(runtime_status),
                 "manual_runtime_comment": str(runtime_entry.get("comment", "")).strip(),
                 "manual_runtime_actor": str(runtime_entry.get("actor", "")).strip(),
                 "manual_runtime_updated_at": str(runtime_entry.get("updated_at", "")).strip(),
+                "runtime_evidence": _build_runtime_evidence_record(
+                    host_id=target,
+                    surface_ready=surface_ready,
+                    runtime_entry=runtime_entry,
+                ),
                 "final_trigger": usage.get("final_trigger", "-"),
                 "host_protocol_mode": usage.get("host_protocol_mode", "-"),
                 "host_protocol_summary": usage.get("host_protocol_summary", "-"),
@@ -1799,9 +2059,7 @@ def _build_host_runtime_validation_payload(
                 "runtime_checklist": _host_runtime_checklist(
                     target, usage, project_dir=project_dir
                 ),
-                "pass_criteria": _host_runtime_pass_criteria(
-                    target, project_dir=project_dir
-                ),
+                "pass_criteria": _host_runtime_pass_criteria(target, project_dir=project_dir),
                 "flow_probe": build_host_flow_probe(target),
                 "resume_probe_prompt": _build_resume_probe_prompt(project_dir, target, usage),
                 "resume_checklist": _host_resume_checklist(target, project_dir=project_dir),
@@ -2321,15 +2579,20 @@ def _build_policy_response(
 
 
 # ==================== API 路由 ====================
+# NOTE: Routes below use /api/ prefix for backward compatibility.
+# The canonical prefix is /api/v1/ — see v1_router above.
 
 
 @app.get("/api/health")
+@v1_router.get("/health")
+@app.get("/health")  # Alias for k8s probes and load balancers
 async def health_check():
     """健康检查"""
     return {"status": "healthy", "version": __version__}
 
 
 @app.get("/api/config")
+@v1_router.get("/config")
 async def get_config(project_dir: str = ".") -> dict:
     """获取项目配置"""
     try:
@@ -2495,6 +2758,7 @@ async def update_policy(
 
 
 @app.post("/api/init", dependencies=[Depends(get_api_key)])
+@v1_router.post("/init", dependencies=[Depends(get_api_key)])
 async def init_project(request: ProjectInitRequest, project_dir: str = ".") -> dict:
     """初始化项目"""
     try:
@@ -2556,6 +2820,7 @@ async def update_config(updates: dict, project_dir: str = ".") -> dict:
 
 
 @app.post("/api/workflow/run", dependencies=[Depends(get_api_key)])
+@v1_router.post("/workflow/run", dependencies=[Depends(get_api_key)])
 async def run_workflow(
     request: WorkflowRunRequest, background_tasks: BackgroundTasks, project_dir: str = "."
 ) -> WorkflowRunResponse:
@@ -2775,8 +3040,10 @@ async def run_workflow(
 
 
 @app.get("/api/workflow/status/{run_id}")
+@v1_router.get("/workflow/status/{run_id}")
 async def get_workflow_status(run_id: str, project_dir: str = ".") -> dict:
     """获取工作流状态"""
+    run_id = _validate_run_id(run_id)
     project_dir_path = _validate_project_dir(project_dir)
     run = _get_run_state(run_id, project_dir_path)
     if run is None:
@@ -2789,6 +3056,7 @@ async def get_workflow_status(run_id: str, project_dir: str = ".") -> dict:
 
 
 @app.get("/api/workflow/docs-confirmation")
+@v1_router.get("/workflow/docs-confirmation")
 async def get_workflow_docs_confirmation(project_dir: str = ".") -> dict:
     """获取三文档确认状态。"""
     project_dir_path = _validate_project_dir(project_dir)
@@ -2806,6 +3074,7 @@ async def get_workflow_docs_confirmation(project_dir: str = ".") -> dict:
 
 
 @app.post("/api/workflow/docs-confirmation", dependencies=[Depends(get_api_key)])
+@v1_router.post("/workflow/docs-confirmation", dependencies=[Depends(get_api_key)])
 async def update_workflow_docs_confirmation(
     request: WorkflowDocsConfirmationRequest,
     project_dir: str = ".",
@@ -2831,6 +3100,7 @@ async def update_workflow_docs_confirmation(
 
 
 @app.get("/api/workflow/preview-confirmation")
+@v1_router.get("/workflow/preview-confirmation")
 async def get_workflow_preview_confirmation(project_dir: str = ".") -> dict:
     """获取前端预览确认状态。"""
     project_dir_path = _validate_project_dir(project_dir)
@@ -2848,6 +3118,7 @@ async def get_workflow_preview_confirmation(project_dir: str = ".") -> dict:
 
 
 @app.post("/api/workflow/preview-confirmation", dependencies=[Depends(get_api_key)])
+@v1_router.post("/workflow/preview-confirmation", dependencies=[Depends(get_api_key)])
 async def update_workflow_preview_confirmation(
     request: WorkflowPreviewConfirmationRequest,
     project_dir: str = ".",
@@ -3001,6 +3272,7 @@ async def update_workflow_quality_revision(
 @app.post("/api/workflow/cancel/{run_id}", dependencies=[Depends(get_api_key)])
 async def cancel_workflow(run_id: str, project_dir: str = ".") -> dict:
     """取消工作流运行"""
+    run_id = _validate_run_id(run_id)
     project_dir_path = _validate_project_dir(project_dir)
     run = _get_run_state(run_id, project_dir_path)
     if run is None:
@@ -3173,6 +3445,7 @@ async def download_workflow_ui_review_screenshot(
 
 
 @app.get("/api/experts")
+@v1_router.get("/experts")
 async def list_experts() -> dict:
     """列出可用专家"""
     return {"experts": list_expert_catalog()}
@@ -3236,6 +3509,7 @@ async def get_expert_advice_content(file_name: str, project_dir: str = ".") -> d
 
 
 @app.get("/api/phases")
+@v1_router.get("/phases")
 async def list_phases() -> dict:
     """列出工作流阶段"""
     phases = [
@@ -3500,6 +3774,11 @@ async def update_hosts_runtime_validation(
         "comment": str(host_entry.get("comment", "")).strip(),
         "actor": str(host_entry.get("actor", "")).strip(),
         "updated_at": str(host_entry.get("updated_at", "")).strip(),
+        "runtime_evidence": _build_runtime_evidence_record(
+            host_id=request.host,
+            surface_ready=True,
+            runtime_entry=host_entry,
+        ),
         "file_path": str(file_path),
     }
 
@@ -4288,6 +4567,9 @@ def _mount_frontend_if_present() -> None:
 
     app.mount("/", StaticFiles(directory=str(frontend_path), html=True), name="frontend")
 
+
+# Mount v1 router
+app.include_router(v1_router)
 
 _mount_frontend_if_present()
 

@@ -6,6 +6,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from super_dev import __version__
+
 PYTHON = sys.executable
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -36,6 +38,8 @@ def test_full_init_to_status_flow():
         )
         assert result.returncode == 0
         assert (project / "super-dev.yaml").exists()
+        assert not (project / ".claude").exists()
+        assert not (project / ".cursor").exists()
 
         # 2. Status
         result = subprocess.run(
@@ -103,4 +107,40 @@ def test_full_init_to_status_flow():
             env=_subprocess_env(),
         )
         assert result.returncode == 0
-        assert "2.3.3" in result.stdout
+        assert __version__ in result.stdout
+
+
+def test_root_help_surfaces_public_entrypoints_only():
+    """Test: root help shows the public two-command model by default."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        result = subprocess.run(
+            [PYTHON, "-m", "super_dev.cli", "--help"],
+            cwd=tmpdir,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env=_subprocess_env(),
+        )
+        assert result.returncode == 0
+        assert "Super Dev Public Help" in result.stdout
+        assert "super-dev           打开宿主安装 / 接入引导" in result.stdout
+        assert "super-dev update    更新到最新版本" in result.stdout
+        assert "内部维护 / 治理命令请使用: super-dev --help-all" in result.stdout
+        assert "可用命令:" not in result.stdout
+
+
+def test_root_help_all_exposes_internal_command_index():
+    """Test: help-all still exposes the internal command catalog."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        result = subprocess.run(
+            [PYTHON, "-m", "super_dev.cli", "--help-all"],
+            cwd=tmpdir,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env=_subprocess_env(),
+        )
+        assert result.returncode == 0
+        assert "可用命令:" in result.stdout
+        assert "onboard             首次接入向导" in result.stdout
+        assert "resume              回到当前仓库的 Super Dev 流程" in result.stdout

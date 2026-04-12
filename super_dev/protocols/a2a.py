@@ -128,7 +128,7 @@ _ADVICE_OUTPUT = {
     "required": ["recommendations"],
 }
 
-_VERSION = "2.3.4"
+_VERSION = "2.3.5"
 
 
 class SuperDevA2AProvider:

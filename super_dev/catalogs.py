@@ -10,6 +10,8 @@ import contextlib
 import os
 from pathlib import Path
 
+from .host_adapters import get_pass_criteria, get_resume_checklist, get_runtime_checklist
+
 PLATFORM_CATALOG: list[dict[str, str]] = [
     {"id": "web", "name": "Web 应用"},
     {"id": "mobile", "name": "H5 / APP"},
@@ -122,12 +124,18 @@ LANGUAGE_PREFERENCE_CATALOG: list[dict[str, str]] = [
 ]
 
 PLATFORM_IDS: tuple[str, ...] = tuple(item["id"] for item in PLATFORM_CATALOG)
-PIPELINE_FRONTEND_TEMPLATE_IDS: tuple[str, ...] = tuple(item["id"] for item in PIPELINE_FRONTEND_TEMPLATE_CATALOG)
-FULL_FRONTEND_TEMPLATE_IDS: tuple[str, ...] = tuple(item["id"] for item in FULL_FRONTEND_TEMPLATE_CATALOG)
+PIPELINE_FRONTEND_TEMPLATE_IDS: tuple[str, ...] = tuple(
+    item["id"] for item in PIPELINE_FRONTEND_TEMPLATE_CATALOG
+)
+FULL_FRONTEND_TEMPLATE_IDS: tuple[str, ...] = tuple(
+    item["id"] for item in FULL_FRONTEND_TEMPLATE_CATALOG
+)
 PIPELINE_BACKEND_IDS: tuple[str, ...] = tuple(item["id"] for item in BACKEND_TEMPLATE_CATALOG)
 DOMAIN_IDS: tuple[str, ...] = tuple(item["id"] for item in DOMAIN_CATALOG)
 CICD_PLATFORM_IDS: tuple[str, ...] = tuple(item["id"] for item in CICD_PLATFORM_CATALOG)
-CICD_PLATFORM_TARGET_IDS: tuple[str, ...] = tuple(item for item in CICD_PLATFORM_IDS if item != "all")
+CICD_PLATFORM_TARGET_IDS: tuple[str, ...] = tuple(
+    item for item in CICD_PLATFORM_IDS if item != "all"
+)
 
 HOST_TOOL_CATALOG: list[dict[str, str]] = [
     {"id": "antigravity", "name": "Antigravity"},
@@ -151,6 +159,7 @@ HOST_TOOL_CATALOG: list[dict[str, str]] = [
     {"id": "qoder", "name": "Qoder"},
     {"id": "trae", "name": "Trae"},
     {"id": "openclaw", "name": "OpenClaw"},
+    {"id": "workbuddy", "name": "WorkBuddy"},
 ]
 
 HOST_TOOL_IDS: tuple[str, ...] = tuple(item["id"] for item in HOST_TOOL_CATALOG)
@@ -162,6 +171,7 @@ HOST_TOOL_ALIASES: dict[str, list[str]] = {
     "cursor-cli": ["cursor-agent"],
     "gemini-cli": ["gemini"],
     "opencode": ["open-code"],
+    "workbuddy": ["work-buddy", "腾讯虾"],
     "vscode-copilot": ["copilot-chat", "vscode"],
 }
 
@@ -184,6 +194,7 @@ PRIMARY_IDE_HOST_TOOL_IDS: tuple[str, ...] = (
     "kiro",
     "qoder",
     "codebuddy",
+    "workbuddy",
     "trae",
     "vscode-copilot",
     "roo-code",
@@ -209,8 +220,7 @@ CLI_HOST_TOOL_IDS: tuple[str, ...] = (
 )
 
 HOST_TOOL_CATEGORY_MAP: dict[str, str] = {
-    host_id: ("cli" if host_id in CLI_HOST_TOOL_IDS else "ide")
-    for host_id in HOST_TOOL_IDS
+    host_id: ("cli" if host_id in CLI_HOST_TOOL_IDS else "ide") for host_id in HOST_TOOL_IDS
 }
 
 HOST_RUNTIME_VALIDATION_OVERRIDES: dict[str, dict[str, list[str]]] = {
@@ -262,12 +272,16 @@ HOST_RUNTIME_VALIDATION_OVERRIDES: dict[str, dict[str, list[str]]] = {
             "确认当前 CodeBuddy CLI 会话就在目标项目目录中，再触发 `/super-dev`。",
             "确认项目级 `.codebuddy/commands/`、`.codebuddy/skills/` 与兼容 `AGENTS.md` 都被当前会话加载。",
             "确认文档返工与确认门阶段仍然保持在 Super Dev 流程内。",
+            "比赛模式验收时，确认 `/super-dev-seeai` 或 `super-dev-seeai:` 会进入半小时时间盒，而不是回到标准长链路。",
+            "确认比赛模式会按 P0/P1/P2 控制范围，优先保住主演示路径，再补 wow 点。",
         ],
         "pass_criteria": [
             "CodeBuddy CLI 真实读取了项目级 commands、skills 与兼容规则面。",
+            "CodeBuddy CLI 的 SEEAI 入口会进入 compact docs + compact spec + full-stack sprint 的比赛合同。",
         ],
         "resume_checklist": [
             "CodeBuddy CLI 恢复时要确认仍在目标项目目录，并重新加载 `.codebuddy/commands/` 与 skills。",
+            "若正在 SEEAI 比赛模式中恢复，确认继续语句仍回到当前比赛合同，而不是重新开题。",
         ],
     },
     "codebuddy": {
@@ -275,12 +289,16 @@ HOST_RUNTIME_VALIDATION_OVERRIDES: dict[str, dict[str, list[str]]] = {
             "确认当前 CodeBuddy IDE Agent Chat 绑定的是目标项目，而不是其他工作区。",
             "确认 `.codebuddy/commands/`、`.codebuddy/agents/` 与 `.codebuddy/skills/` 已在当前会话真实生效。",
             "确认用户继续说“改一下 / 补充 / 继续改”时，CodeBuddy 仍然停留在当前确认门内。",
+            "比赛模式验收时，确认 `/super-dev-seeai` 或 `super-dev-seeai:` 进入的是 30 分钟比赛链路，而不是标准 preview gate 流程。",
+            "确认比赛模式下固定同一个 Agent Chat 仍能持续沿用当前上下文，不因子会话切换而丢失范围控制。",
         ],
         "pass_criteria": [
             "CodeBuddy IDE 在目标工作区真实读取了 commands、agents 与 skills。",
+            "CodeBuddy IDE 的 SEEAI 入口会保留 compact 文档确认门，并在 Spec 后直接进入一体化快速开发。",
         ],
         "resume_checklist": [
             "CodeBuddy IDE 恢复时要确认 Agent Chat 仍在目标项目，并继续当前确认门而不是重新开题。",
+            "若当前是 SEEAI 比赛模式，恢复后仍应保持在同一个比赛冲刺会话里，而不是切回标准模式。",
         ],
     },
     "codex-cli": {
@@ -485,11 +503,37 @@ HOST_RUNTIME_VALIDATION_OVERRIDES: dict[str, dict[str, list[str]]] = {
             "Windsurf 恢复时要确认 Agent Chat / Workflow 已重新加载当前项目的 rules、workflow 与 skills。",
         ],
     },
+    "openclaw": {
+        "runtime_checklist": [
+            "确认当前 OpenClaw Agent 会话绑定的是目标项目工作区，并且 plugin 安装后已经重启 Gateway 或新开会话。",
+            "确认 `.openclaw/rules/super-dev.md`、`.openclaw/commands/super-dev.md`、`.openclaw/commands/super-dev-seeai.md` 与 `~/.openclaw/skills/` 已被当前会话真实加载。",
+            "确认比赛模式优先可通过 `/super-dev-seeai` 或 `super-dev-seeai:` 进入；如果 slash 面板未刷新，也不会阻塞比赛入口。",
+            "确认比赛模式中段不会频繁调用 Tool 打断开发，而是在 sprint 末段再统一做质量/状态收口。",
+        ],
+        "pass_criteria": [
+            "OpenClaw 在目标工作区真实读取了 rules、commands 与 skills，且标准模式与 SEEAI 比赛模式都能进入同一条 Super Dev 合同体系。",
+            "OpenClaw 的 SEEAI 入口会保留 compact 文档确认门，并在 Spec 后直接进入一体化快速开发与最终 polish。",
+        ],
+        "resume_checklist": [
+            "OpenClaw 恢复时要确认重新打开的 Agent 会话仍绑定目标项目，并重新加载 `.openclaw/commands/` 与 skills。",
+            "若当前处于 SEEAI 比赛模式，恢复后仍应回到当前比赛冲刺，而不是重新开始普通流水线。",
+        ],
+    },
 }
 
 
 def host_runtime_validation_overrides(target: str) -> dict[str, list[str]]:
+    adapter_runtime_checklist = list(get_runtime_checklist(target))
+    adapter_pass_criteria = list(get_pass_criteria(target))
+    adapter_resume_checklist = list(get_resume_checklist(target))
+    if adapter_runtime_checklist or adapter_pass_criteria or adapter_resume_checklist:
+        return {
+            "runtime_checklist": adapter_runtime_checklist,
+            "pass_criteria": adapter_pass_criteria,
+            "resume_checklist": adapter_resume_checklist,
+        }
     return HOST_RUNTIME_VALIDATION_OVERRIDES.get(target, {})
+
 
 HOST_COMMAND_CANDIDATES: dict[str, list[str]] = {
     "antigravity": ["antigravity"],
@@ -511,6 +555,7 @@ HOST_COMMAND_CANDIDATES: dict[str, list[str]] = {
     "openclaw": ["openclaw", "openclaw-cli"],
     "qoder": ["qoder"],
     "trae": ["trae"],
+    "workbuddy": ["workbuddy"],
 }
 
 HOST_PATH_PATTERNS: dict[str, list[str]] = {
@@ -598,6 +643,13 @@ HOST_PATH_PATTERNS: dict[str, list[str]] = {
         "%LOCALAPPDATA%/Programs/Microsoft VS Code/Code.exe",
         "%PROGRAMFILES%/Microsoft VS Code/Code.exe",
         "%PROGRAMFILES(X86)%/Microsoft VS Code/Code.exe",
+    ],
+    "workbuddy": [
+        "~/Applications/WorkBuddy.app",
+        "/Applications/WorkBuddy.app",
+        "%LOCALAPPDATA%/Programs/WorkBuddy/WorkBuddy.exe",
+        "%PROGRAMFILES%/WorkBuddy/WorkBuddy.exe",
+        "%PROGRAMFILES(X86)%/WorkBuddy/WorkBuddy.exe",
     ],
 }
 
@@ -783,8 +835,16 @@ def host_path_override_guide(host_id: str) -> dict[str, object]:
         "windows_example": windows_example,
         "unix_export": f"export {primary_key}={unix_example}" if primary_key else "",
         "powershell_export": f"$env:{primary_key}='{windows_example}'" if primary_key else "",
-        "hint": f"如果装在自定义目录，先设置 `{primary_key}=<安装路径>` 再重试。" if primary_key else "",
-        "supported_detection_sources": ["命令命中", "默认安装路径", "自定义路径覆盖", "Windows 注册信息", "Windows shim / 包管理器目录"],
+        "hint": (
+            f"如果装在自定义目录，先设置 `{primary_key}=<安装路径>` 再重试。" if primary_key else ""
+        ),
+        "supported_detection_sources": [
+            "命令命中",
+            "默认安装路径",
+            "自定义路径覆盖",
+            "Windows 注册信息",
+            "Windows shim / 包管理器目录",
+        ],
     }
 
 

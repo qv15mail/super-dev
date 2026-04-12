@@ -6,7 +6,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-SUPER_DEV_VERSION = "2.3.4"
+SUPER_DEV_VERSION = "2.3.5"
+SEEAI_SKILL_NAME = "super-dev-seeai"
 
 
 @dataclass
@@ -79,7 +80,7 @@ class SkillFrontmatter:
                 "e=p.rsplit('.',1)[-1]if '.' in p else'';"
                 "print(json.dumps({'decision':'block','reason':'Super Dev: emoji detected in '+e+' file, use icon library'}"
                 "if e in('tsx','ts','jsx','js','vue','svelte')and bool(re.search(r'[\\\\u2600-\\\\u27BF\\\\U0001F300-\\\\U0001FAFF]',c))else{}))"
-                '\\"\"'
+                '\\""'
             )
             lines.append("          timeout: 5")
         elif host == "codex-cli":
@@ -128,6 +129,10 @@ class SuperDevSkillContent:
 
     def render_body(self) -> str:
         """Return the full Markdown body (everything below the frontmatter)."""
+        if self.skill_name == SEEAI_SKILL_NAME:
+            if self.host == "codex-cli":
+                return self._render_seeai_codex_body()
+            return self._render_seeai_generic_body()
         if self.host == "codex-cli":
             return self._render_codex_body()
         return self._render_generic_body()
@@ -159,6 +164,32 @@ class SuperDevSkillContent:
         ]
         return "\n\n".join(sections) + "\n"
 
+    def _render_seeai_codex_body(self) -> str:
+        sections = [
+            "# Super Dev SEEAI - 赛事极速版 (Codex)",
+            self._section_critical_reminders(),
+            self._section_seeai_activation_rules_codex(),
+            self._section_seeai_trigger_codex(),
+            self._section_seeai_runtime_contract_codex(),
+            self._section_seeai_first_response_contract(),
+            self._section_seeai_first_response_template(),
+            self._section_seeai_compact_doc_template(),
+            self._section_seeai_tech_stack_matrix(),
+            self._section_seeai_game_templates(),
+            self._section_seeai_page_templates(),
+            self._section_seeai_competition_doc_templates(),
+            self._section_seeai_project_archetypes(),
+            self._section_seeai_archetype_detection_hints(),
+            self._section_seeai_quality_floor(),
+            self._section_seeai_competition_tools(),
+            self._section_seeai_required_behavior_codex(),
+            self._section_seeai_session_continuity(),
+            self._section_implementation_closure(),
+            self._section_seeai_never_do(),
+            self._section_seeai_flow_contract(),
+        ]
+        return "\n\n".join(sections) + "\n"
+
     def _section_activation_rules_codex(self) -> str:
         return (
             "## Direct Activation Rule（强制）\n"
@@ -185,6 +216,38 @@ class SuperDevSkillContent:
             "- Do not treat it as ordinary chat.\n"
             "- 当前宿主负责调用模型、工具、终端与实际代码修改。\n"
             "- Super Dev 不是大模型平台，也不提供自己的代码生成 API。"
+        )
+
+    def _section_seeai_activation_rules_codex(self) -> str:
+        return (
+            "## Direct Activation Rule（强制）\n"
+            "\n"
+            "- If this skill is invoked, Super Dev SEEAI competition mode is already active.\n"
+            "- Do not spend a turn explaining the skill or deciding whether to enter the workflow.\n"
+            "- Treat this as a distinct fast-delivery contract optimized for time-boxed competition work.\n"
+            "- Keep quality, but compress the path aggressively after Spec.\n"
+        )
+
+    def _section_seeai_trigger_codex(self) -> str:
+        return (
+            "## 触发方式（强制）\n"
+            "\n"
+            "- Treat `super-dev-seeai: <需求描述>` and `super-dev-seeai：<需求描述>` as the AGENTS-driven natural-language SEEAI entry.\n"
+            "- Treat `$super-dev-seeai` as the explicit Codex CLI Skill entry for the competition mode.\n"
+            "- In Codex App/Desktop, selecting `/super-dev-seeai` from the slash Skill list is the official app entry.\n"
+            "- Do not route SEEAI requests back to ordinary chat or to the full standard Super Dev contract.\n"
+        )
+
+    def _section_seeai_runtime_contract_codex(self) -> str:
+        return (
+            "## Runtime Contract（强制）\n"
+            "\n"
+            "- Super Dev SEEAI is still Super Dev governance, but with a competition-fast contract.\n"
+            "- The host remains responsible for model execution, tools, search, terminal, and edits.\n"
+            "- Use Codex native web/search/edit/terminal capabilities for research, building, and validation.\n"
+            "- Keep local `super-dev` CLI for governance artifacts only when it materially helps the fast path.\n"
+            "- The mode is designed for 30-minute showcase builds such as a polished landing page, mini-game, or focused demo tool.\n"
+            "- Default decision rule: protect one demo path first, one wow point second, and only then add extra engineering depth.\n"
         )
 
     def _section_runtime_contract_codex(self) -> str:
@@ -242,6 +305,24 @@ class SuperDevSkillContent:
             " and only then continue."
         )
 
+    def _section_seeai_required_behavior_codex(self) -> str:
+        return (
+            "## Required behavior\n"
+            "\n"
+            "1. First reply: say Super Dev SEEAI mode is active and the current phase is `research`.\n"
+            "2. Use a strict timebox: 0-4 min research, 4-8 min compact docs, 8-10 min confirmation, 10-12 min compact Spec, 12-27 min build sprint, 27-30 min polish/handoff.\n"
+            "3. Run a fast research pass and write `output/*-research.md` as a real file.\n"
+            "4. Draft compact `output/*-prd.md`, `output/*-architecture.md`, and `output/*-uiux.md` in the same session and save them as real files.\n"
+            "5. Scope the work in P0/P1/P2 order: P0 demo path, P1 wow point, P2 only-if-time-allows extras.\n"
+            "6. Stop after the three compact core documents and wait for explicit confirmation.\n"
+            "7. Only after confirmation, create a compact Spec / tasks breakdown.\n"
+            "8. After Spec, move directly into an integrated full-stack build sprint: frontend first, backend if needed, then final polish.\n"
+            "9. If backend or integration work threatens the schedule, degrade to mock data, local state, or a simulated high-fidelity demo path instead of missing the showcase.\n"
+            "10. Do not require a separate preview confirmation gate in SEEAI mode.\n"
+            "11. End with a concise demo summary, key亮点, and how to present the result quickly.\n"
+            "12. When writing or refreshing `.super-dev/workflow-state.json`, persist `flow_variant = seeai` so resume/continue stays in SEEAI mode.\n"
+        )
+
     # ------------------------------------------------------------------
     # Generic body (all other hosts)
     # ------------------------------------------------------------------
@@ -267,6 +348,30 @@ class SuperDevSkillContent:
             self._section_error_recovery(),
             self._section_agent_teams(),
             self._section_flow_contract(),
+        ]
+        return "\n\n".join(sections) + "\n"
+
+    def _render_seeai_generic_body(self) -> str:
+        sections = [
+            "# Super Dev SEEAI - 赛事极速版",
+            self._section_critical_reminders(),
+            self._section_seeai_trigger_generic(),
+            self._section_seeai_runtime_contract_generic(),
+            self._section_seeai_first_response_contract(),
+            self._section_seeai_first_response_template(),
+            self._section_seeai_compact_doc_template(),
+            self._section_seeai_tech_stack_matrix(),
+            self._section_seeai_game_templates(),
+            self._section_seeai_page_templates(),
+            self._section_seeai_competition_doc_templates(),
+            self._section_seeai_project_archetypes(),
+            self._section_seeai_archetype_detection_hints(),
+            self._section_seeai_quality_floor(),
+            self._section_seeai_competition_tools(),
+            self._section_seeai_session_continuity(),
+            self._section_implementation_closure(),
+            self._section_seeai_never_do(),
+            self._section_seeai_flow_contract(),
         ]
         return "\n\n".join(sections) + "\n"
 
@@ -346,6 +451,21 @@ class SuperDevSkillContent:
             "**规则 3 — 无参数 → 运行 `super-dev` 查看当前状态并继续**"
         )
 
+    def _section_seeai_trigger_generic(self) -> str:
+        return (
+            "## 触发方式与命令路由（强制）\n"
+            "\n"
+            "用户在宿主内使用比赛专用入口：`/super-dev-seeai <需求>` 或 `super-dev-seeai: <需求>` / `super-dev-seeai：<需求>`。\n"
+            "该入口进入 Super Dev SEEAI 赛事极速版，而不是标准 Super Dev 长流程。\n"
+            "\n"
+            "### SEEAI 模式行为\n"
+            "- 保留 research / 三文档 / docs confirm / spec。\n"
+            "- 文档必须压缩成比赛短版，不走标准重治理模板。\n"
+            "- Spec 确认后直接进入前后端一体化快速开发，不再拆 preview confirm。\n"
+            "- 最终必须给出一个可演示、可讲解、视觉完成度够高的作品。\n"
+            "- 默认目标不是“工程最完整”，而是“在评审时间内最好看、最好讲、最容易演示”。\n"
+        )
+
     def _section_runtime_contract_generic(self) -> str:
         return (
             "## Runtime Contract（强制）\n"
@@ -362,6 +482,18 @@ class SuperDevSkillContent:
             "优先使用宿主自身的 browse/search/terminal/edit 能力。\n"
             '- 不要等待用户解释"Super Dev 是什么"；'
             "你要把它理解为当前项目已经安装好的开发治理协议。"
+        )
+
+    def _section_seeai_runtime_contract_generic(self) -> str:
+        return (
+            "## Runtime Contract（强制）\n"
+            "\n"
+            "- Super Dev SEEAI 是比赛专用的快速工作版，目标是在极短时间内交付高完成度展示作品。\n"
+            "- 当前宿主负责调用模型、联网、终端、编辑器与实际代码修改。\n"
+            "- 需要研究、设计、编码、运行、调试时，优先使用宿主自身能力。\n"
+            "- 文档与 Spec 仍然保留，但必须压缩，避免标准模式的重流程拖慢节奏。\n"
+            "- 研究和文档不是为了治理完美，而是为了锁定作品类型、wow 点、实现边界和时间盒取舍。\n"
+            "- 默认遵循一个简单优先级：先保住可演示主路径，再做 wow 点，最后才做额外工程深度。\n"
         )
 
     def _section_cli_command_guide(self) -> str:
@@ -483,6 +615,674 @@ class SuperDevSkillContent:
             "- 架构不合理 -> 先更新 `output/*-architecture.md`，再调整 Spec/实现。\n"
             "- 质量不达标 -> 先修复，重新执行 quality gate + proof-pack。\n"
             "- 启用 policy 时不得默认建议降低治理强度。"
+        )
+
+    def _section_seeai_first_response_contract(self) -> str:
+        return (
+            "## 首轮响应契约（强制）\n"
+            "\n"
+            "- 首次触发时第一轮回复必须说明：Super Dev SEEAI 赛事模式已激活，当前阶段是 `research`。\n"
+            "- 先快速理解需求，再做极短顺位思考：作品类型、评委 wow 点、必须完成项、主动放弃项。\n"
+            "- 如果用户需求模糊，最多只补 1 个关键问题；能合理假设时直接给出假设并推进，不展开长澄清。\n"
+            "- 先完成 fast research，再写 compact research / PRD / architecture / UIUX。\n"
+            "- 文档确认后创建 compact Spec，然后直接进入 full-stack sprint。\n"
+            "- 不要在 SEEAI 模式里重新切回标准 Super Dev 的 preview confirm / 长质量闭环。\n"
+            "- 若会落盘 workflow state，必须把 `flow_variant = seeai` 一起写入。\n"
+        )
+
+    def _section_seeai_first_response_template(self) -> str:
+        return (
+            "## 首轮输出模板（强制）\n"
+            "\n"
+            "SEEAI 首轮回复不要展开成长讨论。优先用极短结构锁定范围，然后立即进入 research：\n"
+            "\n"
+            "- `作品类型`：官网类 / 小游戏类 / 工具类，三选一。\n"
+            "- `评委 wow 点`：本次成品最值得被记住的一个亮点。\n"
+            "- `P0 主路径`：半小时内必须真正跑通的一条演示路径。\n"
+            "- `主动放弃项`：本轮明确不做的部分，避免范围失控。\n"
+            "- `关键假设`：只有在用户没说清时才写，最多 1 到 2 条。\n"
+            "\n"
+            "如果需求不缺关键信息，就不要反问。直接按这个模板给出判断，然后开始 fast research 和 compact 文档。"
+        )
+
+    def _section_seeai_compact_doc_template(self) -> str:
+        return (
+            "## 比赛短文档模板（强制）\n"
+            "\n"
+            "SEEAI 的文档必须真实落盘到 `output/*`，但只保留比赛需要的信息：\n"
+            "\n"
+            "- `research.md`：题目理解、目标观众、参考风格、评委 wow 点、风险与主动放弃项。\n"
+            "- `prd.md`：作品目标、P0 主路径、P1 wow 点、P2 可选项、非目标。\n"
+            "- `architecture.md`：页面/玩法主循环、技术栈、数据流、是否需要最小后端、降级方案。\n"
+            "- `uiux.md`：视觉关键词、主 KV、页面骨架、关键交互、动效重点、设计 token。\n"
+            "- `spec`：只保留一个 sprint 清单，按 `P0 -> P1 -> polish` 排序。\n"
+            "\n"
+            "### 推荐标题骨架\n"
+            "- `research.md`：`# 题目理解` `# 参考风格` `# Wow 点` `# 主动放弃项`\n"
+            "- `prd.md`：`# 作品目标` `# P0 主路径` `# P1 Wow 点` `# P2 可选项` `# 非目标`\n"
+            "- `architecture.md`：`# 主循环` `# 技术栈` `# 数据流` `# 最小后端` `# 降级方案`\n"
+            "- `uiux.md`：`# 视觉方向` `# 首屏/主界面` `# 关键交互` `# 动效重点` `# 设计 Token`\n"
+            "- `spec`：`# Sprint Checklist` 下只列 `P0`、`P1`、`Polish`\n"
+            "\n"
+            "不要把文档写成长方案、长竞品分析或完整工程规划。文档存在的目的，是帮你更快做出更像成品的作品。"
+        )
+
+    def _section_seeai_tech_stack_matrix(self) -> str:
+        return (
+            "## 技术栈快速决策矩阵（核心）\n"
+            "\n"
+            "收到题目后，根据作品类型**立刻**选择技术栈。不纠结，不混搭。\n"
+            "\n"
+            "### 决策树\n"
+            "\n"
+            "```\n"
+            "题目类型？\n"
+            "|-- 小游戏 / 互动动画\n"
+            "|   |-- 纯2D休闲 -> HTML Canvas + Vanilla JS（零依赖，开箱即用）\n"
+            "|   |-- 复杂2D游戏 -> Phaser.js（场景管理、物理引擎、精灵动画一体化）\n"
+            "|   `-- 3D/沉浸感 -> Three.js + React Three Fiber（如果用React）\n"
+            "|\n"
+            "|-- 官网 / 展示页 / 落地页\n"
+            "|   |-- 纯静态展示 -> HTML + Tailwind CDN + GSAP/Framer Motion\n"
+            "|   |-- 需要路由/多页 -> React + Vite + Tailwind + Framer Motion\n"
+            "|   `-- 需要SSR/SEO -> Next.js + Tailwind + Framer Motion\n"
+            "|\n"
+            "|-- 工具 / 应用\n"
+            "|   |-- 纯前端工具 -> React + Vite + Tailwind + Zustand\n"
+            "|   |-- 需要后端API -> React前端 + Express/Fastify后端\n"
+            "|   `-- 实时协作 -> React + Socket.io / WebSocket\n"
+            "|\n"
+            "`-- 数据看板 / 可视化\n"
+            "    |-- 简单图表 -> React + Recharts / Chart.js\n"
+            "    |-- 复杂交互 -> React + D3.js\n"
+            "    `-- 实时数据 -> React + ECharts + WebSocket\n"
+            "```\n"
+            "\n"
+            "### 赛事推荐组合（已验证能30分钟内交付）\n"
+            "\n"
+            "| 组合 | 适用场景 | CDN快速启动 | 需要构建 |\n"
+            "|------|---------|------------|---------|\n"
+            "| **HTML+Tailwind CDN+GSAP** | 展示页/官网 | 是 | 否 |\n"
+            "| **React+Vite+Tailwind+Framer** | 工具/应用/多页 | 否 | 是 |\n"
+            "| **HTML Canvas+Vanilla JS** | 2D小游戏/互动 | 是 | 否 |\n"
+            "| **Phaser.js** | 复杂2D游戏 | 是 | 否 |\n"
+            "| **Three.js** | 3D展示/沉浸 | 是 | 否 |\n"
+            "\n"
+            "**赛事铁律**: 能用 CDN 零构建的优先用 CDN，省掉构建和配置时间。\n"
+        )
+
+    def _section_seeai_game_templates(self) -> str:
+        return (
+            "## 小游戏开发模板库（核心）\n"
+            "\n"
+            "### 模板1: HTML Canvas 游戏骨架\n"
+            "适用于所有 2D 休闲游戏（贪吃蛇、打砖块、弹球、飞机大战等）。\n"
+            "骨架包含：Canvas 初始化、游戏主循环、HUD、菜单/结束 Overlay、localStorage 最高分。\n"
+            "\n"
+            "```html\n"
+            "<!DOCTYPE html>\n"
+            '<html lang="zh-CN">\n'
+            "<head>\n"
+            '  <meta charset="UTF-8">\n'
+            '  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
+            "  <title>GAME_TITLE</title>\n"
+            "  <style>\n"
+            "    * { margin: 0; padding: 0; box-sizing: border-box; }\n"
+            "    body { background: #0a0a0a; display: flex; justify-content: center;"
+            " align-items: center; min-height: 100vh; font-family: 'Inter', sans-serif; }\n"
+            "    #gameContainer { position: relative; }\n"
+            "    canvas { display: block; border-radius: 12px;"
+            " box-shadow: 0 0 40px rgba(59,130,246,0.3); }\n"
+            "    #hud { position: absolute; top: 0; left: 0; right: 0; padding: 16px 24px;"
+            " display: flex; justify-content: space-between; color: #fff; font-size: 14px;"
+            " font-weight: 600; pointer-events: none; z-index: 10; }\n"
+            "    #overlay { position: absolute; inset: 0; display: flex;"
+            " flex-direction: column; justify-content: center; align-items: center;"
+            " background: rgba(0,0,0,0.8); border-radius: 12px; z-index: 20;"
+            " transition: opacity 0.3s; }\n"
+            "    #overlay.hidden { opacity: 0; pointer-events: none; }\n"
+            "    #overlay h1 { color: #fff; font-size: 36px; margin-bottom: 8px; }\n"
+            "    #overlay p { color: #94a3b8; margin-bottom: 24px; }\n"
+            "    #overlay button { padding: 12px 32px; border: none; border-radius: 8px;"
+            " background: #3b82f6; color: #fff; font-size: 16px; font-weight: 600;"
+            " cursor: pointer; transition: transform 0.15s, background 0.15s; }\n"
+            "    #overlay button:hover { transform: scale(1.05); background: #2563eb; }\n"
+            "    .score-display { background: rgba(255,255,255,0.1); padding: 6px 16px;"
+            " border-radius: 20px; backdrop-filter: blur(8px); }\n"
+            "  </style>\n"
+            "</head>\n"
+            "<body>\n"
+            '  <div id="gameContainer">\n'
+            '    <canvas id="gameCanvas"></canvas>\n'
+            '    <div id="hud">\n'
+            '      <div class="score-display">Score: <span id="score">0</span></div>\n'
+            '      <div class="score-display">Level: <span id="level">1</span></div>\n'
+            '      <div class="score-display">Best: <span id="best">0</span></div>\n'
+            "    </div>\n"
+            '    <div id="overlay">\n'
+            "      <h1>GAME_TITLE</h1>\n"
+            "      <p>游戏描述</p>\n"
+            '      <button id="startBtn">Start Game</button>\n'
+            "    </div>\n"
+            "  </div>\n"
+            "  <script>\n"
+            "    const CONFIG = { width: 800, height: 600, bgColor: '#0a0a0a',"
+            " accentColor: '#3b82f6', fps: 60 };\n"
+            "    const STATE = { MENU: 0, PLAYING: 1, PAUSED: 2, OVER: 3 };\n"
+            "    let gameState = STATE.MENU, score = 0, level = 1;\n"
+            "    let bestScore = parseInt(localStorage.getItem('game_best') || '0');\n"
+            "    const canvas = document.getElementById('gameCanvas');\n"
+            "    const ctx = canvas.getContext('2d');\n"
+            "    canvas.width = CONFIG.width; canvas.height = CONFIG.height;\n"
+            "    const keys = {};\n"
+            "    document.addEventListener('keydown', e => { keys[e.key] = true;"
+            " e.preventDefault(); });\n"
+            "    document.addEventListener('keyup', e => { keys[e.key] = false; });\n"
+            "    let lastTime = 0;\n"
+            "    function gameLoop(timestamp) {\n"
+            "      const dt = (timestamp - lastTime) / 1000; lastTime = timestamp;\n"
+            "      ctx.fillStyle = CONFIG.bgColor;\n"
+            "      ctx.fillRect(0, 0, CONFIG.width, CONFIG.height);\n"
+            "      if (gameState === STATE.PLAYING) { update(dt); draw(); }\n"
+            "      requestAnimationFrame(gameLoop);\n"
+            "    }\n"
+            "    function update(dt) { /* game logic */ }\n"
+            "    function draw() { /* render */ }\n"
+            "    function addScore(pts) {\n"
+            "      score += pts;\n"
+            "      document.getElementById('score').textContent = score;\n"
+            "      if (score > bestScore) {\n"
+            "        bestScore = score; localStorage.setItem('game_best', bestScore);\n"
+            "        document.getElementById('best').textContent = bestScore;\n"
+            "      }\n"
+            "    }\n"
+            "    function startGame() {\n"
+            "      score = 0; level = 1; gameState = STATE.PLAYING;\n"
+            "      document.getElementById('overlay').classList.add('hidden');\n"
+            "    }\n"
+            "    function gameOver() {\n"
+            "      gameState = STATE.OVER;\n"
+            "      const o = document.getElementById('overlay');\n"
+            "      o.classList.remove('hidden');\n"
+            "      o.querySelector('h1').textContent = 'Game Over';\n"
+            "      o.querySelector('p').textContent = 'Final Score: ' + score;\n"
+            "      o.querySelector('button').textContent = 'Play Again';\n"
+            "    }\n"
+            "    document.getElementById('startBtn').addEventListener('click', startGame);\n"
+            "    document.getElementById('best').textContent = bestScore;\n"
+            "    requestAnimationFrame(gameLoop);\n"
+            "  </script>\n"
+            "</body>\n"
+            "</html>\n"
+            "```\n"
+            "\n"
+            "### 模板2: 碰撞检测工具箱\n"
+            "\n"
+            "```javascript\n"
+            "// 矩形碰撞\n"
+            "function rectCollision(a, b) {\n"
+            "  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h"
+            " && a.y + a.h > b.y;\n"
+            "}\n"
+            "// 圆形碰撞\n"
+            "function circleCollision(a, b) {\n"
+            "  const dx = a.x - b.x, dy = a.y - b.y;\n"
+            "  return dx*dx + dy*dy < (a.r + b.r) * (a.r + b.r);\n"
+            "}\n"
+            "// 粒子效果\n"
+            "class Particle {\n"
+            "  constructor(x, y, color) {\n"
+            "    this.x=x; this.y=y; this.vx=(Math.random()-0.5)*8;"
+            " this.vy=(Math.random()-0.5)*8;\n"
+            "    this.life=1; this.decay=0.02+Math.random()*0.03;"
+            " this.size=2+Math.random()*4; this.color=color;\n"
+            "  }\n"
+            "  update() { this.x+=this.vx; this.y+=this.vy; this.life-=this.decay;"
+            " this.vy+=0.1; }\n"
+            "  draw(ctx) {\n"
+            "    ctx.globalAlpha=this.life; ctx.fillStyle=this.color;\n"
+            "    ctx.fillRect(this.x-this.size/2, this.y-this.size/2,"
+            " this.size, this.size);\n"
+            "    ctx.globalAlpha=1;\n"
+            "  }\n"
+            "  get dead() { return this.life <= 0; }\n"
+            "}\n"
+            "```\n"
+            "\n"
+            "### 模板3: 常见游戏模式速查\n"
+            "\n"
+            "| 游戏类型 | 核心循环 | 关键对象 | 反馈重点 |\n"
+            "|---------|---------|---------|---------|\n"
+            "| 贪吃蛇 | 移动->吃食->变长->碰撞检测 | 蛇身数组、食物坐标 | 吃到食物闪烁、蛇身渐变色 |\n"
+            "| 打砖块 | 发球->挡板->砖块碰撞 | 挡板、球、砖块网格 | 砖块破碎粒子、连击特效 |\n"
+            "| 飞机大战 | 移动->射击->躲避->Boss | 玩家飞机、敌机数组、子弹数组 | 爆炸粒子、屏幕震动 |\n"
+            "| 消除游戏 | 选择->匹配->消除->下落 | 网格数组、选中状态、动画队列 | 消除爆炸、连锁得分飞字 |\n"
+            "| 跑酷 | 跳跃->障碍->加速->距离 | 角色、障碍物队列、地面 | 跳跃拉伸、落地压缩、速度线 |\n"
+            "\n"
+            "### 模板4: 游戏HUD/UI组件\n"
+            "\n"
+            "```javascript\n"
+            "// 屏幕震动\n"
+            "function screenShake(intensity=5, duration=200) {\n"
+            "  const c = document.getElementById('gameContainer');\n"
+            "  const start = Date.now();\n"
+            "  function shake() {\n"
+            "    const elapsed = Date.now() - start;\n"
+            "    if (elapsed < duration) {\n"
+            "      const f = 1 - elapsed/duration;\n"
+            "      c.style.transform = `translate(${(Math.random()-0.5)*intensity*f}px,"
+            "${(Math.random()-0.5)*intensity*f}px)`;\n"
+            "      requestAnimationFrame(shake);\n"
+            "    } else { c.style.transform = ''; }\n"
+            "  }\n"
+            "  shake();\n"
+            "}\n"
+            "// 得分飞字\n"
+            "function floatingText(x, y, text, color='#fbbf24') {\n"
+            "  const el = document.createElement('div');\n"
+            "  el.textContent = text;\n"
+            "  Object.assign(el.style, { position:'absolute', left:x+'px', top:y+'px',"
+            " color, fontSize:'20px', fontWeight:'bold', pointerEvents:'none',"
+            " transition:'all 0.8s ease-out', zIndex:'30' });\n"
+            "  document.getElementById('gameContainer').appendChild(el);\n"
+            "  requestAnimationFrame(() => { el.style.top=(y-60)+'px'; el.style.opacity='0'; });\n"
+            "  setTimeout(() => el.remove(), 800);\n"
+            "}\n"
+            "```\n"
+            "\n"
+            "### 游戏开发铁律\n"
+            "- 核心玩法循环必须完整：开始->游玩->结束->再来一次\n"
+            "- 反馈感 > 真实物理：夸张的视觉反馈比物理精确更重要\n"
+            "- 操作延迟 < 50ms：任何卡顿都会毁掉游戏体验\n"
+            "- 分数/进度必须实时可见\n"
+        )
+
+    def _section_seeai_page_templates(self) -> str:
+        return (
+            "## 精美页面模板库（核心）\n"
+            "\n"
+            "### 设计Token预设（6套赛事验证主题）\n"
+            "\n"
+            "#### 主题A: 暗夜科技（适合科技/AI/数据类）\n"
+            "```css\n"
+            ":root {\n"
+            "  --bg-primary: #0a0a0f;\n"
+            "  --bg-secondary: #111827;\n"
+            "  --text-primary: #f1f5f9;\n"
+            "  --text-secondary: #94a3b8;\n"
+            "  --accent: #3b82f6;\n"
+            "  --accent-glow: rgba(59,130,246,0.4);\n"
+            "  --gradient-hero: linear-gradient(135deg, #0a0a0f 0%, #1e1b4b 50%, #0a0a0f 100%);\n"
+            "  --card-bg: rgba(17,24,39,0.8);\n"
+            "  --card-border: rgba(59,130,246,0.15);\n"
+            "}\n"
+            "```\n"
+            "\n"
+            "#### 主题B: 日出暖橙（适合教育/社交/正能量）\n"
+            "```css\n"
+            ":root {\n"
+            "  --bg-primary: #fffbf5; --bg-secondary: #fef3e2;\n"
+            "  --text-primary: #1c1917; --text-secondary: #78716c;\n"
+            "  --accent: #f97316; --accent-glow: rgba(249,115,22,0.3);\n"
+            "  --gradient-hero: linear-gradient(135deg, #fffbf5 0%, #fed7aa 100%);\n"
+            "  --card-bg: rgba(255,251,245,0.9); --card-border: rgba(249,115,22,0.15);\n"
+            "}\n"
+            "```\n"
+            "\n"
+            "#### 主题C: 翡翠绿意（适合环保/健康/生活）\n"
+            "```css\n"
+            ":root {\n"
+            "  --bg-primary: #f0fdf4; --bg-secondary: #dcfce7;\n"
+            "  --text-primary: #14532d; --text-secondary: #4d7c0f;\n"
+            "  --accent: #16a34a; --accent-glow: rgba(22,163,74,0.3);\n"
+            "  --gradient-hero: linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 100%);\n"
+            "  --card-bg: rgba(240,253,244,0.9); --card-border: rgba(22,163,74,0.15);\n"
+            "}\n"
+            "```\n"
+            "\n"
+            "#### 主题D: 极简黑白（适合工具/效率/专业）\n"
+            "```css\n"
+            ":root {\n"
+            "  --bg-primary: #fafafa; --bg-secondary: #f4f4f5;\n"
+            "  --text-primary: #18181b; --text-secondary: #71717a;\n"
+            "  --accent: #18181b; --accent-glow: rgba(24,24,27,0.1);\n"
+            "  --gradient-hero: linear-gradient(180deg, #fafafa 0%, #e4e4e7 100%);\n"
+            "  --card-bg: #ffffff; --card-border: rgba(24,24,27,0.08);\n"
+            "}\n"
+            "```\n"
+            "\n"
+            "#### 主题E: 深海蓝绿（适合海洋/探索/游戏）\n"
+            "```css\n"
+            ":root {\n"
+            "  --bg-primary: #042f2e; --bg-secondary: #134e4a;\n"
+            "  --text-primary: #ccfbf1; --text-secondary: #5eead4;\n"
+            "  --accent: #14b8a6; --accent-glow: rgba(20,184,166,0.4);\n"
+            "  --gradient-hero: linear-gradient(135deg, #042f2e 0%, #0f766e 50%, #042f2e 100%);\n"
+            "  --card-bg: rgba(19,78,74,0.6); --card-border: rgba(20,184,166,0.2);\n"
+            "}\n"
+            "```\n"
+            "\n"
+            "#### 主题F: 赛博朋克（适合潮流/音乐/创意）\n"
+            "```css\n"
+            ":root {\n"
+            "  --bg-primary: #0c0015; --bg-secondary: #1a002e;\n"
+            "  --text-primary: #f0e6ff; --text-secondary: #c084fc;\n"
+            "  --accent: #e879f9; --accent-secondary: #06ffa5;\n"
+            "  --accent-glow: rgba(232,121,249,0.4);\n"
+            "  --gradient-hero: linear-gradient(135deg, #0c0015 0%, #2d1b69 50%, #0c0015 100%);\n"
+            "  --card-bg: rgba(26,0,46,0.8); --card-border: rgba(232,121,249,0.2);\n"
+            "}\n"
+            "```\n"
+            "\n"
+            "**禁止使用**: 紫粉渐变、默认蓝色模板感配色。\n"
+            "\n"
+            "### 动效预设工具箱\n"
+            "\n"
+            "```javascript\n"
+            "// 1. 滚动渐入（Intersection Observer）\n"
+            "function setupScrollReveal() {\n"
+            "  const observer = new IntersectionObserver(entries => {\n"
+            "    entries.forEach(e => { if(e.isIntersecting) {"
+            " e.target.classList.add('revealed'); observer.unobserve(e.target); } });\n"
+            "  }, { threshold: 0.1 });\n"
+            "  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));\n"
+            "}\n"
+            "// CSS: .reveal { opacity:0; transform:translateY(30px);"
+            " transition:all 0.6s cubic-bezier(0.16,1,0.3,1); }\n"
+            "// .reveal.revealed { opacity:1; transform:translateY(0); }\n"
+            "\n"
+            "// 2. 数字滚动动画\n"
+            "function animateNumber(el, target, duration=1500) {\n"
+            "  const start = parseInt(el.textContent)||0; const t0 = performance.now();\n"
+            "  function update(now) {\n"
+            "    const p = Math.min((now-t0)/duration, 1);\n"
+            "    const eased = 1 - Math.pow(1-p, 3);\n"
+            "    el.textContent = Math.round(start + (target-start)*eased).toLocaleString();\n"
+            "    if(p<1) requestAnimationFrame(update);\n"
+            "  }\n"
+            "  requestAnimationFrame(update);\n"
+            "}\n"
+            "\n"
+            "// 3. 鼠标跟随光晕\n"
+            "function setupCursorGlow(container) {\n"
+            "  const glow = document.createElement('div');\n"
+            "  Object.assign(glow.style, { position:'absolute', width:'400px', height:'400px',\n"
+            "    borderRadius:'50%', pointerEvents:'none',\n"
+            "    background:'radial-gradient(circle, var(--accent-glow) 0%, transparent 70%)',\n"
+            "    transform:'translate(-50%,-50%)', zIndex:'0', opacity:'0.6' });\n"
+            "  container.style.position = 'relative';\n"
+            "  container.appendChild(glow);\n"
+            "  container.addEventListener('mousemove', e => {\n"
+            "    const r = container.getBoundingClientRect();\n"
+            "    glow.style.left = (e.clientX-r.left)+'px';\n"
+            "    glow.style.top = (e.clientY-r.top)+'px';\n"
+            "  });\n"
+            "}\n"
+            "\n"
+            "// 4. 打字机效果\n"
+            "function typeWriter(el, text, speed=60) {\n"
+            "  let i = 0; el.textContent = '';\n"
+            "  function type() { if(i<text.length) { el.textContent += text.charAt(i++);"
+            " setTimeout(type, speed); } }\n"
+            "  type();\n"
+            "}\n"
+            "\n"
+            "// 5. 卡片3D倾斜\n"
+            "function setupTiltCard(card, intensity=15) {\n"
+            "  card.addEventListener('mousemove', e => {\n"
+            "    const r = card.getBoundingClientRect();\n"
+            "    const x = (e.clientX-r.left)/r.width - 0.5;\n"
+            "    const y = (e.clientY-r.top)/r.height - 0.5;\n"
+            "    card.style.transform = `perspective(800px) rotateY(${x*intensity}deg)"
+            " rotateX(${-y*intensity}deg) scale(1.02)`;\n"
+            "  });\n"
+            "  card.addEventListener('mouseleave', () => { card.style.transform = ''; });\n"
+            "}\n"
+            "```\n"
+            "\n"
+            "### Hero区域模板（3种高转化布局）\n"
+            "\n"
+            "#### Hero A: 大标题+CTA+背景动画（通用）\n"
+            "```html\n"
+            '<section style="min-height:100vh;display:flex;align-items:center;'
+            "justify-content:center;position:relative;overflow:hidden;"
+            'background:var(--bg-primary)">\n'
+            '  <div style="position:absolute;inset:0;opacity:0.5;'
+            'background:var(--gradient-hero)"></div>\n'
+            '  <div style="position:relative;z-index:10;text-align:center;'
+            'max-width:800px;padding:0 24px">\n'
+            '    <div style="display:inline-block;padding:6px 16px;border-radius:20px;'
+            "background:var(--accent);color:#fff;font-size:13px;font-weight:600;"
+            'margin-bottom:24px">Tagline</div>\n'
+            '    <h1 style="font-size:clamp(36px,6vw,72px);font-weight:800;'
+            'color:var(--text-primary);line-height:1.1;margin-bottom:16px">'
+            '主标题 <span style="color:var(--accent)">关键词高亮</span></h1>\n'
+            '    <p style="font-size:18px;color:var(--text-secondary);margin-bottom:32px;'
+            'max-width:600px;margin-left:auto;margin-right:auto">副标题</p>\n'
+            '    <div style="display:flex;gap:12px;justify-content:center">\n'
+            '      <a href="#cta" style="padding:14px 32px;border-radius:8px;'
+            "background:var(--accent);color:#fff;text-decoration:none;"
+            'font-weight:600">Primary CTA</a>\n'
+            "    </div>\n"
+            "  </div>\n"
+            "</section>\n"
+            "```\n"
+            "\n"
+            "#### Hero B: 左文右图（产品/工具类）\n"
+            "```html\n"
+            '<section style="min-height:100vh;display:grid;'
+            "grid-template-columns:1fr 1fr;align-items:center;gap:48px;"
+            'padding:80px 48px;background:var(--bg-primary)">\n'
+            "  <div>\n"
+            '    <h1 style="font-size:48px;font-weight:800;'
+            'color:var(--text-primary)">标题</h1>\n'
+            '    <p style="font-size:18px;color:var(--text-secondary);'
+            'margin-bottom:24px">描述</p>\n'
+            '    <button style="padding:12px 28px;border-radius:8px;'
+            "background:var(--accent);color:#fff;border:none;"
+            'font-weight:600;cursor:pointer">Get Started</button>\n'
+            "  </div>\n"
+            '  <div style="aspect-ratio:4/3;border-radius:16px;'
+            'background:var(--card-bg);border:1px solid var(--card-border)"></div>\n'
+            "</section>\n"
+            "```\n"
+            "\n"
+            "#### Hero C: 全屏动态背景+居中标题（展示类）\n"
+            "```html\n"
+            '<section style="height:100vh;display:flex;align-items:center;'
+            'justify-content:center;position:relative">\n'
+            '  <div style="position:absolute;inset:0;'
+            'background:var(--gradient-hero);z-index:1"></div>\n'
+            '  <div style="position:relative;z-index:10;text-align:center;color:#fff">\n'
+            '    <h1 style="font-size:clamp(40px,8vw,80px);font-weight:900;'
+            'text-shadow:0 2px 20px rgba(0,0,0,0.3)">主标题</h1>\n'
+            '    <p style="font-size:20px;max-width:600px;margin:16px auto 0;'
+            'opacity:0.85">副标题</p>\n'
+            "  </div>\n"
+            "</section>\n"
+            "```\n"
+            "\n"
+            "### 页面开发铁律\n"
+            "- 首屏3秒内传达核心价值，不允许普通模板感\n"
+            "- 至少一个让人记住的动效瞬间（鼠标跟随/数字滚动/粒子背景）\n"
+            "- 所有颜色使用 CSS 变量，不硬编码 hex\n"
+            "- 移动端至少可用，桌面端完美\n"
+        )
+
+    def _section_seeai_competition_doc_templates(self) -> str:
+        return (
+            "## 赛事文档模板库（核心）\n"
+            "\n"
+            "比赛不只看代码，**文档和演示决定最终名次**。以下模板在 Spec 确认后立即生成。\n"
+            "\n"
+            "### 模板1: 参赛项目 README\n"
+            "\n"
+            "```markdown\n"
+            "# PROJECT_NAME\n"
+            "\n"
+            "> 一句话描述项目核心价值（评委3秒内能理解）\n"
+            "\n"
+            "## 项目亮点\n"
+            "- 亮点1（技术实现/设计/创新）\n"
+            "- 亮点2\n"
+            "- 亮点3\n"
+            "\n"
+            "## 技术栈\n"
+            "\n"
+            "| 层级 | 技术 | 选型理由 |\n"
+            "|------|------|----------|\n"
+            "| 前端 | XXX | 快速/美观/生态 |\n"
+            '| 后端 | XXX（如无则写"纯前端"） | 必要性 |\n'
+            "| 数据 | XXX | 轻量/够用 |\n"
+            "| 部署 | XXX | 一键/零配置 |\n"
+            "\n"
+            "## 快速开始\n"
+            "```bash\n"
+            "npm install && npm run dev\n"
+            "```\n"
+            "\n"
+            "## 功能演示路径\n"
+            "1. 打开首页 -> 看到XXX\n"
+            "2. 点击XXX -> 触发XXX\n"
+            "3. 完成XXX -> 看到结果\n"
+            "```\n"
+            "\n"
+            "### 模板2: 技术亮点文档\n"
+            "\n"
+            "```markdown\n"
+            "## 1. 创新点：XXX\n"
+            "**问题**: 为什么要做这个\n"
+            "**方案**: 具体怎么实现的\n"
+            "**效果**: 数据/截图/对比\n"
+            "\n"
+            "## 2. 技术难点突破：XXX\n"
+            "**挑战**: 遇到什么问题\n"
+            "**解决**: 怎么解决的\n"
+            "**收获**: 学到了什么\n"
+            "```\n"
+            "\n"
+            "### 模板3: 演示脚本（30秒版 + 2分钟版）\n"
+            "\n"
+            "```markdown\n"
+            "## 30秒电梯演讲\n"
+            "大家好，我们是TEAM_NAME。我们做了PROJECT_NAME。\n"
+            "它解决的核心问题是【痛点】。我们的方案是【一句话方案】。\n"
+            "最大的亮点是【wow点】。谢谢！\n"
+            "\n"
+            "## 2分钟完整演示\n"
+            "### 开场（15秒）：我们注意到一个问题... 切到首页展示痛点场景\n"
+            "### 核心演示（60秒）：按功能顺序走一条完整主路径\n"
+            "### 亮点展示（30秒）：展示技术亮点/创新设计\n"
+            "### 总结（15秒）：一句话总结核心价值 + 未来展望\n"
+            "\n"
+            "## 演示注意\n"
+            "- 准备备用演示路径（主路径出问题时的Plan B）\n"
+            "- 数据预填充，不要现场输入\n"
+            "- 不依赖网络，本地运行\n"
+            "```\n"
+            "\n"
+            "### 模板4: 答辩准备卡\n"
+            "\n"
+            "```markdown\n"
+            "## 必答题\n"
+            "1. 技术方案为什么这样选？ -> 性能/生态/时间权衡\n"
+            "2. 再给一周时间优先做什么？ -> 核心体验/用户反馈\n"
+            "3. 最大的技术挑战？ -> 具体问题+解决方案\n"
+            "4. 和竞品相比核心差异？ -> 创新点+用户价值\n"
+            "5. 用户体验有什么特别设计？ -> 细节+数据支撑\n"
+            "\n"
+            "## 加分回答（主动提及）\n"
+            "- 我们不只做了功能，还关注了XXX细节\n"
+            "- 我们在有限时间内做了降级方案确保演示稳定\n"
+            "\n"
+            "## 减分避免\n"
+            '- 不要说"时间不够所以没做完"\n'
+            '- 不要说"这个功能比较简单"\n'
+            '- 不要说"AI帮我们写的"（改说"我们利用AI辅助提升了开发效率"）\n'
+            "```\n"
+            "\n"
+            "### 赛事文档铁律\n"
+            "- 文档必须落盘到 output/* 和项目根目录 README.md\n"
+            "- 技术亮点不能空泛，必须有具体的方案描述\n"
+            "- 演示脚本必须提前演练一遍，确保路径完整无断点\n"
+            '- 答辩回答不要说"时间不够"或"AI写的"\n'
+        )
+
+    def _section_seeai_project_archetypes(self) -> str:
+        return (
+            "## 作品类型决策模板\n"
+            "\n"
+            "进入 SEEAI 后，优先先判断当前更像哪一类题，再决定研究和实现重心：\n"
+            "\n"
+            "- 官网类：优先主视觉、品牌故事、信息层级、首屏转化、滚动节奏与演示动效。\n"
+            "  默认技术栈：React/Vite 或 Next.js + Tailwind + Framer Motion。\n"
+            "  默认 sprint：先做 Hero 与主叙事，再做亮点区和 CTA，最后统一动效与滚动节奏。\n"
+            "- 小游戏类：优先核心玩法循环、反馈感、记分/胜负、开始到再次游玩的完整闭环。\n"
+            "  默认技术栈：HTML Canvas + Vanilla JS；更复杂时再上 Phaser。\n"
+            "  默认 sprint：先做可玩的主循环，再补积分/胜负反馈，最后加音效、特效和复玩钩子。\n"
+            "- 工具类：优先一个高价值主流程、输入输出清晰、演示结果直观、无需复杂配置。\n"
+            "  默认技术栈：React + Vite + Tailwind + 本地状态；必要时补最小 Express/Fastify 后端。\n"
+            "  默认 sprint：先打通输入到结果的主流程，再补结果页质感，最后加分享/导出等演示加分项。\n"
+            "\n"
+            "如果需求跨多类，默认选最容易形成强演示效果的那一类做主轴，其余只做辅助。"
+        )
+
+    def _section_seeai_archetype_detection_hints(self) -> str:
+        return (
+            "## 题型识别提示\n"
+            "\n"
+            "在首轮判断时，优先用需求关键词快速归类，不要犹豫太久：\n"
+            "\n"
+            "- 如果需求强调品牌、产品发布、活动宣传、首屏、官网、落地页，默认按官网类处理。\n"
+            "- 如果需求强调玩法、得分、胜负、闯关、点击反馈、复玩，默认按小游戏类处理。\n"
+            "- 如果需求强调生成、分析、查询、表单、输入输出、结果页、效率提升，默认按工具类处理。\n"
+            "- 如果用户同时提到官网 + 交互玩法，先判断评审更容易记住哪一面，把那一面作为主轴。\n"
+        )
+
+    def _section_seeai_quality_floor(self) -> str:
+        return (
+            "## 比赛质量底线\n"
+            "\n"
+            "即使在半小时里，也必须守住这些底线：\n"
+            "\n"
+            "- 首屏或第一轮交互必须让人一眼看懂主题，不允许普通模板感。\n"
+            "- 至少有一个清晰 wow 点：视觉、玩法、结果页、数据动效、讲解桥段任选其一。\n"
+            "- 主路径必须真实可演示，不能全是占位按钮或空数据。\n"
+            "- 文案不能是通用 AI 空话，标题、卖点、CTA、结果文案要贴题。\n"
+            "- 时间不够时，优先删功能，不要删完成度。\n"
+        )
+
+    def _section_seeai_competition_tools(self) -> str:
+        return (
+            "## 赛事专用能力\n"
+            "\n"
+            "### 评委视角优化\n"
+            "- 每个作品必须有一个2分钟能讲完的完整演示故事线\n"
+            "- 标题/首屏/Hero区域在3秒内传达核心价值\n"
+            "- 结果页/完成页让评委有完成感，而不是半成品感\n"
+            "- 动效不在于多，在于有1-2个让人记住的瞬间\n"
+            "\n"
+            "### 降级策略\n"
+            "- 后端来不及 -> 用 localStorage / mock API，但要标注demo数据\n"
+            "- 多页面来不及 -> 做好单页的完整体验，胜过5个半成品页面\n"
+            "- 复杂交互来不及 -> 简化流程，但保留核心闭环\n"
+            "- 响应式来不及 -> 保证桌面端完美，移动端可用\n"
+            "\n"
+            "### 演示准备\n"
+            "- 准备一段30秒的口头介绍：这是什么 + 给谁用 + 核心价值 + wow点\n"
+            "- 准备一条完整的主流程演示路径（从开始到结束无断点）\n"
+            "- 准备一个备选路径（如果主路径出了问题）\n"
+            "- 确保首屏截图就能当宣传图用\n"
+        )
+
+    def _section_seeai_session_continuity(self) -> str:
+        return (
+            "## 会话连续性契约（强制）\n"
+            "\n"
+            "- 若存在 `.super-dev/SESSION_BRIEF.md`，每次继续前必须先读取。\n"
+            '- 用户在 SEEAI 模式里说"改一下 / 再炫一点 / 补个功能 / 继续做"等，属于当前比赛流程内动作。\n'
+            "- 文档确认前，任何修改都先落在 compact research / PRD / architecture / UIUX 上。\n"
+            "- Spec 之后，任何修改默认回到当前 full-stack sprint，不额外拆出新的长门禁。\n"
         )
 
     def _section_pre_code_gate(self) -> str:
@@ -609,6 +1409,16 @@ class SuperDevSkillContent:
             f" {self._host_display_name()}."
         )
 
+    def _section_seeai_never_do(self) -> str:
+        return (
+            "## Never do this\n"
+            "\n"
+            "- Never skip research, the three compact core documents, or Spec entirely.\n"
+            "- Never expand SEEAI mode back into the full standard Super Dev long chain unless the user explicitly asks to switch modes.\n"
+            "- Never stop after frontend to wait for a separate preview gate in SEEAI mode.\n"
+            "- Never sacrifice baseline polish and demoability just to move fast.\n"
+        )
+
     def _section_error_recovery(self) -> str:
         return (
             "## 错误恢复策略\n"
@@ -662,6 +1472,17 @@ class SuperDevSkillContent:
             "- HOST_PARITY: required"
         )
 
+    def _section_seeai_flow_contract(self) -> str:
+        return (
+            "## Super Dev SEEAI Flow Contract\n"
+            "\n"
+            "- SUPER_DEV_SEEAI_FLOW_CONTRACT_V1\n"
+            "- PHASE_CHAIN: research>docs>docs_confirm>spec>build_fullstack>polish>handoff\n"
+            "- DOC_CONFIRM_GATE: required\n"
+            "- PREVIEW_CONFIRM_GATE: omitted\n"
+            "- QUALITY_STYLE: speed_with_showcase_quality"
+        )
+
     def _host_display_name(self) -> str:
         display_map = {
             "codex-cli": "Codex",
@@ -694,6 +1515,32 @@ class SkillTemplate:
     @classmethod
     def for_builtin(cls, skill_name: str, host: str) -> SkillTemplate:
         """Factory: create a template pre-configured for the built-in skill."""
+        if skill_name == SEEAI_SKILL_NAME:
+            if host == "codex-cli":
+                fm = SkillFrontmatter(
+                    name=skill_name,
+                    description="Activate the Super Dev SEEAI competition mode inside Codex CLI.",
+                    when_to_use=(
+                        "Use when the user says /super-dev-seeai, super-dev-seeai:,"
+                        " or super-dev-seeai： followed by a requirement."
+                        " Activate the fast competition delivery mode."
+                    ),
+                )
+            else:
+                fm = SkillFrontmatter(
+                    name=skill_name,
+                    description=(
+                        "Super Dev SEEAI competition mode for fast, high-quality"
+                        " showcase delivery under tight time limits"
+                    ),
+                    when_to_use=(
+                        "Use when the user says /super-dev-seeai, super-dev-seeai:,"
+                        " or super-dev-seeai： followed by a requirement."
+                        " Activate the competition fast mode."
+                    ),
+                )
+            content = SuperDevSkillContent(skill_name=skill_name, host=host)
+            return cls(frontmatter=fm, content=content)
         if host == "codex-cli":
             fm = SkillFrontmatter(
                 name=skill_name,

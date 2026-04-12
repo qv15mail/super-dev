@@ -1013,11 +1013,11 @@ class CliGovernanceMixin:
     # ------------------------------------------------------------------
 
     def _cmd_migrate(self, _args: Any) -> int:
-        """执行项目迁移 (2.2.0+ -> 2.3.4)。"""
+        """执行项目迁移 (2.2.0+ -> 2.3.5)。"""
         from .migrate import migrate_project
 
         project_dir = Path.cwd()
-        self.console.print("[cyan]正在执行 2.2.0+ → 2.3.4 迁移...[/cyan]\n")
+        self.console.print("[cyan]正在执行 2.2.0+ → 2.3.5 迁移...[/cyan]\n")
 
         changes = migrate_project(project_dir)
 
@@ -1029,6 +1029,597 @@ class CliGovernanceMixin:
         for change in changes:
             self.console.print(f"  - {change}")
         return 0
+
+    # ------------------------------------------------------------------
+    # rollback 命令
+    # ------------------------------------------------------------------
+
+    def _cmd_rollback(self, args: Any) -> int:
+        """将项目状态恢复到之前的流水线检查点。"""
+        project_dir = Path.cwd()
+        superdev_dir = project_dir / ".super-dev"
+        checkpoint_dir = superdev_dir / "checkpoints"
+        history_dir = superdev_dir / "workflow-history"
+
+        if not superdev_dir.exists():
+            self.console.print("[yellow]未发现 .super-dev/ 目录，当前项目尚未初始化。[/yellow]")
+            return 1
+
+        # --list: 列出可用检查点
+        if getattr(args, "list", False):
+            return self._rollback_list_checkpoints(checkpoint_dir, history_dir, superdev_dir)
+
+        # --last: 回退到上一个检查点
+        if getattr(args, "last", False):
+            return self._rollback_to_last(checkpoint_dir, history_dir, superdev_dir, project_dir)
+
+        # --phase <name>: 回退到指定阶段
+        phase_name = getattr(args, "phase", None)
+        if phase_name:
+            return self._rollback_to_phase(
+                phase_name, checkpoint_dir, history_dir, superdev_dir, project_dir
+            )
+
+        # 无参数时显示帮助
+        self.console.print(
+            "[yellow]请指定回退目标: --list (列出检查点), --last (回退上一个), "
+            "--phase <阶段名> (回退到指定阶段)[/yellow]"
+        )
+        return 1
+
+    def _rollback_list_checkpoints(
+        self,
+        checkpoint_dir: Path,
+        history_dir: Path,
+        superdev_dir: Path,
+    ) -> int:
+        """列出所有可用的检查点。"""
+        checkpoints: list[dict[str, Any]] = []
+
+        # 从 checkpoints/ 收集
+        if checkpoint_dir.exists():
+            for cp_file in sorted(checkpoint_dir.glob("*.json")):
+                try:
+                    data = json.loads(cp_file.read_text(encoding="utf-8"))
+                    data["_source"] = "checkpoint"
+                    data["_file"] = str(cp_file)
+                    checkpoints.append(data)
+                except Exception:
+                    pass
+
+        # 从 workflow-history/ 收集
+        if history_dir.exists():
+            for hist_file in sorted(history_dir.glob("*.json")):
+                try:
+                    data = json.loads(hist_file.read_text(encoding="utf-8"))
+                    data["_source"] = "history"
+                    data["_file"] = str(hist_file)
+                    checkpoints.append(data)
+                except Exception:
+                    pass
+
+        # 从 pipeline-state.json 收集
+        pipeline_state_file = superdev_dir / "pipeline-state.json"
+        if pipeline_state_file.exists():
+            try:
+                data = json.loads(pipeline_state_file.read_text(encoding="utf-8"))
+                checkpoints.append({
+                    "phase": data.get("current_phase", "unknown"),
+                    "timestamp": data.get("last_updated", ""),
+                    "_source": "pipeline-state",
+                    "_file": str(pipeline_state_file),
+                    "phases_completed": data.get("phases_completed", []),
+                    "phases_remaining": data.get("phases_remaining", []),
+                })
+            except Exception:
+                pass
+
+        if not checkpoints:
+            self.console.print("[yellow]未找到任何检查点。[/yellow]")
+            return 0
+
+        # 按时间排序（最新在前）
+        checkpoints.sort(key=lambda c: str(c.get("timestamp", "")), reverse=True)
+
+        if RICH_AVAILABLE:
+            from rich.table import Table
+
+            table = Table(title="可用检查点", show_lines=True)
+            table.add_column("阶段", style="cyan", min_width=14)
+            table.add_column("时间戳", style="green", min_width=20)
+            table.add_column("来源", style="magenta", min_width=14)
+            table.add_column("状态", style="yellow", min_width=8)
+            table.add_column("质量分", style="blue", min_width=6)
+
+            for cp in checkpoints:
+                phase = str(cp.get("phase", "-"))
+                ts = str(cp.get("timestamp", "-"))
+                # Truncate microseconds for display
+                if "." in ts:
+                    ts = ts.split(".")[0]
+                source = str(cp.get("_source", "-"))
+                success = cp.get("success")
+                if success is True:
+                    status = "[green]✓ 成功[/green]"
+                elif success is False:
+                    status = "[red]✗ 失败[/red]"
+                else:
+                    status = "[dim]-[/dim]"
+                qscore = str(cp.get("quality_score", "-"))
+                if qscore != "-":
+                    try:
+                        score = float(qscore)
+                        qscore = f"{score:.1f}"
+                    except (ValueError, TypeError):
+                        pass
+                table.add_row(phase, ts, source, status, qscore)
+
+            self.console.print(table)
+            self.console.print(
+                f"\n[dim]共 {len(checkpoints)} 个检查点。"
+                "使用 --phase <阶段名> 或 --last 回退到指定检查点。[/dim]"
+            )
+        else:
+            self.console.print(f"共 {len(checkpoints)} 个检查点:")
+            for cp in checkpoints:
+                phase = cp.get("phase", "-")
+                ts = cp.get("timestamp", "-")
+                source = cp.get("_source", "-")
+                self.console.print(f"  {phase} | {ts} | {source}")
+
+        return 0
+
+    def _rollback_to_last(
+        self,
+        checkpoint_dir: Path,
+        history_dir: Path,
+        superdev_dir: Path,
+        project_dir: Path,
+    ) -> int:
+        """回退到上一个检查点。"""
+        # 收集历史检查点（按时间排序）
+        history_files = sorted(
+            history_dir.glob("*.json"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        ) if history_dir.exists() else []
+
+        # 也收集 checkpoint 文件
+        checkpoint_files = sorted(
+            checkpoint_dir.glob("*.json"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        ) if checkpoint_dir.exists() else []
+
+        # 合并所有来源，排除 pipeline-state
+        all_candidates: list[tuple[float, Path]] = []
+        for f in history_files:
+            all_candidates.append((f.stat().st_mtime, f))
+        for f in checkpoint_files:
+            all_candidates.append((f.stat().st_mtime, f))
+
+        # 加入 workflow-state.json
+        ws_file = superdev_dir / "workflow-state.json"
+        if ws_file.exists():
+            all_candidates.append((ws_file.stat().st_mtime, ws_file))
+
+        # 排除当前活跃的 pipeline-state.json
+        pipeline_state = superdev_dir / "pipeline-state.json"
+        all_candidates = [
+            (mt, fp) for mt, fp in all_candidates if fp.resolve() != pipeline_state.resolve()
+        ]
+
+        if not all_candidates:
+            self.console.print("[red]未找到可回退的检查点。[/red]")
+            return 1
+
+        # 排序取最新的非当前状态
+        all_candidates.sort(key=lambda x: x[0], reverse=True)
+
+        # 优先使用 workflow-history 中的条目
+        target_path = all_candidates[0][1]
+
+        return self._do_rollback(target_path, superdev_dir, project_dir)
+
+    def _rollback_to_phase(
+        self,
+        phase_name: str,
+        checkpoint_dir: Path,
+        history_dir: Path,
+        superdev_dir: Path,
+        project_dir: Path,
+    ) -> int:
+        """回退到指定阶段的检查点。"""
+        # 查找该阶段的检查点文件
+        cp_file = checkpoint_dir / f"{phase_name}.json"
+        if not cp_file.exists():
+            # 尝试在 workflow-history 中查找
+            candidates: list[Path] = []
+            if history_dir.exists():
+                for hf in history_dir.glob("*.json"):
+                    try:
+                        data = json.loads(hf.read_text(encoding="utf-8"))
+                        if data.get("phase") == phase_name or data.get("current_phase") == phase_name:
+                            candidates.append(hf)
+                    except Exception:
+                        pass
+            if not candidates:
+                self.console.print(f"[red]未找到阶段 '{phase_name}' 的检查点。[/red]")
+                self.console.print("使用 [cyan]--list[/cyan] 查看所有可用检查点。")
+                return 1
+            # 取最新的匹配
+            candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            cp_file = candidates[0]
+
+        return self._do_rollback(cp_file, superdev_dir, project_dir)
+
+    def _do_rollback(
+        self,
+        source_path: Path,
+        superdev_dir: Path,
+        project_dir: Path,
+    ) -> int:
+        """执行实际的回退操作。"""
+        from datetime import datetime, timezone
+
+        # 读取目标检查点数据
+        try:
+            checkpoint_data = json.loads(source_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            self.console.print(f"[red]无法读取检查点: {exc}[/red]")
+            return 1
+
+        # 备份当前状态
+        history_dir = superdev_dir / "workflow-history"
+        history_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        backup_path = history_dir / f"pre-rollback-{timestamp}.json"
+
+        current_state_files = ["pipeline-state.json", "workflow-state.json"]
+        backup_data: dict[str, Any] = {
+            "backup_reason": "pre-rollback",
+            "backup_timestamp": datetime.now(timezone.utc).isoformat(),
+            "restored_from": str(source_path),
+            "current_states": {},
+        }
+
+        for state_file in current_state_files:
+            state_path = superdev_dir / state_file
+            if state_path.exists():
+                try:
+                    backup_data["current_states"][state_file] = json.loads(
+                        state_path.read_text(encoding="utf-8")
+                    )
+                except Exception:
+                    backup_data["current_states"][state_file] = None
+
+        backup_path.write_text(
+            json.dumps(backup_data, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+
+        # 恢复检查点到 pipeline-state.json
+        phase = checkpoint_data.get("phase", checkpoint_data.get("current_phase", "unknown"))
+        new_state: dict[str, Any] = {
+            "current_phase": phase,
+            "phase_index": checkpoint_data.get("phase_index", 0),
+            "total_phases": checkpoint_data.get("total_phases", 0),
+            "phases_completed": checkpoint_data.get("phases_completed", []),
+            "phases_remaining": checkpoint_data.get("phases_remaining", []),
+            "started_at": checkpoint_data.get("started_at", checkpoint_data.get("timestamp", "")),
+            "last_updated": datetime.now(timezone.utc).isoformat(),
+            "restored_from_checkpoint": str(source_path),
+            "rollback_timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+        pipeline_state_path = superdev_dir / "pipeline-state.json"
+        pipeline_state_path.write_text(
+            json.dumps(new_state, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+
+        # 如果检查点包含 workflow-state 数据，也恢复它
+        ws_data = checkpoint_data.get("workflow_state") or checkpoint_data.get("workflow-state")
+        if ws_data:
+            ws_path = superdev_dir / "workflow-state.json"
+            ws_path.write_text(
+                json.dumps(ws_data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+
+        # 输出恢复确认
+        if RICH_AVAILABLE:
+            from rich.panel import Panel
+
+            ts_display = str(checkpoint_data.get("timestamp", "-"))
+            if "." in ts_display:
+                ts_display = ts_display.split(".")[0]
+
+            quality = checkpoint_data.get("quality_score")
+            quality_str = f"{quality:.1f}" if quality is not None else "-"
+
+            panel_content = (
+                f"[bold cyan]已回退到检查点[/bold cyan]\n\n"
+                f"  阶段: [green]{phase}[/green]\n"
+                f"  检查点时间: {ts_display}\n"
+                f"  质量分: [blue]{quality_str}[/blue]\n"
+                f"  来源: [magenta]{source_path.name}[/magenta]\n\n"
+                f"  备份位置: [dim]{backup_path.name}[/dim]"
+            )
+            self.console.print(Panel(panel_content, title="Rollback", border_style="green"))
+        else:
+            self.console.print(f"已回退到阶段: {phase}")
+            self.console.print(f"来源: {source_path.name}")
+            self.console.print(f"备份: {backup_path.name}")
+
+        return 0
+
+    # ------------------------------------------------------------------
+    # replay 命令
+    # ------------------------------------------------------------------
+
+    def _cmd_replay(self, args: Any) -> int:
+        """逐步查看流水线各阶段的执行详情和变更。"""
+        project_dir = Path.cwd()
+        superdev_dir = project_dir / ".super-dev"
+        checkpoint_dir = superdev_dir / "checkpoints"
+        history_dir = superdev_dir / "workflow-history"
+        events_file = superdev_dir / "workflow-events.jsonl"
+
+        if not superdev_dir.exists():
+            self.console.print("[yellow]未发现 .super-dev/ 目录，当前项目尚未初始化。[/yellow]")
+            return 1
+
+        run_id = getattr(args, "run_id", None)
+
+        # 收集所有阶段数据
+        phases_data: list[dict[str, Any]] = []
+
+        # 1. 从 checkpoints/ 收集阶段数据
+        if checkpoint_dir.exists():
+            for cp_file in sorted(checkpoint_dir.glob("*.json")):
+                try:
+                    data = json.loads(cp_file.read_text(encoding="utf-8"))
+                    phases_data.append(data)
+                except Exception:
+                    pass
+
+        # 2. 从 workflow-events.jsonl 收集事件数据
+        events: list[dict[str, Any]] = []
+        if events_file.exists():
+            try:
+                for line in events_file.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if line:
+                        try:
+                            event = json.loads(line)
+                            events.append(event)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+        # 3. 从 workflow-history/ 收集历史快照
+        history_snapshots: list[dict[str, Any]] = []
+        if history_dir.exists():
+            for hist_file in sorted(history_dir.glob("*.json")):
+                try:
+                    data = json.loads(hist_file.read_text(encoding="utf-8"))
+                    data["_file"] = str(hist_file)
+                    history_snapshots.append(data)
+                except Exception:
+                    pass
+
+        # 4. 如果有 pipeline-state.json，也加入
+        pipeline_state_file = superdev_dir / "pipeline-state.json"
+        pipeline_state: dict[str, Any] = {}
+        if pipeline_state_file.exists():
+            try:
+                pipeline_state = json.loads(pipeline_state_file.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        # 如果指定了 run-id，筛选数据
+        if run_id:
+            phases_data = [
+                p for p in phases_data
+                if str(p.get("run_id", "")) == run_id
+                or str(p.get("project", "")) == run_id
+            ]
+            events = [
+                e for e in events
+                if str(e.get("run_id", "")) == run_id
+            ]
+
+        if not phases_data and not events and not history_snapshots:
+            self.console.print("[yellow]未找到任何流水线执行记录。[/yellow]")
+            return 0
+
+        # 按时间排序
+        phases_data.sort(key=lambda d: str(d.get("timestamp", "")))
+
+        # 渲染时间线
+        if RICH_AVAILABLE:
+            from rich.panel import Panel
+            from rich.table import Table
+
+            # 总览
+            total_phases = len(phases_data)
+            successful = sum(1 for p in phases_data if p.get("success") is True)
+            failed = sum(1 for p in phases_data if p.get("success") is False)
+            avg_quality = 0.0
+            quality_scores = [
+                float(p.get("quality_score", 0))
+                for p in phases_data
+                if p.get("quality_score") is not None
+            ]
+            if quality_scores:
+                avg_quality = sum(quality_scores) / len(quality_scores)
+
+            overview_text = (
+                f"[bold]流水线执行总览[/bold]\n\n"
+                f"  阶段总数: {total_phases}\n"
+                f"  成功: [green]{successful}[/green]  失败: [red]{failed}[/red]\n"
+                f"  平均质量分: [blue]{avg_quality:.1f}[/blue]\n"
+                f"  事件记录: {len(events)} 条\n"
+                f"  历史快照: {len(history_snapshots)} 个"
+            )
+            if pipeline_state:
+                current = pipeline_state.get("current_phase", "-")
+                completed_list = pipeline_state.get("phases_completed", [])
+                overview_text += f"\n  当前阶段: [cyan]{current}[/cyan]"
+                overview_text += f"\n  已完成阶段: {', '.join(completed_list) if completed_list else '-'}"
+
+            self.console.print(Panel(overview_text, title="Pipeline Replay", border_style="cyan"))
+            self.console.print("")
+
+            # 阶段时间线表
+            if phases_data:
+                table = Table(title="阶段执行时间线", show_lines=True)
+                table.add_column("#", style="dim", width=3)
+                table.add_column("阶段", style="cyan", min_width=14)
+                table.add_column("状态", min_width=8)
+                table.add_column("耗时", style="yellow", min_width=8)
+                table.add_column("质量分", style="blue", min_width=8)
+                table.add_column("时间戳", style="green", min_width=20)
+
+                for idx, phase in enumerate(phases_data, 1):
+                    p_name = str(phase.get("phase", "-"))
+                    success = phase.get("success")
+                    if success is True:
+                        status = "[green]✓ 成功[/green]"
+                    elif success is False:
+                        status = "[red]✗ 失败[/red]"
+                    else:
+                        status = "[dim]-[/dim]"
+
+                    duration = phase.get("duration")
+                    if duration is not None:
+                        try:
+                            dur_val = float(duration)
+                            if dur_val < 60:
+                                dur_str = f"{dur_val:.1f}s"
+                            else:
+                                dur_str = f"{dur_val / 60:.1f}m"
+                        except (ValueError, TypeError):
+                            dur_str = str(duration)
+                    else:
+                        dur_str = "-"
+
+                    qscore = phase.get("quality_score")
+                    if qscore is not None:
+                        try:
+                            qs = float(qscore)
+                            if qs >= 90:
+                                qscore_str = f"[green]{qs:.1f}[/green]"
+                            elif qs >= 70:
+                                qscore_str = f"[yellow]{qs:.1f}[/yellow]"
+                            else:
+                                qscore_str = f"[red]{qs:.1f}[/red]"
+                        except (ValueError, TypeError):
+                            qscore_str = str(qscore)
+                    else:
+                        qscore_str = "-"
+
+                    ts = str(phase.get("timestamp", "-"))
+                    if "." in ts:
+                        ts = ts.split(".")[0]
+
+                    table.add_row(str(idx), p_name, status, dur_str, qscore_str, ts)
+
+                self.console.print(table)
+
+            # 每个阶段的详细 Panel
+            if phases_data:
+                self.console.print("")
+                for phase in phases_data:
+                    p_name = str(phase.get("phase", "-"))
+                    ts = str(phase.get("timestamp", "-"))
+                    if "." in ts:
+                        ts = ts.split(".")[0]
+
+                    detail_lines = [f"时间戳: {ts}"]
+
+                    duration = phase.get("duration")
+                    if duration is not None:
+                        detail_lines.append(f"耗时: {float(duration):.1f}s")
+
+                    qscore = phase.get("quality_score")
+                    if qscore is not None:
+                        detail_lines.append(f"质量分: {float(qscore):.1f}")
+
+                    errors = phase.get("errors", [])
+                    if errors:
+                        detail_lines.append(f"错误: {len(errors)} 个")
+                        for err in errors[:3]:
+                            detail_lines.append(f"  - {err}")
+
+                    # 显示关联的输出文件
+                    project_name = phase.get("project", "")
+                    phase_val = phase.get("phase", "")
+                    if project_name and phase_val:
+                        output_dir = project_dir / "output"
+                        if output_dir.exists():
+                            related = list(output_dir.glob(f"{project_name}-{phase_val}*"))[:3]
+                            if related:
+                                detail_lines.append("产出文件:")
+                                for rf in related:
+                                    detail_lines.append(f"  - {rf.name}")
+
+                    panel_content = "\n".join(detail_lines)
+                    border = "green" if phase.get("success") else "red"
+                    self.console.print(
+                        Panel(panel_content, title=f"阶段: {p_name}", border_style=border)
+                    )
+
+            # 事件时间线
+            if events:
+                self.console.print("")
+                self.console.print("[bold cyan]事件记录[/bold cyan]")
+                for event in events[-20:]:  # 只展示最近 20 条
+                    evt_ts = str(event.get("timestamp", "-"))
+                    if "." in evt_ts:
+                        evt_ts = evt_ts.split(".")[0]
+                    evt_type = str(event.get("type", event.get("event", "-")))
+                    evt_phase = str(event.get("phase", ""))
+                    evt_msg = str(event.get("message", event.get("detail", "")))
+                    line = f"  [dim]{evt_ts}[/dim] [{evt_type}] {evt_phase} {evt_msg}".strip()
+                    self.console.print(line)
+
+            # 历史快照概要
+            if history_snapshots:
+                self.console.print("")
+                self.console.print(f"[dim]历史快照: {len(history_snapshots)} 个 "
+                                   f"(位于 .super-dev/workflow-history/)[/dim]")
+
+        else:
+            # 非 Rich 模式
+            self.console.print("=== Pipeline Replay ===")
+            self.console.print(f"阶段总数: {len(phases_data)}")
+            self.console.print(f"事件记录: {len(events)} 条")
+            self.console.print(f"历史快照: {len(history_snapshots)} 个")
+            self.console.print("")
+            for phase in phases_data:
+                p_name = phase.get("phase", "-")
+                success = phase.get("success")
+                dur = phase.get("duration", "-")
+                qs = phase.get("quality_score", "-")
+                status = "成功" if success else ("失败" if success is False else "-")
+                self.console.print(f"  {p_name}: {status} | 耗时: {dur} | 质量分: {qs}")
+
+        return 0
+
+    # ------------------------------------------------------------------
+    # guard command
+    # ------------------------------------------------------------------
+
+    def _cmd_guard(self, args: Any) -> int:
+        """Run the real-time governance guard."""
+        from ..guard import GovernanceGuard
+
+        project_dir = Path.cwd()
+        guard = GovernanceGuard(project_dir=project_dir)
+        watch = not getattr(args, "no_watch", False)
+        interval = getattr(args, "interval", 2.0)
+        return guard.run(watch=watch, interval=interval)
 
 
 def _format_mtime(mtime: float) -> str:
