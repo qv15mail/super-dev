@@ -103,7 +103,7 @@ DEFAULT_HOST_REGISTRY = HostRegistry(
                 "Project-level `.agent/workflows/`",
                 "User-level `~/.gemini/GEMINI.md`",
                 "User-level `~/.gemini/commands/`",
-                "User-level `~/.gemini/skills/super-dev-core/SKILL.md`",
+                "User-level `~/.gemini/skills/super-dev/SKILL.md`",
             ),
         ),
         HostDefinition(
@@ -134,7 +134,7 @@ DEFAULT_HOST_REGISTRY = HostRegistry(
                 "Project root `AGENTS.md`",
                 "Project-level `.clinerules/`",
                 "Project-level `.cline/skills/`",
-                "User-level `~/.cline/skills/super-dev-core/SKILL.md`",
+                "User-level `~/.cline/skills/super-dev/SKILL.md`",
             ),
         ),
         HostDefinition(
@@ -325,7 +325,7 @@ DEFAULT_HOST_REGISTRY = HostRegistry(
                 "Project-level `.openclaw/rules/super-dev.md`",
                 "Project-level `.openclaw/commands/super-dev.md`",
                 "Project-level `.openclaw/commands/super-dev-seeai.md`",
-                "User-level `~/.openclaw/skills/super-dev-core/SKILL.md`",
+                "User-level `~/.openclaw/skills/super-dev/SKILL.md`",
                 "User-level `~/.openclaw/skills/super-dev-seeai/SKILL.md`",
             ),
         ),
@@ -389,7 +389,7 @@ DEFAULT_HOST_REGISTRY = HostRegistry(
                 "Project-level `.trae/rules.md`",
                 "User-level `~/.trae/user_rules.md`",
                 "User-level `~/.trae/rules.md`",
-                "User-level `~/.trae/skills/super-dev-core/SKILL.md`",
+                "User-level `~/.trae/skills/super-dev/SKILL.md`",
             ),
         ),
         HostDefinition(

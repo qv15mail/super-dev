@@ -2,7 +2,7 @@ author: ''
 backend: node
 cli: {}
 database: postgresql
-description: Super Dev 是一个本地 Python CLI 与宿主规则协同的 AI Coding 治理工具，用 research-first 流水线约束文档冻结、Spec 拆解、前端优先验证、质量门禁和交付证据闭环。
+description: think 做一个龙虾抓取小游戏 --mode competition
 domain: ''
 experts:
 - PM
@@ -53,32 +53,4 @@ platform: web
 quality_gate: 90
 state_management: []
 testing_frameworks: []
-version: 2.3.5
-
-# ── Governance Configuration (2.2.0+) ──────────────────────────────
-# validation_rules:
-#   enabled: true                          # 启用验证规则引擎
-#   custom_rules_path: .super-dev/rules/custom_rules.yaml  # 项目级自定义规则
-#   fail_on_warning: false                 # 是否将 warning 级规则视为失败
-#   skip_rules: []                         # 跳过的规则 ID 列表
-#
-# knowledge_tracker:
-#   enabled: true                          # 启用知识引用追踪
-#   report_dir: output/knowledge-reports   # 知识报告输出目录
-#   min_coverage: 0.6                      # 最低知识覆盖率阈值 (0-1)
-#
-# prompt_templates:
-#   enabled: true                          # 启用 Prompt 模板版本管理
-#   template_dir: super_dev/templates      # 模板存储目录
-#   version_strategy: semver               # 版本策略: semver | date | hash
-#
-# adr:
-#   enabled: true                          # 启用 ADR 自动生成
-#   output_dir: docs/adr                   # ADR 输出目录
-#   template: madr                         # ADR 模板格式: madr | nygard | custom
-#
-# pipeline_metrics:
-#   enabled: true                          # 启用交付效能度量
-#   storage: output/metrics                # 度量数据存储路径
-#   track_dora: true                       # 追踪 DORA 四项指标
-#   track_rework_rate: true                # 追踪返工率
+version: 2.3.6

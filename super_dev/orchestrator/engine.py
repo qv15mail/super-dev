@@ -628,6 +628,33 @@ class WorkflowEngine:
                 result = await self._run_phase(phase, context, phase_timeout=phase_timeout)
                 results[phase] = result
 
+                # Checkpoint: save after successful phase
+                if result.success:
+                    try:
+                        from ..session_checkpoint import save_checkpoint
+
+                        save_checkpoint(
+                            self.project_dir,
+                            phase.value,
+                            {
+                                "completed_phases": [
+                                    p.value for p in phases[: phases.index(phase) + 1]
+                                ],
+                                "user_input": (
+                                    dict(context.user_input)
+                                    if hasattr(context, "user_input")
+                                    else {}
+                                ),
+                                "metadata": (
+                                    dict(context.metadata)
+                                    if hasattr(context, "metadata")
+                                    else {}
+                                ),
+                            },
+                        )
+                    except Exception:
+                        pass
+
                 # Compact: save phase summary
                 if self.compact_engine and result.success:
                     try:
@@ -1341,16 +1368,30 @@ class WorkflowEngine:
                     )
 
         dispatcher = ExpertDispatcher(self.project_dir)
-        result = dispatcher.dispatch_document_generation(
-            name=name,
-            description=description,
-            platform=platform,
-            frontend=frontend,
-            backend=backend,
-            domain=domain,
-            language_preferences=language_preferences,
-            knowledge_summary=knowledge_summary,
-        )
+        # 优先使用异步并行版本，三份文档同时生成
+        try:
+            result = await dispatcher.dispatch_document_generation_async(
+                name=name,
+                description=description,
+                platform=platform,
+                frontend=frontend,
+                backend=backend,
+                domain=domain,
+                language_preferences=language_preferences,
+                knowledge_summary=knowledge_summary,
+            )
+        except Exception:
+            # 退回到同步顺序版本
+            result = dispatcher.dispatch_document_generation(
+                name=name,
+                description=description,
+                platform=platform,
+                frontend=frontend,
+                backend=backend,
+                domain=domain,
+                language_preferences=language_preferences,
+                knowledge_summary=knowledge_summary,
+            )
 
         # 保存生成的文档到 output/ 目录
         output_dir = self.project_dir / "output"

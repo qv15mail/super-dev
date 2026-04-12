@@ -10,6 +10,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -523,8 +526,144 @@ class ExpertDispatcher:
 
         result = ExpertTeamResult()
 
-        # 1. PM 专家：生成 PRD
+        # 注入专家视角到文档生成
+        pm_profile = EXPERT_PROFILES.get(ExpertRole.PM)
+        arch_profile = EXPERT_PROFILES.get(ExpertRole.ARCHITECT)
+        ui_profile = EXPERT_PROFILES.get(ExpertRole.UI)
+
+        # 1. PM 专家：生成 PRD（带专家视角）
+        if pm_profile:
+            gen.expert_context = {
+                "role": pm_profile.title,
+                "goal": pm_profile.goal,
+                "thinking": pm_profile.thinking_framework,
+                "quality": pm_profile.quality_criteria,
+            }
         prd_content = gen.generate_prd()
+        prd_score = self._score_document(prd_content, ["产品愿景", "功能需求", "验收标准"])
+        # 专家自检：用 quality_criteria 验证生成内容
+        if pm_profile:
+            prd_score = self._expert_quality_check(prd_content, pm_profile, prd_score)
+        result.outputs.append(ExpertOutput(
+            role=ExpertRole.PM,
+            document_type="prd",
+            content=prd_content,
+            quality_score=prd_score,
+            metadata={"name": name, "platform": platform, "expert_active": True},
+        ))
+
+        # 2. ARCHITECT 专家：生成架构文档（带专家视角）
+        if arch_profile:
+            gen.expert_context = {
+                "role": arch_profile.title,
+                "goal": arch_profile.goal,
+                "thinking": arch_profile.thinking_framework,
+                "quality": arch_profile.quality_criteria,
+            }
+        arch_content = gen.generate_architecture()
+        arch_score = self._score_document(arch_content, ["技术栈", "数据库", "API", "安全"])
+        if arch_profile:
+            arch_score = self._expert_quality_check(arch_content, arch_profile, arch_score)
+        result.outputs.append(ExpertOutput(
+            role=ExpertRole.ARCHITECT,
+            document_type="architecture",
+            content=arch_content,
+            quality_score=arch_score,
+            metadata={"frontend": frontend, "backend": backend, "expert_active": True},
+        ))
+
+        # 3. UI/UX 专家：生成 UI/UX 文档（带专家视角）
+        if ui_profile:
+            gen.expert_context = {
+                "role": ui_profile.title,
+                "goal": ui_profile.goal,
+                "thinking": ui_profile.thinking_framework,
+                "quality": ui_profile.quality_criteria,
+            }
+        uiux_content = gen.generate_uiux()
+        uiux_score = self._score_document(uiux_content, ["设计系统", "色彩", "组件"])
+        if ui_profile:
+            uiux_score = self._expert_quality_check(uiux_content, ui_profile, uiux_score)
+        result.outputs.append(ExpertOutput(
+            role=ExpertRole.UI,
+            document_type="uiux",
+            content=uiux_content,
+            quality_score=uiux_score,
+            metadata={"platform": platform, "expert_active": True},
+        ))
+
+        # 4. 计算团队总分（含专家自检结果）
+        scores = [o.quality_score for o in result.outputs]
+        result.total_score = sum(scores) / len(scores) if scores else 0.0
+        active_experts = [o for o in result.outputs if o.metadata.get("expert_active")]
+        result.summary = (
+            f"专家团队协作完成：{len(active_experts)} 位专家参与，"
+            f"生成 {len(result.outputs)} 份文档，"
+            f"平均质量分 {result.total_score:.0f}/100"
+        )
+
+        return result
+
+    async def dispatch_document_generation_async(
+        self,
+        name: str,
+        description: str,
+        platform: str = "web",
+        frontend: str = "react",
+        backend: str = "node",
+        domain: str = "",
+        language_preferences: list[str] | None = None,
+        **kwargs,
+    ) -> ExpertTeamResult:
+        """
+        异步并行版本：调度多专家协作生成完整项目文档集
+
+        PM / ARCHITECT / UI-UX 三份文档并行生成，最后汇总评分。
+        若并行执行失败，自动退回到顺序执行。
+        """
+        from ..creators.document_generator import DocumentGenerator
+
+        logger = logging.getLogger(__name__)
+
+        gen = DocumentGenerator(
+            name=name,
+            description=description,
+            platform=platform,
+            frontend=frontend,
+            backend=backend,
+            domain=domain,
+            language_preferences=language_preferences,
+            **kwargs,
+        )
+
+        try:
+            loop = asyncio.get_running_loop()
+            executor = ThreadPoolExecutor(max_workers=3)
+
+            prd_future = loop.run_in_executor(executor, gen.generate_prd)
+            arch_future = loop.run_in_executor(executor, gen.generate_architecture)
+            uiux_future = loop.run_in_executor(executor, gen.generate_uiux)
+
+            prd_content, arch_content, uiux_content = await asyncio.gather(
+                prd_future, arch_future, uiux_future,
+            )
+            executor.shutdown(wait=False)
+            logger.info("并行文档生成完成 (3 docs)")
+        except Exception as exc:
+            logger.warning("并行文档生成失败，退回顺序执行: %s", exc)
+            return self.dispatch_document_generation(
+                name=name,
+                description=description,
+                platform=platform,
+                frontend=frontend,
+                backend=backend,
+                domain=domain,
+                language_preferences=language_preferences,
+                **kwargs,
+            )
+
+        result = ExpertTeamResult()
+
         result.outputs.append(ExpertOutput(
             role=ExpertRole.PM,
             document_type="prd",
@@ -533,8 +672,6 @@ class ExpertDispatcher:
             metadata={"name": name, "platform": platform},
         ))
 
-        # 2. ARCHITECT 专家：生成架构文档
-        arch_content = gen.generate_architecture()
         result.outputs.append(ExpertOutput(
             role=ExpertRole.ARCHITECT,
             document_type="architecture",
@@ -543,8 +680,6 @@ class ExpertDispatcher:
             metadata={"frontend": frontend, "backend": backend},
         ))
 
-        # 3. UI/UX 专家：生成 UI/UX 文档
-        uiux_content = gen.generate_uiux()
         result.outputs.append(ExpertOutput(
             role=ExpertRole.UI,
             document_type="uiux",
@@ -553,11 +688,10 @@ class ExpertDispatcher:
             metadata={"platform": platform},
         ))
 
-        # 4. 计算团队总分
         scores = [o.quality_score for o in result.outputs]
         result.total_score = sum(scores) / len(scores) if scores else 0.0
         result.summary = (
-            f"专家团队协作完成：生成 {len(result.outputs)} 份文档，"
+            f"专家团队协作完成（并行模式）：生成 {len(result.outputs)} 份文档，"
             f"平均质量分 {result.total_score:.0f}/100"
         )
 
@@ -769,6 +903,33 @@ class ExpertDispatcher:
         # 长度加分（越详细越好，上限 100）
         length_bonus = min(10, len(content) // 2000)
         return min(100, base + length_bonus)
+
+    def _expert_quality_check(
+        self, content: str, profile: ExpertProfile, base_score: int
+    ) -> int:
+        """用专家的 quality_criteria 验证文档内容，调整评分。"""
+        if not content or not profile.quality_criteria:
+            return base_score
+
+        met = 0
+        for criterion in profile.quality_criteria:
+            # 提取标准中的关键词做简单匹配
+            keywords = [w for w in criterion.replace("、", " ").split() if len(w) >= 2]
+            if any(kw in content for kw in keywords[:3]):
+                met += 1
+
+        total = len(profile.quality_criteria)
+        if total == 0:
+            return base_score
+
+        ratio = met / total
+        # 专家自检通过率影响最终评分
+        # 通过率 > 80% → 加分；< 50% → 扣分
+        if ratio >= 0.8:
+            return min(100, base_score + 5)
+        elif ratio < 0.5:
+            return max(0, base_score - 10)
+        return base_score
 
     def _serialize_security_issue(self, issue) -> dict:
         return {

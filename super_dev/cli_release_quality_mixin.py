@@ -37,8 +37,14 @@ class CliReleaseQualityMixin:
                 self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
                 return 0 if report.status == "ready" else 1
 
-            status = "[green]ready[/green]" if report.status == "ready" else "[yellow]incomplete[/yellow]"
-            self.console.print(f"[cyan]Proof Pack[/cyan] {status} 证据就绪: {report.ready_count}/{report.total_count}")
+            status = (
+                "[green]ready[/green]"
+                if report.status == "ready"
+                else "[yellow]incomplete[/yellow]"
+            )
+            self.console.print(
+                f"[cyan]Proof Pack[/cyan] {status} 证据就绪: {report.ready_count}/{report.total_count}"
+            )
             self.console.print(f"  [green]✓[/green] Markdown: {files['markdown']}")
             self.console.print(f"  [green]✓[/green] JSON: {files['json']}")
             self.console.print(f"  [green]✓[/green] Summary: {files['summary']}")
@@ -55,7 +61,9 @@ class CliReleaseQualityMixin:
             return 0 if report.status == "ready" else 1
 
         if args.release_command != "readiness":
-            self.console.print("[yellow]请指定 release 子命令，例如 `super-dev release readiness` 或 `super-dev release proof-pack`[/yellow]")
+            self.console.print(
+                "[yellow]请指定 release 子命令，例如 `super-dev release readiness` 或 `super-dev release proof-pack`[/yellow]"
+            )
             return 1
 
         project_dir = Path.cwd()
@@ -119,13 +127,17 @@ class CliReleaseQualityMixin:
         if args.list:
             self.console.print("[cyan]可用专家列表:[/cyan]")
             for expert in list_experts():
-                self.console.print(f"  [green]{expert['id']:<10}[/green] {expert['name']} - {expert['description']}")
+                self.console.print(
+                    f"  [green]{expert['id']:<10}[/green] {expert['name']} - {expert['description']}"
+                )
             return 0
 
         if args.list_teams:
             self.console.print("[cyan]可用专家团队:[/cyan]")
             for team in list_expert_teams():
-                self.console.print(f"  [green]{team['id']:<16}[/green] {team['name']} - {team['description']}")
+                self.console.print(
+                    f"  [green]{team['id']:<16}[/green] {team['name']} - {team['description']}"
+                )
             return 0
 
         prompt = " ".join(args.prompt) if args.prompt else ""
@@ -145,7 +157,9 @@ class CliReleaseQualityMixin:
 
         # 如果没有提供专家名称，显示帮助
         if not args.expert_name:
-            self.console.print("[yellow]请提供专家名称，或使用 --list / --list-teams 查看可用专家[/yellow]")
+            self.console.print(
+                "[yellow]请提供专家名称，或使用 --list / --list-teams 查看可用专家[/yellow]"
+            )
             return 1
 
         self.console.print(f"[cyan]调用专家: {args.expert_name}[/cyan]")
@@ -254,7 +268,9 @@ class CliReleaseQualityMixin:
             expected_pattern = pattern_map[args.type]
             matched = sorted(output_dir.glob(expected_pattern))
             if matched:
-                self.console.print(f"[green]✓[/green] 检测到 {len(matched)} 个文档: {expected_pattern}")
+                self.console.print(
+                    f"[green]✓[/green] 检测到 {len(matched)} 个文档: {expected_pattern}"
+                )
                 for file_path in matched[:5]:
                     self.console.print(f"  - {file_path}")
                 return 0
@@ -271,7 +287,9 @@ class CliReleaseQualityMixin:
             host_compatibility_min_ready_hosts_override=config.host_compatibility_min_ready_hosts,
         )
         persisted_redteam = load_persisted_redteam_report(project_dir, project_name)
-        gate_result = gate_checker.check(redteam_report=persisted_redteam[1] if persisted_redteam else None)
+        gate_result = gate_checker.check(
+            redteam_report=persisted_redteam[1] if persisted_redteam else None
+        )
 
         gate_file = output_dir / f"{project_name}-quality-gate.md"
         gate_file.write_text(gate_result.to_markdown(), encoding="utf-8")
@@ -333,6 +351,28 @@ class CliReleaseQualityMixin:
             for failure in gate_result.critical_failures:
                 self.console.print(f"  - {failure}")
 
+        # Post-merge safety check: detect silently dropped code hunks
+        from .merge_safety import detect_dropped_hunks
+
+        merge_result = detect_dropped_hunks(project_dir)
+        if merge_result["merge_detected"]:
+            if merge_result["safe"]:
+                self.console.print("[green]  ✓ 合并安全检查通过 — 未检测到丢失的代码块[/green]")
+            else:
+                self.console.print(
+                    f"[red]  ✗ 合并安全检查: 检测到 {len(merge_result['dropped_files'])} "
+                    f"个文件可能丢失代码块[/red]"
+                )
+                for entry in merge_result["dropped_files"]:
+                    self.console.print(
+                        f"    [yellow]{entry['file']}[/yellow] (来自 {entry['parent']})"
+                    )
+                    for block in entry["blocks"][:3]:
+                        self.console.print(
+                            f"      行 {block['start_line']}-{block['end_line']} "
+                            f"({block['line_count']} 行)"
+                        )
+
         return 0 if gate_result.passed else 1
 
     def _cmd_metrics(self, args) -> int:
@@ -353,7 +393,9 @@ class CliReleaseQualityMixin:
             if args.project:
                 prefix = f"{self._sanitize_project_name(args.project)}-pipeline-metrics"
                 candidates = [item for item in candidates if item.name.startswith(prefix)]
-            candidates = sorted(candidates, key=lambda path: path.stat().st_mtime, reverse=True)[:limit]
+            candidates = sorted(candidates, key=lambda path: path.stat().st_mtime, reverse=True)[
+                :limit
+            ]
             if not candidates:
                 self.console.print("[yellow]未找到 pipeline 历史指标文件[/yellow]")
                 return 1
@@ -399,7 +441,9 @@ class CliReleaseQualityMixin:
             return 0
 
         if args.project:
-            metrics_file = output_dir / f"{self._sanitize_project_name(args.project)}-pipeline-metrics.json"
+            metrics_file = (
+                output_dir / f"{self._sanitize_project_name(args.project)}-pipeline-metrics.json"
+            )
             if not metrics_file.exists():
                 self.console.print(f"[red]未找到指标文件: {metrics_file.name}[/red]")
                 return 1
@@ -410,7 +454,9 @@ class CliReleaseQualityMixin:
                 reverse=True,
             )
             if not candidates:
-                self.console.print("[yellow]未找到 pipeline 指标文件，请先运行 super-dev \"需求\"[/yellow]")
+                self.console.print(
+                    '[yellow]未找到 pipeline 指标文件，请先运行 super-dev "需求"[/yellow]'
+                )
                 return 1
             metrics_file = candidates[0]
 
@@ -578,7 +624,9 @@ class CliReleaseQualityMixin:
 
         if not records:
             self.console.print("[yellow]未找到历史流水线运行记录[/yellow]")
-            self.console.print("  提示: 运行一次流水线后，记录会自动保存在 .super-dev/workflow-history/")
+            self.console.print(
+                "  提示: 运行一次流水线后，记录会自动保存在 .super-dev/workflow-history/"
+            )
             return 0
 
         if RICH_AVAILABLE:
@@ -653,9 +701,7 @@ class CliReleaseQualityMixin:
 
         if not cost_data and not metrics_data:
             self.console.print("[yellow]未找到成本或指标数据[/yellow]")
-            self.console.print(
-                "  提示: 运行一次流水线后，成本数据会自动保存在 .super-dev/metrics/"
-            )
+            self.console.print("  提示: 运行一次流水线后，成本数据会自动保存在 .super-dev/metrics/")
             self.console.print("  查看指标: super-dev metrics")
             return 0
 
@@ -698,7 +744,9 @@ class CliReleaseQualityMixin:
             )
 
         if metrics_data:
-            self.console.print(f"[cyan]Pipeline Metrics[/cyan]  project={metrics_data.get('project_name', '')}")
+            self.console.print(
+                f"[cyan]Pipeline Metrics[/cyan]  project={metrics_data.get('project_name', '')}"
+            )
             self.console.print(
                 f"  success={metrics_data.get('success', False)}  "
                 f"success_rate={metrics_data.get('success_rate', 0)}%  "
@@ -821,7 +869,9 @@ class CliReleaseQualityMixin:
                 self.console.print("\n[cyan]Git Diff (output/):[/cyan]")
                 self.console.print(result.stdout.strip())
             else:
-                self.console.print("\n[dim]No uncommitted changes detected in output/ via git.[/dim]")
+                self.console.print(
+                    "\n[dim]No uncommitted changes detected in output/ via git.[/dim]"
+                )
         except (FileNotFoundError, subprocess.TimeoutExpired):
             self.console.print("\n[dim]Git not available or timed out.[/dim]")
 

@@ -33,11 +33,9 @@ class SkillManager:
     }
 
     # Default skill name for hosts not listed in CANONICAL_SKILL_NAMES.
-    DEFAULT_SKILL_NAME = "super-dev-core"
+    DEFAULT_SKILL_NAME = "super-dev"
 
-    LEGACY_SKILL_ALIASES = {
-        "codex-cli": ["super-dev-core"],
-    }
+    LEGACY_SKILL_ALIASES: dict[str, list[str]] = {}
     SUPPLEMENTAL_BUILTIN_SKILLS = {
         "codex-cli": ["super-dev-seeai"],
         "claude-code": ["super-dev-seeai"],
@@ -99,9 +97,7 @@ class SkillManager:
         **OFFICIAL_TARGET_PATHS,
     }
 
-    COMPATIBILITY_MIRROR_PATHS = {
-        "codex-cli": ["~/.codex/skills"],
-    }
+    COMPATIBILITY_MIRROR_PATHS: dict[str, list[str]] = {}
 
     def __init__(self, project_dir: Path):
         self.project_dir = Path(project_dir).resolve()
@@ -210,6 +206,16 @@ class SkillManager:
         if source == "super-dev":
             skill_name = name or self.default_skill_name(target)
             target_dir = base / skill_name
+
+            # Clean up legacy skill names for this target
+            legacy_names = ["super-dev-core"]  # Old skill names to clean up
+            for legacy in legacy_names:
+                if legacy == skill_name:
+                    continue  # Don't remove the skill we're about to install
+                legacy_dir = base / legacy
+                if legacy_dir.exists():
+                    shutil.rmtree(legacy_dir, ignore_errors=True)
+
             self._prepare_target_dir(target_dir, force=force)
             self._write_builtin_skill(target_dir, skill_name, target)
             self._mirror_skill_install(
@@ -246,6 +252,7 @@ class SkillManager:
                         mirror_dir, extra_skill, target
                     ),
                 )
+            self._cleanup_legacy_skills(target)
             return SkillInstallResult(
                 name=skill_name,
                 target=target,
@@ -256,6 +263,24 @@ class SkillManager:
         raise FileNotFoundError(
             f"Skill source not found: {source}. Use a local directory, git url, or 'super-dev'."
         )
+
+    def refresh_all_installed(self) -> list[str]:
+        """Re-install skills for all hosts that already have them, updating to current version."""
+        refreshed = []
+        for target, target_path_str in {
+            **self.OFFICIAL_TARGET_PATHS,
+            **self.OBSERVED_TARGET_PATHS,
+        }.items():
+            target_path = Path(target_path_str).expanduser()
+            # Check if super-dev skill exists for this target
+            skill_dir = target_path / "super-dev"
+            if skill_dir.exists() and (skill_dir / "SKILL.md").exists():
+                try:
+                    self.install(source="super-dev", target=target, force=True)
+                    refreshed.append(target)
+                except Exception:
+                    pass
+        return refreshed
 
     def uninstall(self, name: str, target: str) -> Path:
         names = self.compatibility_skill_names(target, name)
@@ -311,6 +336,18 @@ class SkillManager:
             mirror_dir = mirror_base / skill_name
             self._prepare_target_dir(mirror_dir, force=force)
             writer(mirror_dir)
+
+    def _cleanup_legacy_skills(self, target: str) -> None:
+        """Remove legacy super-dev-core and stale codex mirror directories."""
+        legacy_dirs = [
+            Path("~/.agents/skills/super-dev-core").expanduser(),
+            Path("~/.codex/skills/super-dev-core").expanduser(),
+            Path("~/.codex/skills/super-dev").expanduser(),
+            Path("~/.codex/skills/super-dev-seeai").expanduser(),
+        ]
+        for legacy in legacy_dirs:
+            if legacy.exists():
+                shutil.rmtree(legacy, ignore_errors=True)
 
     def _is_git_source(self, source: str) -> bool:
         return (

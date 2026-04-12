@@ -2471,12 +2471,12 @@ class TestWebAPI:
             in codex_host["optional_project_surfaces"]
         )
         assert (
-            "~/.agents/skills/super-dev-core/SKILL.md"
+            "~/.agents/skills/super-dev/SKILL.md"
             in codex_host["observed_compatibility_surfaces"]
         )
         assert "~/.codex/skills/super-dev/SKILL.md" in codex_host["observed_compatibility_surfaces"]
         assert (
-            "~/.codex/skills/super-dev-core/SKILL.md"
+            "~/.codex/skills/super-dev/SKILL.md"
             in codex_host["observed_compatibility_surfaces"]
         )
         assert (
@@ -2536,8 +2536,8 @@ class TestWebAPI:
         assert ".qoder/rules/super-dev.md" in qoder_host["official_project_surfaces"]
         assert "~/.qoder/AGENTS.md" in qoder_host["official_user_surfaces"]
         assert "~/.qoder/commands/super-dev.md" in qoder_host["official_user_surfaces"]
-        assert ".qoder/skills/super-dev-core/SKILL.md" in qoder_host["official_project_surfaces"]
-        assert "~/.qoder/skills/super-dev-core/SKILL.md" in qoder_host["official_user_surfaces"]
+        assert ".qoder/skills/super-dev/SKILL.md" in qoder_host["official_project_surfaces"]
+        assert "~/.qoder/skills/super-dev/SKILL.md" in qoder_host["official_user_surfaces"]
         assert qoder_host["observed_compatibility_surfaces"] == []
 
     def test_codebuddy_and_openclaw_catalogs_expose_competition_mode(self):
@@ -2632,7 +2632,7 @@ class TestWebAPI:
         assert "GEMINI.md" in host["official_project_surfaces"]
         assert ".agent/workflows/super-dev.md" in host["official_project_surfaces"]
         assert "~/.gemini/GEMINI.md" in host["official_user_surfaces"]
-        assert "~/.gemini/skills/super-dev-core/SKILL.md" in host["official_user_surfaces"]
+        assert "~/.gemini/skills/super-dev/SKILL.md" in host["official_user_surfaces"]
         assert host["commands"]["trigger"] == '/super-dev "你的需求"'
         assert host["final_trigger"] == '/super-dev "你的需求"'
         assert host["requires_restart_after_onboard"] is True
@@ -2651,9 +2651,9 @@ class TestWebAPI:
         assert kiro_host["commands"]["trigger"] == '/super-dev "你的需求"'
         assert kiro_host["final_trigger"] == '/super-dev "你的需求"'
         assert ".kiro/steering/super-dev.md" in kiro_host["official_project_surfaces"]
-        assert ".kiro/skills/super-dev-core/SKILL.md" in kiro_host["official_project_surfaces"]
+        assert ".kiro/skills/super-dev/SKILL.md" in kiro_host["official_project_surfaces"]
         assert "~/.kiro/steering/super-dev.md" in kiro_host["official_user_surfaces"]
-        assert "~/.kiro/skills/super-dev-core/SKILL.md" in kiro_host["official_user_surfaces"]
+        assert "~/.kiro/skills/super-dev/SKILL.md" in kiro_host["official_user_surfaces"]
         assert "~/.kiro/steering/AGENTS.md" in kiro_host["observed_compatibility_surfaces"]
 
     @pytest.mark.parametrize(
@@ -2700,9 +2700,9 @@ class TestWebAPI:
         assert host["slash_command_file"] == ".kiro/steering/super-dev.md"
         assert host["final_trigger"] == '/super-dev "你的需求"'
         assert ".kiro/steering/super-dev.md" in host["official_project_surfaces"]
-        assert ".kiro/skills/super-dev-core/SKILL.md" in host["official_project_surfaces"]
+        assert ".kiro/skills/super-dev/SKILL.md" in host["official_project_surfaces"]
         assert "~/.kiro/steering/super-dev.md" in host["official_user_surfaces"]
-        assert "~/.kiro/skills/super-dev-core/SKILL.md" in host["official_user_surfaces"]
+        assert "~/.kiro/skills/super-dev/SKILL.md" in host["official_user_surfaces"]
 
     def test_hosts_doctor_endpoint_ready_after_files_present(
         self, temp_project_dir: Path, monkeypatch

@@ -4,7 +4,7 @@ description: Super Dev pipeline governance for research-first, commercial-grade 
 when_to_use: Use when the user says /super-dev, super-dev:, or super-dev： followed by a requirement. Activate the Super Dev pipeline for research-first, commercial-grade project delivery.
 allowed_tools: Read, Edit, Write, Bash
 user_invocable: true
-version: 2.3.5
+version: 2.3.6
 argument_hint: requirement description
 metadata: {"openclaw":{"requires":{"bins":["super-dev"]},"homepage":"https://superdev.goder.ai","install":[{"id":"pip","kind":"uv","formula":"super-dev","bins":["super-dev"],"label":"pip install super-dev"}]}}
 ---
@@ -22,7 +22,7 @@ metadata: {"openclaw":{"requires":{"bins":["super-dev"]},"homepage":"https://sup
 
 4. **自检规则**: 在向用户展示任何 UI 代码或预览前，必须自检源码中不存在任何 emoji 字符（Unicode range U+2600-U+27BF, U+1F300-U+1FAFF）。发现后先替换为正式图标库再继续。
 
-> 版本: 2.3.5 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
+> 版本: 2.3.6 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
 
 ---
 
@@ -146,6 +146,23 @@ super-dev spec list                     # 查看规范与变更
 - 说明固定顺序：research -> 三份核心文档 -> 等待确认 -> Spec/tasks -> 前端优先 -> 后端/测试/交付。
 - 三份核心文档完成后暂停等待确认；未经确认不创建 Spec 也不编码。
 
+### 顺位思考（需求拆解）
+
+收到用户需求后，在进入 research 之前先用**顺位思考**（Sequential Thinking）拆解需求。
+逐步推理，每步建立在前一步之上，发现前面想错了可以修正。
+
+```
+Step 1 — 理解需求本质：这是什么类型的产品？解决什么问题？服务谁？
+Step 2 — 识别核心价值：用户为什么要用这个？核心价值主张是什么？
+Step 3 — 拆解功能域：按用户旅程拆分功能模块（不是按技术层拆）
+Step 4 — 判断技术方向：前端框架？后端架构？数据存储？部署方式？
+Step 5 — 识别风险与约束：技术风险、时间约束、业务规则、安全要求
+Step 6 — 确定优先级：哪些是 MVP 必须的？哪些可以后续迭代？
+Step 7 — 回顾修正：前面的步骤有没有矛盾？优先级合理吗？
+```
+
+思考过程写入 `output/*-research.md` 的开头部分，让后续文档阶段能继承。
+
 ### research 双引擎
 
 **引擎 1: CLI 知识推送** — `super-dev run research` 触发本地知识发现，读取 `knowledge/` 和 knowledge-bundle.json。
@@ -263,19 +280,65 @@ super-dev spec list                     # 查看规范与变更
 
 永远不要在尝试阶段 1-2 之前就暴露错误给用户。
 
-## Agent Teams 协作（支持 Teams 功能的宿主）
+## 专家并行（自动利用宿主 Agent 能力）
 
-如果宿主支持 Agent Teams（如 Claude Code 的 /teams），可以让多位 Super Dev 专家并行工作：
+当宿主支持 Agent/Subagent 能力时（如 Claude Code 的 Agent tool、Codex 的 subagent），
+**自动**将独立的工作并行分发给子 agent，而不是让用户手动操作。
 
-**研究阶段**: PM + ARCHITECT 并行调研
-**文档阶段**: PRD / Architecture / UIUX 可并行起草
-**编码阶段**: 前端 + 后端可并行开发（注意 API 契约对齐）
-**质量阶段**: Security + QA + Performance 并行审查
+### 何时自动并行
 
-使用 Teams 时的约束：
-- 每个 teammate 必须声明自己的专家角色
-- teammates 之间通过共享文件（output/*.md）传递上下文
-- 修改同一文件前必须协调（避免冲突）
+以下阶段的子任务相互独立，应该自动并行：
+
+**研究阶段**：
+- Agent A: PM 视角调研（用户需求、市场定位、竞品）
+- Agent B: ARCHITECT 视角调研（技术栈、架构模式、性能基准）
+- 两个 agent 各自输出，主 agent 合并到 `output/*-research.md`
+
+**文档阶段**：
+- Agent A: 生成 PRD（PM 专家角色）
+- Agent B: 生成架构文档（ARCHITECT 专家角色）
+- Agent C: 生成 UIUX 文档（UI/UX 专家角色）
+- 三个 agent 并行写不同文件，完成后主 agent 做一致性检查
+
+**编码阶段**（前后端分离项目）：
+- Agent A: 前端实现（UI 专家角色）
+- Agent B: 后端实现（CODE 专家角色）
+- 约束：两个 agent 必须共用同一个 API 路径定义（从 `output/*-architecture.md` 读取）
+
+**质量阶段**：
+- Agent A: 安全审查（SECURITY 专家角色）
+- Agent B: 代码质量审查（QA 专家角色）
+- Agent C: 性能审查（ARCHITECT 专家角色）
+- 三个 agent 并行审查，各自输出报告，主 agent 汇总
+
+### 如何自动并行
+
+如果宿主有 Agent tool（如 Claude Code），直接在执行中使用：
+
+```
+# 研究阶段 — 并行派发两个子 agent
+Agent({
+  name: "pm-research",
+  prompt: "你是 PM 专家。调研 [需求] 的用户需求和竞品...",
+  run_in_background: true
+})
+Agent({
+  name: "arch-research",
+  prompt: "你是架构专家。调研 [需求] 的技术方案和性能基准...",
+  run_in_background: true
+})
+# 等两个完成后合并结果
+```
+
+如果宿主不支持 Agent tool，自动降级为顺序执行，不报错。
+
+### 并行约束
+
+- 并行的 agent 写**不同文件**，不写同一个文件
+- API 路径必须从共享的架构文档读取，不各自发明
+- 每个 agent 声明自己的专家角色（在 prompt 里说明）
+- 主 agent 负责合并和一致性检查
+- 质量门禁必须等所有并行 agent 完成后才运行
 - 质量门禁结果必须等所有 teammates 完成后汇总
 
 ## Super Dev System Flow Contract

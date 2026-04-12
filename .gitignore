@@ -79,3 +79,21 @@ artifacts/
 # Local logs and media
 logs/
 dist_2_0_9/
+
+# Super Dev runtime state (per-project, not code)
+.super-dev/decisions/
+.super-dev/workflow-history/
+.super-dev/workflow-events.jsonl
+.super-dev/knowledge-stats.db
+.super-dev/install-manifest.json
+.super-dev/checkpoints/
+.super-dev/pipeline-state.json
+.super-dev/SESSION_BRIEF.md
+.super-dev/workflow-state.json
+.super-dev/project.md
+
+# Root-level media duplicates (use super-dev-website/public/ instead)
+demo.mp4
+wechat.png
+wx.png
+qun.jpg

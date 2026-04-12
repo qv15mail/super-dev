@@ -3543,7 +3543,7 @@ async def doctor_hosts(
     project_dir: str = ".",
     host: str | None = None,
     auto: bool = False,
-    skill_name: str = "super-dev-core",
+    skill_name: str = "super-dev",
     skip_integrate: bool = False,
     skip_skill: bool = False,
     skip_slash: bool = False,
@@ -3666,7 +3666,7 @@ async def validate_hosts(
     project_dir: str = ".",
     host: str | None = None,
     auto: bool = False,
-    skill_name: str = "super-dev-core",
+    skill_name: str = "super-dev",
 ) -> dict[str, Any]:
     project_dir_path = _validate_project_dir(project_dir)
     integration_manager = IntegrationManager(project_dir_path)
@@ -3736,7 +3736,7 @@ async def get_hosts_runtime_validation(
     project_dir: str = ".",
     host: str | None = None,
     auto: bool = False,
-    skill_name: str = "super-dev-core",
+    skill_name: str = "super-dev",
 ) -> dict[str, Any]:
     """读取宿主真人运行时验收状态。"""
     return await validate_hosts(

@@ -301,7 +301,7 @@ class IntegrationManagerContentMixin:
         if target == "codebuddy" and relative.endswith(".codebuddy/rules/super-dev/RULE.mdc"):
             return self._build_codebuddy_rule_content()
 
-        if target == "codebuddy" and relative.endswith(".codebuddy/agents/super-dev-core.md"):
+        if target == "codebuddy" and relative.endswith(".codebuddy/agents/super-dev.md"):
             return self._build_codebuddy_agent_content()
 
         if target == "trae":
@@ -541,21 +541,6 @@ class IntegrationManagerContentMixin:
                 "- Enter research first, then compact PRD / architecture / UIUX, wait for docs confirmation, create compact Spec, and move into one integrated build sprint.\n"
                 "- Do not expand back into the standard preview gate unless the user explicitly switches modes.\n"
                 "- Keep the result demoable, visually intentional, and runnable.\n"
-            )
-        if skill_name == "super-dev-core":
-            return (
-                "---\n"
-                "name: super-dev-core\n"
-                "description: Compatibility alias for the Super Dev Codex plugin skill.\n"
-                "when_to_use: Use when legacy Codex environments still surface super-dev-core instead of super-dev.\n"
-                f"version: {__version__}\n"
-                "---\n\n"
-                "# Super Dev Core Compatibility Alias\n\n"
-                "Treat this skill as the same contract as `super-dev`.\n\n"
-                "- Enter the full Super Dev pipeline immediately.\n"
-                "- Read `AGENTS.md` and `.super-dev/SESSION_BRIEF.md` before replying when present.\n"
-                "- Follow the exact same research -> docs -> confirmation -> implementation flow.\n"
-                "- Do not explain the alias; execute the workflow.\n"
             )
         return (
             "---\n"

@@ -138,7 +138,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "antigravity": [
             "Antigravity 当前优先按 `GEMINI.md + .agent/workflows + /super-dev` 模式接入。",
             "项目内会写入 `GEMINI.md`、`.gemini/commands/super-dev.md` 与 `.agent/workflows/super-dev.md`。",
-            "用户级会补充 `~/.gemini/GEMINI.md`、`~/.gemini/commands/super-dev.md` 与 `~/.gemini/skills/super-dev-core/SKILL.md`。",
+            "用户级会补充 `~/.gemini/GEMINI.md`、`~/.gemini/commands/super-dev.md` 与 `~/.gemini/skills/super-dev/SKILL.md`。",
             "接入后建议新开一个 Antigravity Chat，使 GEMINI 上下文、slash 与 Skill 一起生效。",
         ],
         "claude-code": [
@@ -150,7 +150,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
         ],
         "cline": [
             "Cline 优先使用 `.clinerules/` 规则目录，并补充项目级 `.cline/skills/` 让宿主在当前工作区内直接理解 Super Dev 协议。",
-            "用户级 `~/.cline/skills/super-dev-core/SKILL.md` 会作为全局增强面一起安装。",
+            "用户级 `~/.cline/skills/super-dev/SKILL.md` 会作为全局增强面一起安装。",
             "当前按文本触发 `super-dev: <需求描述>` 适配，减少与内建 slash 的语义冲突。",
         ],
         "codebuddy-cli": [
@@ -169,7 +169,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "Codex 官方不走自定义项目 slash；桌面端请从 `/` 列表选择 `super-dev`，那是启用 Skill 的展示入口。",
             "实际依赖项目根 AGENTS.md、项目级 .agents/skills/super-dev/SKILL.md、全局 CODEX_HOME/AGENTS.md（默认 ~/.codex/AGENTS.md），以及官方用户级技能目录 ~/.agents/skills/super-dev/SKILL.md。",
             "仓库内还会额外生成 `.agents/plugins/marketplace.json` 与 `plugins/super-dev-codex/`，作为 Codex App/Desktop 的可选 repo plugin 增强层。",
-            "非 Claude Code 宿主保留 super-dev-core 作为兼容别名；Claude Code 统一使用 super-dev。",
+            "所有宿主统一使用 super-dev 技能名称，onboard / migrate 会自动清理旧版 super-dev-core 残留。",
             "如果旧会话没加载新 Skill，重启 codex 再试。",
         ],
         "copilot-cli": [
@@ -239,22 +239,21 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "trae": [
             "不要输入 /super-dev。",
             "Trae 优先依赖项目级 `.trae/project_rules.md` 与用户级 `~/.trae/user_rules.md`；同时会兼容写入 `.trae/rules.md` 与 `~/.trae/rules.md`，用于命中当前已观测到的规则加载面。",
-            "若检测到宿主级 ~/.trae/skills/super-dev-core/SKILL.md，则会额外增强。",
+            "若检测到宿主级 ~/.trae/skills/super-dev/SKILL.md，则会额外增强。",
             "安装后建议新开一个 Trae Agent Chat，让新的规则与 Skill 一起生效。",
             "随后按 output/* 与 .super-dev/changes/*/tasks.md 推进开发。",
         ],
         "openclaw": [
             "OpenClaw 通过原生 Plugin SDK 集成，安装插件后 10 个专用 Tool 自动注册。",
             "项目内会写入 `.openclaw/rules/super-dev.md`、`.openclaw/commands/super-dev.md` 与 `.openclaw/commands/super-dev-seeai.md`。",
-            "用户级 Skill 会安装到 `~/.openclaw/skills/super-dev-core/SKILL.md` 与 `~/.openclaw/skills/super-dev-seeai/SKILL.md`。",
+            "用户级 Skill 会安装到 `~/.openclaw/skills/super-dev/SKILL.md` 与 `~/.openclaw/skills/super-dev-seeai/SKILL.md`。",
             "安装后建议重启 OpenClaw Gateway 或开启新会话，让 Plugin 和 Skill 一起生效。",
             "比赛场景优先使用 `/super-dev-seeai` 或 `super-dev-seeai:`，把精力集中在 30 分钟内可讲解、可展示的主作品。",
         ],
         "workbuddy": [
-            "WorkBuddy 当前按手动接入宿主建模，不走 `super-dev install/setup` 自动写项目规则文件。",
-            "官方公开能力集中在自然语言任务、Skills 扩展、MCP、右侧文件/变更侧栏与本地文件夹授权。",
-            "当前主入口是 `super-dev: <需求描述>`；比赛模式使用 `super-dev-seeai: <需求描述>`。",
-            "建议在 WorkBuddy 的技能市场/技能导入能力中手动启用 Super Dev 标准版与 SEEAI 比赛版，再在同一个任务会话中连续执行。",
+            "WorkBuddy 通过 Skill 接入，`super-dev setup workbuddy` 自动安装到 ~/.workbuddy/skills/。",
+            "主入口是 `super-dev: <需求描述>`；赛事模式使用 `super-dev-seeai: <需求描述>`。",
+            "也可在 WorkBuddy 技能市场搜索 Super Dev 手动启用。",
         ],
     }
     HOST_PRECONDITION_GUIDANCE: dict[str, list[str]] = {
@@ -403,12 +402,12 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "cline": IntegrationTarget(
             name="cline",
             description="Cline IDE 规则注入",
-            files=[".clinerules/super-dev.md", ".cline/skills/super-dev-core/SKILL.md"],
+            files=[".clinerules/super-dev.md", ".cline/skills/super-dev/SKILL.md"],
         ),
         "codebuddy-cli": IntegrationTarget(
             name="codebuddy-cli",
             description="CodeBuddy CLI 项目规则注入",
-            files=["CODEBUDDY.md", ".codebuddy/skills/super-dev-core/SKILL.md"],
+            files=["CODEBUDDY.md", ".codebuddy/skills/super-dev/SKILL.md"],
         ),
         "codebuddy": IntegrationTarget(
             name="codebuddy",
@@ -416,8 +415,8 @@ class IntegrationManager(IntegrationManagerContentMixin):
             files=[
                 "CODEBUDDY.md",
                 ".codebuddy/rules/super-dev/RULE.mdc",
-                ".codebuddy/agents/super-dev-core.md",
-                ".codebuddy/skills/super-dev-core/SKILL.md",
+                ".codebuddy/agents/super-dev.md",
+                ".codebuddy/skills/super-dev/SKILL.md",
             ],
         ),
         "codex-cli": IntegrationTarget(
@@ -430,20 +429,20 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "plugins/super-dev-codex/.codex-plugin/plugin.json",
                 "plugins/super-dev-codex/README.md",
                 "plugins/super-dev-codex/skills/super-dev/SKILL.md",
-                "plugins/super-dev-codex/skills/super-dev-core/SKILL.md",
+                "plugins/super-dev-codex/skills/super-dev/SKILL.md",
             ],
             optional_files=[
                 ".agents/plugins/marketplace.json",
                 "plugins/super-dev-codex/.codex-plugin/plugin.json",
                 "plugins/super-dev-codex/README.md",
                 "plugins/super-dev-codex/skills/super-dev/SKILL.md",
-                "plugins/super-dev-codex/skills/super-dev-core/SKILL.md",
+                "plugins/super-dev-codex/skills/super-dev/SKILL.md",
             ],
         ),
         "copilot-cli": IntegrationTarget(
             name="copilot-cli",
             description="GitHub Copilot CLI 指令注入",
-            files=[".github/copilot-instructions.md", ".github/skills/super-dev-core/SKILL.md"],
+            files=[".github/copilot-instructions.md", ".github/skills/super-dev/SKILL.md"],
         ),
         "cursor-cli": IntegrationTarget(
             name="cursor-cli",
@@ -453,7 +452,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "windsurf": IntegrationTarget(
             name="windsurf",
             description="Windsurf IDE 规则注入",
-            files=[".windsurf/rules/super-dev.md", ".windsurf/skills/super-dev-core/SKILL.md"],
+            files=[".windsurf/rules/super-dev.md", ".windsurf/skills/super-dev/SKILL.md"],
         ),
         "gemini-cli": IntegrationTarget(
             name="gemini-cli",
@@ -463,12 +462,12 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "kilo-code": IntegrationTarget(
             name="kilo-code",
             description="Kilo Code 规则 + Skill 注入",
-            files=[".kilocode/rules/super-dev.md", ".kilocode/skills/super-dev-core/SKILL.md"],
+            files=[".kilocode/rules/super-dev.md", ".kilocode/skills/super-dev/SKILL.md"],
         ),
         "kiro-cli": IntegrationTarget(
             name="kiro-cli",
             description="Kiro CLI 项目规则注入",
-            files=[".kiro/steering/super-dev.md", ".kiro/skills/super-dev-core/SKILL.md"],
+            files=[".kiro/steering/super-dev.md", ".kiro/skills/super-dev/SKILL.md"],
         ),
         "qoder-cli": IntegrationTarget(
             name="qoder-cli",
@@ -476,7 +475,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
             files=[
                 "AGENTS.md",
                 ".qoder/rules/super-dev.md",
-                ".qoder/skills/super-dev-core/SKILL.md",
+                ".qoder/skills/super-dev/SKILL.md",
             ],
         ),
         "roo-code": IntegrationTarget(
@@ -495,7 +494,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
             files=[
                 "AGENTS.md",
                 ".opencode/commands/super-dev.md",
-                ".opencode/skills/super-dev-core/SKILL.md",
+                ".opencode/skills/super-dev/SKILL.md",
             ],
         ),
         "cursor": IntegrationTarget(
@@ -506,7 +505,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "kiro": IntegrationTarget(
             name="kiro",
             description="Kiro IDE 项目规则注入",
-            files=[".kiro/steering/super-dev.md", ".kiro/skills/super-dev-core/SKILL.md"],
+            files=[".kiro/steering/super-dev.md", ".kiro/skills/super-dev/SKILL.md"],
         ),
         "qoder": IntegrationTarget(
             name="qoder",
@@ -514,7 +513,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
             files=[
                 "AGENTS.md",
                 ".qoder/rules/super-dev.md",
-                ".qoder/skills/super-dev-core/SKILL.md",
+                ".qoder/skills/super-dev/SKILL.md",
             ],
         ),
         "trae": IntegrationTarget(
@@ -529,7 +528,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
         ),
         "workbuddy": IntegrationTarget(
             name="workbuddy",
-            description="WorkBuddy 桌面工作台手动技能接入",
+            description="WorkBuddy 桌面工作台 Skill 接入",
             files=[],
         ),
     }
@@ -827,7 +826,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "evidence": [
                 "官方文档公开 copilot-instructions.md、.github/skills 与 ~/.copilot/skills",
                 "官方文档公开 Copilot CLI custom agents 目录 .github/agents 与 ~/.copilot/agents",
-                "Super Dev 已写入 .github/copilot-instructions.md 与 .github/skills/super-dev-core/SKILL.md",
+                "Super Dev 已写入 .github/copilot-instructions.md 与 .github/skills/super-dev/SKILL.md",
             ],
         },
         "cursor": {
@@ -1492,7 +1491,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
     def expected_skill_path(
         cls,
         target: str,
-        skill_name: str = "super-dev-core",
+        skill_name: str = "super-dev",
         project_dir: Path | None = None,
     ) -> Path | None:
         paths = cls.expected_skill_paths(
@@ -1504,7 +1503,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
     def expected_skill_paths(
         cls,
         target: str,
-        skill_name: str = "super-dev-core",
+        skill_name: str = "super-dev",
         project_dir: Path | None = None,
     ) -> list[Path]:
         from ..skills import SkillManager
@@ -1612,7 +1611,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
         if normalized.endswith(".agent/workflows/super-dev.md"):
             return [documents_group, confirmation_group, flow_group]
 
-        if normalized.endswith("/agents/super-dev-core.md"):
+        if normalized.endswith("/agents/super-dev.md"):
             return [trigger_group, documents_group, confirmation_group, artifacts_group, flow_group]
 
         if normalized.endswith("AGENTS.md") and target in {"codex-cli", "opencode"}:
@@ -1653,7 +1652,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
         return missing
 
     def collect_managed_surface_paths(
-        self, target: str, skill_name: str = "super-dev-core"
+        self, target: str, skill_name: str = "super-dev"
     ) -> dict[str, Path]:
         if target not in self.TARGETS:
             raise ValueError(f"Unsupported target: {target}")
@@ -1727,7 +1726,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
         self,
         *,
         target: str,
-        skill_name: str = "super-dev-core",
+        skill_name: str = "super-dev",
     ) -> dict[str, dict[str, Any]]:
         managed = self.collect_managed_surface_paths(target=target, skill_name=skill_name)
         groups = self.surface_path_groups(target=target)
@@ -1754,7 +1753,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
         self,
         *,
         target: str,
-        skill_name: str = "super-dev-core",
+        skill_name: str = "super-dev",
     ) -> dict[str, list[Path]]:
         groups = self.surface_path_groups(target=target)
         skill_paths = self.expected_skill_paths(
@@ -1972,7 +1971,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
                     '在 Claude Code 当前项目会话里输入 `/super-dev "<需求描述>"` 触发完整流程。',
                 ],
                 "usage_notes": usage_notes,
-                "notes": "Claude Code 当前最佳接入面是项目根 `CLAUDE.md` + 项目级 `.claude/skills/super-dev/` + 用户级 `~/.claude/skills/`；`.claude/commands/` 保留为兼容增强面；repo 级 `.claude-plugin/marketplace.json` + `plugins/super-dev-claude/.claude-plugin/plugin.json` 作为可选 plugin enhancement 一并提供。Claude Code 不再安装 super-dev-core 别名，避免重复技能冲突。",
+                "notes": "Claude Code 当前最佳接入面是项目根 `CLAUDE.md` + 项目级 `.claude/skills/super-dev/` + 用户级 `~/.claude/skills/`；`.claude/commands/` 保留为兼容增强面；repo 级 `.claude-plugin/marketplace.json` + `plugins/super-dev-claude/.claude-plugin/plugin.json` 作为可选 plugin enhancement 一并提供。",
             }
         if target == "antigravity":
             return {
@@ -1985,7 +1984,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "post_onboard_steps": [
                     "完成接入后重新打开 Antigravity，或至少新开一个 Agent Chat。",
                     "确认项目内已生成 `GEMINI.md`、`.gemini/commands/super-dev.md` 与 `.agent/workflows/super-dev.md`。",
-                    "确认用户目录已生成 `~/.gemini/GEMINI.md`、`~/.gemini/commands/super-dev.md` 与 `~/.gemini/skills/super-dev-core/SKILL.md`。",
+                    "确认用户目录已生成 `~/.gemini/GEMINI.md`、`~/.gemini/commands/super-dev.md` 与 `~/.gemini/skills/super-dev/SKILL.md`。",
                     '在 Antigravity Agent Chat 输入 `/super-dev "<需求描述>"` 触发完整流程。',
                 ],
                 "usage_notes": usage_notes,
@@ -2007,7 +2006,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
                     "按 output/* 与 .super-dev/changes/*/tasks.md 执行开发。",
                 ],
                 "usage_notes": usage_notes,
-                "notes": "该宿主当前以项目级 `.trae/project_rules.md` 与用户级 `~/.trae/user_rules.md` 为官方核心接入面；同时会兼容写入 `.trae/rules.md` 与 `~/.trae/rules.md`，若检测到 ~/.trae/skills，则会增强安装 super-dev-core。",
+                "notes": "该宿主当前以项目级 `.trae/project_rules.md` 与用户级 `~/.trae/user_rules.md` 为官方核心接入面；同时会兼容写入 `.trae/rules.md` 与 `~/.trae/rules.md`，若检测到 ~/.trae/skills，则会增强安装 super-dev Skill。",
             }
         if target == "kiro":
             return {
@@ -2037,8 +2036,8 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "requires_restart_after_onboard": True,
                 "post_onboard_steps": [
                     "完成接入后重开 Kiro CLI，使 `.kiro/steering/` 与 skills 在新会话里生效。",
-                    "确认项目内已生成 `.kiro/steering/super-dev.md` 与 `.kiro/skills/super-dev-core/SKILL.md`。",
-                    "确认用户目录已生成 `~/.kiro/steering/super-dev.md` 与 `~/.kiro/skills/super-dev-core/SKILL.md`。",
+                    "确认项目内已生成 `.kiro/steering/super-dev.md` 与 `.kiro/skills/super-dev/SKILL.md`。",
+                    "确认用户目录已生成 `~/.kiro/steering/super-dev.md` 与 `~/.kiro/skills/super-dev/SKILL.md`。",
                     '在 Kiro CLI 会话里优先输入 `/super-dev "<需求描述>"`；若当前会话只接受自然语言，再回退到 `super-dev: <需求描述>`。',
                 ],
                 "usage_notes": usage_notes,
@@ -2061,7 +2060,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
                     "usage_notes": usage_notes
                     or [
                         "建议在同一会话里连续完成 research、文档、Spec 与编码。",
-                        "接入时还会安装宿主级 super-dev-core Skill，让宿主理解完整流水线契约。",
+                        "接入时还会安装宿主级 super-dev Skill，让宿主理解完整流水线契约。",
                     ],
                     "notes": "CLI 宿主建议直接在当前会话执行 slash 命令；slash 负责触发，host skill 负责让宿主理解 Super Dev 流水线协议。",
                 }
@@ -2329,8 +2328,8 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "summary": "官方 Plugin SDK + Skills",
             },
             "workbuddy": {
-                "mode": "manual-skill",
-                "summary": "官方自然语言任务 + Skills + MCP + 文件侧栏",
+                "mode": "skill-only",
+                "summary": "官方 Skills + MCP + 文件侧栏",
             },
         }
         return mapping.get(target, {"mode": "none", "summary": ""})
@@ -2371,7 +2370,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "official_user_surfaces": [
                     "~/.gemini/GEMINI.md",
                     "~/.gemini/commands/super-dev.md",
-                    "~/.gemini/skills/super-dev-core/SKILL.md",
+                    "~/.gemini/skills/super-dev/SKILL.md",
                 ],
                 "observed_compatibility_surfaces": [],
             },
@@ -2383,21 +2382,21 @@ class IntegrationManager(IntegrationManagerContentMixin):
             "cline": {
                 "official_project_surfaces": [
                     ".clinerules/super-dev.md",
-                    ".cline/skills/super-dev-core/SKILL.md",
+                    ".cline/skills/super-dev/SKILL.md",
                 ],
                 "official_user_surfaces": [
                     "~/Documents/Cline/Rules/super-dev.md",
-                    "~/.cline/skills/super-dev-core/SKILL.md",
+                    "~/.cline/skills/super-dev/SKILL.md",
                 ],
                 "observed_compatibility_surfaces": ["AGENTS.md"],
             },
             "kilo-code": {
                 "official_project_surfaces": [
                     ".kilocode/rules/super-dev.md",
-                    ".kilocode/skills/super-dev-core/SKILL.md",
+                    ".kilocode/skills/super-dev/SKILL.md",
                 ],
                 "official_user_surfaces": [
-                    "~/.kilocode/skills/super-dev-core/SKILL.md",
+                    "~/.kilocode/skills/super-dev/SKILL.md",
                 ],
                 "observed_compatibility_surfaces": [],
             },
@@ -2426,21 +2425,21 @@ class IntegrationManager(IntegrationManagerContentMixin):
                     "plugins/super-dev-codex/.codex-plugin/plugin.json",
                     "plugins/super-dev-codex/README.md",
                     "plugins/super-dev-codex/skills/super-dev/SKILL.md",
-                    "plugins/super-dev-codex/skills/super-dev-core/SKILL.md",
+                    "plugins/super-dev-codex/skills/super-dev/SKILL.md",
                 ],
                 "optional_user_surfaces": [],
                 "observed_compatibility_surfaces": [
-                    "~/.agents/skills/super-dev-core/SKILL.md",
+                    "~/.agents/skills/super-dev/SKILL.md",
                     "~/.codex/skills/super-dev/SKILL.md",
-                    "~/.codex/skills/super-dev-core/SKILL.md",
+                    "~/.codex/skills/super-dev/SKILL.md",
                 ],
             },
             "copilot-cli": {
                 "official_project_surfaces": [
                     ".github/copilot-instructions.md",
-                    ".github/skills/super-dev-core/SKILL.md",
+                    ".github/skills/super-dev/SKILL.md",
                 ],
-                "official_user_surfaces": ["~/.copilot/skills/super-dev-core/SKILL.md"],
+                "official_user_surfaces": ["~/.copilot/skills/super-dev/SKILL.md"],
                 "observed_compatibility_surfaces": ["AGENTS.md"],
             },
             "cursor-cli": {
@@ -2451,7 +2450,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "official_user_surfaces": ["~/.cursor/commands/super-dev.md"],
                 "observed_compatibility_surfaces": [
                     "AGENTS.md",
-                    "~/.cursor/skills/super-dev-core/SKILL.md",
+                    "~/.cursor/skills/super-dev/SKILL.md",
                 ],
             },
             "cursor": {
@@ -2462,16 +2461,16 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "official_user_surfaces": ["~/.cursor/commands/super-dev.md"],
                 "observed_compatibility_surfaces": [
                     "AGENTS.md",
-                    "~/.cursor/skills/super-dev-core/SKILL.md",
+                    "~/.cursor/skills/super-dev/SKILL.md",
                 ],
             },
             "windsurf": {
                 "official_project_surfaces": [
                     ".windsurf/rules/super-dev.md",
                     ".windsurf/workflows/super-dev.md",
-                    ".windsurf/skills/super-dev-core/SKILL.md",
+                    ".windsurf/skills/super-dev/SKILL.md",
                 ],
-                "official_user_surfaces": ["~/.codeium/windsurf/skills/super-dev-core/SKILL.md"],
+                "official_user_surfaces": ["~/.codeium/windsurf/skills/super-dev/SKILL.md"],
                 "observed_compatibility_surfaces": [],
             },
             "gemini-cli": {
@@ -2480,27 +2479,27 @@ class IntegrationManager(IntegrationManagerContentMixin):
                     "~/.gemini/GEMINI.md",
                     "~/.gemini/commands/super-dev.md",
                 ],
-                "observed_compatibility_surfaces": ["~/.gemini/skills/super-dev-core/SKILL.md"],
+                "observed_compatibility_surfaces": ["~/.gemini/skills/super-dev/SKILL.md"],
             },
             "kiro-cli": {
                 "official_project_surfaces": [
                     ".kiro/steering/super-dev.md",
-                    ".kiro/skills/super-dev-core/SKILL.md",
+                    ".kiro/skills/super-dev/SKILL.md",
                 ],
                 "official_user_surfaces": [
                     "~/.kiro/steering/super-dev.md",
-                    "~/.kiro/skills/super-dev-core/SKILL.md",
+                    "~/.kiro/skills/super-dev/SKILL.md",
                 ],
                 "observed_compatibility_surfaces": [],
             },
             "kiro": {
                 "official_project_surfaces": [
                     ".kiro/steering/super-dev.md",
-                    ".kiro/skills/super-dev-core/SKILL.md",
+                    ".kiro/skills/super-dev/SKILL.md",
                 ],
                 "official_user_surfaces": [
                     "~/.kiro/steering/super-dev.md",
-                    "~/.kiro/skills/super-dev-core/SKILL.md",
+                    "~/.kiro/skills/super-dev/SKILL.md",
                 ],
                 "observed_compatibility_surfaces": ["~/.kiro/steering/AGENTS.md"],
             },
@@ -2508,12 +2507,12 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "official_project_surfaces": [
                     "AGENTS.md",
                     ".opencode/commands/super-dev.md",
-                    ".opencode/skills/super-dev-core/SKILL.md",
+                    ".opencode/skills/super-dev/SKILL.md",
                 ],
                 "official_user_surfaces": [
                     "~/.config/opencode/AGENTS.md",
                     "~/.config/opencode/commands/super-dev.md",
-                    "~/.config/opencode/skills/super-dev-core/SKILL.md",
+                    "~/.config/opencode/skills/super-dev/SKILL.md",
                 ],
                 "observed_compatibility_surfaces": [],
             },
@@ -2522,12 +2521,12 @@ class IntegrationManager(IntegrationManagerContentMixin):
                     "AGENTS.md",
                     ".qoder/rules/super-dev.md",
                     ".qoder/commands/super-dev.md",
-                    ".qoder/skills/super-dev-core/SKILL.md",
+                    ".qoder/skills/super-dev/SKILL.md",
                 ],
                 "official_user_surfaces": [
                     "~/.qoder/AGENTS.md",
                     "~/.qoder/commands/super-dev.md",
-                    "~/.qoder/skills/super-dev-core/SKILL.md",
+                    "~/.qoder/skills/super-dev/SKILL.md",
                 ],
                 "observed_compatibility_surfaces": [],
             },
@@ -2536,12 +2535,12 @@ class IntegrationManager(IntegrationManagerContentMixin):
                     "AGENTS.md",
                     ".qoder/rules/super-dev.md",
                     ".qoder/commands/super-dev.md",
-                    ".qoder/skills/super-dev-core/SKILL.md",
+                    ".qoder/skills/super-dev/SKILL.md",
                 ],
                 "official_user_surfaces": [
                     "~/.qoder/AGENTS.md",
                     "~/.qoder/commands/super-dev.md",
-                    "~/.qoder/skills/super-dev-core/SKILL.md",
+                    "~/.qoder/skills/super-dev/SKILL.md",
                 ],
                 "observed_compatibility_surfaces": [],
             },
@@ -2551,7 +2550,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
                 "observed_compatibility_surfaces": [
                     ".trae/rules.md",
                     "~/.trae/rules.md",
-                    "~/.trae/skills/super-dev-core/SKILL.md",
+                    "~/.trae/skills/super-dev/SKILL.md",
                 ],
             },
         }

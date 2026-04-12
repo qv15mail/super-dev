@@ -53,6 +53,7 @@ class DocumentGenerator(DocumentGeneratorContentMixin):
         self.testing_frameworks = testing_frameworks or []
         self.language_preferences = self._normalize_language_preferences(language_preferences)
         self.knowledge_summary: dict = knowledge_summary or {}
+        self.expert_context: dict | None = None  # 专家视角注入（由 ExpertDispatcher 设置）
         self.requirement_parser = RequirementParser()
 
         # Prompt 模板管理器（加载失败不影响文档生成）
@@ -221,13 +222,30 @@ class DocumentGenerator(DocumentGeneratorContentMixin):
         return keywords
 
 
+    def _expert_header(self) -> str:
+        """生成专家视角说明（如果有专家上下文）"""
+        if not self.expert_context:
+            return ""
+        role = self.expert_context.get("role", "")
+        goal = self.expert_context.get("goal", "")
+        thinking = self.expert_context.get("thinking", [])
+        thinking_text = "\n".join(f"  - {t}" for t in thinking[:3]) if thinking else ""
+        return f"""
+> **审查专家**: {role}
+> **专家目标**: {goal}
+> **思考框架**:
+{thinking_text}
+"""
+
     def generate_prd(self) -> str:
         """生成高质量 PRD 文档"""
+        expert_header = self._expert_header()
         doc = f"""# {self.name} - 产品需求文档 (PRD)
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.3.5
+> **版本**: v2.3.6
 > **状态**: 草稿
+{expert_header}
 
 ---
 
@@ -470,7 +488,7 @@ class DocumentGenerator(DocumentGeneratorContentMixin):
 
 | 版本 | 日期 | 变更内容 | 作者 |
 |:---|:---|:---|:---|
-| v2.3.5 | {datetime.now().strftime('%Y-%m-%d')} | 初始版本 | Super Dev |
+| v2.3.6 | {datetime.now().strftime('%Y-%m-%d')} | 初始版本 | Super Dev |
 """
 
         # 追加 Prompt 模板版本标记
@@ -488,7 +506,7 @@ class DocumentGenerator(DocumentGeneratorContentMixin):
         doc = f"""# {self.name} - 架构设计文档
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.3.5
+> **版本**: v2.3.6
 > **架构师**: Super Dev ARCHITECT 专家
 
 ---
@@ -944,7 +962,7 @@ jobs:
         doc_parts.append(f"""# {self.name} - UI/UX 设计文档
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.3.5
+> **版本**: v2.3.6
 > **设计师**: Super Dev UI/UX 专家
 
 ---

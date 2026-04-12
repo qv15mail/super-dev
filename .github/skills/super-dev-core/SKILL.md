@@ -4,7 +4,7 @@ description: Super Dev pipeline governance for research-first, commercial-grade 
 when_to_use: Use when the user says /super-dev, super-dev:, or super-dev： followed by a requirement. Activate the Super Dev pipeline for research-first, commercial-grade project delivery.
 allowed_tools: Read, Edit, Write, Bash
 user_invocable: true
-version: 2.3.5
+version: 2.3.6
 argument_hint: requirement description
 ---
 # super-dev-core - Super Dev AI Coding Skill
@@ -21,7 +21,7 @@ argument_hint: requirement description
 
 4. **自检规则**: 在向用户展示任何 UI 代码或预览前，必须自检源码中不存在任何 emoji 字符（Unicode range U+2600-U+27BF, U+1F300-U+1FAFF）。发现后先替换为正式图标库再继续。
 
-> 版本: 2.3.5 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
+> 版本: 2.3.6 | 适用工具: Claude Code, Codex CLI, OpenCode, Cursor, Antigravity 等所有 AI Coding 工具
 
 ---
 

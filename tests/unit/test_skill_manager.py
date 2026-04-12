@@ -25,7 +25,7 @@ class TestSkillManager:
         assert SkillManager.TARGET_PATHS["claude-code"] == "~/.claude/skills"
         assert SkillManager.TARGET_PATHS["cline"] == "~/.cline/skills"
         assert SkillManager.TARGET_PATHS["codex-cli"] == "~/.agents/skills"
-        assert SkillManager.COMPATIBILITY_MIRROR_PATHS["codex-cli"] == ["~/.codex/skills"]
+        assert SkillManager.COMPATIBILITY_MIRROR_PATHS == {}
         assert SkillManager.TARGET_PATHS["qoder"] == "~/.qoder/skills"
         assert SkillManager.TARGET_PATHS["kiro"] == "~/.kiro/skills"
         assert SkillManager.TARGET_PATHS["windsurf"] == "~/.codeium/windsurf/skills"
@@ -61,12 +61,12 @@ class TestSkillManager:
         fake_home.mkdir(parents=True, exist_ok=True)
         monkeypatch.setenv("HOME", str(fake_home))
         manager = SkillManager(temp_project_dir)
-        result = manager.install(source="super-dev", target=target, name="super-dev-core")
+        result = manager.install(source="super-dev", target=target, name="super-dev")
 
         assert result.path.exists()
         assert (result.path / "SKILL.md").exists()
         skill_content = (result.path / "SKILL.md").read_text(encoding="utf-8")
-        assert skill_content.startswith("---\nname: super-dev-core\n")
+        assert skill_content.startswith("---\nname: super-dev\n")
         assert "当前宿主负责调用模型、工具、终端与实际代码修改" in skill_content
         assert "Super Dev 不是大模型平台" in skill_content
         assert "Runtime Contract（强制）" in skill_content
@@ -79,12 +79,12 @@ class TestSkillManager:
         assert "super-dev：" in skill_content
         assert ".super-dev/SESSION_BRIEF.md" in skill_content
         assert "确认门/返工门" in skill_content
-        assert "super-dev-core" in manager.list_installed(target)
+        assert "super-dev" in manager.list_installed(target)
 
-        removed = manager.uninstall("super-dev-core", target)
+        removed = manager.uninstall("super-dev", target)
         assert not removed.exists()
 
-    def test_codex_builtin_skill_is_mirrored_to_compatibility_surface(
+    def test_codex_builtin_skill_no_duplicate_mirrors(
         self, temp_project_dir: Path, monkeypatch
     ):
         fake_home = temp_project_dir / "fake-home"
@@ -95,35 +95,30 @@ class TestSkillManager:
         result = manager.install(source="super-dev", target="codex-cli", name="super-dev")
 
         primary_skill = result.path / "SKILL.md"
-        official_legacy_skill = fake_home / ".agents" / "skills" / "super-dev-core" / "SKILL.md"
-        compatibility_skill = fake_home / ".codex" / "skills" / "super-dev" / "SKILL.md"
-        compatibility_legacy_skill = fake_home / ".codex" / "skills" / "super-dev-core" / "SKILL.md"
         metadata_file = result.path / "agents" / "openai.yaml"
         assert primary_skill.exists()
-        assert official_legacy_skill.exists()
-        assert compatibility_skill.exists()
-        assert compatibility_legacy_skill.exists()
         assert metadata_file.exists()
+        # No mirrors should exist in ~/.codex/skills/
+        codex_mirror = fake_home / ".codex" / "skills" / "super-dev" / "SKILL.md"
+        codex_legacy_mirror = fake_home / ".codex" / "skills" / "super-dev-core" / "SKILL.md"
+        assert not codex_mirror.exists()
+        assert not codex_legacy_mirror.exists()
+        # Legacy super-dev-core should not exist in ~/.agents/skills/
+        agents_legacy = fake_home / ".agents" / "skills" / "super-dev-core" / "SKILL.md"
+        assert not agents_legacy.exists()
         primary_content = primary_skill.read_text(encoding="utf-8")
-        compatibility_content = compatibility_skill.read_text(encoding="utf-8")
         metadata_content = metadata_file.read_text(encoding="utf-8")
         assert "Do not answer with variants of" in primary_content
         assert "$super-dev" in primary_content
-        assert primary_content == compatibility_content
         assert "interface:" in metadata_content
         assert 'display_name: "Super Dev"' in metadata_content
         assert "$super-dev" in metadata_content
         assert "slash skill list" in metadata_content
         assert "allow_implicit_invocation: true" in metadata_content
-        assert {"super-dev", "super-dev-core", "super-dev-seeai"}.issubset(
-            set(manager.list_installed("codex-cli"))
-        )
+        assert {"super-dev", "super-dev-seeai"} == set(manager.list_installed("codex-cli"))
 
         manager.uninstall("super-dev", "codex-cli")
         assert not primary_skill.exists()
-        assert not official_legacy_skill.exists()
-        assert not compatibility_skill.exists()
-        assert not compatibility_legacy_skill.exists()
 
     def test_codex_builtin_skill_installs_seeai_metadata(self, temp_project_dir: Path, monkeypatch):
         fake_home = temp_project_dir / "fake-home"
@@ -155,7 +150,7 @@ class TestSkillManager:
         assert 'display_name: "Super Dev SEEAI"' in metadata_content
         assert "$super-dev-seeai" in metadata_content
 
-    def test_codex_compatibility_mirror_uses_codex_home_when_set(
+    def test_codex_no_compatibility_mirror_when_codex_home_set(
         self, temp_project_dir: Path, monkeypatch
     ):
         fake_home = temp_project_dir / "fake-home"
@@ -169,5 +164,6 @@ class TestSkillManager:
         result = manager.install(source="super-dev", target="codex-cli", name="super-dev")
 
         assert (result.path / "SKILL.md").exists()
-        assert (codex_home / "skills" / "super-dev" / "SKILL.md").exists()
-        assert (codex_home / "skills" / "super-dev-core" / "SKILL.md").exists()
+        # No mirror should be created in CODEX_HOME since we removed codex-cli mirrors
+        assert not (codex_home / "skills" / "super-dev" / "SKILL.md").exists()
+        assert not (codex_home / "skills" / "super-dev-core" / "SKILL.md").exists()

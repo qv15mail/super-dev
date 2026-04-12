@@ -52,8 +52,8 @@ def test_codebuddy_special_adapter_exposes_competition_steps_and_surfaces():
     assert "~/.codebuddy/skills/super-dev-seeai/SKILL.md" in surfaces["official_user_surfaces"]
 
 
-def test_workbuddy_adapter_mode_override_is_manual_workbench_skill():
-    assert get_adapter_mode_override("workbuddy") == "manual-workbench-skill"
+def test_workbuddy_adapter_mode_override_is_skill_only():
+    assert get_adapter_mode_override("workbuddy") == "skill-only"
     assert get_adapter_mode_override("claude-code") == ""
 
 

@@ -21,7 +21,7 @@ const COPY = {
     points: ['终端只保留 super-dev / super-dev update', '宿主内统一使用 /super-dev 或 super-dev:', '接入完成度与运行成熟度分开展示'],
     docs: '查看文档',
     installNote: '支持 pip 或 uv 安装。安装后终端输入 super-dev 进入宿主接入引导；日常使用回到宿主里的 /super-dev 或 super-dev:。',
-    releaseNote: 'v2.3.5: 新增 SEEAI 赛事模式 + WorkBuddy 正式接入 + 安全防护增强 + 安装界面响应式优化 + 旧版残留自动修复',
+    releaseNote: 'v2.3.6: 新增 SEEAI 赛事模式 + WorkBuddy 正式接入 + 安全防护增强 + 安装界面响应式优化 + 旧版残留自动修复',
   },
   en: {
     openSource: 'MIT Open Source',
@@ -30,7 +30,7 @@ const COPY = {
     points: ['The terminal only exposes super-dev and super-dev update', 'Inside the host, use /super-dev or super-dev:', 'Integration readiness and runtime maturity are shown separately'],
     docs: 'Read Docs',
     installNote: 'Install with pip or uv, then run super-dev in the terminal to open host onboarding. Daily use moves back into /super-dev or super-dev: inside the host.',
-    releaseNote: 'v2.3.5: New SEEAI competition mode + WorkBuddy unified install + security hardening + responsive install UI + auto-fix stale installations',
+    releaseNote: 'v2.3.6: New SEEAI competition mode + WorkBuddy unified install + security hardening + responsive install UI + auto-fix stale installations',
   },
 } as const;
 
@@ -48,7 +48,7 @@ export function HeroSection({ locale = 'zh' }: { locale?: SiteLocale }) {
       <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-14 px-4 pb-20 sm:px-6 lg:grid lg:grid-cols-[minmax(0,1fr)_520px] lg:items-center lg:gap-16 lg:pb-24">
         <div className="flex flex-col gap-7">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="version">v2.3.5</Badge>
+            <Badge variant="version">v2.3.6</Badge>
             <Badge variant="certified">{copy.openSource}</Badge>
             <a
               href={GITHUB_REPO_URL}

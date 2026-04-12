@@ -650,8 +650,8 @@ class CliParserMixin:
         )
         onboard_parser.add_argument(
             "--skill-name",
-            default="super-dev-core",
-            help="安装后的 Skill 名称（默认: super-dev-core）",
+            default="super-dev",
+            help="安装后的 Skill 名称（默认: super-dev）",
         )
         onboard_parser.add_argument(
             "--skip-integrate", action="store_true", help="跳过规则文件集成"
@@ -692,8 +692,8 @@ class CliParserMixin:
         )
         doctor_parser.add_argument(
             "--skill-name",
-            default="super-dev-core",
-            help="需要校验的 Skill 名称（默认: super-dev-core）",
+            default="super-dev",
+            help="需要校验的 Skill 名称（默认: super-dev）",
         )
         doctor_parser.add_argument(
             "--skip-integrate", action="store_true", help="跳过集成规则文件检查"
@@ -741,8 +741,8 @@ class CliParserMixin:
         )
         setup_parser.add_argument(
             "--skill-name",
-            default="super-dev-core",
-            help="安装后的 Skill 名称（默认: super-dev-core）",
+            default="super-dev",
+            help="安装后的 Skill 名称（默认: super-dev）",
         )
         setup_parser.add_argument("--skip-integrate", action="store_true", help="跳过规则文件集成")
         setup_parser.add_argument("--skip-skill", action="store_true", help="跳过内置 Skill 安装")
@@ -774,8 +774,8 @@ class CliParserMixin:
         )
         install_parser.add_argument(
             "--skill-name",
-            default="super-dev-core",
-            help="安装后的 Skill 名称（默认: super-dev-core）",
+            default="super-dev",
+            help="安装后的 Skill 名称（默认: super-dev）",
         )
         install_parser.add_argument(
             "--no-skill", action="store_true", help="只安装规则与 /super-dev 映射，不安装 skill"
@@ -841,8 +841,8 @@ class CliParserMixin:
         )
         detect_parser.add_argument(
             "--skill-name",
-            default="super-dev-core",
-            help="用于兼容性评分的 Skill 名称（默认: super-dev-core）",
+            default="super-dev",
+            help="用于兼容性评分的 Skill 名称（默认: super-dev）",
         )
         detect_parser.add_argument(
             "--skip-integrate", action="store_true", help="评分时跳过集成规则文件检查"
@@ -1923,7 +1923,7 @@ class CliParserMixin:
         subparsers.add_parser(
             "migrate",
             help="迁移项目到最新版本",
-            description="将 2.2.0+ 项目配置迁移到 2.3.5（更新配置、规则文件与 hooks）",
+            description="将 2.2.0+ 项目配置迁移到 2.3.6（更新配置、规则文件与 hooks）",
         )
 
         # rollback 命令 - 回退到指定阶段或检查点

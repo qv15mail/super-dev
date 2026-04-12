@@ -2,7 +2,7 @@
 name: super-dev-core
 description: Compatibility alias for the Super Dev Codex plugin skill.
 when_to_use: Use when legacy Codex environments still surface super-dev-core instead of super-dev.
-version: 2.3.5
+version: 2.3.6
 ---
 
 # Super Dev Core Compatibility Alias

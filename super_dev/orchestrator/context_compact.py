@@ -18,6 +18,18 @@ from typing import Any
 
 _logger = logging.getLogger("super_dev.context_compact")
 
+# Token 预算：上下文注入的最大 token 数（约 4K tokens ≈ 16K 字符）
+_DEFAULT_TOKEN_BUDGET = 4000
+
+
+def estimate_tokens(text: str) -> int:
+    """估算文本的 token 数（粗略：1 token ≈ 4 字符英文 / 2 字符中文）。"""
+    if not text:
+        return 0
+    ascii_chars = sum(1 for c in text if ord(c) < 128)
+    non_ascii_chars = len(text) - ascii_chars
+    return (ascii_chars // 4) + (non_ascii_chars // 2)
+
 
 # ---------------------------------------------------------------------------
 # Data classes
@@ -312,7 +324,93 @@ class CompactEngine:
         if loaded_count == 0:
             sections.append("_No compact summaries available from previous phases._\n")
 
-        return "\n".join(sections)
+        context = "\n".join(sections)
+
+        # 智能截断：如果上下文超出 token 预算，逐级压缩
+        estimated_tokens = estimate_tokens(context)
+        if estimated_tokens > _DEFAULT_TOKEN_BUDGET:
+            _logger.info(
+                "Context for '%s' exceeds budget (%d > %d tokens), truncating...",
+                target_phase,
+                estimated_tokens,
+                _DEFAULT_TOKEN_BUDGET,
+            )
+            context = self._truncate_context(context, _DEFAULT_TOKEN_BUDGET)
+
+        return context
+
+    def _truncate_context(self, context: str, budget: int) -> str:
+        """逐级压缩上下文直到 token 预算内。
+
+        策略（优先级从低到高，先砍最不重要的）：
+        1. 砍 Files 详情（保留路径，去掉 summary）
+        2. 砍 Issues 详情（保留条目数）
+        3. 砍 Key Concepts（保留前 5 个）
+        4. 砍 Pending Tasks（保留前 3 个）
+        5. 砍旧阶段（只保留最近 2 个阶段）
+        """
+        lines = context.split("\n")
+        result = lines
+
+        # Level 1: 截断文件摘要
+        if estimate_tokens("\n".join(result)) > budget:
+            result = [
+                line if not (line.startswith("- `") and " — " in line) else line.split(" — ")[0]
+                for line in result
+            ]
+
+        # Level 2: 截断 Issues
+        if estimate_tokens("\n".join(result)) > budget:
+            in_issues = False
+            issue_count = 0
+            truncated: list[str] = []
+            for line in result:
+                if "**Issues Found:**" in line:
+                    in_issues = True
+                    truncated.append(line)
+                    continue
+                if in_issues:
+                    if line.startswith("- "):
+                        issue_count += 1
+                        if issue_count <= 3:
+                            truncated.append(line)
+                        continue
+                    else:
+                        if issue_count > 3:
+                            truncated.append(f"_...and {issue_count - 3} more issues_")
+                        in_issues = False
+                        issue_count = 0
+                truncated.append(line)
+            result = truncated
+
+        # Level 3: 截断 Concepts 到前 5 个
+        if estimate_tokens("\n".join(result)) > budget:
+            in_concepts = False
+            concept_count = 0
+            truncated = []
+            for line in result:
+                if "**Key Concepts:**" in line:
+                    in_concepts = True
+                    truncated.append(line)
+                    continue
+                if in_concepts and line.startswith("- "):
+                    concept_count += 1
+                    if concept_count <= 5:
+                        truncated.append(line)
+                    continue
+                elif in_concepts:
+                    in_concepts = False
+                truncated.append(line)
+            result = truncated
+
+        # Level 4: 只保留最近 2 个阶段
+        if estimate_tokens("\n".join(result)) > budget:
+            phase_starts = [i for i, line in enumerate(result) if line.startswith("## From Phase:")]
+            if len(phase_starts) > 2:
+                keep_from = phase_starts[-2]
+                result = result[:1] + result[keep_from:]
+
+        return "\n".join(result)
 
     # ------------------------------------------------------------------
     # Rendering

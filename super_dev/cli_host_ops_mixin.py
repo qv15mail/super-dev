@@ -782,6 +782,31 @@ class CliHostOpsMixin:
             self._auto_fix_runtime_install(runtime_health)
             self.console.print("")
 
+        # After runtime health fix, check skill versions
+        self._auto_refresh_outdated_skills()
+
+    def _auto_refresh_outdated_skills(self) -> None:
+        """Silently refresh any installed skills that have outdated versions."""
+        from .skills import SkillManager
+
+        try:
+            skill_manager = SkillManager(Path.cwd())
+            for target, path_str in {
+                **SkillManager.OFFICIAL_TARGET_PATHS,
+                **SkillManager.OBSERVED_TARGET_PATHS,
+            }.items():
+                target_path = Path(path_str).expanduser()
+                skill_md = target_path / "super-dev" / "SKILL.md"
+                if skill_md.exists():
+                    content = skill_md.read_text(encoding="utf-8")
+                    if f"version: {__version__}" not in content:
+                        try:
+                            skill_manager.install(source="super-dev", target=target, force=True)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
     def _detect_host_targets(
         self,
         *,
@@ -1049,18 +1074,27 @@ class CliHostOpsMixin:
             if check_integrate:
                 integrate_files = surface_groups["official_project"]
                 optional_integrate_files = surface_groups["optional_project"]
-                integrate_ok = all(path.exists() for path in integrate_files)
-                host_report["checks"]["integrate"] = {
-                    "ok": integrate_ok,
-                    "files": [str(item) for item in integrate_files],
-                    "optional_files": [str(item) for item in optional_integrate_files],
-                }
-                if not integrate_ok:
-                    host_report["ready"] = False
-                    host_report["missing"].append("integrate")
-                    host_report["suggestions"].append(
-                        f"super-dev integrate setup --target {target} --force"
-                    )
+                if not integrate_files:
+                    # No project-level integration files expected for this host
+                    host_report["checks"]["integrate"] = {
+                        "ok": True,
+                        "files": [],
+                        "optional_files": [str(item) for item in optional_integrate_files],
+                        "note": "no project files for this host",
+                    }
+                else:
+                    integrate_ok = all(path.exists() for path in integrate_files)
+                    host_report["checks"]["integrate"] = {
+                        "ok": integrate_ok,
+                        "files": [str(item) for item in integrate_files],
+                        "optional_files": [str(item) for item in optional_integrate_files],
+                    }
+                    if not integrate_ok:
+                        host_report["ready"] = False
+                        host_report["missing"].append("integrate")
+                        host_report["suggestions"].append(
+                            f"super-dev integrate setup --target {target} --force"
+                        )
                 user_surface_files = surface_groups["official_user"]
                 optional_user_surface_files = surface_groups["optional_user"]
                 user_surfaces_ok = all(path.exists() for path in user_surface_files)
@@ -1930,7 +1964,11 @@ class CliHostOpsMixin:
                 self.console.print("")
                 continue
 
-            if not args.skip_integrate:
+            # Check whether this host has integration files to write
+            target_config = integration_manager.TARGETS.get(target)
+            has_integrate_files = bool(target_config and target_config.files)
+
+            if not args.skip_integrate and has_integrate_files:
                 try:
                     written_files = integration_manager.setup(target=target, force=args.force)
                     integrate_written_count = len(written_files)
@@ -1965,7 +2003,26 @@ class CliHostOpsMixin:
                             self.console.print("  [green]✓[/green] 宿主协议: 已写入")
                 except Exception as exc:
                     has_error = True
-                    self.console.print(f"  [red]✗[/red] 集成失败: {exc}")
+                    self.console.print(f"  [yellow]⚠[/yellow] 集成规则写入失败: {exc}")
+            elif not args.skip_integrate and not has_integrate_files:
+                self.console.print("  [dim]- 该宿主无项目级集成文件，跳过集成规则[/dim]")
+                # Still attempt global protocol even for hosts without project files
+                try:
+                    global_protocol = integration_manager.setup_global_protocol(
+                        target=target, force=args.force
+                    )
+                    if global_protocol is not None:
+                        has_global_surface = True
+                        manifest_paths.append(str(global_protocol))
+                        if detail:
+                            self.console.print(
+                                f"  [green]✓[/green] 宿主协议: {global_protocol}",
+                                soft_wrap=True,
+                            )
+                        else:
+                            self.console.print("  [green]✓[/green] 宿主协议: 已写入")
+                except Exception as exc:
+                    self.console.print(f"  [yellow]⚠[/yellow] 宿主协议写入失败: {exc}")
 
             if not args.skip_skill and IntegrationManager.requires_skill(target):
                 try:
@@ -1999,8 +2056,8 @@ class CliHostOpsMixin:
                                 )
                             else:
                                 self.console.print("  [green]✓[/green] Skill: 已安装")
-                        # Clean up legacy super-dev-core for hosts that now use super-dev
-                        if target_skill_name == "super-dev" and "super-dev-core" in installed:
+                        # Clean up legacy super-dev-core skill directories
+                        if "super-dev-core" in installed:
                             try:
                                 skill_manager.uninstall("super-dev-core", target)
                                 self.console.print(
@@ -2014,17 +2071,25 @@ class CliHostOpsMixin:
             elif not args.skip_skill:
                 self.console.print("  [dim]- 该宿主默认按项目规则运行，已跳过 Skill 安装[/dim]")
 
-            # Clean up legacy agent file for Claude Code
+            # Clean up legacy super-dev-core agent files
+            legacy_agent_files: list[Path] = []
             if target == "claude-code":
-                legacy_agent = Path.home() / ".claude" / "agents" / "super-dev-core.md"
-                project_agent = project_dir / ".claude" / "agents" / "super-dev-core.md"
-                for legacy_path in [legacy_agent, project_agent]:
-                    if legacy_path.exists():
-                        try:
-                            legacy_path.unlink()
-                            self.console.print(f"  [green]✓[/green] 已清理旧版: {legacy_path.name}")
-                        except Exception:
-                            pass
+                legacy_agent_files = [
+                    Path.home() / ".claude" / "agents" / "super-dev-core.md",
+                    project_dir / ".claude" / "agents" / "super-dev-core.md",
+                ]
+            elif target in ("codebuddy", "codebuddy-cli"):
+                legacy_agent_files = [
+                    project_dir / ".codebuddy" / "agents" / "super-dev-core.md",
+                    Path.home() / ".codebuddy" / "agents" / "super-dev-core.md",
+                ]
+            for legacy_path in legacy_agent_files:
+                if legacy_path.exists():
+                    try:
+                        legacy_path.unlink()
+                        self.console.print(f"  [green]✓[/green] 已清理旧版: {legacy_path.name}")
+                    except Exception:
+                        pass
 
             if not args.skip_slash:
                 try:
@@ -3417,6 +3482,22 @@ class CliHostOpsMixin:
                 self.console.print("[yellow]自动迁移未完成，可手动执行: super-dev migrate[/yellow]")
         except Exception:
             self.console.print("[yellow]自动迁移未执行，可手动执行: super-dev migrate[/yellow]")
+
+        # After migrate, refresh all installed skills to current version
+        self.console.print("[cyan]正在刷新已安装的宿主 Skills...[/cyan]")
+        try:
+            from .skills import SkillManager
+
+            skill_manager = SkillManager(Path.cwd())
+            refreshed = skill_manager.refresh_all_installed()
+            if refreshed:
+                self.console.print(
+                    f"[green]✓ 已刷新 {len(refreshed)} 个宿主的 Skills[/green]"
+                )
+        except Exception:
+            self.console.print(
+                "[yellow]Skills 刷新未完成，可手动执行: super-dev setup --all --force[/yellow]"
+            )
 
         self.console.print("")
         self.console.print(

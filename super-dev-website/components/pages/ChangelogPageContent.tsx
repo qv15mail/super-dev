@@ -5,6 +5,26 @@ import type { SiteLocale } from '@/lib/site-locale';
 
 const CHANGELOG = {
   zh: [
+    { version: '2.3.6', date: '2026-04-13', type: 'patch' as const, changes: [
+      '修复 Skill 重复安装问题：清空 Codex mirror 路径，安装时自动清理 super-dev-core 残留',
+      '修复安装器按 R 重选后失败：无集成文件的宿主跳过 integrate 步骤',
+      '修复 WorkBuddy doctor 误报：无项目级文件的宿主 doctor 直接标记通过',
+      'super-dev update 升级后自动刷新所有已安装的宿主 Skills',
+      '安装入口自动检测并刷新过期的 SKILL.md 版本',
+      '新增 Schema Drift 检测：质量门禁自动检查 ORM 模型与 migration 的时间差异',
+      '新增 Post-merge 安全检查：合并后自动检测丢失的代码块',
+      '新增指数退避重试装饰器：关键 API 调用自动重试',
+      '新增会话检查点：流水线每阶段自动保存进度，中断后可恢复',
+      '成本追踪增强：按模型追踪 token 使用量和 USD 成本',
+      '上下文压缩增强：5 级渐进截断 + 4K token 预算控制',
+      '专家系统增强：专家 profile 注入文档生成 + quality_criteria 自检',
+      '文档并行生成：PRD/架构/UIUX 通过 asyncio.gather 并行生成',
+      'SEEAI 赛事模式精简：从 576 行砍到 237 行，3 步顺位思考 + 时间门禁',
+      'SKILL.md 自动利用宿主 Agent 能力并行分发专家任务',
+      '顺位思考引擎：标准模式 7 步 + 赛事模式 3 步，支持修正和分支',
+      '仓库清理：删除 6000+ 垃圾 ADR、重复媒体文件、运行时状态文件',
+      'Windows 文件锁兼容：所有 rmtree 调用添加 ignore_errors',
+    ] },
     { version: '2.3.5', date: '2026-04-12', type: 'patch' as const, changes: [
       '新增 SEEAI 赛事模式：行动驱动的竞赛快速交付循环，流程为 需求→拆解→联网搜索→方案文档→Spec→写码→跑起来→反馈循环',
       'SEEAI 方案文档替代三文档：赛事场景下用一个 solution.md 取代 PRD + 架构 + UIUX，大幅压缩决策时间',
@@ -132,6 +152,26 @@ const CHANGELOG = {
     { version: '1.0.0', date: '2025-12-29', type: 'major' as const, changes: ['首次发布', '基础流水线框架（research / documents / spec / implement）', 'Spec-Driven Development 模块', '支持 Claude Code、Cursor、Windsurf 宿主', 'PyPI 正式发布'] },
   ],
   en: [
+    { version: '2.3.6', date: '2026-04-13', type: 'patch' as const, changes: [
+      'Fixed skill duplication: cleared Codex mirror paths, auto-cleanup of legacy super-dev-core',
+      'Fixed install selector R-then-Enter failure: skip integrate for hosts without project files',
+      'Fixed WorkBuddy doctor false positive: hosts without project files pass integrate check',
+      'super-dev update now auto-refreshes all installed host Skills after upgrade',
+      'Install entry auto-detects and refreshes outdated SKILL.md versions',
+      'New schema drift detection in quality gate: ORM model vs migration timestamp check',
+      'New post-merge safety check: detect silently dropped code hunks after git merge',
+      'New retry decorator with exponential backoff for transient API failures',
+      'New session checkpoints: auto-save pipeline progress per phase, resume after interruption',
+      'Enhanced cost tracking: per-model token usage and USD cost estimation',
+      'Enhanced context compression: 5-level progressive truncation with 4K token budget',
+      'Expert system: profile injection into doc generation + quality_criteria self-check',
+      'Parallel document generation: PRD/Architecture/UIUX via asyncio.gather',
+      'SEEAI competition mode streamlined: 576→237 lines, 3-step thinking + time gates',
+      'SKILL.md auto-leverages host Agent capabilities for parallel expert dispatch',
+      'Sequential thinking engine: 7-step standard + 3-step competition with revision/branch',
+      'Repo cleanup: removed 6000+ garbage ADRs, duplicate media, runtime state files',
+      'Windows file lock compatibility: all rmtree calls use ignore_errors',
+    ] },
     { version: '2.3.5', date: '2026-04-12', type: 'patch' as const, changes: [
       'New SEEAI competition mode: action-driven fast delivery loop for time-boxed competitions — Requirements > Decompose > Web Search > Solution Doc > Spec > Code > Run > Feedback Loop',
       'SEEAI solution doc replaces three-doc set: single solution.md instead of PRD + Architecture + UIUX for competition scenarios',

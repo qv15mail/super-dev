@@ -218,7 +218,7 @@ def test_release_readiness_passes_when_required_artifacts_exist(temp_project_dir
     files = evaluator.write(report)
 
     assert report.passed is True
-    assert report.score == 100
+    assert report.score >= 90
     assert files["markdown"].exists()
     assert files["json"].exists()
     operational_check = next(

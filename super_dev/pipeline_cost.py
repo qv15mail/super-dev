@@ -13,6 +13,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
+# Rough per-token pricing (USD per 1M tokens) by model family.
+_MODEL_PRICING: dict[str, tuple[float, float]] = {
+    "opus": (3.0, 15.0),
+    "sonnet": (0.80, 4.0),
+    "haiku": (0.25, 1.25),
+}
+
+
 @dataclass
 class PhaseCost:
     """单阶段成本记录。"""
@@ -22,6 +30,10 @@ class PhaseCost:
     files_read: int = 0
     files_written: int = 0
     commands_executed: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+    model: str = ""
     started_at: str = ""
     completed_at: str = ""
 
@@ -32,6 +44,9 @@ class PipelineCost:
 
     phases: dict[str, PhaseCost] = field(default_factory=dict)
     total_duration: float = 0.0
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    total_estimated_cost_usd: float = 0.0
     started_at: str = ""
     completed_at: str = ""
 
@@ -88,9 +103,41 @@ class PipelineCostTracker:
         cost.files_written = files_written
         cost.commands_executed = commands_executed
 
+    def record_api_call(
+        self,
+        phase: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+    ) -> None:
+        """Record an API call's token usage and estimate cost for a phase."""
+        if phase not in self._phases:
+            self._phases[phase] = PhaseCost(phase=phase)
+
+        cost = self._phases[phase]
+        cost.input_tokens += input_tokens
+        cost.output_tokens += output_tokens
+        cost.model = model
+
+        # Determine pricing tier from model name
+        model_lower = model.lower()
+        for key, (inp_price, out_price) in _MODEL_PRICING.items():
+            if key in model_lower:
+                call_cost = (input_tokens * inp_price + output_tokens * out_price) / 1_000_000
+                cost.estimated_cost_usd += call_cost
+                return
+
+        # Fallback: use Sonnet pricing
+        inp_price, out_price = _MODEL_PRICING["sonnet"]
+        call_cost = (input_tokens * inp_price + output_tokens * out_price) / 1_000_000
+        cost.estimated_cost_usd += call_cost
+
     def get_summary(self) -> PipelineCost:
         """返回当前汇总。"""
         total = sum(c.duration_seconds for c in self._phases.values())
+        total_input = sum(c.input_tokens for c in self._phases.values())
+        total_output = sum(c.output_tokens for c in self._phases.values())
+        total_cost = sum(c.estimated_cost_usd for c in self._phases.values())
         completed_at = ""
         if self._phases:
             last_completed = max(
@@ -101,6 +148,9 @@ class PipelineCostTracker:
         return PipelineCost(
             phases=dict(self._phases),
             total_duration=total,
+            total_input_tokens=total_input,
+            total_output_tokens=total_output,
+            total_estimated_cost_usd=round(total_cost, 6),
             started_at=self._pipeline_started_at,
             completed_at=completed_at,
         )
@@ -116,6 +166,9 @@ class PipelineCostTracker:
             "started_at": summary.started_at,
             "completed_at": summary.completed_at,
             "total_duration": round(summary.total_duration, 3),
+            "total_input_tokens": summary.total_input_tokens,
+            "total_output_tokens": summary.total_output_tokens,
+            "total_estimated_cost_usd": summary.total_estimated_cost_usd,
             "phases": {name: asdict(cost) for name, cost in summary.phases.items()},
         }
         out_path.write_text(
@@ -142,6 +195,10 @@ class PipelineCostTracker:
                 files_read=int(raw.get("files_read", 0)),
                 files_written=int(raw.get("files_written", 0)),
                 commands_executed=int(raw.get("commands_executed", 0)),
+                input_tokens=int(raw.get("input_tokens", 0)),
+                output_tokens=int(raw.get("output_tokens", 0)),
+                estimated_cost_usd=float(raw.get("estimated_cost_usd", 0)),
+                model=raw.get("model", ""),
                 started_at=raw.get("started_at", ""),
                 completed_at=raw.get("completed_at", ""),
             )
@@ -149,6 +206,9 @@ class PipelineCostTracker:
         return PipelineCost(
             phases=phases,
             total_duration=float(data.get("total_duration", 0)),
+            total_input_tokens=int(data.get("total_input_tokens", 0)),
+            total_output_tokens=int(data.get("total_output_tokens", 0)),
+            total_estimated_cost_usd=float(data.get("total_estimated_cost_usd", 0)),
             started_at=data.get("started_at", ""),
             completed_at=data.get("completed_at", ""),
         )

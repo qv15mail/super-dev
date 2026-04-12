@@ -1309,7 +1309,7 @@ class TestCLISkillAndIntegrate:
             assert result == 0
             assert (temp_project_dir / "AGENTS.md").exists()
             assert (temp_project_dir / ".qoder" / "rules" / "super-dev.md").exists()
-            assert (temp_project_dir / ".qoder" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (temp_project_dir / ".qoder" / "skills" / "super-dev" / "SKILL.md").exists()
         finally:
             os.chdir(original_cwd)
 
@@ -1449,7 +1449,7 @@ class TestCLISkillAndIntegrate:
                     "--target",
                     target,
                     "--name",
-                    "super-dev-core",
+                    "super-dev",
                     "--force",
                 ]
             )
@@ -1458,7 +1458,7 @@ class TestCLISkillAndIntegrate:
             list_result = cli.run(["skill", "list", "--target", target])
             assert list_result == 0
 
-            uninstall_result = cli.run(["skill", "uninstall", "super-dev-core", "--target", target])
+            uninstall_result = cli.run(["skill", "uninstall", "super-dev", "--target", target])
             assert uninstall_result == 0
         finally:
             os.chdir(original_cwd)
@@ -1503,7 +1503,7 @@ class TestCLISkillAndIntegrate:
             assert (temp_project_dir / ".gemini" / "commands" / "super-dev.md").exists()
             assert (fake_home / ".gemini" / "GEMINI.md").exists()
             assert (fake_home / ".gemini" / "commands" / "super-dev.md").exists()
-            assert (fake_home / ".gemini" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (fake_home / ".gemini" / "skills" / "super-dev" / "SKILL.md").exists()
         finally:
             os.chdir(original_cwd)
 
@@ -1557,7 +1557,7 @@ class TestCLISkillAndIntegrate:
             assert (temp_project_dir / ".trae" / "rules.md").exists()
             assert (fake_home / ".trae" / "user_rules.md").exists()
             assert (fake_home / ".trae" / "rules.md").exists()
-            assert (fake_home / ".trae" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (fake_home / ".trae" / "skills" / "super-dev" / "SKILL.md").exists()
             assert not (temp_project_dir / ".trae" / "commands" / "super-dev.md").exists()
         finally:
             os.chdir(original_cwd)
@@ -1578,7 +1578,7 @@ class TestCLISkillAndIntegrate:
             assert (temp_project_dir / ".trae" / "rules.md").exists()
             assert (fake_home / ".trae" / "user_rules.md").exists()
             assert (fake_home / ".trae" / "rules.md").exists()
-            assert not (fake_home / ".trae" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert not (fake_home / ".trae" / "skills" / "super-dev" / "SKILL.md").exists()
             output = capsys.readouterr().out
             assert "未检测到官方或兼容 Skill 目录" in output
         finally:
@@ -1602,7 +1602,7 @@ class TestCLISkillAndIntegrate:
             ).exists()
             assert (fake_home / ".codex" / "AGENTS.md").exists()
             assert (fake_home / ".agents" / "skills" / "super-dev" / "SKILL.md").exists()
-            assert (fake_home / ".agents" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (fake_home / ".agents" / "skills" / "super-dev" / "SKILL.md").exists()
             assert not (temp_project_dir / ".codex" / "commands" / "super-dev.md").exists()
         finally:
             os.chdir(original_cwd)
@@ -1642,9 +1642,9 @@ class TestCLISkillAndIntegrate:
             result = cli.run(["onboard", "--host", "kiro", "--force", "--yes"])
             assert result == 0
             assert (temp_project_dir / ".kiro" / "steering" / "super-dev.md").exists()
-            assert (temp_project_dir / ".kiro" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (temp_project_dir / ".kiro" / "skills" / "super-dev" / "SKILL.md").exists()
             assert (fake_home / ".kiro" / "steering" / "super-dev.md").exists()
-            assert (fake_home / ".kiro" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (fake_home / ".kiro" / "skills" / "super-dev" / "SKILL.md").exists()
         finally:
             os.chdir(original_cwd)
 
@@ -1714,30 +1714,30 @@ class TestCLISkillAndIntegrate:
             assert (temp_project_dir / ".claude-plugin" / "marketplace.json").exists()
             assert (temp_project_dir / "AGENTS.md").exists()
             assert (temp_project_dir / ".qoder" / "rules" / "super-dev.md").exists()
-            assert (temp_project_dir / ".qoder" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (temp_project_dir / ".qoder" / "skills" / "super-dev" / "SKILL.md").exists()
             assert (temp_project_dir / ".qoder" / "commands" / "super-dev.md").exists()
             assert (temp_project_dir / ".kiro" / "steering" / "super-dev.md").exists()
-            assert (temp_project_dir / ".kiro" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (temp_project_dir / ".kiro" / "skills" / "super-dev" / "SKILL.md").exists()
             assert (temp_project_dir / "CODEBUDDY.md").exists()
             assert (temp_project_dir / ".codebuddy" / "rules" / "super-dev" / "RULE.mdc").exists()
             assert (
-                temp_project_dir / ".codebuddy" / "skills" / "super-dev-core" / "SKILL.md"
+                temp_project_dir / ".codebuddy" / "skills" / "super-dev" / "SKILL.md"
             ).exists()
             assert (temp_project_dir / ".claude" / "commands" / "super-dev.md").exists()
             assert (temp_project_dir / ".github" / "copilot-instructions.md").exists()
             assert (
-                temp_project_dir / ".github" / "skills" / "super-dev-core" / "SKILL.md"
+                temp_project_dir / ".github" / "skills" / "super-dev" / "SKILL.md"
             ).exists()
             assert (temp_project_dir / ".cursor" / "rules" / "super-dev.mdc").exists()
             assert (temp_project_dir / ".cursor" / "commands" / "super-dev.md").exists()
             assert (temp_project_dir / ".windsurf" / "rules" / "super-dev.md").exists()
             assert (temp_project_dir / ".windsurf" / "workflows" / "super-dev.md").exists()
             assert (
-                temp_project_dir / ".windsurf" / "skills" / "super-dev-core" / "SKILL.md"
+                temp_project_dir / ".windsurf" / "skills" / "super-dev" / "SKILL.md"
             ).exists()
             assert (temp_project_dir / ".opencode" / "commands" / "super-dev.md").exists()
             assert (
-                temp_project_dir / ".opencode" / "skills" / "super-dev-core" / "SKILL.md"
+                temp_project_dir / ".opencode" / "skills" / "super-dev" / "SKILL.md"
             ).exists()
             assert not (temp_project_dir / ".kimi" / "commands" / "super-dev.md").exists()
             assert not (temp_project_dir / ".kimi" / "AGENTS.md").exists()
@@ -1792,7 +1792,7 @@ class TestCLISkillAndIntegrate:
             result = cli.run(["onboard", "--auto", "--yes", "--force"])
             assert result == 0
             assert (temp_project_dir / "AGENTS.md").exists()
-            assert (fake_home / ".agents" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (fake_home / ".agents" / "skills" / "super-dev" / "SKILL.md").exists()
             assert not (temp_project_dir / ".codex" / "commands" / "super-dev.md").exists()
         finally:
             os.environ["PATH"] = original_path
@@ -2067,9 +2067,10 @@ class TestCLISkillAndIntegrate:
             assert onboard == 0
 
             official_skill = fake_home / ".agents" / "skills" / "super-dev" / "SKILL.md"
-            compatibility_skill = fake_home / ".codex" / "skills" / "super-dev" / "SKILL.md"
             assert official_skill.exists()
-            assert compatibility_skill.exists()
+            # Codex mirror removed — only official path should exist
+            compatibility_skill = fake_home / ".codex" / "skills" / "super-dev" / "SKILL.md"
+            assert not compatibility_skill.exists()
             official_skill.unlink()
 
             result = cli.run(["doctor", "--host", "codex-cli"])
@@ -2093,7 +2094,7 @@ class TestCLISkillAndIntegrate:
             assert repaired == 0
 
             assert (temp_project_dir / "AGENTS.md").exists()
-            assert (fake_home / ".agents" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (fake_home / ".agents" / "skills" / "super-dev" / "SKILL.md").exists()
             assert not (temp_project_dir / ".codex" / "commands" / "super-dev.md").exists()
         finally:
             os.chdir(original_cwd)
@@ -3034,7 +3035,7 @@ class TestCLISkillAndIntegrate:
             result = cli.run(["setup", "--host", "codex-cli", "--force"])
             assert result == 0
             assert (temp_project_dir / "AGENTS.md").exists()
-            assert (fake_home / ".agents" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (fake_home / ".agents" / "skills" / "super-dev" / "SKILL.md").exists()
             assert not (temp_project_dir / ".codex" / "commands" / "super-dev.md").exists()
         finally:
             os.chdir(original_cwd)
@@ -3051,7 +3052,7 @@ class TestCLISkillAndIntegrate:
             result = cli.run(["install", "--host", "codex-cli", "--force", "--yes"])
             assert result == 0
             assert (temp_project_dir / "AGENTS.md").exists()
-            assert (fake_home / ".agents" / "skills" / "super-dev-core" / "SKILL.md").exists()
+            assert (fake_home / ".agents" / "skills" / "super-dev" / "SKILL.md").exists()
             assert not (temp_project_dir / ".codex" / "commands" / "super-dev.md").exists()
         finally:
             os.chdir(original_cwd)

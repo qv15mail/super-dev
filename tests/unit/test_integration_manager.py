@@ -125,7 +125,7 @@ class TestIntegrationManager:
         openclaw_files = manager.setup("openclaw", force=True)
 
         codebuddy_seeai = temp_project_dir / ".codebuddy" / "commands" / "super-dev-seeai.md"
-        codebuddy_agent = temp_project_dir / ".codebuddy" / "agents" / "super-dev-core.md"
+        codebuddy_agent = temp_project_dir / ".codebuddy" / "agents" / "super-dev.md"
         openclaw_seeai = temp_project_dir / ".openclaw" / "commands" / "super-dev-seeai.md"
 
         assert codebuddy_seeai.resolve() in {item.resolve() for item in codebuddy_files}
@@ -171,22 +171,19 @@ class TestIntegrationManager:
         paths = manager.expected_skill_paths("codex-cli")
         normalized = {path.as_posix() for path in paths}
         assert any(item.endswith("/.agents/skills/super-dev/SKILL.md") for item in normalized)
-        assert any(
+        # No compatibility mirrors for codex-cli anymore
+        assert not any(
             item.endswith("/custom-codex-home/skills/super-dev/SKILL.md") for item in normalized
         )
-        assert any(
-            item.endswith("/custom-codex-home/skills/super-dev-core/SKILL.md")
-            for item in normalized
-        )
 
-    def test_codex_expected_skill_paths_include_compatibility_mirror(self, temp_project_dir: Path):
+    def test_codex_expected_skill_paths_no_compatibility_mirror(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)
         paths = manager.expected_skill_paths("codex-cli")
         normalized = {path.as_posix() for path in paths}
         assert any(item.endswith("/.agents/skills/super-dev/SKILL.md") for item in normalized)
-        assert any(item.endswith("/.agents/skills/super-dev-core/SKILL.md") for item in normalized)
-        assert any(item.endswith("/.codex/skills/super-dev/SKILL.md") for item in normalized)
-        assert any(item.endswith("/.codex/skills/super-dev-core/SKILL.md") for item in normalized)
+        # No legacy super-dev-core or codex mirror paths
+        assert not any(item.endswith("super-dev-core/SKILL.md") for item in normalized)
+        assert not any(item.endswith("/.codex/skills/super-dev/SKILL.md") for item in normalized)
 
     def test_readiness_surface_sets_distinguish_official_optional_and_compatibility(
         self, temp_project_dir: Path
@@ -213,7 +210,7 @@ class TestIntegrationManager:
         )
         assert not claude_compat_skill
 
-        codex_sets = manager.readiness_surface_sets(target="codex-cli", skill_name="super-dev-core")
+        codex_sets = manager.readiness_surface_sets(target="codex-cli", skill_name="super-dev")
         codex_required_slash = {path.as_posix() for path in codex_sets["required_slash"]}
         codex_official_skill = {path.as_posix() for path in codex_sets["official_skill"]}
         codex_compat_skill = {path.as_posix() for path in codex_sets["compatibility_skill"]}
@@ -221,12 +218,8 @@ class TestIntegrationManager:
         assert any(
             item.endswith("/.agents/skills/super-dev/SKILL.md") for item in codex_official_skill
         )
-        assert any(
-            item.endswith("/.agents/skills/super-dev-core/SKILL.md") for item in codex_compat_skill
-        )
-        assert any(
-            item.endswith("/.codex/skills/super-dev/SKILL.md") for item in codex_compat_skill
-        )
+        # No compatibility mirrors anymore
+        assert not codex_compat_skill
 
     def test_adapter_profiles_cover_all_targets(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)
@@ -245,7 +238,7 @@ class TestIntegrationManager:
         assert ".agent/workflows/super-dev.md" in antigravity.integration_files
         assert ".gemini/commands/super-dev.md" in antigravity.official_project_surfaces
         assert "~/.gemini/GEMINI.md" in antigravity.official_user_surfaces
-        assert "~/.gemini/skills/super-dev-core/SKILL.md" in antigravity.official_user_surfaces
+        assert "~/.gemini/skills/super-dev/SKILL.md" in antigravity.official_user_surfaces
         assert antigravity.requires_restart_after_onboard is True
 
         codex = by_host["codex-cli"]
@@ -280,9 +273,9 @@ class TestIntegrationManager:
         assert (
             "plugins/super-dev-codex/.codex-plugin/plugin.json" in codex.optional_project_surfaces
         )
-        assert "~/.agents/skills/super-dev-core/SKILL.md" in codex.observed_compatibility_surfaces
+        assert "~/.agents/skills/super-dev/SKILL.md" in codex.observed_compatibility_surfaces
         assert "~/.codex/skills/super-dev/SKILL.md" in codex.observed_compatibility_surfaces
-        assert "~/.codex/skills/super-dev-core/SKILL.md" in codex.observed_compatibility_surfaces
+        assert "~/.codex/skills/super-dev/SKILL.md" in codex.observed_compatibility_surfaces
         assert "/` 列表选择 `super-dev`" in codex.primary_entry
         assert "$super-dev" in codex.primary_entry
         assert "从 `/` 列表选择 `super-dev`" in codex.usage_notes[0]
@@ -299,8 +292,8 @@ class TestIntegrationManager:
         assert ".qoder/rules/super-dev.md" in qoder.official_project_surfaces
         assert "~/.qoder/AGENTS.md" in qoder.official_user_surfaces
         assert "~/.qoder/commands/super-dev.md" in qoder.official_user_surfaces
-        assert "~/.qoder/skills/super-dev-core/SKILL.md" in qoder.official_user_surfaces
-        assert ".qoder/skills/super-dev-core/SKILL.md" in qoder.official_project_surfaces
+        assert "~/.qoder/skills/super-dev/SKILL.md" in qoder.official_user_surfaces
+        assert ".qoder/skills/super-dev/SKILL.md" in qoder.official_project_surfaces
         assert qoder.observed_compatibility_surfaces == []
 
         codebuddy = by_host["codebuddy"]
@@ -313,10 +306,10 @@ class TestIntegrationManager:
         assert ".codebuddy/rules/super-dev/RULE.mdc" in codebuddy.integration_files
         assert "CODEBUDDY.md" in codebuddy.official_project_surfaces
         assert ".codebuddy/rules/super-dev/RULE.mdc" in codebuddy.official_project_surfaces
-        assert ".codebuddy/agents/super-dev-core.md" in codebuddy.integration_files
+        assert ".codebuddy/agents/super-dev.md" in codebuddy.integration_files
         assert "~/.codebuddy/CODEBUDDY.md" in codebuddy.official_user_surfaces
-        assert "~/.codebuddy/agents/super-dev-core.md" in codebuddy.official_user_surfaces
-        assert "~/.codebuddy/skills/super-dev-core/SKILL.md" in codebuddy.official_user_surfaces
+        assert "~/.codebuddy/agents/super-dev.md" in codebuddy.official_user_surfaces
+        assert "~/.codebuddy/skills/super-dev/SKILL.md" in codebuddy.official_user_surfaces
         assert ".codebuddy/commands/super-dev-seeai.md" in codebuddy.official_project_surfaces
         assert ".codebuddy/skills/super-dev-seeai/SKILL.md" in codebuddy.official_project_surfaces
         assert "~/.codebuddy/commands/super-dev-seeai.md" in codebuddy.official_user_surfaces
@@ -331,7 +324,7 @@ class TestIntegrationManager:
         assert "CODEBUDDY.md" in codebuddy_cli.integration_files
         assert "CODEBUDDY.md" in codebuddy_cli.official_project_surfaces
         assert "~/.codebuddy/CODEBUDDY.md" in codebuddy_cli.official_user_surfaces
-        assert ".codebuddy/skills/super-dev-core/SKILL.md" in codebuddy_cli.integration_files
+        assert ".codebuddy/skills/super-dev/SKILL.md" in codebuddy_cli.integration_files
         assert ".codebuddy/commands/super-dev-seeai.md" in codebuddy_cli.official_project_surfaces
         assert (
             ".codebuddy/skills/super-dev-seeai/SKILL.md" in codebuddy_cli.official_project_surfaces
@@ -341,7 +334,7 @@ class TestIntegrationManager:
             "~/.codebuddy/skills/super-dev-seeai/SKILL.md" in codebuddy_cli.official_user_surfaces
         )
         assert (
-            ".codebuddy/skills/super-dev-core/SKILL.md" in codebuddy_cli.official_project_surfaces
+            ".codebuddy/skills/super-dev/SKILL.md" in codebuddy_cli.official_project_surfaces
         )
         assert ".codebuddy/AGENTS.md" in codebuddy_cli.observed_compatibility_surfaces
 
@@ -351,7 +344,7 @@ class TestIntegrationManager:
 
         workbuddy = by_host["workbuddy"]
         assert workbuddy.category == "ide"
-        assert workbuddy.adapter_mode == "manual-workbench-skill"
+        assert workbuddy.adapter_mode == "skill-only"
         assert workbuddy.usage_mode == "manual-workbench-skill"
         assert workbuddy.trigger_command == "super-dev: <需求描述>"
         assert workbuddy.slash_command_file == ""
@@ -359,7 +352,7 @@ class TestIntegrationManager:
         assert workbuddy.host_protocol_mode == "skills"
         assert workbuddy.host_protocol_summary == "官方 Skills + MCP + 文件侧栏"
         assert any("super-dev-seeai:" in item["entry"] for item in workbuddy.entry_variants)
-        assert "WorkBuddy 技能市场" in workbuddy.official_user_surfaces[0]
+        assert "~/.workbuddy/skills/super-dev/SKILL.md" in workbuddy.official_user_surfaces
 
         claude = by_host["claude-code"]
         assert claude.host_protocol_mode == "official-skill"
@@ -409,9 +402,9 @@ class TestIntegrationManager:
         assert kiro_cli.usage_mode == "native-slash"
         assert kiro_cli.trigger_command == '/super-dev "<需求描述>"'
         assert ".kiro/steering/super-dev.md" in kiro_cli.official_project_surfaces
-        assert ".kiro/skills/super-dev-core/SKILL.md" in kiro_cli.official_project_surfaces
+        assert ".kiro/skills/super-dev/SKILL.md" in kiro_cli.official_project_surfaces
         assert "~/.kiro/steering/super-dev.md" in kiro_cli.official_user_surfaces
-        assert "~/.kiro/skills/super-dev-core/SKILL.md" in kiro_cli.official_user_surfaces
+        assert "~/.kiro/skills/super-dev/SKILL.md" in kiro_cli.official_user_surfaces
 
         kiro = by_host["kiro"]
         assert kiro.host_protocol_mode == "official-steering"
@@ -419,7 +412,7 @@ class TestIntegrationManager:
         assert kiro.usage_mode == "native-slash"
         assert ".kiro/steering/super-dev.md" in kiro.official_project_surfaces
         assert "~/.kiro/steering/super-dev.md" in kiro.official_user_surfaces
-        assert "~/.kiro/skills/super-dev-core/SKILL.md" in kiro.official_user_surfaces
+        assert "~/.kiro/skills/super-dev/SKILL.md" in kiro.official_user_surfaces
         assert "~/.kiro/steering/AGENTS.md" in kiro.observed_compatibility_surfaces
 
         roo = by_host["roo-code"]
@@ -433,8 +426,8 @@ class TestIntegrationManager:
         assert cline.host_protocol_mode == "official-context"
         assert cline.host_protocol_summary == "官方 .clinerules + skills + AGENTS.md compatibility"
         assert ".clinerules/super-dev.md" in cline.official_project_surfaces
-        assert ".cline/skills/super-dev-core/SKILL.md" in cline.official_project_surfaces
-        assert "~/.cline/skills/super-dev-core/SKILL.md" in cline.official_user_surfaces
+        assert ".cline/skills/super-dev/SKILL.md" in cline.official_project_surfaces
+        assert "~/.cline/skills/super-dev/SKILL.md" in cline.official_user_surfaces
         assert "AGENTS.md" in cline.observed_compatibility_surfaces
 
         copilot = by_host["vscode-copilot"]
@@ -449,9 +442,9 @@ class TestIntegrationManager:
             copilot_cli.host_protocol_summary
             == "官方 copilot-instructions + skills + AGENTS.md compatibility"
         )
-        assert ".github/skills/super-dev-core/SKILL.md" in copilot_cli.integration_files
-        assert ".github/skills/super-dev-core/SKILL.md" in copilot_cli.official_project_surfaces
-        assert "~/.copilot/skills/super-dev-core/SKILL.md" in copilot_cli.official_user_surfaces
+        assert ".github/skills/super-dev/SKILL.md" in copilot_cli.integration_files
+        assert ".github/skills/super-dev/SKILL.md" in copilot_cli.official_project_surfaces
+        assert "~/.copilot/skills/super-dev/SKILL.md" in copilot_cli.official_user_surfaces
         assert "AGENTS.md" in copilot_cli.observed_compatibility_surfaces
 
     def test_adapter_profile_contains_docs_references_and_capability_labels(
@@ -570,7 +563,7 @@ class TestIntegrationManager:
             encoding="utf-8"
         )
         skill_content = (
-            temp_project_dir / ".qoder" / "skills" / "super-dev-core" / "SKILL.md"
+            temp_project_dir / ".qoder" / "skills" / "super-dev" / "SKILL.md"
         ).read_text(encoding="utf-8")
         seeai_command = temp_project_dir / ".qoder" / "commands" / "super-dev-seeai.md"
         assert "Super Dev" in agents_content
@@ -587,7 +580,7 @@ class TestIntegrationManager:
             encoding="utf-8"
         )
         skill_content = (
-            temp_project_dir / ".cline" / "skills" / "super-dev-core" / "SKILL.md"
+            temp_project_dir / ".cline" / "skills" / "super-dev" / "SKILL.md"
         ).read_text(encoding="utf-8")
         assert "Super Dev" in rules_content
         assert "super-dev：" in skill_content
@@ -650,7 +643,7 @@ class TestIntegrationManager:
         )
         assert "Super Dev" in rules_content
         assert "super-dev：" in rules_content
-        assert (temp_project_dir / ".kilocode" / "skills" / "super-dev-core" / "SKILL.md").exists()
+        assert (temp_project_dir / ".kilocode" / "skills" / "super-dev" / "SKILL.md").exists()
 
     def test_slash_content_requires_host_research_first(self, temp_project_dir: Path):
         manager = IntegrationManager(temp_project_dir)
@@ -733,7 +726,7 @@ class TestIntegrationManager:
                     skill_root.mkdir(parents=True, exist_ok=True)
                 if skill_manager.skill_surface_available(target):
                     skill_manager.install(
-                        "super-dev", target=target, name="super-dev-core", force=True
+                        "super-dev", target=target, name="super-dev", force=True
                     )
 
             surfaces = manager.collect_managed_surface_paths(target)
@@ -875,7 +868,7 @@ class TestIntegrationManager:
         root_agents = temp_project_dir / "AGENTS.md"
         assert root_agents.resolve() in [item.resolve() for item in written]
         assert (
-            temp_project_dir / ".opencode" / "skills" / "super-dev-core" / "SKILL.md"
+            temp_project_dir / ".opencode" / "skills" / "super-dev" / "SKILL.md"
         ).resolve() in [item.resolve() for item in written]
         assert root_agents.exists()
         root_content = root_agents.read_text(encoding="utf-8")
@@ -897,7 +890,7 @@ class TestIntegrationManager:
             encoding="utf-8"
         )
         skill_content = (
-            temp_project_dir / ".windsurf" / "skills" / "super-dev-core" / "SKILL.md"
+            temp_project_dir / ".windsurf" / "skills" / "super-dev" / "SKILL.md"
         ).read_text(encoding="utf-8")
         seeai_workflow = (
             temp_project_dir / ".windsurf" / "workflows" / "super-dev-seeai.md"

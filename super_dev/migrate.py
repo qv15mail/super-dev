@@ -64,6 +64,47 @@ def _cleanup_claude_code_legacy(project_dir: Path, changes: list[str]) -> None:
                 pass
 
 
+def _cleanup_legacy_skill_for_target(
+    project_dir: Path, target: str, changes: list[str]
+) -> None:
+    """清理指定宿主的旧版 super-dev-core 残留。"""
+    from .skills.manager import SkillManager
+
+    sm = SkillManager(project_dir=project_dir)
+
+    # 清理 Skill 目录中的 super-dev-core
+    try:
+        installed = set(sm.list_installed(target))
+        if "super-dev-core" in installed:
+            sm.uninstall("super-dev-core", target)
+            changes.append(f"{target}: 已清理旧版 super-dev-core Skill")
+    except Exception:
+        pass
+
+    # 清理宿主特定的 agent 文件
+    legacy_agent_map: dict[str, list[Path]] = {
+        "claude-code": [
+            Path.home() / ".claude" / "agents" / "super-dev-core.md",
+            project_dir / ".claude" / "agents" / "super-dev-core.md",
+        ],
+        "codebuddy": [
+            project_dir / ".codebuddy" / "agents" / "super-dev-core.md",
+            Path.home() / ".codebuddy" / "agents" / "super-dev-core.md",
+        ],
+        "codebuddy-cli": [
+            project_dir / ".codebuddy" / "agents" / "super-dev-core.md",
+            Path.home() / ".codebuddy" / "agents" / "super-dev-core.md",
+        ],
+    }
+    for legacy_path in legacy_agent_map.get(target, []):
+        if legacy_path.exists():
+            try:
+                legacy_path.unlink()
+                changes.append(f"{target}: 已清理旧版 {legacy_path.name}")
+            except Exception:
+                pass
+
+
 def migrate_project(project_dir: Path) -> list[str]:
     """将旧版项目迁移到当前版本。
 
@@ -166,7 +207,11 @@ def migrate_project(project_dir: Path) -> list[str]:
             except Exception:
                 pass
 
-        # Claude Code 特有清理
+        # 清理所有宿主的旧版 super-dev-core 残留
+        for target in detected_hosts:
+            _cleanup_legacy_skill_for_target(project_dir, target, changes)
+
+        # Claude Code 特有的 Skill 目录清理（用户级）
         if "claude-code" in detected_hosts:
             _cleanup_claude_code_legacy(project_dir, changes)
 

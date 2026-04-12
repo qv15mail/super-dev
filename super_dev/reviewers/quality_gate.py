@@ -90,6 +90,7 @@ class QualityGateResult:
                 "validation_rules": "QA",
                 "accessibility": "CODE",
                 "ui_quality": "UI",
+                "schema_drift": "CODE",
             }
 
             expert_results: dict[str, dict] = {}
@@ -387,6 +388,10 @@ class QualityGateChecker:
         "ui_quality": {
             "weight": 1.2,
             "required": True,
+        },
+        "schema_drift": {
+            "weight": 0.8,
+            "required": False,
         },
     }
 
@@ -2290,6 +2295,9 @@ class QualityGateChecker:
         checks.append(self._check_launch_rehearsal())
         checks.append(self._check_rehearsal_verification_report())
 
+        # Schema drift 检测
+        checks.append(self._check_schema_drift())
+
         return checks
 
     def _check_pipeline_observability(self) -> QualityCheck:
@@ -2720,6 +2728,114 @@ class QualityGateChecker:
             score=70 if self.is_zero_to_one else 60,
             weight=self.CHECKS_CONFIG["code_quality"]["weight"],
             details="未发现 output/rehearsal/*-rehearsal-report.(md|json)",
+        )
+
+    def _check_schema_drift(self) -> QualityCheck:
+        """检测 ORM 模型文件是否比最新迁移文件更新（schema drift）"""
+        weight = self.CHECKS_CONFIG["schema_drift"]["weight"]
+
+        model_patterns = [
+            "**/models.py",
+            "**/models/*.py",
+            "**/schema.py",
+            "**/entities/*.py",
+            "**/*.entity.ts",
+            "**/prisma/schema.prisma",
+        ]
+        migration_patterns = [
+            "**/migrations/**",
+            "**/alembic/**",
+            "**/prisma/migrations/**",
+            "**/drizzle/**",
+        ]
+
+        # Collect model files with their latest mtime
+        model_files: list[Path] = []
+        for pattern in model_patterns:
+            model_files.extend(self.project_dir.glob(pattern))
+
+        # Filter out __pycache__, node_modules, .git, and migration dirs themselves
+        skip_segments = {"__pycache__", "node_modules", ".git", "migrations", "alembic"}
+        model_files = [
+            f
+            for f in model_files
+            if f.is_file() and not (skip_segments & set(f.parts))
+        ]
+
+        if not model_files:
+            return QualityCheck(
+                name="Schema Drift 检测",
+                category="schema_drift",
+                description="ORM 模型与数据库迁移文件一致性",
+                status=CheckStatus.PASSED,
+                score=100,
+                weight=weight,
+                details="未发现 ORM 模型文件，跳过检测",
+            )
+
+        latest_model_mtime = max(f.stat().st_mtime for f in model_files)
+
+        # Collect migration files
+        migration_files: list[Path] = []
+        for pattern in migration_patterns:
+            migration_files.extend(
+                f for f in self.project_dir.glob(pattern) if f.is_file()
+            )
+        migration_files = [
+            f
+            for f in migration_files
+            if not ({"__pycache__", "node_modules", ".git"} & set(f.parts))
+        ]
+
+        if not migration_files:
+            # Models exist but no migrations at all — warn
+            model_names = ", ".join(sorted(f.name for f in model_files[:5]))
+            suffix = "..." if len(model_files) > 5 else ""
+            return QualityCheck(
+                name="Schema Drift 检测",
+                category="schema_drift",
+                description="ORM 模型与数据库迁移文件一致性",
+                status=CheckStatus.WARNING,
+                score=60,
+                weight=weight,
+                details=(
+                    f"发现 {len(model_files)} 个模型文件 ({model_names}{suffix}) "
+                    "但未找到任何迁移文件，可能存在 schema drift"
+                ),
+            )
+
+        latest_migration_mtime = max(f.stat().st_mtime for f in migration_files)
+
+        if latest_model_mtime > latest_migration_mtime:
+            # Find which model files are newer than latest migration
+            drifted = [
+                f for f in model_files if f.stat().st_mtime > latest_migration_mtime
+            ]
+            drifted_names = ", ".join(
+                sorted(str(f.relative_to(self.project_dir)) for f in drifted[:5])
+            )
+            suffix = "..." if len(drifted) > 5 else ""
+            return QualityCheck(
+                name="Schema Drift 检测",
+                category="schema_drift",
+                description="ORM 模型与数据库迁移文件一致性",
+                status=CheckStatus.WARNING,
+                score=65,
+                weight=weight,
+                details=(
+                    f"模型文件 ({drifted_names}{suffix}) 比最新迁移文件更新，"
+                    "可能需要生成新的数据库迁移"
+                ),
+            )
+
+        return QualityCheck(
+            name="Schema Drift 检测",
+            category="schema_drift",
+            description="ORM 模型与数据库迁移文件一致性",
+            status=CheckStatus.PASSED,
+            score=100,
+            weight=weight,
+            details="模型文件与迁移文件时间戳一致，未检测到 schema drift",
         )
 
     def _calculate_total_score(self, checks: list[QualityCheck]) -> int:
