@@ -91,9 +91,3 @@ dist_2_0_9/
 .super-dev/SESSION_BRIEF.md
 .super-dev/workflow-state.json
 .super-dev/project.md
-
-# Root-level media duplicates (use super-dev-website/public/ instead)
-demo.mp4
-wechat.png
-wx.png
-qun.jpg

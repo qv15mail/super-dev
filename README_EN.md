@@ -146,7 +146,7 @@ super-dev governance templates show <id> # view a specific template
 <video controls playsinline preload="metadata" src="https://shangyankeji.github.io/super-dev/demo.mp4" width="100%"></video>
 
 - Stream online: [Watch the demo](https://shangyankeji.github.io/super-dev/demo.mp4)
-- Repository file: [demo.mp4](demo.mp4)
+- Repository file: [demo.mp4](public/demo.mp4)
 
 ---
 
