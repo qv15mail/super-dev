@@ -31,7 +31,7 @@
 <video controls playsinline preload="metadata" src="https://shangyankeji.github.io/super-dev/demo.mp4" width="100%"></video>
 
 - 在线播放：[观看演示视频](https://shangyankeji.github.io/super-dev/demo.mp4)
-- 仓库文件：[demo.mp4](public/demo.mp4)
+- 仓库文件：[demo.mp4](super-dev-website/public/demo.mp4)
 
 ---
 
@@ -41,7 +41,7 @@
 
 微信号：**Excellent_We**
 
-<img src="public/wx.png" alt="开发者微信" width="200">
+<img src="super-dev-website/public/wx.png" alt="开发者微信" width="200">
 
 扫码或搜索微信号联系开发者
 
@@ -1185,7 +1185,7 @@ super-dev-seeai: 比赛需求
 
 <div align="center">
 
-<img src="public/logo.png" alt="微信公众号" width="100%">
+<img src="super-dev-website/public/logo.png" alt="微信公众号" width="100%">
 
 </div>
 
