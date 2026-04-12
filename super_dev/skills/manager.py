@@ -228,6 +228,8 @@ class SkillManager:
                 if alias == skill_name:
                     continue
                 alias_dir = base / alias
+                if alias_dir.exists() and not force:
+                    continue  # 兼容 Skill 已存在且不强制 → 静默跳过
                 self._prepare_target_dir(alias_dir, force=force)
                 self._write_builtin_skill(alias_dir, alias, target)
                 self._mirror_skill_install(
@@ -242,6 +244,8 @@ class SkillManager:
                 if extra_name in {skill_name, *self.compatibility_skill_names(target, skill_name)}:
                     continue
                 extra_dir = base / extra_name
+                if extra_dir.exists() and not force:
+                    continue  # 补充 Skill 已存在且不强制 → 静默跳过
                 self._prepare_target_dir(extra_dir, force=force)
                 self._write_builtin_skill(extra_dir, extra_name, target)
                 self._mirror_skill_install(
