@@ -1,11 +1,11 @@
-# 发布指南（2.3.6）
+# 发布指南（2.3.7）
 
 > 面向 Super Dev 2.x 的标准发布流程。
 
 ## 1. 发布前检查
 
 1. 更新版本号（`pyproject.toml` 与 `super_dev/__init__.py`）。
-2. 更新 `CHANGELOG.md` 或准备本次 GitHub Release Notes。
+2. 更新 `docs/releases/2.3.7.md` 或准备本次 GitHub Release Notes。
 3. 确认本地预检全部通过。
 
 执行强制预检：
@@ -65,8 +65,8 @@ export PYPI_API_TOKEN="<your-token>"
 
 ```bash
 ./scripts/release.sh --skip-publish --github-release \
-  --notes-file docs/releases/2.3.6.md \
-  --title "v2.3.6 - Super Dev" \
+  --notes-file docs/releases/2.3.7.md \
+  --title "v2.3.7 - Super Dev" \
   --yes
 ```
 
@@ -75,11 +75,11 @@ export PYPI_API_TOKEN="<your-token>"
 ## 4. 发布后验证
 
 ```bash
-uv tool install super-dev==2.3.6
+uv tool install super-dev==2.3.7
 super-dev --help
 
 # 或 pip
-pip install --no-cache-dir super-dev==2.3.6
+pip install --no-cache-dir super-dev==2.3.7
 super-dev --help
 super-dev "构建一个包含登录和订单的系统"
 ```
@@ -90,6 +90,6 @@ PyPI 不支持删除已发布版本，建议：
 
 1. 对有问题版本执行 `yank`。
 2. 发布补丁版本（如 `2.1.1` 的后续补丁）。
-3. 在 `CHANGELOG.md` 和 GitHub Release 明确影响范围与修复建议。
+3. 在 `docs/releases/2.3.7.md` 和 GitHub Release 明确影响范围与修复建议。
 
 参考：[`docs/RELEASE_RUNBOOK.md`](./RELEASE_RUNBOOK.md)
