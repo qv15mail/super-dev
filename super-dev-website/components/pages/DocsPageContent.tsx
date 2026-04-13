@@ -102,7 +102,7 @@ const zhContent: Content = {
     { label: '核心阶段', value: '9 段' },
   ],
   sections: [
-    { id: 'highlights', label: 'v2.3.6 新功能', icon: Zap },
+    { id: 'highlights', label: 'v2.3.7 新功能', icon: Zap },
     { id: 'governance', label: '产品定位', icon: BookOpen },
     { id: 'install', label: '安装方式', icon: Package },
     { id: 'surfaces', label: '接入面', icon: Boxes },
@@ -304,8 +304,8 @@ const zhContent: Content = {
     '先用 smoke 触发语句。',
     '如果宿主直接开始开发，优先判断当前会话没有重新加载规则。',
   ],
-  highlightsTitle: 'v2.3.6 新功能亮点',
-  highlightsBody: '2.3.6 聚焦赛事模式与宿主生态：新增 SEEAI 赛事模式、WorkBuddy 正式接入、安全防护增强（敏感文件守卫 + API 认证）、安装界面响应式优化、旧版残留自动修复、需求解析器增强。',
+  highlightsTitle: 'v2.3.7 新功能亮点',
+  highlightsBody: '2.3.7 聚焦赛事模式与宿主生态：新增 SEEAI 赛事模式、WorkBuddy 正式接入、安全防护增强（敏感文件守卫 + API 认证）、安装界面响应式优化、旧版残留自动修复、需求解析器增强。',
   highlightsCards: [
     { title: '新增 SEEAI 赛事模式', body: '行动驱动的竞赛快速交付循环：需求→拆解→联网搜索→方案文档→Spec→写码→跑起来→反馈循环。' },
     { title: 'WorkBuddy 正式接入', body: 'WorkBuddy 从手动安装升级为统一安装宿主，Skill 自动安装到 ~/.workbuddy/skills/，21+1 宿主生态。' },
@@ -331,7 +331,7 @@ const enContent: Content = {
     { label: 'Core phases', value: '9' },
   ],
   sections: [
-    { id: 'highlights', label: 'v2.3.6 Highlights', icon: Zap },
+    { id: 'highlights', label: 'v2.3.7 Highlights', icon: Zap },
     { id: 'governance', label: 'Positioning', icon: BookOpen },
     { id: 'install', label: 'Installation', icon: Package },
     { id: 'surfaces', label: 'Integration Surfaces', icon: Boxes },
@@ -533,8 +533,8 @@ const enContent: Content = {
     'Use a smoke prompt before trying the real requirement.',
     'If the host starts coding immediately, assume the current session did not reload the rules.',
   ],
-  highlightsTitle: 'v2.3.6 Highlights',
-  highlightsBody: 'Version 2.3.6 focuses on competition mode and host ecosystem: SEEAI flow rewrite, WorkBuddy unified install, responsive install UI, security hardening, and auto-fix for stale installations.',
+  highlightsTitle: 'v2.3.7 Highlights',
+  highlightsBody: 'Version 2.3.7 focuses on competition mode and host ecosystem: SEEAI flow rewrite, WorkBuddy unified install, responsive install UI, security hardening, and auto-fix for stale installations.',
   highlightsCards: [
     { title: 'SEEAI Competition Mode', body: 'New action-driven competition mode: Requirements > Decompose > Search > Solution Doc > Spec > Code > Run > Feedback Loop.' },
     { title: 'WorkBuddy Unified Install', body: 'WorkBuddy promoted from manual to unified install host. Skills auto-installed to ~/.workbuddy/skills/. 21+1 host ecosystem.' },
@@ -594,7 +594,7 @@ export function DocsPageContent({ locale = 'zh' }: { locale?: SiteLocale }) {
             <div className="max-w-[860px]">
               <div className="mb-5 flex flex-wrap items-center gap-2">
                 <Badge variant="version">{content.heroKicker}</Badge>
-                <Badge variant="certified">v2.3.6</Badge>
+                <Badge variant="certified">v2.3.7</Badge>
                 <Badge variant="compatible">{locale === 'en' ? 'Bilingual' : '中英双语'}</Badge>
               </div>
               <h1 className="max-w-[900px] text-4xl font-bold leading-[1.08] tracking-tight text-text-primary sm:text-5xl lg:text-[3.5rem]">

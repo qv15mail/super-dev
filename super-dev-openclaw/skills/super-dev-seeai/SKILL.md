@@ -4,7 +4,7 @@ description: "Super Dev SEEAI competition mode - action-driven fast delivery loo
 when_to_use: "Use when the user says /super-dev-seeai, super-dev-seeai:, or super-dev-seeai： followed by a requirement. Activate the competition action loop for time-boxed high-quality delivery."
 allowed_tools: Read, Edit, Write, Bash
 user_invocable: true
-version: 2.3.6
+version: 2.3.7
 argument_hint: competition requirement
 metadata: {"openclaw":{"requires":{"bins":["super-dev"]},"homepage":"https://superdev.goder.ai","install":[{"id":"pip","kind":"uv","formula":"super-dev","bins":["super-dev"],"label":"pip install super-dev"}]}}
 ---

@@ -2,7 +2,7 @@
 name: super-dev
 description: Activate the Super Dev pipeline inside Codex CLI.
 when_to_use: Use when the user says /super-dev, super-dev:, or super-dev： followed by a requirement. Activate the Super Dev pipeline for research-first, commercial-grade project delivery.
-version: 2.3.6
+version: 2.3.7
 ---
 # super-dev for Codex CLI
 

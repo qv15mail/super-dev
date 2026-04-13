@@ -286,6 +286,30 @@ class SkillManager:
                     pass
         return refreshed
 
+    @classmethod
+    def cleanup_all_legacy(cls) -> list[str]:
+        """扫描所有已知和常见 skill 目录，删除 super-dev-core 残留。"""
+        cleaned: list[str] = []
+        # 已知宿主路径
+        all_paths = {**cls.OFFICIAL_TARGET_PATHS, **cls.OBSERVED_TARGET_PATHS}
+        search_dirs = [Path(p).expanduser() for p in all_paths.values()]
+        # 常见但不在列表里的旧路径
+        home = Path.home()
+        for pattern in (
+            ".*/skills",  # ~/.xxx/skills
+            ".config/*/skills",  # ~/.config/xxx/skills
+        ):
+            for match in home.glob(pattern):
+                if match.is_dir() and match not in search_dirs:
+                    search_dirs.append(match)
+        # 扫描并清理
+        for skill_dir in search_dirs:
+            legacy = skill_dir / "super-dev-core"
+            if legacy.exists():
+                shutil.rmtree(legacy, ignore_errors=True)
+                cleaned.append(str(legacy))
+        return cleaned
+
     def uninstall(self, name: str, target: str) -> Path:
         names = self.compatibility_skill_names(target, name)
         target_dir = self._target_dir(target) / name
@@ -342,16 +366,19 @@ class SkillManager:
             writer(mirror_dir)
 
     def _cleanup_legacy_skills(self, target: str) -> None:
-        """Remove legacy super-dev-core and stale codex mirror directories."""
-        legacy_dirs = [
-            Path("~/.agents/skills/super-dev-core").expanduser(),
-            Path("~/.codex/skills/super-dev-core").expanduser(),
-            Path("~/.codex/skills/super-dev").expanduser(),
-            Path("~/.codex/skills/super-dev-seeai").expanduser(),
-        ]
-        for legacy in legacy_dirs:
-            if legacy.exists():
-                shutil.rmtree(legacy, ignore_errors=True)
+        """Remove legacy super-dev-core from the target host's skill directory."""
+        # 清理当前宿主下的旧名称
+        base = self._target_dir(target)
+        legacy_name = base / "super-dev-core"
+        if legacy_name.exists():
+            shutil.rmtree(legacy_name, ignore_errors=True)
+
+        # 清理 mirror 路径下的旧名称和旧 mirror
+        for mirror_base in self._compatibility_target_dirs(target):
+            for old_name in ("super-dev-core", "super-dev", "super-dev-seeai"):
+                old_dir = mirror_base / old_name
+                if old_dir.exists():
+                    shutil.rmtree(old_dir, ignore_errors=True)
 
     def _is_git_source(self, source: str) -> bool:
         return (

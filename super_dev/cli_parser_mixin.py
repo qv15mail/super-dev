@@ -1923,7 +1923,7 @@ class CliParserMixin:
         subparsers.add_parser(
             "migrate",
             help="迁移项目到最新版本",
-            description="将 2.2.0+ 项目配置迁移到 2.3.6（更新配置、规则文件与 hooks）",
+            description="将 2.2.0+ 项目配置迁移到 2.3.7（更新配置、规则文件与 hooks）",
         )
 
         # rollback 命令 - 回退到指定阶段或检查点

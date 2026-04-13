@@ -4346,6 +4346,10 @@ class TestCLIPipeline:
         self, temp_project_dir: Path, monkeypatch
     ):
         original_cwd = os.getcwd()
+        # 使用隔离的假 HOME 避免真实宿主安装影响检测
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
         os.chdir(temp_project_dir)
         monkeypatch.setenv("SUPER_DEV_DISABLE_WEB", "1")
         monkeypatch.delenv("SUPER_DEV_ALLOW_NO_HOST", raising=False)

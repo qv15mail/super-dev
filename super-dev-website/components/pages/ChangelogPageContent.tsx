@@ -5,6 +5,15 @@ import type { SiteLocale } from '@/lib/site-locale';
 
 const CHANGELOG = {
   zh: [
+    { version: '2.3.7', date: '2026-04-13', type: 'patch' as const, changes: [
+      '修复 WorkBuddy doctor 报错 user_surfaces 缺失：从 NO_SKILL_TARGETS 移除，onboard 自动安装 Skill',
+      '修复补充 Skill（super-dev-seeai）重复安装报错：已存在时静默跳过，不再 --force 才能安装',
+      '全局清理 super-dev-core 残留：扫描所有宿主 skills 目录（包括未列表的），自动删除旧名称',
+      '优化旧版文案：WorkBuddy 描述更新为"通过官方 Skills 接入"',
+      'CI 配置重写：从 Node.js 全栈模板改为 Python CLI 项目，CI 不再 2 秒失败',
+      'README 媒体路径修正：指向 super-dev-website/public/ 下的实际文件',
+      '仓库清理：.gitignore 补全 runtime state 路径，避免误提交运行时数据',
+    ] },
     { version: '2.3.6', date: '2026-04-13', type: 'patch' as const, changes: [
       '修复 Skill 重复安装问题：清空 Codex mirror 路径，安装时自动清理 super-dev-core 残留',
       '修复安装器按 R 重选后失败：无集成文件的宿主跳过 integrate 步骤',
@@ -152,6 +161,15 @@ const CHANGELOG = {
     { version: '1.0.0', date: '2025-12-29', type: 'major' as const, changes: ['首次发布', '基础流水线框架（research / documents / spec / implement）', 'Spec-Driven Development 模块', '支持 Claude Code、Cursor、Windsurf 宿主', 'PyPI 正式发布'] },
   ],
   en: [
+    { version: '2.3.7', date: '2026-04-13', type: 'patch' as const, changes: [
+      'Fixed WorkBuddy doctor reporting missing user_surfaces: removed from NO_SKILL_TARGETS, onboard now installs Skill automatically',
+      'Fixed supplemental skill (super-dev-seeai) install collision: silently skip if exists, no --force required',
+      'Global super-dev-core cleanup: scan all host skills directories (including unlisted), auto-remove legacy names',
+      'Updated WorkBuddy description: now reflects official Skills integration',
+      'CI config rewritten: from Node.js fullstack template to Python CLI project, CI no longer fails in 2s',
+      'README media paths corrected: point to super-dev-website/public/ actual files',
+      'Repo cleanup: .gitignore covers all runtime state paths to prevent accidental commits',
+    ] },
     { version: '2.3.6', date: '2026-04-13', type: 'patch' as const, changes: [
       'Fixed skill duplication: cleared Codex mirror paths, auto-cleanup of legacy super-dev-core',
       'Fixed install selector R-then-Enter failure: skip integrate for hosts without project files',

@@ -108,7 +108,6 @@ class IntegrationManager(IntegrationManagerContentMixin):
         "cline",
         "kilo-code",
         "vscode-copilot",
-        "workbuddy",
     }
     HOST_USAGE_LOCATIONS: dict[str, str] = {
         "antigravity": "打开 Antigravity 的 Agent Chat / Prompt 面板，并确保当前工作区就是目标项目。",
@@ -889,7 +888,7 @@ class IntegrationManager(IntegrationManagerContentMixin):
         },
         "workbuddy": {
             "level": "experimental",
-            "reason": "WorkBuddy 当前官方公开的是桌面任务工作台、Skills、MCP 与本地文件操作能力，适合接入 Super Dev 合同，但本地规则/命令文件面尚未公开，因此先按手动技能宿主建模。",
+            "reason": "WorkBuddy 通过官方 Skills 系统接入，Super Dev 自动写入 ~/.workbuddy/skills/。",
             "evidence": [
                 "官方文档公开 WorkBuddy 支持自然语言任务、Skills 扩展、MCP 与本地文件夹授权执行",
                 "官方文档公开右侧边栏可查看当前工作目录文件树与变更结果",

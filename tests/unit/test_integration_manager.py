@@ -348,7 +348,7 @@ class TestIntegrationManager:
         assert workbuddy.usage_mode == "manual-workbench-skill"
         assert workbuddy.trigger_command == "super-dev: <需求描述>"
         assert workbuddy.slash_command_file == ""
-        assert workbuddy.skill_dir == ""
+        assert workbuddy.skill_dir == "~/.workbuddy/skills"
         assert workbuddy.host_protocol_mode == "skills"
         assert workbuddy.host_protocol_summary == "官方 Skills + MCP + 文件侧栏"
         assert any("super-dev-seeai:" in item["entry"] for item in workbuddy.entry_variants)

@@ -4,7 +4,7 @@
     {
       "name": "super-dev-claude",
       "source": "./plugins/super-dev-claude",
-      "version": "2.3.6"
+      "version": "2.3.7"
     }
   ]
 }

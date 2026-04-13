@@ -782,7 +782,15 @@ class CliHostOpsMixin:
             self._auto_fix_runtime_install(runtime_health)
             self.console.print("")
 
-        # After runtime health fix, check skill versions
+        # After runtime health fix, clean up legacy skills globally + refresh outdated
+        try:
+            from .skills import SkillManager
+            cleaned = SkillManager.cleanup_all_legacy()
+            if cleaned:
+                for path in cleaned:
+                    self.console.print(f"  [green]✓[/green] 已清理旧 Skill: {path}")
+        except Exception:
+            pass
         self._auto_refresh_outdated_skills()
 
     def _auto_refresh_outdated_skills(self) -> None:
