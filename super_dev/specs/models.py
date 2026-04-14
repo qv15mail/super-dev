@@ -18,35 +18,39 @@ def _utcnow() -> datetime:
 
 class ChangeStatus(Enum):
     """变更状态"""
-    DRAFT = "draft"           # 草稿
-    PROPOSED = "proposed"     # 已提议
-    APPROVED = "approved"     # 已批准
+
+    DRAFT = "draft"  # 草稿
+    PROPOSED = "proposed"  # 已提议
+    APPROVED = "approved"  # 已批准
     IN_PROGRESS = "in_progress"  # 进行中
-    COMPLETED = "completed"   # 已完成
-    ARCHIVED = "archived"     # 已归档
+    COMPLETED = "completed"  # 已完成
+    ARCHIVED = "archived"  # 已归档
 
 
 class TaskStatus(Enum):
     """任务状态"""
-    PENDING = "pending"       # 待处理
+
+    PENDING = "pending"  # 待处理
     IN_PROGRESS = "in_progress"  # 进行中
-    COMPLETED = "completed"   # 已完成
-    SKIPPED = "skipped"       # 已跳过
+    COMPLETED = "completed"  # 已完成
+    SKIPPED = "skipped"  # 已跳过
 
 
 class DeltaType(Enum):
     """增量类型"""
-    ADDED = "added"           # 新增
-    MODIFIED = "modified"     # 修改
-    REMOVED = "removed"       # 删除
+
+    ADDED = "added"  # 新增
+    MODIFIED = "modified"  # 修改
+    REMOVED = "removed"  # 删除
 
 
 @dataclass
 class Scenario:
     """场景 - 需求的具体场景"""
-    given: str = ""           # 前置条件
-    when: str = ""            # 触发事件
-    then: str = ""            # 预期结果
+
+    given: str = ""  # 前置条件
+    when: str = ""  # 触发事件
+    then: str = ""  # 预期结果
 
     def to_markdown(self) -> str:
         """转换为 Markdown"""
@@ -63,17 +67,15 @@ class Scenario:
 @dataclass
 class Requirement:
     """需求 - 功能需求"""
-    name: str                 # 需求名称
-    description: str = ""     # 需求描述
-    keyword: str = "SHALL"    # 关键词 (SHALL/MUST/SHOULD/MAY)
+
+    name: str  # 需求名称
+    description: str = ""  # 需求描述
+    keyword: str = "SHALL"  # 关键词 (SHALL/MUST/SHOULD/MAY)
     scenarios: list[Scenario] = field(default_factory=list)
 
     def to_markdown(self, level: int = 3) -> str:
         """转换为 Markdown"""
-        lines = [
-            f"{'#' * level} Requirement: {self.name}",
-            ""
-        ]
+        lines = [f"{'#' * level} Requirement: {self.name}", ""]
         if self.description:
             lines.append(f"{self.keyword} {self.description}")
             lines.append("")
@@ -94,8 +96,7 @@ class Requirement:
             "description": self.description,
             "keyword": self.keyword,
             "scenarios": [
-                {"given": s.given, "when": s.when, "then": s.then}
-                for s in self.scenarios
+                {"given": s.given, "when": s.when, "then": s.then} for s in self.scenarios
             ],
         }
 
@@ -103,9 +104,10 @@ class Requirement:
 @dataclass
 class Spec:
     """规范 - 功能规范文档"""
-    name: str                 # 规范名称 (如 "auth", "user-profile")
-    title: str = ""           # 规范标题
-    purpose: str = ""         # 规范目的
+
+    name: str  # 规范名称 (如 "auth", "user-profile")
+    title: str = ""  # 规范标题
+    purpose: str = ""  # 规范目的
     requirements: list[Requirement] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
     created_at: datetime = field(default_factory=_utcnow)
@@ -118,17 +120,10 @@ class Spec:
 
     def to_markdown(self) -> str:
         """转换为 Markdown"""
-        lines = [
-            f"# {self.title or self.name.title()}",
-            ""
-        ]
+        lines = [f"# {self.title or self.name.title()}", ""]
 
         if self.purpose:
-            lines.extend([
-                "## Purpose",
-                self.purpose,
-                ""
-            ])
+            lines.extend(["## Purpose", self.purpose, ""])
 
         if self.requirements:
             lines.append("## Requirements")
@@ -150,32 +145,28 @@ class Spec:
                     "description": r.description,
                     "keyword": r.keyword,
                     "scenarios": [
-                        {
-                            "given": s.given,
-                            "when": s.when,
-                            "then": s.then
-                        }
-                        for s in r.scenarios
-                    ]
+                        {"given": s.given, "when": s.when, "then": s.then} for s in r.scenarios
+                    ],
                 }
                 for r in self.requirements
             ],
             "metadata": self.metadata,
             "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat()
+            "updated_at": self.updated_at.isoformat(),
         }
 
 
 @dataclass
 class Task:
     """任务 - 实现任务"""
-    id: str                   # 任务 ID (如 "1.1", "2.3")
-    title: str                # 任务标题
-    description: str = ""     # 任务描述
+
+    id: str  # 任务 ID (如 "1.1", "2.3")
+    title: str  # 任务标题
+    description: str = ""  # 任务描述
     status: TaskStatus = TaskStatus.PENDING
-    assigned_to: str = ""     # 分配给谁
+    assigned_to: str = ""  # 分配给谁
     dependencies: list[str] = field(default_factory=list)  # 依赖的任务 ID
-    spec_refs: list[str] = field(default_factory=list)    # 引用的规范
+    spec_refs: list[str] = field(default_factory=list)  # 引用的规范
 
     def to_markdown(self) -> str:
         """转换为 Markdown"""
@@ -183,12 +174,10 @@ class Task:
             TaskStatus.PENDING: "[ ]",
             TaskStatus.IN_PROGRESS: "[~]",
             TaskStatus.COMPLETED: "[x]",
-            TaskStatus.SKIPPED: "[_]"
+            TaskStatus.SKIPPED: "[_]",
         }.get(self.status, "[ ]")
 
-        lines = [
-            f"- {checkbox} **{self.id}: {self.title}**"
-        ]
+        lines = [f"- {checkbox} **{self.id}: {self.title}**"]
 
         if self.description:
             lines.append(f"  - {self.description}")
@@ -208,23 +197,18 @@ class Task:
 @dataclass
 class SpecDelta:
     """规范增量 - 规范的变更"""
-    spec_name: str            # 规范名称
-    delta_type: DeltaType     # 增量类型
+
+    spec_name: str  # 规范名称
+    delta_type: DeltaType  # 增量类型
     requirements: list[Requirement] = field(default_factory=list)
-    description: str = ""     # 变更说明
+    description: str = ""  # 变更说明
 
     def to_markdown(self) -> str:
         """转换为 Markdown"""
-        lines = [
-            f"## {self.delta_type.value.upper()} Requirements",
-            ""
-        ]
+        lines = [f"## {self.delta_type.value.upper()} Requirements", ""]
 
         if self.description:
-            lines.extend([
-                f"> {self.description}",
-                ""
-            ])
+            lines.extend([f"> {self.description}", ""])
 
         for req in self.requirements:
             lines.append(req.to_markdown())
@@ -237,51 +221,34 @@ class SpecDelta:
             "spec_name": self.spec_name,
             "delta_type": self.delta_type.value,
             "description": self.description,
-            "requirements": [r.to_dict() for r in self.requirements]
+            "requirements": [r.to_dict() for r in self.requirements],
         }
 
 
 @dataclass
 class Proposal:
     """提案 - 变更提案"""
-    title: str                # 提案标题
-    description: str          # 提案描述
-    motivation: str = ""      # 动机/背景
-    impact: str = ""          # 影响范围
+
+    title: str  # 提案标题
+    description: str  # 提案描述
+    motivation: str = ""  # 动机/背景
+    impact: str = ""  # 影响范围
 
     def to_markdown(self) -> str:
         """转换为 Markdown"""
-        lines = [
-            "# Proposal",
-            ""
-        ]
+        lines = ["# Proposal", ""]
 
         if self.title:
-            lines.extend([
-                f"## {self.title}",
-                ""
-            ])
+            lines.extend([f"## {self.title}", ""])
 
         if self.description:
-            lines.extend([
-                "## Description",
-                self.description,
-                ""
-            ])
+            lines.extend(["## Description", self.description, ""])
 
         if self.motivation:
-            lines.extend([
-                "## Motivation",
-                self.motivation,
-                ""
-            ])
+            lines.extend(["## Motivation", self.motivation, ""])
 
         if self.impact:
-            lines.extend([
-                "## Impact",
-                self.impact,
-                ""
-            ])
+            lines.extend(["## Impact", self.impact, ""])
 
         return "\n".join(lines)
 
@@ -291,20 +258,21 @@ class Proposal:
             "title": self.title,
             "description": self.description,
             "motivation": self.motivation,
-            "impact": self.impact
+            "impact": self.impact,
         }
 
 
 @dataclass
 class Change:
     """变更 - 功能变更"""
-    id: str                   # 变更 ID (目录名，如 "add-user-auth")
-    title: str                # 变更标题
+
+    id: str  # 变更 ID (目录名，如 "add-user-auth")
+    title: str  # 变更标题
     status: ChangeStatus = ChangeStatus.DRAFT
     proposal: Proposal | None = None
     tasks: list[Task] = field(default_factory=list)
     spec_deltas: list[SpecDelta] = field(default_factory=list)
-    design_notes: str = ""    # 设计笔记 (可选)
+    design_notes: str = ""  # 设计笔记 (可选)
     created_at: datetime = field(default_factory=_utcnow)
     updated_at: datetime = field(default_factory=_utcnow)
 
@@ -336,7 +304,7 @@ class Change:
                     "status": t.status.value,
                     "assigned_to": t.assigned_to,
                     "dependencies": t.dependencies,
-                    "spec_refs": t.spec_refs
+                    "spec_refs": t.spec_refs,
                 }
                 for t in self.tasks
             ],
@@ -345,7 +313,7 @@ class Change:
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
             "is_completed": self.is_completed,
-            "completion_rate": self.completion_rate
+            "completion_rate": self.completion_rate,
         }
 
     def get_task_by_id(self, task_id: str) -> Task | None:

@@ -72,6 +72,7 @@ class AestheticDirectionType(str, Enum):
 @dataclass
 class Typography:
     """字体配置"""
+
     display: str  # 标题字体
     body: str  # 正文字体
     accent: str | None = None  # 强调字体
@@ -90,6 +91,7 @@ class Typography:
 @dataclass
 class ColorPalette:
     """色彩配置"""
+
     primary: str  # 主色
     secondary: str  # 次要色
     accent: str  # 强调色
@@ -124,6 +126,7 @@ class ColorPalette:
 @dataclass
 class AnimationStyle:
     """动画风格"""
+
     easing: str  # 缓动函数
     duration: str  # 默认时长
     stagger: bool = True  # 是否使用交错
@@ -139,6 +142,7 @@ class AnimationStyle:
 @dataclass
 class LayoutPrinciples:
     """布局原则"""
+
     grid_system: str  # 栅格系统
     asymmetry: bool = False  # 不对称
     overlap: bool = False  # 重叠元素
@@ -150,6 +154,7 @@ class LayoutPrinciples:
 @dataclass
 class VisualDetails:
     """视觉细节"""
+
     shadows: str  # 阴影风格
     borders: str  # 边框风格
     corner_radius: str  # 圆角
@@ -165,6 +170,7 @@ class VisualDetails:
 @dataclass
 class AestheticDirection:
     """完整的美学方向"""
+
     name: str
     description: str
     typography: Typography
@@ -187,28 +193,64 @@ class AestheticEngine:
 
     # 独特的字体库（避免 Inter, Roboto, Arial）
     DISPLAY_FONTS = [
-        "Space Grotesk", "Syne", "Clash Display", "General Sans",
-        "Fraunces", "Bebas Neue", "Right Grotesk", "PP Neue Montreal",
-        "DM Sans", "Outfit", "Sora", "Chillax",
-        "Monument Extended", "Bodon", "Playfair Display", "Cormorant",
-        "IBM Plex Sans", "Syncopate", "Russo One", "Lexend",
+        "Space Grotesk",
+        "Syne",
+        "Clash Display",
+        "General Sans",
+        "Fraunces",
+        "Bebas Neue",
+        "Right Grotesk",
+        "PP Neue Montreal",
+        "DM Sans",
+        "Outfit",
+        "Sora",
+        "Chillax",
+        "Monument Extended",
+        "Bodon",
+        "Playfair Display",
+        "Cormorant",
+        "IBM Plex Sans",
+        "Syncopate",
+        "Russo One",
+        "Lexend",
     ]
 
     BODY_FONTS = [
-        "Plus Jakarta Sans", "Inter", "Satoshi", "Geist",
-        "Neue Haas Grotesk", "SF Pro Display", "Source Sans Pro",
-        "Work Sans", "Space Grotesk", "DM Sans", "Outfit",
-        "EB Garamond", "Crimson Pro", "Lora", "Merriweather",
+        "Plus Jakarta Sans",
+        "Inter",
+        "Satoshi",
+        "Geist",
+        "Neue Haas Grotesk",
+        "SF Pro Display",
+        "Source Sans Pro",
+        "Work Sans",
+        "Space Grotesk",
+        "DM Sans",
+        "Outfit",
+        "EB Garamond",
+        "Crimson Pro",
+        "Lora",
+        "Merriweather",
     ]
 
     ACCENT_FONTS = [
-        "Playfair Display", "Cormorant", "Fraunces", "Bebas Neue",
-        "Syncopate", "Russo One", "Monument Extended",
+        "Playfair Display",
+        "Cormorant",
+        "Fraunces",
+        "Bebas Neue",
+        "Syncopate",
+        "Russo One",
+        "Monument Extended",
     ]
 
     MONO_FONTS = [
-        "JetBrains Mono", "Fira Code", "IBM Plex Mono", "Source Code Pro",
-        "Space Mono", "Roboto Mono", "DM Mono",
+        "JetBrains Mono",
+        "Fira Code",
+        "IBM Plex Mono",
+        "Source Code Pro",
+        "Space Mono",
+        "Roboto Mono",
+        "DM Mono",
     ]
 
     # 预设美学方向
@@ -235,7 +277,6 @@ class AestheticEngine:
                 "micro_interactions": False,
             },
         },
-
         AestheticDirectionType.MAXIMALIST_CHAOS: {
             "description": "极繁混乱 - 最大化视觉冲击力",
             "typography": {
@@ -262,7 +303,6 @@ class AestheticEngine:
                 "scroll_trigger": True,
             },
         },
-
         AestheticDirectionType.CYBERPUNK: {
             "description": "赛博朋克 - 高科技低生活",
             "typography": {
@@ -291,7 +331,6 @@ class AestheticEngine:
                 "parallax": True,
             },
         },
-
         AestheticDirectionType.SOFT_PASTEL: {
             "description": "柔和梦幻 - 粉彩与柔和",
             "typography": {
@@ -314,7 +353,6 @@ class AestheticEngine:
                 "micro_interactions": True,
             },
         },
-
         AestheticDirectionType.LUXURY_REFINED: {
             "description": "奢华精致 - 优雅与品质",
             "typography": {
@@ -338,7 +376,6 @@ class AestheticEngine:
                 "micro_interactions": True,
             },
         },
-
         AestheticDirectionType.VAPORWAVE: {
             "description": "蒸汽波 - 复古数字美学",
             "typography": {
@@ -403,9 +440,7 @@ class AestheticEngine:
 
         return self._build_from_preset(direction, preset)
 
-    def _generate_custom_direction(
-        self, direction: AestheticDirectionType
-    ) -> AestheticDirection:
+    def _generate_custom_direction(self, direction: AestheticDirectionType) -> AestheticDirection:
         """生成自定义美学方向"""
         return AestheticDirection(
             name=direction.value,
@@ -426,11 +461,16 @@ class AestheticEngine:
                 text_secondary="#666666",
             ),
             animation=AnimationStyle(
-                easing=self._rng.choice([
-                    "ease", "ease-in", "ease-out", "ease-in-out",
-                    "cubic-bezier(0.4, 0, 0.2, 1)",
-                    "cubic-bezier(0.68, -0.55, 0.265, 1.55)",
-                ]),
+                easing=self._rng.choice(
+                    [
+                        "ease",
+                        "ease-in",
+                        "ease-out",
+                        "ease-in-out",
+                        "cubic-bezier(0.4, 0, 0.2, 1)",
+                        "cubic-bezier(0.68, -0.55, 0.265, 1.55)",
+                    ]
+                ),
                 duration=f"{self._rng.uniform(0.2, 0.8):.1f}s",
                 stagger=self._rng.random() > 0.3,
                 micro_interactions=self._rng.random() > 0.2,
@@ -472,25 +512,37 @@ class AestheticEngine:
             animation=AnimationStyle(**anim_cfg),
             layout=LayoutPrinciples(
                 grid_system="8pt",
-                asymmetry=direction in [
+                asymmetry=direction
+                in [
                     AestheticDirectionType.MAXIMALIST_CHAOS,
                     AestheticDirectionType.GRID_BREAKING,
                 ],
-                overlap=direction in [
+                overlap=direction
+                in [
                     AestheticDirectionType.MAXIMALIST_CHAOS,
                     AestheticDirectionType.MEMPHIS_GROUP,
                 ],
             ),
             details=VisualDetails(
-                shadows="dramatic" if direction in [
-                    AestheticDirectionType.CYBERPUNK,
-                    AestheticDirectionType.VAPORWAVE,
-                ] else "subtle",
+                shadows=(
+                    "dramatic"
+                    if direction
+                    in [
+                        AestheticDirectionType.CYBERPUNK,
+                        AestheticDirectionType.VAPORWAVE,
+                    ]
+                    else "subtle"
+                ),
                 borders="thin",
-                corner_radius="0" if direction in [
-                    AestheticDirectionType.BRUTALIST_MINIMAL,
-                    AestheticDirectionType.RAW_INDUSTRIAL,
-                ] else "8px",
+                corner_radius=(
+                    "0"
+                    if direction
+                    in [
+                        AestheticDirectionType.BRUTALIST_MINIMAL,
+                        AestheticDirectionType.RAW_INDUSTRIAL,
+                    ]
+                    else "8px"
+                ),
                 textures=["noise"] if direction == AestheticDirectionType.CYBERPUNK else [],
             ),
             differentiation=self._get_differentiation(direction),
@@ -510,9 +562,7 @@ class AestheticEngine:
             AestheticDirectionType.PLAYFUL_TOY: "明亮色彩、圆润形状、趣味图标",
             AestheticDirectionType.EDITORIAL_MAGAZINE: "大胆排版、不对称布局、编辑感",
         }
-        return differentiations.get(
-            direction, "独特的视觉识别，令人难忘的设计语言"
-        )
+        return differentiations.get(direction, "独特的视觉识别，令人难忘的设计语言")
 
     def _random_color(self, light: bool = False) -> str:
         """生成随机颜色"""

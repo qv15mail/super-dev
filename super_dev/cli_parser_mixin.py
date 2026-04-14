@@ -547,7 +547,9 @@ class CliParserMixin:
         config_parser = subparsers.add_parser(
             "config", help="配置管理", description="查看和修改项目配置"
         )
-        config_parser.add_argument("action", choices=["get", "set", "list", "validate"], help="操作")
+        config_parser.add_argument(
+            "action", choices=["get", "set", "list", "validate"], help="操作"
+        )
         config_parser.add_argument("key", nargs="?", help="配置键")
         config_parser.add_argument("value", nargs="?", help="配置值")
 
@@ -614,6 +616,13 @@ class CliParserMixin:
         integrate_parser.add_argument("--comment", help="用于 validate：补充真人运行时验收备注")
         integrate_parser.add_argument(
             "--actor", default="user", help="用于 validate：记录操作者（默认: user）"
+        )
+        integrate_parser.add_argument(
+            "--competition-evidence-json",
+            help=(
+                "用于 validate：写入 SEEAI 比赛验收证据 JSON，"
+                "包含 first_response/runtime_checkpoint/fallback_decision/demo_path"
+            ),
         )
         integrate_parser.add_argument(
             "--verify-docs",
@@ -712,9 +721,7 @@ class CliParserMixin:
         doctor_parser.add_argument(
             "--detail", action="store_true", help="显示详细诊断、路径与逐项建议"
         )
-        doctor_parser.add_argument(
-            "--fix", action="store_true", help="自动修复检测到的问题"
-        )
+        doctor_parser.add_argument("--fix", action="store_true", help="自动修复检测到的问题")
 
         # setup 命令 - 非技术用户一步接入
         setup_parser = subparsers.add_parser(
@@ -1073,10 +1080,18 @@ class CliParserMixin:
             help="列出设计灵感锚点",
             description="列出内置设计灵感库，供 UI/UX 方向选择与参考",
         )
-        design_list_parser.add_argument("--product-type", help="产品类型过滤 (landing/saas/dashboard/content/ecommerce)")
-        design_list_parser.add_argument("--industry", help="行业过滤 (fintech/education/healthcare/general)")
-        design_list_parser.add_argument("--style", help="风格过滤 (minimal/professional/playful/luxury/modern)")
-        design_list_parser.add_argument("--frontend", help="前端栈过滤 (react/vue/next/uni-app/electron 等)")
+        design_list_parser.add_argument(
+            "--product-type", help="产品类型过滤 (landing/saas/dashboard/content/ecommerce)"
+        )
+        design_list_parser.add_argument(
+            "--industry", help="行业过滤 (fintech/education/healthcare/general)"
+        )
+        design_list_parser.add_argument(
+            "--style", help="风格过滤 (minimal/professional/playful/luxury/modern)"
+        )
+        design_list_parser.add_argument(
+            "--frontend", help="前端栈过滤 (react/vue/next/uni-app/electron 等)"
+        )
         design_list_parser.add_argument(
             "-n", "--max-results", type=int, default=10, help="最大结果数 (默认: 10)"
         )
@@ -1087,7 +1102,9 @@ class CliParserMixin:
             description="结合当前项目配置或需求描述，推荐最合适的设计灵感方向",
         )
         design_recommend_parser.add_argument(
-            "--idea", default="", help="显式需求描述；未提供时优先读取 super-dev.yaml 中的 description"
+            "--idea",
+            default="",
+            help="显式需求描述；未提供时优先读取 super-dev.yaml 中的 description",
         )
         design_recommend_parser.add_argument("--product-type", help="显式指定产品类型")
         design_recommend_parser.add_argument("--industry", help="显式指定行业")
@@ -1102,7 +1119,9 @@ class CliParserMixin:
             help="应用设计灵感锚点",
             description="将指定设计灵感写入项目配置，并可同步重生成 uiux/ui-contract",
         )
-        design_apply_parser.add_argument("slug", help="设计灵感 slug，例如 linear.app / vercel / stripe")
+        design_apply_parser.add_argument(
+            "slug", help="设计灵感 slug，例如 linear.app / vercel / stripe"
+        )
         design_apply_parser.add_argument(
             "--idea", default="", help="可选需求描述；仅在当前项目 description 为空时作为补充上下文"
         )
@@ -1788,15 +1807,11 @@ class CliParserMixin:
             default=20,
             help="生成 hook harness 时最多读取最近多少条历史（默认 20）",
         )
-        harness_status_parser.add_argument(
-            "--json", action="store_true", help="以 JSON 输出结果"
-        )
+        harness_status_parser.add_argument("--json", action="store_true", help="以 JSON 输出结果")
         harness_workflow_parser = harness_subparsers.add_parser(
             "workflow", help="查看 workflow continuity harness"
         )
-        harness_workflow_parser.add_argument(
-            "--json", action="store_true", help="以 JSON 输出结果"
-        )
+        harness_workflow_parser.add_argument("--json", action="store_true", help="以 JSON 输出结果")
         harness_framework_parser = harness_subparsers.add_parser(
             "framework", help="查看跨平台 framework harness"
         )
@@ -1824,9 +1839,7 @@ class CliParserMixin:
             default=10,
             help="最多读取最近多少条统一时间线（默认 10）",
         )
-        harness_timeline_parser.add_argument(
-            "--json", action="store_true", help="以 JSON 输出结果"
-        )
+        harness_timeline_parser.add_argument("--json", action="store_true", help="以 JSON 输出结果")
         harness_hooks_parser = harness_subparsers.add_parser(
             "hooks", help="查看 hook audit trail harness"
         )
@@ -1836,9 +1849,7 @@ class CliParserMixin:
             default=20,
             help="最多读取最近多少条 hook 历史（默认 20）",
         )
-        harness_hooks_parser.add_argument(
-            "--json", action="store_true", help="以 JSON 输出结果"
-        )
+        harness_hooks_parser.add_argument("--json", action="store_true", help="以 JSON 输出结果")
 
         # experts 命令 - 查看专家角色
         experts_parser = subparsers.add_parser(
@@ -1975,7 +1986,7 @@ class CliParserMixin:
         subparsers.add_parser(
             "migrate",
             help="迁移项目到最新版本",
-            description="将 2.2.0+ 项目配置迁移到 2.3.7（更新配置、规则文件与 hooks）",
+            description="将 2.2.0+ 项目配置迁移到 2.3.8（更新配置、规则文件与 hooks）",
         )
 
         # rollback 命令 - 回退到指定阶段或检查点
@@ -2016,9 +2027,7 @@ class CliParserMixin:
             help="查看历史流水线运行",
             description="列出过去的流水线运行记录",
         )
-        history_parser.add_argument(
-            "--limit", type=int, default=10, help="显示条数（默认 10）"
-        )
+        history_parser.add_argument("--limit", type=int, default=10, help="显示条数（默认 10）")
         history_parser.add_argument(
             "--status", choices=["success", "failed", "running"], help="按状态过滤"
         )
@@ -2036,8 +2045,6 @@ class CliParserMixin:
             help="查看流水线阶段变更",
             description="对比当前与上一阶段的文件变更",
         )
-        diff_parser.add_argument(
-            "--phase", help="指定阶段对比"
-        )
+        diff_parser.add_argument("--phase", help="指定阶段对比")
 
         return parser

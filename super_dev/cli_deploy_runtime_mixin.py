@@ -24,15 +24,39 @@ class CliDeployRuntimeMixin:
     def _framework_playbook_complete(self, playbook: dict[str, Any]) -> bool:
         return framework_playbook_complete(playbook)
 
-    def _frontend_runtime_report_paths(self, output_dir: Path, project_name: str) -> dict[str, Path]:
+    def _frontend_runtime_report_paths(
+        self, output_dir: Path, project_name: str
+    ) -> dict[str, Path]:
         return {
             "markdown": output_dir / f"{project_name}-frontend-runtime.md",
             "json": output_dir / f"{project_name}-frontend-runtime.json",
         }
 
-    def _runtime_ui_probe_files(self, *, project_dir: Path, frontend_dir: Path, preview_file: Path) -> list[Path]:
-        allowed_suffixes = {".tsx", ".ts", ".jsx", ".js", ".vue", ".svelte", ".css", ".scss", ".less", ".html"}
-        excluded_dirs = {"node_modules", ".git", ".venv", "venv", "dist", "build", ".next", "coverage"}
+    def _runtime_ui_probe_files(
+        self, *, project_dir: Path, frontend_dir: Path, preview_file: Path
+    ) -> list[Path]:
+        allowed_suffixes = {
+            ".tsx",
+            ".ts",
+            ".jsx",
+            ".js",
+            ".vue",
+            ".svelte",
+            ".css",
+            ".scss",
+            ".less",
+            ".html",
+        }
+        excluded_dirs = {
+            "node_modules",
+            ".git",
+            ".venv",
+            "venv",
+            "dist",
+            "build",
+            ".next",
+            "coverage",
+        }
         candidates: list[Path] = []
         for candidate in (
             preview_file,
@@ -71,7 +95,9 @@ class CliDeployRuntimeMixin:
             if path.exists()
         )
         emoji_hits = sorted({item for item in self._RUNTIME_UI_EMOJI_RE.findall(combined)})[:10]
-        chat_shell_hits = sorted({item for item in self._RUNTIME_UI_CHAT_SHELL_RE.findall(combined)})[:10]
+        chat_shell_hits = sorted(
+            {item for item in self._RUNTIME_UI_CHAT_SHELL_RE.findall(combined)}
+        )[:10]
         observed = [*emoji_hits, *chat_shell_hits]
         return {
             "passed": len(observed) == 0,
@@ -80,20 +106,41 @@ class CliDeployRuntimeMixin:
             "observed": observed[:10],
         }
 
-    def _load_frontend_runtime_validation(self, *, output_dir: Path, project_name: str) -> dict[str, Any]:
-        report_file = self._frontend_runtime_report_paths(output_dir=output_dir, project_name=project_name)["json"]
+    def _load_frontend_runtime_validation(
+        self, *, output_dir: Path, project_name: str
+    ) -> dict[str, Any]:
+        report_file = self._frontend_runtime_report_paths(
+            output_dir=output_dir, project_name=project_name
+        )["json"]
         if not report_file.exists():
-            return {"passed": False, "checks": {}, "preview_file": "", "report_file": str(report_file)}
+            return {
+                "passed": False,
+                "checks": {},
+                "preview_file": "",
+                "report_file": str(report_file),
+            }
         try:
             payload = json.loads(report_file.read_text(encoding="utf-8"))
         except Exception:
-            return {"passed": False, "checks": {}, "preview_file": "", "report_file": str(report_file)}
+            return {
+                "passed": False,
+                "checks": {},
+                "preview_file": "",
+                "report_file": str(report_file),
+            }
         if not isinstance(payload, dict):
-            return {"passed": False, "checks": {}, "preview_file": "", "report_file": str(report_file)}
+            return {
+                "passed": False,
+                "checks": {},
+                "preview_file": "",
+                "report_file": str(report_file),
+            }
         payload["report_file"] = str(report_file)
         return payload
 
-    def _runtime_ui_source_blob(self, *, project_dir: Path, frontend_dir: Path, preview_file: Path) -> str:
+    def _runtime_ui_source_blob(
+        self, *, project_dir: Path, frontend_dir: Path, preview_file: Path
+    ) -> str:
         return "\n".join(
             path.read_text(encoding="utf-8", errors="ignore")
             for path in self._runtime_ui_probe_files(
@@ -116,7 +163,9 @@ class CliDeployRuntimeMixin:
             return True
         if "var(--color-" in combined or "var(--space-" in combined or "var(--font-" in combined:
             return True
-        if design_tokens_content and ("--color-" in design_tokens_content or "--font-" in design_tokens_content):
+        if design_tokens_content and (
+            "--color-" in design_tokens_content or "--font-" in design_tokens_content
+        ):
             return "var(--" in combined
         return False
 
@@ -218,7 +267,8 @@ class CliDeployRuntimeMixin:
         keywords = [
             token
             for token in re.findall(r"[a-zA-Z0-9_-]{3,}", observed)
-            if token not in {"must", "with", "and", "the", "for", "are", "app", "web", "page", "pages"}
+            if token
+            not in {"must", "with", "and", "the", "for", "are", "app", "web", "page", "pages"}
         ]
         if not keywords:
             return True
@@ -241,7 +291,11 @@ class CliDeployRuntimeMixin:
         ui_alignment_file = output_dir / f"{project_name}-ui-contract-alignment.json"
         package_json_file = project_dir / "package.json"
 
-        exported_preview = self._export_preview_from_output_frontend(preview_file) if index_file.exists() else False
+        exported_preview = (
+            self._export_preview_from_output_frontend(preview_file)
+            if index_file.exists()
+            else False
+        )
         checks = {
             "output_frontend_index": index_file.exists(),
             "output_frontend_styles": css_file.exists(),
@@ -259,13 +313,10 @@ class CliDeployRuntimeMixin:
             except Exception:
                 ui_alignment_summary = {}
         ui_alignment_available = bool(ui_alignment_summary)
-        ui_alignment_passed = (
-            bool(ui_alignment_summary)
-            and all(
-                bool(value.get("passed", False))
-                for value in ui_alignment_summary.values()
-                if isinstance(value, dict)
-            )
+        ui_alignment_passed = bool(ui_alignment_summary) and all(
+            bool(value.get("passed", False))
+            for value in ui_alignment_summary.values()
+            if isinstance(value, dict)
         )
         checks["ui_contract_alignment"] = ui_alignment_passed if ui_alignment_available else False
         key_alignment_checks = {
@@ -285,7 +336,11 @@ class CliDeployRuntimeMixin:
             frontend_dir=frontend_dir,
             preview_file=preview_file,
         )
-        preview_content = preview_file.read_text(encoding="utf-8", errors="ignore") if preview_file.exists() else ""
+        preview_content = (
+            preview_file.read_text(encoding="utf-8", errors="ignore")
+            if preview_file.exists()
+            else ""
+        )
         design_tokens_content = (
             design_tokens_file.read_text(encoding="utf-8", errors="ignore")
             if design_tokens_file.exists()
@@ -307,9 +362,20 @@ class CliDeployRuntimeMixin:
                     ui_contract = loaded
             except Exception:
                 ui_contract = {}
-        component_stack = ui_contract.get("component_stack", {}) if isinstance(ui_contract.get("component_stack"), dict) else {}
-        icon_system = ui_contract.get("icon_system") or component_stack.get("icon") or component_stack.get("icons") or ""
-        analysis = ui_contract.get("analysis", {}) if isinstance(ui_contract.get("analysis"), dict) else {}
+        component_stack = (
+            ui_contract.get("component_stack", {})
+            if isinstance(ui_contract.get("component_stack"), dict)
+            else {}
+        )
+        icon_system = (
+            ui_contract.get("icon_system")
+            or component_stack.get("icon")
+            or component_stack.get("icons")
+            or ""
+        )
+        analysis = (
+            ui_contract.get("analysis", {}) if isinstance(ui_contract.get("analysis"), dict) else {}
+        )
         frontend_variant = str(analysis.get("frontend") or "")
         cross_platform_frontend = self._is_cross_platform_frontend(frontend_variant)
         framework_playbook = (
@@ -366,7 +432,9 @@ class CliDeployRuntimeMixin:
                 bool(checks.get(name, False)) for name in key_alignment_checks
             )
         framework_playbook_ready = self._framework_playbook_complete(framework_playbook)
-        checks["ui_framework_playbook"] = framework_playbook_ready if cross_platform_frontend else True
+        checks["ui_framework_playbook"] = (
+            framework_playbook_ready if cross_platform_frontend else True
+        )
         passed = all(checks.values())
         report = {
             "project_name": project_name,
@@ -389,25 +457,48 @@ class CliDeployRuntimeMixin:
             "ui_alignment_key_areas": {
                 key: value
                 for key, value in ui_alignment_summary.items()
-                if key in {"theme_entry", "navigation_shell", "component_imports", "banned_patterns", "framework_execution"}
+                if key
+                in {
+                    "theme_entry",
+                    "navigation_shell",
+                    "component_imports",
+                    "banned_patterns",
+                    "framework_execution",
+                }
             },
             "ui_banned_pattern_probe": banned_pattern_probe,
         }
-        report_paths = self._frontend_runtime_report_paths(output_dir=output_dir, project_name=project_name)
-        report_paths["json"].write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        report_paths = self._frontend_runtime_report_paths(
+            output_dir=output_dir, project_name=project_name
+        )
+        report_paths["json"].write_text(
+            json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
         lines = [
             "# Frontend Runtime Validation",
             "",
             f"- Passed: {'yes' if passed else 'no'}",
-            f"- Preview file: `{preview_file}`" if preview_file.exists() else "- Preview file: missing",
-            f"- UI contract: `{ui_contract_file}`" if ui_contract_file.exists() else "- UI contract: missing",
+            (
+                f"- Preview file: `{preview_file}`"
+                if preview_file.exists()
+                else "- Preview file: missing"
+            ),
+            (
+                f"- UI contract: `{ui_contract_file}`"
+                if ui_contract_file.exists()
+                else "- UI contract: missing"
+            ),
             (
                 f"- Design tokens: `{design_tokens_file}`"
                 if design_tokens_file.exists()
                 else "- Design tokens: missing"
             ),
-            f"- UI alignment: `{ui_alignment_file}`" if ui_alignment_file.exists() else "- UI alignment: pending (will be refreshed after UI review)",
+            (
+                f"- UI alignment: `{ui_alignment_file}`"
+                if ui_alignment_file.exists()
+                else "- UI alignment: pending (will be refreshed after UI review)"
+            ),
             "",
             "## Checks",
             "",
@@ -423,8 +514,7 @@ class CliDeployRuntimeMixin:
                     f"- Style direction: {ui_contract.get('style_direction', '-')}",
                     f"- Icon system: {icon_system or '-'}",
                     (
-                        "- Emoji policy: "
-                        f"{ui_contract.get('emoji_policy', {}).get('rule', '-')}"
+                        "- Emoji policy: " f"{ui_contract.get('emoji_policy', {}).get('rule', '-')}"
                         if isinstance(ui_contract.get("emoji_policy"), dict)
                         else "- Emoji policy: -"
                     ),
@@ -435,8 +525,7 @@ class CliDeployRuntimeMixin:
                         else "- Selected library: -"
                     ),
                     (
-                        "- Framework playbook: "
-                        f"{framework_playbook.get('framework', '-')}"
+                        "- Framework playbook: " f"{framework_playbook.get('framework', '-')}"
                         if framework_playbook
                         else "- Framework playbook: -"
                     ),

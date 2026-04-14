@@ -62,6 +62,7 @@ class DocumentGenerator(DocumentGeneratorContentMixin):
         self._template_mgr = None
         try:
             from .prompt_templates import PromptTemplateManager
+
             self._template_mgr = PromptTemplateManager()
         except Exception:
             logger.debug("Prompt 模板管理器加载失败，将跳过模板版本标记")
@@ -102,7 +103,18 @@ class DocumentGenerator(DocumentGeneratorContentMixin):
         }
         if language in mapping:
             return mapping[language]
-        if language in {"go", "java", "ruby", "scala", "swift", "kotlin", "rust", "dart", "elixir", "lua"}:
+        if language in {
+            "go",
+            "java",
+            "ruby",
+            "scala",
+            "swift",
+            "kotlin",
+            "rust",
+            "dart",
+            "elixir",
+            "lua",
+        }:
             return language.capitalize()
         return language.replace("-", " ").title()
 
@@ -118,9 +130,23 @@ class DocumentGenerator(DocumentGeneratorContentMixin):
 
         # 产品类型
         product_type = "general"
-        if any(word in description_lower for word in ["dashboard", "仪表盘", "后台", "admin", "workbench", "workspace", "工作台"]):
+        if any(
+            word in description_lower
+            for word in ["dashboard", "仪表盘", "后台", "admin", "workbench", "workspace", "工作台"]
+        ):
             product_type = "dashboard"
-        elif any(word in description_lower for word in ["landing", "落地页", "营销页", "官网", "官方网站", "official website", "marketing"]):
+        elif any(
+            word in description_lower
+            for word in [
+                "landing",
+                "落地页",
+                "营销页",
+                "官网",
+                "官方网站",
+                "official website",
+                "marketing",
+            ]
+        ):
             product_type = "landing"
         elif any(word in description_lower for word in ["saas", "软件服务", "platform", "平台"]):
             product_type = "saas"
@@ -133,7 +159,9 @@ class DocumentGenerator(DocumentGeneratorContentMixin):
         industry = "general"
         if any(word in description_lower for word in ["医疗", "健康", "health", "medical", "care"]):
             industry = "healthcare"
-        elif any(word in description_lower for word in ["金融", "支付", "fintech", "金融科技", "banking"]):
+        elif any(
+            word in description_lower for word in ["金融", "支付", "fintech", "金融科技", "banking"]
+        ):
             industry = "fintech"
         elif any(word in description_lower for word in ["教育", "培训", "education", "learning"]):
             industry = "education"
@@ -141,14 +169,18 @@ class DocumentGenerator(DocumentGeneratorContentMixin):
             industry = "legal"
         elif any(word in description_lower for word in ["政务", "government", "public"]):
             industry = "government"
-        elif any(word in description_lower for word in ["美容", "美业", "beauty", "spa", "wellness"]):
+        elif any(
+            word in description_lower for word in ["美容", "美业", "beauty", "spa", "wellness"]
+        ):
             industry = "beauty"
 
         # 风格倾向
         style = "modern"
         if any(word in description_lower for word in ["极简", "minimal", "简约"]):
             style = "minimal"
-        elif any(word in description_lower for word in ["专业", "商务", "business", "professional"]):
+        elif any(
+            word in description_lower for word in ["专业", "商务", "business", "professional"]
+        ):
             style = "professional"
         elif any(word in description_lower for word in ["活泼", "fun", "playful", "活力"]):
             style = "playful"
@@ -173,12 +205,12 @@ class DocumentGenerator(DocumentGeneratorContentMixin):
         """
         description = self.description
         keywords: dict[str, list[str]] = {
-            "ai_frameworks": [],      # AI 框架：LangGraph, LangChain, Transformers 等
-            "agent_tools": [],        # Agent 工具：AutoGPT, BabyAGI, CrewAI 等
-            "ml_libraries": [],       # ML 库：PyTorch, TensorFlow, scikit-learn 等
-            "vector_stores": [],      # 向量数据库：Pinecone, Chroma, Weaviate 等
-            "orchestration": [],      # 编排工具：Airflow, Prefect, Dagster 等
-            "other_keywords": [],     # 其他技术关键词
+            "ai_frameworks": [],  # AI 框架：LangGraph, LangChain, Transformers 等
+            "agent_tools": [],  # Agent 工具：AutoGPT, BabyAGI, CrewAI 等
+            "ml_libraries": [],  # ML 库：PyTorch, TensorFlow, scikit-learn 等
+            "vector_stores": [],  # 向量数据库：Pinecone, Chroma, Weaviate 等
+            "orchestration": [],  # 编排工具：Airflow, Prefect, Dagster 等
+            "other_keywords": [],  # 其他技术关键词
         }
 
         # AI 框架
@@ -223,7 +255,6 @@ class DocumentGenerator(DocumentGeneratorContentMixin):
 
         return keywords
 
-
     def _expert_header(self) -> str:
         """生成专家视角说明（如果有专家上下文）"""
         if not self.expert_context:
@@ -245,7 +276,7 @@ class DocumentGenerator(DocumentGeneratorContentMixin):
         doc = f"""# {self.name} - 产品需求文档 (PRD)
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.3.7
+> **版本**: v2.3.8
 > **状态**: 草稿
 {expert_header}
 
@@ -490,7 +521,7 @@ class DocumentGenerator(DocumentGeneratorContentMixin):
 
 | 版本 | 日期 | 变更内容 | 作者 |
 |:---|:---|:---|:---|
-| v2.3.7 | {datetime.now().strftime('%Y-%m-%d')} | 初始版本 | Super Dev |
+| v2.3.8 | {datetime.now().strftime('%Y-%m-%d')} | 初始版本 | Super Dev |
 """
 
         # 追加 Prompt 模板版本标记
@@ -508,7 +539,7 @@ class DocumentGenerator(DocumentGeneratorContentMixin):
         doc = f"""# {self.name} - 架构设计文档
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.3.7
+> **版本**: v2.3.8
 > **架构师**: Super Dev ARCHITECT 专家
 
 ---
@@ -937,12 +968,18 @@ jobs:
             from .adr_generator import ADRGenerator
 
             adr_gen = ADRGenerator(Path.cwd())
-            adrs = adr_gen.generate_from_architecture({
-                "database": self.backend if "sql" in self.backend.lower() or "postgres" in self.backend.lower() else "postgresql",
-                "frontend": self.frontend,
-                "backend": self.backend,
-                "platform": self.platform,
-            })
+            adrs = adr_gen.generate_from_architecture(
+                {
+                    "database": (
+                        self.backend
+                        if "sql" in self.backend.lower() or "postgres" in self.backend.lower()
+                        else "postgresql"
+                    ),
+                    "frontend": self.frontend,
+                    "backend": self.backend,
+                    "platform": self.platform,
+                }
+            )
             adr_gen.save_all(adrs)
         except Exception:
             logger.debug("ADR 自动生成失败，跳过")
@@ -961,10 +998,11 @@ jobs:
         doc_parts = []
 
         # 文档头部
-        doc_parts.append(f"""# {self.name} - UI/UX 设计文档
+        doc_parts.append(
+            f"""# {self.name} - UI/UX 设计文档
 
 > **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-> **版本**: v2.3.7
+> **版本**: v2.3.8
 > **设计师**: Super Dev UI/UX 专家
 
 ---
@@ -987,26 +1025,36 @@ jobs:
 
 AI 基于项目特征，从设计数据库中为您推荐：
 
-""")
+"""
+        )
 
         # 添加推荐摘要
-        if recommendations.get('styles'):
-            doc_parts.append(f"""**推荐风格**: {', '.join([s.get('name', s.get('Style Category', 'Unknown')) for s in recommendations['styles'][:2]])}
-""")
+        if recommendations.get("styles"):
+            doc_parts.append(
+                f"""**推荐风格**: {', '.join([s.get('name', s.get('Style Category', 'Unknown')) for s in recommendations['styles'][:2]])}
+"""
+            )
 
-        if recommendations.get('colors'):
-            color = recommendations['colors']
-            doc_parts.append(f"""**推荐配色**: {color.get('name', color.get('Palette Name', 'Standard'))}
-""")
+        if recommendations.get("colors"):
+            color = recommendations["colors"]
+            doc_parts.append(
+                f"""**推荐配色**: {color.get('name', color.get('Palette Name', 'Standard'))}
+"""
+            )
 
-        if recommendations.get('fonts'):
-            doc_parts.append(f"""**推荐字体**: {', '.join([f.get('Font Pairing Name', 'Professional') for f in recommendations['fonts'][:2]])}
-""")
+        if recommendations.get("fonts"):
+            doc_parts.append(
+                f"""**推荐字体**: {', '.join([f.get('Font Pairing Name', 'Professional') for f in recommendations['fonts'][:2]])}
+"""
+            )
 
-        doc_parts.append(f"""**推荐组件生态**: {ui_intelligence['primary_library']['name']}
-""")
+        doc_parts.append(
+            f"""**推荐组件生态**: {ui_intelligence['primary_library']['name']}
+"""
+        )
 
-        doc_parts.append(f"""
+        doc_parts.append(
+            f"""
 ---
 
 ## 1. 设计概述
@@ -1051,12 +1099,14 @@ AI 基于项目特征，从设计数据库中为您推荐：
 
 ### 2.1 色彩规范
 
-""")
+"""
+        )
 
         # 智能配色推荐
-        if recommendations.get('colors'):
-            color = recommendations['colors']
-            doc_parts.append(f"""#### 推荐配色方案: {color.get('name', 'Professional Palette')}
+        if recommendations.get("colors"):
+            color = recommendations["colors"]
+            doc_parts.append(
+                f"""#### 推荐配色方案: {color.get('name', 'Professional Palette')}
 
 **推荐理由**: 基于 {analysis['industry']} {analysis['product_type']} 产品的最佳实践
 
@@ -1085,9 +1135,11 @@ module.exports = {{
 }}
 ```
 
-""")
-            primary_hex = color.get('primary', color.get('Primary (Hex)', '#2563EB'))
-            doc_parts.append(f"""
+"""
+            )
+            primary_hex = color.get("primary", color.get("Primary (Hex)", "#2563EB"))
+            doc_parts.append(
+                f"""
 #### 色阶系统
 
 | 梯度 | Primary | Neutral | 用途 |
@@ -1114,10 +1166,12 @@ module.exports = {{
 
 ---
 
-""")
+"""
+            )
         else:
             # 默认配色
-            doc_parts.append("""#### 主色调
+            doc_parts.append(
+                """#### 主色调
 
 | 颜色 | 用途 | Hex | RGB |
 |:---|:---|:---|:---|
@@ -1127,8 +1181,10 @@ module.exports = {{
 | **Warning** | 警告状态 | #F59E0B | rgb(245, 158, 11) |
 | **Error** | 错误状态 | #EF4444 | rgb(239, 68, 68) |
 
-""")
-            doc_parts.append(f"""
+"""
+            )
+            doc_parts.append(
+                f"""
 #### 色阶系统
 
 | 梯度 | Primary | Neutral | 用途 |
@@ -1155,18 +1211,24 @@ module.exports = {{
 
 ---
 
-""")
+"""
+            )
 
         # 智能字体推荐
-        doc_parts.append("""### 2.2 字体规范
-""")
+        doc_parts.append(
+            """### 2.2 字体规范
+"""
+        )
 
-        if recommendations.get('fonts'):
-            doc_parts.append("""#### 推荐字体组合
+        if recommendations.get("fonts"):
+            doc_parts.append(
+                """#### 推荐字体组合
 
-""")
-            for font in recommendations['fonts'][:2]:
-                doc_parts.append(f"""**{font.get('name', font.get('Font Pairing Name', 'Professional'))}**
+"""
+            )
+            for font in recommendations["fonts"][:2]:
+                doc_parts.append(
+                    f"""**{font.get('name', font.get('Font Pairing Name', 'Professional'))}**
 - **Heading**: {font.get('heading_font', font.get('Heading Font', 'Inter'))}
 - **Body**: {font.get('body_font', font.get('Body Font', 'Roboto'))}
 - **风格**: {font.get('mood', font.get('Mood/Style Keywords', 'Professional'))}
@@ -1177,10 +1239,12 @@ module.exports = {{
 {font.get('css_import', font.get('CSS Import', '<link href="https://fonts.googleapis.cn/css2?family=Manrope:wght@500;600;700;800&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">'))}
 ```
 
-""")
+"""
+                )
 
         # Always add full typography scale
-        doc_parts.append("""#### 字号层级
+        doc_parts.append(
+            """#### 字号层级
 
 | 级别 | 大小 | 字重 | 行高 | 字间距 | 用途 |
 |:---|:---|:---|:---|:---|:---|
@@ -1197,24 +1261,30 @@ module.exports = {{
 
 ---
 
-""")
+"""
+        )
 
-        doc_parts.append(f"""
+        doc_parts.append(
+            f"""
 {self._render_design_token_freeze_output(ui_intelligence, design_system_bundle)}
 
-""")
+"""
+        )
 
-        if not recommendations.get('fonts'):
-            doc_parts.append("""#### 字体家族
+        if not recommendations.get("fonts"):
+            doc_parts.append(
+                """#### 字体家族
 
 ```css
 font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Segoe UI', sans-serif;
 ```
 
-""")
+"""
+            )
 
         # 间距和圆角规范保持不变
-        doc_parts.append(f"""### 2.3 间距规范
+        doc_parts.append(
+            f"""### 2.3 间距规范
 
 使用 8px 基础单位:
 - **xs**: 4px
@@ -1344,12 +1414,13 @@ font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Segoe UI', san
 ## 3. 页面结构
 
 ### 3.1 整体布局
-""")
+"""
+        )
 
         # 如果有 Landing 页面推荐，添加它
-        if recommendations.get('landing'):
-            landing = recommendations['landing']
-            landing_sections = landing.get('sections', '')
+        if recommendations.get("landing"):
+            landing = recommendations["landing"]
+            landing_sections = landing.get("sections", "")
             if isinstance(landing_sections, list):
                 landing_sections_text = "\n".join(
                     f"- {s.get('name', s)}" if isinstance(s, dict) else f"- {s}"
@@ -1358,15 +1429,14 @@ font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Segoe UI', san
             else:
                 landing_sections_text = str(landing_sections)
 
-            cta_strategy = landing.get('cta_strategy', {})
+            cta_strategy = landing.get("cta_strategy", {})
             if isinstance(cta_strategy, dict):
-                cta_strategy_text = ", ".join(
-                    f"{k}: {v}" for k, v in cta_strategy.items()
-                )
+                cta_strategy_text = ", ".join(f"{k}: {v}" for k, v in cta_strategy.items())
             else:
                 cta_strategy_text = str(cta_strategy)
 
-            doc_parts.append(f"""
+            doc_parts.append(
+                f"""
 #### 推荐页面布局: {landing.get('name', 'Standard Layout')}
 
 **布局类型**: {landing.get('category', 'classic').title()}
@@ -1383,9 +1453,11 @@ font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Segoe UI', san
 
 ---
 
-""")
+"""
+            )
         else:
-            doc_parts.append("""
+            doc_parts.append(
+                """
 ```
 ┌─────────────────────────────────────────────────┐
 │  Header (Logo, Nav, User)                       │
@@ -1402,10 +1474,12 @@ font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Segoe UI', san
 
 ---
 
-""")
+"""
+            )
 
         # 添加其他部分（保持原有的内容结构）
-        doc_parts.append(f"""### 3.2 页面骨架优先级
+        doc_parts.append(
+            f"""### 3.2 页面骨架优先级
 
 {self._render_page_blueprints(ui_intelligence)}
 
@@ -1562,11 +1636,13 @@ font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Segoe UI', san
 - [Dribbble](https://dribbble.com/)
 - [Behance](https://www.behance.net/)
 - [Mobbin](https://mobbin.com/)
-""")
+"""
+        )
 
         # 添加 UX 最佳实践部分
-        if recommendations.get('ux_tips'):
-            doc_parts.append("""
+        if recommendations.get("ux_tips"):
+            doc_parts.append(
+                """
 
 ---
 
@@ -1574,14 +1650,16 @@ font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Segoe UI', san
 
 基于项目特征，AI 为您推荐以下 UX 最佳实践：
 
-""")
-            for i, tip in enumerate(recommendations['ux_tips'][:5], 1):
-                guideline = tip.get('guideline', tip)
-                domain = guideline.get('domain', 'UX')
-                domain_text = domain.value if hasattr(domain, 'value') else str(domain)
-                complexity = guideline.get('complexity', 'medium')
+"""
+            )
+            for i, tip in enumerate(recommendations["ux_tips"][:5], 1):
+                guideline = tip.get("guideline", tip)
+                domain = guideline.get("domain", "UX")
+                domain_text = domain.value if hasattr(domain, "value") else str(domain)
+                complexity = guideline.get("complexity", "medium")
                 complexity_text = str(complexity).title()
-                doc_parts.append(f"""### {i}. {guideline.get('topic', 'Best Practice')} ({domain_text})
+                doc_parts.append(
+                    f"""### {i}. {guideline.get('topic', 'Best Practice')} ({domain_text})
 
 **最佳实践**:
 {guideline.get('best_practice', 'Follow industry standards')}
@@ -1593,7 +1671,8 @@ font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Segoe UI', san
 
 **实施难度**: {complexity_text}
 
-""")
+"""
+                )
 
         doc = "\n".join(doc_parts)
 

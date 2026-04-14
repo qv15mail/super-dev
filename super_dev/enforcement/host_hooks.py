@@ -16,7 +16,9 @@ class HostHooksConfigurator:
     """为 AI coding host 生成和安装执行 hooks。"""
 
     SUPPORTED_HOSTS = ("claude-code",)
-    SENSITIVE_READ_MATCHER = "Read|Grep|Glob|LS|mcp__acp__Read|mcp__acp__Grep|mcp__acp__Glob|mcp__acp__LS"
+    SENSITIVE_READ_MATCHER = (
+        "Read|Grep|Glob|LS|mcp__acp__Read|mcp__acp__Grep|mcp__acp__Glob|mcp__acp__LS"
+    )
 
     def __init__(self, project_dir: Path):
         self.project_dir = project_dir
@@ -362,7 +364,7 @@ PY
                             "timeout": 5,
                         }
                     ],
-                }
+                },
             ],
             "PostToolUse": [
                 {
@@ -420,7 +422,8 @@ PY
                     (
                         existing_entry
                         for existing_entry in merged[phase]
-                        if isinstance(existing_entry, dict) and existing_entry.get("matcher") == matcher
+                        if isinstance(existing_entry, dict)
+                        and existing_entry.get("matcher") == matcher
                     ),
                     None,
                 )

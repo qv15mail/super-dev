@@ -888,135 +888,1060 @@ class UIIntelligenceAdvisor:
 
     PRODUCT_COLOR_PALETTES: dict[str, dict[str, str]] = {
         # SaaS & Software
-        "saas": {"primary": "#2563EB", "secondary": "#3B82F6", "accent": "#EA580C", "background": "#F8FAFC", "text": "#1E293B", "card": "#FFFFFF", "muted": "#E9EFF8", "border": "#E2E8F0", "name": "Trust Blue"},
-        "micro-saas": {"primary": "#6366F1", "secondary": "#818CF8", "accent": "#059669", "background": "#F5F3FF", "text": "#1E1B4B", "card": "#FFFFFF", "muted": "#EBEFF9", "border": "#E0E7FF", "name": "Indigo Focus"},
-        "b2b": {"primary": "#0F172A", "secondary": "#334155", "accent": "#0369A1", "background": "#F8FAFC", "text": "#020617", "card": "#FFFFFF", "muted": "#E8ECF1", "border": "#E2E8F0", "name": "Enterprise Navy"},
-        "productivity": {"primary": "#0D9488", "secondary": "#14B8A6", "accent": "#EA580C", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F1F4", "border": "#99F6E4", "name": "Teal Efficiency"},
-        "collaboration": {"primary": "#7C3AED", "secondary": "#8B5CF6", "accent": "#059669", "background": "#F5F3FF", "text": "#312E81", "card": "#FFFFFF", "muted": "#EBEFF9", "border": "#E0E7FF", "name": "Team Indigo"},
-        "ai-platform": {"primary": "#A83AED", "secondary": "#A78BFA", "accent": "#0891B2", "background": "#FAF5FF", "text": "#1E1B4B", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "AI Violet"},
-        "design-tool": {"primary": "#4F46E5", "secondary": "#6366F1", "accent": "#EA580C", "background": "#EEF2FF", "text": "#312E81", "card": "#FFFFFF", "muted": "#EBEEF8", "border": "#C7D2FE", "name": "Creative Indigo"},
-        "knowledge-base": {"primary": "#475569", "secondary": "#64748B", "accent": "#2563EB", "background": "#F8FAFC", "text": "#1E293B", "card": "#FFFFFF", "muted": "#EAEFF3", "border": "#E2E8F0", "name": "Slate Knowledge"},
+        "saas": {
+            "primary": "#2563EB",
+            "secondary": "#3B82F6",
+            "accent": "#EA580C",
+            "background": "#F8FAFC",
+            "text": "#1E293B",
+            "card": "#FFFFFF",
+            "muted": "#E9EFF8",
+            "border": "#E2E8F0",
+            "name": "Trust Blue",
+        },
+        "micro-saas": {
+            "primary": "#6366F1",
+            "secondary": "#818CF8",
+            "accent": "#059669",
+            "background": "#F5F3FF",
+            "text": "#1E1B4B",
+            "card": "#FFFFFF",
+            "muted": "#EBEFF9",
+            "border": "#E0E7FF",
+            "name": "Indigo Focus",
+        },
+        "b2b": {
+            "primary": "#0F172A",
+            "secondary": "#334155",
+            "accent": "#0369A1",
+            "background": "#F8FAFC",
+            "text": "#020617",
+            "card": "#FFFFFF",
+            "muted": "#E8ECF1",
+            "border": "#E2E8F0",
+            "name": "Enterprise Navy",
+        },
+        "productivity": {
+            "primary": "#0D9488",
+            "secondary": "#14B8A6",
+            "accent": "#EA580C",
+            "background": "#F0FDFA",
+            "text": "#134E4A",
+            "card": "#FFFFFF",
+            "muted": "#E8F1F4",
+            "border": "#99F6E4",
+            "name": "Teal Efficiency",
+        },
+        "collaboration": {
+            "primary": "#7C3AED",
+            "secondary": "#8B5CF6",
+            "accent": "#059669",
+            "background": "#F5F3FF",
+            "text": "#312E81",
+            "card": "#FFFFFF",
+            "muted": "#EBEFF9",
+            "border": "#E0E7FF",
+            "name": "Team Indigo",
+        },
+        "ai-platform": {
+            "primary": "#A83AED",
+            "secondary": "#A78BFA",
+            "accent": "#0891B2",
+            "background": "#FAF5FF",
+            "text": "#1E1B4B",
+            "card": "#FFFFFF",
+            "muted": "#ECEEF9",
+            "border": "#DDD6FE",
+            "name": "AI Violet",
+        },
+        "design-tool": {
+            "primary": "#4F46E5",
+            "secondary": "#6366F1",
+            "accent": "#EA580C",
+            "background": "#EEF2FF",
+            "text": "#312E81",
+            "card": "#FFFFFF",
+            "muted": "#EBEEF8",
+            "border": "#C7D2FE",
+            "name": "Creative Indigo",
+        },
+        "knowledge-base": {
+            "primary": "#475569",
+            "secondary": "#64748B",
+            "accent": "#2563EB",
+            "background": "#F8FAFC",
+            "text": "#1E293B",
+            "card": "#FFFFFF",
+            "muted": "#EAEFF3",
+            "border": "#E2E8F0",
+            "name": "Slate Knowledge",
+        },
         # E-commerce & Marketplace
-        "ecommerce": {"primary": "#059669", "secondary": "#10B981", "accent": "#EA580C", "background": "#ECFDF5", "text": "#064E3B", "card": "#FFFFFF", "muted": "#E8F1F3", "border": "#A7F3D0", "name": "Commerce Green"},
-        "ecommerce-luxury": {"primary": "#1C1917", "secondary": "#44403C", "accent": "#A16207", "background": "#FAFAF9", "text": "#0C0A09", "card": "#FFFFFF", "muted": "#E8ECF0", "border": "#D6D3D1", "name": "Luxury Noir"},
-        "marketplace": {"primary": "#4F3AED", "secondary": "#A78BFA", "accent": "#16A34A", "background": "#FAF5FF", "text": "#4C1D95", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "Market Purple"},
-        "subscription-box": {"primary": "#D946EF", "secondary": "#E879F9", "accent": "#EA580C", "background": "#FDF4FF", "text": "#86198F", "card": "#FFFFFF", "muted": "#F0EEF9", "border": "#F5D0FE", "name": "Unbox Magenta"},
+        "ecommerce": {
+            "primary": "#059669",
+            "secondary": "#10B981",
+            "accent": "#EA580C",
+            "background": "#ECFDF5",
+            "text": "#064E3B",
+            "card": "#FFFFFF",
+            "muted": "#E8F1F3",
+            "border": "#A7F3D0",
+            "name": "Commerce Green",
+        },
+        "ecommerce-luxury": {
+            "primary": "#1C1917",
+            "secondary": "#44403C",
+            "accent": "#A16207",
+            "background": "#FAFAF9",
+            "text": "#0C0A09",
+            "card": "#FFFFFF",
+            "muted": "#E8ECF0",
+            "border": "#D6D3D1",
+            "name": "Luxury Noir",
+        },
+        "marketplace": {
+            "primary": "#4F3AED",
+            "secondary": "#A78BFA",
+            "accent": "#16A34A",
+            "background": "#FAF5FF",
+            "text": "#4C1D95",
+            "card": "#FFFFFF",
+            "muted": "#ECEEF9",
+            "border": "#DDD6FE",
+            "name": "Market Purple",
+        },
+        "subscription-box": {
+            "primary": "#D946EF",
+            "secondary": "#E879F9",
+            "accent": "#EA580C",
+            "background": "#FDF4FF",
+            "text": "#86198F",
+            "card": "#FFFFFF",
+            "muted": "#F0EEF9",
+            "border": "#F5D0FE",
+            "name": "Unbox Magenta",
+        },
         # Finance & Fintech
-        "fintech": {"primary": "#F59E0B", "secondary": "#FBBF24", "accent": "#8B5CF6", "background": "#0F172A", "text": "#F8FAFC", "card": "#222735", "muted": "#272F42", "border": "#334155", "name": "Crypto Gold"},
-        "banking": {"primary": "#0E102A", "secondary": "#1E3A8A", "accent": "#A16207", "background": "#F8FAFC", "text": "#020617", "card": "#FFFFFF", "muted": "#E8ECF1", "border": "#E2E8F0", "name": "Bank Navy"},
-        "insurance": {"primary": "#0369A1", "secondary": "#0EA5E9", "accent": "#16A34A", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E7EFF5", "border": "#BAE6FD", "name": "Trust Sky"},
-        "financial-dashboard": {"primary": "#0E1D2A", "secondary": "#1E293B", "accent": "#22C55E", "background": "#020617", "text": "#F8FAFC", "card": "#0E1223", "muted": "#1A1E2F", "border": "#334155", "name": "Dark Finance"},
-        "analytics": {"primary": "#1E40AF", "secondary": "#3B82F6", "accent": "#D97706", "background": "#F8FAFC", "text": "#1E3A8A", "card": "#FFFFFF", "muted": "#E9EEF6", "border": "#DBEAFE", "name": "Data Blue"},
+        "fintech": {
+            "primary": "#F59E0B",
+            "secondary": "#FBBF24",
+            "accent": "#8B5CF6",
+            "background": "#0F172A",
+            "text": "#F8FAFC",
+            "card": "#222735",
+            "muted": "#272F42",
+            "border": "#334155",
+            "name": "Crypto Gold",
+        },
+        "banking": {
+            "primary": "#0E102A",
+            "secondary": "#1E3A8A",
+            "accent": "#A16207",
+            "background": "#F8FAFC",
+            "text": "#020617",
+            "card": "#FFFFFF",
+            "muted": "#E8ECF1",
+            "border": "#E2E8F0",
+            "name": "Bank Navy",
+        },
+        "insurance": {
+            "primary": "#0369A1",
+            "secondary": "#0EA5E9",
+            "accent": "#16A34A",
+            "background": "#F0F9FF",
+            "text": "#0C4A6E",
+            "card": "#FFFFFF",
+            "muted": "#E7EFF5",
+            "border": "#BAE6FD",
+            "name": "Trust Sky",
+        },
+        "financial-dashboard": {
+            "primary": "#0E1D2A",
+            "secondary": "#1E293B",
+            "accent": "#22C55E",
+            "background": "#020617",
+            "text": "#F8FAFC",
+            "card": "#0E1223",
+            "muted": "#1A1E2F",
+            "border": "#334155",
+            "name": "Dark Finance",
+        },
+        "analytics": {
+            "primary": "#1E40AF",
+            "secondary": "#3B82F6",
+            "accent": "#D97706",
+            "background": "#F8FAFC",
+            "text": "#1E3A8A",
+            "card": "#FFFFFF",
+            "muted": "#E9EEF6",
+            "border": "#DBEAFE",
+            "name": "Data Blue",
+        },
         # Healthcare & Wellness
-        "healthcare": {"primary": "#0891B2", "secondary": "#22D3EE", "accent": "#059669", "background": "#ECFEFF", "text": "#164E63", "card": "#FFFFFF", "muted": "#E8F1F6", "border": "#A5F3FC", "name": "Medical Cyan"},
-        "mental-health": {"primary": "#8B5CF6", "secondary": "#C4B5FD", "accent": "#059669", "background": "#FAF5FF", "text": "#4C1D95", "card": "#FFFFFF", "muted": "#EDEFF9", "border": "#EDE9FE", "name": "Calm Violet"},
-        "fitness": {"primary": "#F97316", "secondary": "#FB923C", "accent": "#22C55E", "background": "#1F2937", "text": "#F8FAFC", "card": "#313742", "muted": "#37414F", "border": "#374151", "name": "Energy Orange"},
-        "beauty-spa": {"primary": "#EC4899", "secondary": "#F9A8D4", "accent": "#8B5CF6", "background": "#FDF2F8", "text": "#831843", "card": "#FFFFFF", "muted": "#F1EEF5", "border": "#FBCFE8", "name": "Blush Pink"},
+        "healthcare": {
+            "primary": "#0891B2",
+            "secondary": "#22D3EE",
+            "accent": "#059669",
+            "background": "#ECFEFF",
+            "text": "#164E63",
+            "card": "#FFFFFF",
+            "muted": "#E8F1F6",
+            "border": "#A5F3FC",
+            "name": "Medical Cyan",
+        },
+        "mental-health": {
+            "primary": "#8B5CF6",
+            "secondary": "#C4B5FD",
+            "accent": "#059669",
+            "background": "#FAF5FF",
+            "text": "#4C1D95",
+            "card": "#FFFFFF",
+            "muted": "#EDEFF9",
+            "border": "#EDE9FE",
+            "name": "Calm Violet",
+        },
+        "fitness": {
+            "primary": "#F97316",
+            "secondary": "#FB923C",
+            "accent": "#22C55E",
+            "background": "#1F2937",
+            "text": "#F8FAFC",
+            "card": "#313742",
+            "muted": "#37414F",
+            "border": "#374151",
+            "name": "Energy Orange",
+        },
+        "beauty-spa": {
+            "primary": "#EC4899",
+            "secondary": "#F9A8D4",
+            "accent": "#8B5CF6",
+            "background": "#FDF2F8",
+            "text": "#831843",
+            "card": "#FFFFFF",
+            "muted": "#F1EEF5",
+            "border": "#FBCFE8",
+            "name": "Blush Pink",
+        },
         # Education & Learning
-        "education": {"primary": "#4F46E5", "secondary": "#818CF8", "accent": "#EA580C", "background": "#EEF2FF", "text": "#1E1B4B", "card": "#FFFFFF", "muted": "#EBEEF8", "border": "#C7D2FE", "name": "Learn Indigo"},
-        "e-learning": {"primary": "#0F766E", "secondary": "#14B8A6", "accent": "#EA580C", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F1F4", "border": "#5EEAD4", "name": "Edu Teal"},
+        "education": {
+            "primary": "#4F46E5",
+            "secondary": "#818CF8",
+            "accent": "#EA580C",
+            "background": "#EEF2FF",
+            "text": "#1E1B4B",
+            "card": "#FFFFFF",
+            "muted": "#EBEEF8",
+            "border": "#C7D2FE",
+            "name": "Learn Indigo",
+        },
+        "e-learning": {
+            "primary": "#0F766E",
+            "secondary": "#14B8A6",
+            "accent": "#EA580C",
+            "background": "#F0FDFA",
+            "text": "#134E4A",
+            "card": "#FFFFFF",
+            "muted": "#E8F1F4",
+            "border": "#5EEAD4",
+            "name": "Edu Teal",
+        },
         # Media & Entertainment
-        "social-media": {"primary": "#E11D48", "secondary": "#FB7185", "accent": "#2563EB", "background": "#FFF1F2", "text": "#881337", "card": "#FFFFFF", "muted": "#F0ECF2", "border": "#FECDD3", "name": "Social Rose"},
-        "gaming": {"primary": "#D53AED", "secondary": "#A78BFA", "accent": "#F43F5E", "background": "#0F0F23", "text": "#E2E8F0", "card": "#1E1C35", "muted": "#27273B", "border": "#4C1D95", "name": "Game Violet"},
-        "music": {"primary": "#1E1B4B", "secondary": "#4338CA", "accent": "#22C55E", "background": "#0F0F23", "text": "#F8FAFC", "card": "#1B1B30", "muted": "#27273B", "border": "#312E81", "name": "Sound Dark"},
-        "video-streaming": {"primary": "#0F0F23", "secondary": "#1E1B4B", "accent": "#E11D48", "background": "#000000", "text": "#F8FAFC", "card": "#0C0C0D", "muted": "#181818", "border": "#312E81", "name": "Stream Black"},
-        "podcast": {"primary": "#1E1B4B", "secondary": "#312E81", "accent": "#F97316", "background": "#0F0F23", "text": "#F8FAFC", "card": "#1B1B30", "muted": "#27273B", "border": "#4338CA", "name": "Voice Dark"},
-        "content": {"primary": "#475569", "secondary": "#94A3B8", "accent": "#2563EB", "background": "#FFFFFF", "text": "#1E293B", "card": "#F8FAFC", "muted": "#F1F5F9", "border": "#E2E8F0", "name": "Reader Slate"},
-        "creative-agency": {"primary": "#EC4899", "secondary": "#F472B6", "accent": "#0891B2", "background": "#FDF2F8", "text": "#831843", "card": "#FFFFFF", "muted": "#F1EEF5", "border": "#FBCFE8", "name": "Agency Pink"},
-        "creator-economy": {"primary": "#EC4899", "secondary": "#F472B6", "accent": "#EA580C", "background": "#FDF2F8", "text": "#831843", "card": "#FFFFFF", "muted": "#F1EEF5", "border": "#FBCFE8", "name": "Creator Pink"},
+        "social-media": {
+            "primary": "#E11D48",
+            "secondary": "#FB7185",
+            "accent": "#2563EB",
+            "background": "#FFF1F2",
+            "text": "#881337",
+            "card": "#FFFFFF",
+            "muted": "#F0ECF2",
+            "border": "#FECDD3",
+            "name": "Social Rose",
+        },
+        "gaming": {
+            "primary": "#D53AED",
+            "secondary": "#A78BFA",
+            "accent": "#F43F5E",
+            "background": "#0F0F23",
+            "text": "#E2E8F0",
+            "card": "#1E1C35",
+            "muted": "#27273B",
+            "border": "#4C1D95",
+            "name": "Game Violet",
+        },
+        "music": {
+            "primary": "#1E1B4B",
+            "secondary": "#4338CA",
+            "accent": "#22C55E",
+            "background": "#0F0F23",
+            "text": "#F8FAFC",
+            "card": "#1B1B30",
+            "muted": "#27273B",
+            "border": "#312E81",
+            "name": "Sound Dark",
+        },
+        "video-streaming": {
+            "primary": "#0F0F23",
+            "secondary": "#1E1B4B",
+            "accent": "#E11D48",
+            "background": "#000000",
+            "text": "#F8FAFC",
+            "card": "#0C0C0D",
+            "muted": "#181818",
+            "border": "#312E81",
+            "name": "Stream Black",
+        },
+        "podcast": {
+            "primary": "#1E1B4B",
+            "secondary": "#312E81",
+            "accent": "#F97316",
+            "background": "#0F0F23",
+            "text": "#F8FAFC",
+            "card": "#1B1B30",
+            "muted": "#27273B",
+            "border": "#4338CA",
+            "name": "Voice Dark",
+        },
+        "content": {
+            "primary": "#475569",
+            "secondary": "#94A3B8",
+            "accent": "#2563EB",
+            "background": "#FFFFFF",
+            "text": "#1E293B",
+            "card": "#F8FAFC",
+            "muted": "#F1F5F9",
+            "border": "#E2E8F0",
+            "name": "Reader Slate",
+        },
+        "creative-agency": {
+            "primary": "#EC4899",
+            "secondary": "#F472B6",
+            "accent": "#0891B2",
+            "background": "#FDF2F8",
+            "text": "#831843",
+            "card": "#FFFFFF",
+            "muted": "#F1EEF5",
+            "border": "#FBCFE8",
+            "name": "Agency Pink",
+        },
+        "creator-economy": {
+            "primary": "#EC4899",
+            "secondary": "#F472B6",
+            "accent": "#EA580C",
+            "background": "#FDF2F8",
+            "text": "#831843",
+            "card": "#FFFFFF",
+            "muted": "#F1EEF5",
+            "border": "#FBCFE8",
+            "name": "Creator Pink",
+        },
         # Professional Services
-        "legal": {"primary": "#1E3A8A", "secondary": "#1E40AF", "accent": "#B45309", "background": "#F8FAFC", "text": "#0F172A", "card": "#FFFFFF", "muted": "#E9EEF5", "border": "#CBD5E1", "name": "Legal Blue"},
-        "government": {"primary": "#140E2A", "secondary": "#334155", "accent": "#0369A1", "background": "#F8FAFC", "text": "#020617", "card": "#FFFFFF", "muted": "#E8ECF1", "border": "#E2E8F0", "name": "Gov Navy"},
-        "nonprofit": {"primary": "#0891B2", "secondary": "#22D3EE", "accent": "#EA580C", "background": "#ECFEFF", "text": "#164E63", "card": "#FFFFFF", "muted": "#E8F1F6", "border": "#A5F3FC", "name": "Impact Cyan"},
-        "consulting": {"primary": "#0E242A", "secondary": "#1E293B", "accent": "#2563EB", "background": "#F8FAFC", "text": "#020617", "card": "#FFFFFF", "muted": "#E8ECF1", "border": "#E2E8F0", "name": "Consult Navy"},
+        "legal": {
+            "primary": "#1E3A8A",
+            "secondary": "#1E40AF",
+            "accent": "#B45309",
+            "background": "#F8FAFC",
+            "text": "#0F172A",
+            "card": "#FFFFFF",
+            "muted": "#E9EEF5",
+            "border": "#CBD5E1",
+            "name": "Legal Blue",
+        },
+        "government": {
+            "primary": "#140E2A",
+            "secondary": "#334155",
+            "accent": "#0369A1",
+            "background": "#F8FAFC",
+            "text": "#020617",
+            "card": "#FFFFFF",
+            "muted": "#E8ECF1",
+            "border": "#E2E8F0",
+            "name": "Gov Navy",
+        },
+        "nonprofit": {
+            "primary": "#0891B2",
+            "secondary": "#22D3EE",
+            "accent": "#EA580C",
+            "background": "#ECFEFF",
+            "text": "#164E63",
+            "card": "#FFFFFF",
+            "muted": "#E8F1F6",
+            "border": "#A5F3FC",
+            "name": "Impact Cyan",
+        },
+        "consulting": {
+            "primary": "#0E242A",
+            "secondary": "#1E293B",
+            "accent": "#2563EB",
+            "background": "#F8FAFC",
+            "text": "#020617",
+            "card": "#FFFFFF",
+            "muted": "#E8ECF1",
+            "border": "#E2E8F0",
+            "name": "Consult Navy",
+        },
         # Real Estate & Hospitality
-        "real-estate": {"primary": "#0F766E", "secondary": "#14B8A6", "accent": "#0369A1", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F0F3", "border": "#99F6E4", "name": "Property Teal"},
-        "hotel": {"primary": "#1E3A8A", "secondary": "#3B82F6", "accent": "#A16207", "background": "#F8FAFC", "text": "#1E40AF", "card": "#FFFFFF", "muted": "#E9EEF5", "border": "#BFDBFE", "name": "Hotel Royal"},
-        "travel": {"primary": "#0EA5E9", "secondary": "#38BDF8", "accent": "#EA580C", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E8F2F8", "border": "#BAE6FD", "name": "Travel Sky"},
-        "restaurant": {"primary": "#DC2626", "secondary": "#F87171", "accent": "#A16207", "background": "#FEF2F2", "text": "#450A0A", "card": "#FFFFFF", "muted": "#F0EDF1", "border": "#FECACA", "name": "Dining Red"},
+        "real-estate": {
+            "primary": "#0F766E",
+            "secondary": "#14B8A6",
+            "accent": "#0369A1",
+            "background": "#F0FDFA",
+            "text": "#134E4A",
+            "card": "#FFFFFF",
+            "muted": "#E8F0F3",
+            "border": "#99F6E4",
+            "name": "Property Teal",
+        },
+        "hotel": {
+            "primary": "#1E3A8A",
+            "secondary": "#3B82F6",
+            "accent": "#A16207",
+            "background": "#F8FAFC",
+            "text": "#1E40AF",
+            "card": "#FFFFFF",
+            "muted": "#E9EEF5",
+            "border": "#BFDBFE",
+            "name": "Hotel Royal",
+        },
+        "travel": {
+            "primary": "#0EA5E9",
+            "secondary": "#38BDF8",
+            "accent": "#EA580C",
+            "background": "#F0F9FF",
+            "text": "#0C4A6E",
+            "card": "#FFFFFF",
+            "muted": "#E8F2F8",
+            "border": "#BAE6FD",
+            "name": "Travel Sky",
+        },
+        "restaurant": {
+            "primary": "#DC2626",
+            "secondary": "#F87171",
+            "accent": "#A16207",
+            "background": "#FEF2F2",
+            "text": "#450A0A",
+            "card": "#FFFFFF",
+            "muted": "#F0EDF1",
+            "border": "#FECACA",
+            "name": "Dining Red",
+        },
         # Technology & IOT
-        "smart-home": {"primary": "#1E293B", "secondary": "#334155", "accent": "#22C55E", "background": "#0F172A", "text": "#F8FAFC", "card": "#1B2336", "muted": "#272F42", "border": "#475569", "name": "IoT Dark"},
-        "ev-charging": {"primary": "#0891B2", "secondary": "#22D3EE", "accent": "#16A34A", "background": "#ECFEFF", "text": "#164E63", "card": "#FFFFFF", "muted": "#E8F1F6", "border": "#A5F3FC", "name": "EV Cyan"},
-        "web3": {"primary": "#8B5CF6", "secondary": "#A78BFA", "accent": "#FBBF24", "background": "#0F0F23", "text": "#F8FAFC", "card": "#1E1D35", "muted": "#27273B", "border": "#4C1D95", "name": "Web3 Purple"},
-        "logistics": {"primary": "#2563EB", "secondary": "#3B82F6", "accent": "#EA580C", "background": "#EFF6FF", "text": "#1E40AF", "card": "#FFFFFF", "muted": "#E9EFF8", "border": "#BFDBFE", "name": "Logistics Blue"},
-        "agriculture": {"primary": "#15803D", "secondary": "#22C55E", "accent": "#A16207", "background": "#F0FDF4", "text": "#14532D", "card": "#FFFFFF", "muted": "#E8F0F1", "border": "#BBF7D0", "name": "Farm Green"},
+        "smart-home": {
+            "primary": "#1E293B",
+            "secondary": "#334155",
+            "accent": "#22C55E",
+            "background": "#0F172A",
+            "text": "#F8FAFC",
+            "card": "#1B2336",
+            "muted": "#272F42",
+            "border": "#475569",
+            "name": "IoT Dark",
+        },
+        "ev-charging": {
+            "primary": "#0891B2",
+            "secondary": "#22D3EE",
+            "accent": "#16A34A",
+            "background": "#ECFEFF",
+            "text": "#164E63",
+            "card": "#FFFFFF",
+            "muted": "#E8F1F6",
+            "border": "#A5F3FC",
+            "name": "EV Cyan",
+        },
+        "web3": {
+            "primary": "#8B5CF6",
+            "secondary": "#A78BFA",
+            "accent": "#FBBF24",
+            "background": "#0F0F23",
+            "text": "#F8FAFC",
+            "card": "#1E1D35",
+            "muted": "#27273B",
+            "border": "#4C1D95",
+            "name": "Web3 Purple",
+        },
+        "logistics": {
+            "primary": "#2563EB",
+            "secondary": "#3B82F6",
+            "accent": "#EA580C",
+            "background": "#EFF6FF",
+            "text": "#1E40AF",
+            "card": "#FFFFFF",
+            "muted": "#E9EFF8",
+            "border": "#BFDBFE",
+            "name": "Logistics Blue",
+        },
+        "agriculture": {
+            "primary": "#15803D",
+            "secondary": "#22C55E",
+            "accent": "#A16207",
+            "background": "#F0FDF4",
+            "text": "#14532D",
+            "card": "#FFFFFF",
+            "muted": "#E8F0F1",
+            "border": "#BBF7D0",
+            "name": "Farm Green",
+        },
         # Lifestyle & Events
-        "dating": {"primary": "#E11D48", "secondary": "#FB7185", "accent": "#EA580C", "background": "#FFF1F2", "text": "#881337", "card": "#FFFFFF", "muted": "#F0ECF2", "border": "#FECDD3", "name": "Love Rose"},
-        "wedding": {"primary": "#DB2777", "secondary": "#F472B6", "accent": "#A16207", "background": "#FDF2F8", "text": "#831843", "card": "#FFFFFF", "muted": "#F0EDF4", "border": "#FBCFE8", "name": "Wedding Fuchsia"},
-        "pet-tech": {"primary": "#F97316", "secondary": "#FB923C", "accent": "#2563EB", "background": "#FFF7ED", "text": "#9A3412", "card": "#FFFFFF", "muted": "#F1F0F0", "border": "#FED7AA", "name": "Pet Orange"},
+        "dating": {
+            "primary": "#E11D48",
+            "secondary": "#FB7185",
+            "accent": "#EA580C",
+            "background": "#FFF1F2",
+            "text": "#881337",
+            "card": "#FFFFFF",
+            "muted": "#F0ECF2",
+            "border": "#FECDD3",
+            "name": "Love Rose",
+        },
+        "wedding": {
+            "primary": "#DB2777",
+            "secondary": "#F472B6",
+            "accent": "#A16207",
+            "background": "#FDF2F8",
+            "text": "#831843",
+            "card": "#FFFFFF",
+            "muted": "#F0EDF4",
+            "border": "#FBCFE8",
+            "name": "Wedding Fuchsia",
+        },
+        "pet-tech": {
+            "primary": "#F97316",
+            "secondary": "#FB923C",
+            "accent": "#2563EB",
+            "background": "#FFF7ED",
+            "text": "#9A3412",
+            "card": "#FFFFFF",
+            "muted": "#F1F0F0",
+            "border": "#FED7AA",
+            "name": "Pet Orange",
+        },
         # Portfolio & Personal
-        "portfolio": {"primary": "#18181B", "secondary": "#3F3F46", "accent": "#2563EB", "background": "#FAFAFA", "text": "#09090B", "card": "#FFFFFF", "muted": "#E8ECF0", "border": "#E4E4E7", "name": "Mono Zinc"},
-        "luxury-brand": {"primary": "#1C1917", "secondary": "#44403C", "accent": "#A16207", "background": "#FAFAF9", "text": "#0C0A09", "card": "#FFFFFF", "muted": "#E8ECF0", "border": "#D6D3D1", "name": "Luxury Stone"},
+        "portfolio": {
+            "primary": "#18181B",
+            "secondary": "#3F3F46",
+            "accent": "#2563EB",
+            "background": "#FAFAFA",
+            "text": "#09090B",
+            "card": "#FFFFFF",
+            "muted": "#E8ECF0",
+            "border": "#E4E4E7",
+            "name": "Mono Zinc",
+        },
+        "luxury-brand": {
+            "primary": "#1C1917",
+            "secondary": "#44403C",
+            "accent": "#A16207",
+            "background": "#FAFAF9",
+            "text": "#0C0A09",
+            "card": "#FFFFFF",
+            "muted": "#E8ECF0",
+            "border": "#D6D3D1",
+            "name": "Luxury Stone",
+        },
         # Job & HR
-        "job-board": {"primary": "#0241A1", "secondary": "#0EA5E9", "accent": "#16A34A", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E7EFF5", "border": "#BAE6FD", "name": "Career Sky"},
+        "job-board": {
+            "primary": "#0241A1",
+            "secondary": "#0EA5E9",
+            "accent": "#16A34A",
+            "background": "#F0F9FF",
+            "text": "#0C4A6E",
+            "card": "#FFFFFF",
+            "muted": "#E7EFF5",
+            "border": "#BAE6FD",
+            "name": "Career Sky",
+        },
         # Dashboard variants
-        "dashboard": {"primary": "#1E40AF", "secondary": "#3B82F6", "accent": "#D97706", "background": "#F8FAFC", "text": "#1E3A8A", "card": "#FFFFFF", "muted": "#E9EEF6", "border": "#DBEAFE", "name": "Dashboard Blue"},
-        "admin": {"primary": "#1B0E2A", "secondary": "#334155", "accent": "#2563EB", "background": "#F8FAFC", "text": "#020617", "card": "#FFFFFF", "muted": "#E8ECF1", "border": "#E2E8F0", "name": "Admin Slate"},
+        "dashboard": {
+            "primary": "#1E40AF",
+            "secondary": "#3B82F6",
+            "accent": "#D97706",
+            "background": "#F8FAFC",
+            "text": "#1E3A8A",
+            "card": "#FFFFFF",
+            "muted": "#E9EEF6",
+            "border": "#DBEAFE",
+            "name": "Dashboard Blue",
+        },
+        "admin": {
+            "primary": "#1B0E2A",
+            "secondary": "#334155",
+            "accent": "#2563EB",
+            "background": "#F8FAFC",
+            "text": "#020617",
+            "card": "#FFFFFF",
+            "muted": "#E8ECF1",
+            "border": "#E2E8F0",
+            "name": "Admin Slate",
+        },
         # Landing & General
-        "landing": {"primary": "#1D4ED8", "secondary": "#2563EB", "accent": "#EA580C", "background": "#FFFFFF", "text": "#111827", "card": "#F8FAFC", "muted": "#F1F5F9", "border": "#E5E7EB", "name": "Brand Blue"},
-        "general": {"primary": "#3B82F6", "secondary": "#60A5FA", "accent": "#EA580C", "background": "#FFFFFF", "text": "#111827", "card": "#F8FAFC", "muted": "#F1F5F9", "border": "#E5E7EB", "name": "Professional Blue"},
+        "landing": {
+            "primary": "#1D4ED8",
+            "secondary": "#2563EB",
+            "accent": "#EA580C",
+            "background": "#FFFFFF",
+            "text": "#111827",
+            "card": "#F8FAFC",
+            "muted": "#F1F5F9",
+            "border": "#E5E7EB",
+            "name": "Brand Blue",
+        },
+        "general": {
+            "primary": "#3B82F6",
+            "secondary": "#60A5FA",
+            "accent": "#EA580C",
+            "background": "#FFFFFF",
+            "text": "#111827",
+            "card": "#F8FAFC",
+            "muted": "#F1F5F9",
+            "border": "#E5E7EB",
+            "name": "Professional Blue",
+        },
         # Construction & Automotive
-        "construction": {"primary": "#64748B", "secondary": "#94A3B8", "accent": "#EA580C", "background": "#F8FAFC", "text": "#334155", "card": "#FFFFFF", "muted": "#EBF0F5", "border": "#E2E8F0", "name": "Build Slate"},
-        "automotive": {"primary": "#1E293B", "secondary": "#334155", "accent": "#DC2626", "background": "#F8FAFC", "text": "#0F172A", "card": "#FFFFFF", "muted": "#E9EDF1", "border": "#E2E8F0", "name": "Auto Dark"},
+        "construction": {
+            "primary": "#64748B",
+            "secondary": "#94A3B8",
+            "accent": "#EA580C",
+            "background": "#F8FAFC",
+            "text": "#334155",
+            "card": "#FFFFFF",
+            "muted": "#EBF0F5",
+            "border": "#E2E8F0",
+            "name": "Build Slate",
+        },
+        "automotive": {
+            "primary": "#1E293B",
+            "secondary": "#334155",
+            "accent": "#DC2626",
+            "background": "#F8FAFC",
+            "text": "#0F172A",
+            "card": "#FFFFFF",
+            "muted": "#E9EDF1",
+            "border": "#E2E8F0",
+            "name": "Auto Dark",
+        },
         # Photography & Creative
-        "photography": {"primary": "#18181B", "secondary": "#27272A", "accent": "#F8FAFC", "background": "#000000", "text": "#FAFAFA", "card": "#0C0C0C", "muted": "#181818", "border": "#3F3F46", "name": "Photo Noir"},
+        "photography": {
+            "primary": "#18181B",
+            "secondary": "#27272A",
+            "accent": "#F8FAFC",
+            "background": "#000000",
+            "text": "#FAFAFA",
+            "card": "#0C0C0C",
+            "muted": "#181818",
+            "border": "#3F3F46",
+            "name": "Photo Noir",
+        },
         # Coworking & Services
-        "coworking": {"primary": "#F59E0B", "secondary": "#FBBF24", "accent": "#2563EB", "background": "#FFFBEB", "text": "#78350F", "card": "#FFFFFF", "muted": "#F1F2EF", "border": "#FDE68A", "name": "Space Amber"},
-        "home-services": {"primary": "#1E40AF", "secondary": "#3B82F6", "accent": "#EA580C", "background": "#EFF6FF", "text": "#1E3A8A", "card": "#FFFFFF", "muted": "#E9EEF6", "border": "#BFDBFE", "name": "Service Blue"},
+        "coworking": {
+            "primary": "#F59E0B",
+            "secondary": "#FBBF24",
+            "accent": "#2563EB",
+            "background": "#FFFBEB",
+            "text": "#78350F",
+            "card": "#FFFFFF",
+            "muted": "#F1F2EF",
+            "border": "#FDE68A",
+            "name": "Space Amber",
+        },
+        "home-services": {
+            "primary": "#1E40AF",
+            "secondary": "#3B82F6",
+            "accent": "#EA580C",
+            "background": "#EFF6FF",
+            "text": "#1E3A8A",
+            "card": "#FFFFFF",
+            "muted": "#E9EEF6",
+            "border": "#BFDBFE",
+            "name": "Service Blue",
+        },
         # Childcare & Senior Care
-        "childcare": {"primary": "#F472B6", "secondary": "#FBCFE8", "accent": "#16A34A", "background": "#FDF2F8", "text": "#9D174D", "card": "#FFFFFF", "muted": "#F1F0F6", "border": "#FCE7F3", "name": "Care Pink"},
-        "senior-care": {"primary": "#0290A1", "secondary": "#38BDF8", "accent": "#16A34A", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E7EFF5", "border": "#E0F2FE", "name": "Elder Sky"},
+        "childcare": {
+            "primary": "#F472B6",
+            "secondary": "#FBCFE8",
+            "accent": "#16A34A",
+            "background": "#FDF2F8",
+            "text": "#9D174D",
+            "card": "#FFFFFF",
+            "muted": "#F1F0F6",
+            "border": "#FCE7F3",
+            "name": "Care Pink",
+        },
+        "senior-care": {
+            "primary": "#0290A1",
+            "secondary": "#38BDF8",
+            "accent": "#16A34A",
+            "background": "#F0F9FF",
+            "text": "#0C4A6E",
+            "card": "#FFFFFF",
+            "muted": "#E7EFF5",
+            "border": "#E0F2FE",
+            "name": "Elder Sky",
+        },
         # Medical & Health Services
-        "medical-clinic": {"primary": "#0891B2", "secondary": "#22D3EE", "accent": "#16A34A", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F1F6", "border": "#CCFBF1", "name": "Clinic Teal"},
-        "pharmacy": {"primary": "#15803D", "secondary": "#22C55E", "accent": "#0369A1", "background": "#F0FDF4", "text": "#14532D", "card": "#FFFFFF", "muted": "#E8F0F1", "border": "#BBF7D0", "name": "Pharma Green"},
-        "dental": {"primary": "#0EA5E9", "secondary": "#38BDF8", "accent": "#059669", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E8F2F8", "border": "#BAE6FD", "name": "Dental Sky"},
-        "veterinary": {"primary": "#115E59", "secondary": "#0D9488", "accent": "#EA580C", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F1F4", "border": "#99F6E4", "name": "Vet Teal"},
+        "medical-clinic": {
+            "primary": "#0891B2",
+            "secondary": "#22D3EE",
+            "accent": "#16A34A",
+            "background": "#F0FDFA",
+            "text": "#134E4A",
+            "card": "#FFFFFF",
+            "muted": "#E8F1F6",
+            "border": "#CCFBF1",
+            "name": "Clinic Teal",
+        },
+        "pharmacy": {
+            "primary": "#15803D",
+            "secondary": "#22C55E",
+            "accent": "#0369A1",
+            "background": "#F0FDF4",
+            "text": "#14532D",
+            "card": "#FFFFFF",
+            "muted": "#E8F0F1",
+            "border": "#BBF7D0",
+            "name": "Pharma Green",
+        },
+        "dental": {
+            "primary": "#0EA5E9",
+            "secondary": "#38BDF8",
+            "accent": "#059669",
+            "background": "#F0F9FF",
+            "text": "#0C4A6E",
+            "card": "#FFFFFF",
+            "muted": "#E8F2F8",
+            "border": "#BAE6FD",
+            "name": "Dental Sky",
+        },
+        "veterinary": {
+            "primary": "#115E59",
+            "secondary": "#0D9488",
+            "accent": "#EA580C",
+            "background": "#F0FDFA",
+            "text": "#134E4A",
+            "card": "#FFFFFF",
+            "muted": "#E8F1F4",
+            "border": "#99F6E4",
+            "name": "Vet Teal",
+        },
         # Food & Beverage
-        "florist": {"primary": "#15803D", "secondary": "#22C55E", "accent": "#EC4899", "background": "#F0FDF4", "text": "#14532D", "card": "#FFFFFF", "muted": "#E8F0F1", "border": "#BBF7D0", "name": "Bloom Green"},
-        "bakery-cafe": {"primary": "#92400E", "secondary": "#B45309", "accent": "#DC2626", "background": "#FEF3C7", "text": "#78350F", "card": "#FFFFFF", "muted": "#EDEEF0", "border": "#FDE68A", "name": "Bake Amber"},
-        "brewery": {"primary": "#7C2D12", "secondary": "#B91C1C", "accent": "#A16207", "background": "#FEF2F2", "text": "#450A0A", "card": "#FFFFFF", "muted": "#ECEDF0", "border": "#FECACA", "name": "Brew Red"},
+        "florist": {
+            "primary": "#15803D",
+            "secondary": "#22C55E",
+            "accent": "#EC4899",
+            "background": "#F0FDF4",
+            "text": "#14532D",
+            "card": "#FFFFFF",
+            "muted": "#E8F0F1",
+            "border": "#BBF7D0",
+            "name": "Bloom Green",
+        },
+        "bakery-cafe": {
+            "primary": "#92400E",
+            "secondary": "#B45309",
+            "accent": "#DC2626",
+            "background": "#FEF3C7",
+            "text": "#78350F",
+            "card": "#FFFFFF",
+            "muted": "#EDEEF0",
+            "border": "#FDE68A",
+            "name": "Bake Amber",
+        },
+        "brewery": {
+            "primary": "#7C2D12",
+            "secondary": "#B91C1C",
+            "accent": "#A16207",
+            "background": "#FEF2F2",
+            "text": "#450A0A",
+            "card": "#FFFFFF",
+            "muted": "#ECEDF0",
+            "border": "#FECACA",
+            "name": "Brew Red",
+        },
         # Transport & Media
-        "airline": {"primary": "#1E3A8A", "secondary": "#3B82F6", "accent": "#EA580C", "background": "#EFF6FF", "text": "#1E40AF", "card": "#FFFFFF", "muted": "#E9EEF5", "border": "#BFDBFE", "name": "Sky Royal"},
-        "news-media": {"primary": "#DC2626", "secondary": "#EF4444", "accent": "#1E40AF", "background": "#FEF2F2", "text": "#450A0A", "card": "#FFFFFF", "muted": "#F0EDF1", "border": "#FECACA", "name": "News Red"},
-        "magazine": {"primary": "#18181B", "secondary": "#3F3F46", "accent": "#EC4899", "background": "#FAFAFA", "text": "#09090B", "card": "#FFFFFF", "muted": "#E8ECF0", "border": "#E4E4E7", "name": "Editorial Mono"},
+        "airline": {
+            "primary": "#1E3A8A",
+            "secondary": "#3B82F6",
+            "accent": "#EA580C",
+            "background": "#EFF6FF",
+            "text": "#1E40AF",
+            "card": "#FFFFFF",
+            "muted": "#E9EEF5",
+            "border": "#BFDBFE",
+            "name": "Sky Royal",
+        },
+        "news-media": {
+            "primary": "#DC2626",
+            "secondary": "#EF4444",
+            "accent": "#1E40AF",
+            "background": "#FEF2F2",
+            "text": "#450A0A",
+            "card": "#FFFFFF",
+            "muted": "#F0EDF1",
+            "border": "#FECACA",
+            "name": "News Red",
+        },
+        "magazine": {
+            "primary": "#18181B",
+            "secondary": "#3F3F46",
+            "accent": "#EC4899",
+            "background": "#FAFAFA",
+            "text": "#09090B",
+            "card": "#FFFFFF",
+            "muted": "#E8ECF0",
+            "border": "#E4E4E7",
+            "name": "Editorial Mono",
+        },
         # Freelancer & Agency
-        "freelancer": {"primary": "#4338CA", "secondary": "#6366F1", "accent": "#16A34A", "background": "#EEF2FF", "text": "#312E81", "card": "#FFFFFF", "muted": "#EBEFF9", "border": "#C7D2FE", "name": "Freelance Indigo"},
-        "marketing-agency": {"primary": "#EC4899", "secondary": "#F472B6", "accent": "#0891B2", "background": "#FDF2F8", "text": "#831843", "card": "#FFFFFF", "muted": "#F1EEF5", "border": "#FBCFE8", "name": "Marketing Pink"},
-        "event-management": {"primary": "#3A51ED", "secondary": "#A78BFA", "accent": "#EA580C", "background": "#FAF5FF", "text": "#4C1D95", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "Event Purple"},
+        "freelancer": {
+            "primary": "#4338CA",
+            "secondary": "#6366F1",
+            "accent": "#16A34A",
+            "background": "#EEF2FF",
+            "text": "#312E81",
+            "card": "#FFFFFF",
+            "muted": "#EBEFF9",
+            "border": "#C7D2FE",
+            "name": "Freelance Indigo",
+        },
+        "marketing-agency": {
+            "primary": "#EC4899",
+            "secondary": "#F472B6",
+            "accent": "#0891B2",
+            "background": "#FDF2F8",
+            "text": "#831843",
+            "card": "#FFFFFF",
+            "muted": "#F1EEF5",
+            "border": "#FBCFE8",
+            "name": "Marketing Pink",
+        },
+        "event-management": {
+            "primary": "#3A51ED",
+            "secondary": "#A78BFA",
+            "accent": "#EA580C",
+            "background": "#FAF5FF",
+            "text": "#4C1D95",
+            "card": "#FFFFFF",
+            "muted": "#ECEEF9",
+            "border": "#DDD6FE",
+            "name": "Event Purple",
+        },
         # Community & Membership
-        "membership": {"primary": "#ED3AD7", "secondary": "#A78BFA", "accent": "#16A34A", "background": "#FAF5FF", "text": "#4C1D95", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "Community Purple"},
-        "newsletter": {"primary": "#0219A1", "secondary": "#0EA5E9", "accent": "#EA580C", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E7EFF5", "border": "#BAE6FD", "name": "Newsletter Sky"},
-        "digital-products": {"primary": "#4F46E5", "secondary": "#6366F1", "accent": "#16A34A", "background": "#EEF2FF", "text": "#312E81", "card": "#FFFFFF", "muted": "#EBEFF9", "border": "#C7D2FE", "name": "Digital Indigo"},
-        "church": {"primary": "#ED3A51", "secondary": "#A78BFA", "accent": "#A16207", "background": "#FAF5FF", "text": "#4C1D95", "card": "#FFFFFF", "muted": "#ECEEF9", "border": "#DDD6FE", "name": "Faith Purple"},
+        "membership": {
+            "primary": "#ED3AD7",
+            "secondary": "#A78BFA",
+            "accent": "#16A34A",
+            "background": "#FAF5FF",
+            "text": "#4C1D95",
+            "card": "#FFFFFF",
+            "muted": "#ECEEF9",
+            "border": "#DDD6FE",
+            "name": "Community Purple",
+        },
+        "newsletter": {
+            "primary": "#0219A1",
+            "secondary": "#0EA5E9",
+            "accent": "#EA580C",
+            "background": "#F0F9FF",
+            "text": "#0C4A6E",
+            "card": "#FFFFFF",
+            "muted": "#E7EFF5",
+            "border": "#BAE6FD",
+            "name": "Newsletter Sky",
+        },
+        "digital-products": {
+            "primary": "#4F46E5",
+            "secondary": "#6366F1",
+            "accent": "#16A34A",
+            "background": "#EEF2FF",
+            "text": "#312E81",
+            "card": "#FFFFFF",
+            "muted": "#EBEFF9",
+            "border": "#C7D2FE",
+            "name": "Digital Indigo",
+        },
+        "church": {
+            "primary": "#ED3A51",
+            "secondary": "#A78BFA",
+            "accent": "#A16207",
+            "background": "#FAF5FF",
+            "text": "#4C1D95",
+            "card": "#FFFFFF",
+            "muted": "#ECEEF9",
+            "border": "#DDD6FE",
+            "name": "Faith Purple",
+        },
         # Web3 & Digital
-        "nft-web3": {"primary": "#8B5CF6", "secondary": "#A78BFA", "accent": "#FBBF24", "background": "#0F0F23", "text": "#F8FAFC", "card": "#1E1D35", "muted": "#27273B", "border": "#4C1D95", "name": "Web3 Violet"},
-        "remote-work": {"primary": "#5B21B6", "secondary": "#7C3AED", "accent": "#059669", "background": "#F5F3FF", "text": "#312E81", "card": "#FFFFFF", "muted": "#EBEFF9", "border": "#E0E7FF", "name": "Remote Indigo"},
+        "nft-web3": {
+            "primary": "#8B5CF6",
+            "secondary": "#A78BFA",
+            "accent": "#FBBF24",
+            "background": "#0F0F23",
+            "text": "#F8FAFC",
+            "card": "#1E1D35",
+            "muted": "#27273B",
+            "border": "#4C1D95",
+            "name": "Web3 Violet",
+        },
+        "remote-work": {
+            "primary": "#5B21B6",
+            "secondary": "#7C3AED",
+            "accent": "#059669",
+            "background": "#F5F3FF",
+            "text": "#312E81",
+            "card": "#FFFFFF",
+            "muted": "#EBEFF9",
+            "border": "#E0E7FF",
+            "name": "Remote Indigo",
+        },
         # Streaming & Music
-        "music-streaming": {"primary": "#1E1B4B", "secondary": "#4338CA", "accent": "#22C55E", "background": "#0F0F23", "text": "#F8FAFC", "card": "#1B1B30", "muted": "#27273B", "border": "#312E81", "name": "Sound Indigo"},
+        "music-streaming": {
+            "primary": "#1E1B4B",
+            "secondary": "#4338CA",
+            "accent": "#22C55E",
+            "background": "#0F0F23",
+            "text": "#F8FAFC",
+            "card": "#1B1B30",
+            "muted": "#27273B",
+            "border": "#312E81",
+            "name": "Sound Indigo",
+        },
         # Recruitment & Local
-        "recruitment": {"primary": "#02A18A", "secondary": "#0EA5E9", "accent": "#16A34A", "background": "#F0F9FF", "text": "#0C4A6E", "card": "#FFFFFF", "muted": "#E7EFF5", "border": "#BAE6FD", "name": "Career Sky"},
-        "hyperlocal": {"primary": "#059669", "secondary": "#10B981", "accent": "#EA580C", "background": "#ECFDF5", "text": "#064E3B", "card": "#FFFFFF", "muted": "#E8F1F3", "border": "#A7F3D0", "name": "Local Green"},
-        "online-course": {"primary": "#0D9488", "secondary": "#2DD4BF", "accent": "#EA580C", "background": "#F0FDFA", "text": "#134E4A", "card": "#FFFFFF", "muted": "#E8F1F4", "border": "#5EEAD4", "name": "Course Teal"},
+        "recruitment": {
+            "primary": "#02A18A",
+            "secondary": "#0EA5E9",
+            "accent": "#16A34A",
+            "background": "#F0F9FF",
+            "text": "#0C4A6E",
+            "card": "#FFFFFF",
+            "muted": "#E7EFF5",
+            "border": "#BAE6FD",
+            "name": "Career Sky",
+        },
+        "hyperlocal": {
+            "primary": "#059669",
+            "secondary": "#10B981",
+            "accent": "#EA580C",
+            "background": "#ECFDF5",
+            "text": "#064E3B",
+            "card": "#FFFFFF",
+            "muted": "#E8F1F3",
+            "border": "#A7F3D0",
+            "name": "Local Green",
+        },
+        "online-course": {
+            "primary": "#0D9488",
+            "secondary": "#2DD4BF",
+            "accent": "#EA580C",
+            "background": "#F0FDFA",
+            "text": "#134E4A",
+            "card": "#FFFFFF",
+            "muted": "#E8F1F4",
+            "border": "#5EEAD4",
+            "name": "Course Teal",
+        },
     }
 
     PRODUCT_TYPOGRAPHY_PRESETS: dict[str, dict[str, str]] = {
-        "saas": {"heading": "Manrope", "body": "Source Sans 3", "mood": "professional, clear, product-focused", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Manrope:wght@500;600;700;800&family=Source+Sans+3:wght@400;500;600&display=swap');"},
-        "ecommerce": {"heading": "DM Sans", "body": "Inter", "mood": "friendly, approachable, trustworthy", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');"},
-        "ecommerce-luxury": {"heading": "Cormorant Garamond", "body": "Montserrat", "mood": "elegant, luxury, sophisticated", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600&display=swap');"},
-        "fintech": {"heading": "Space Grotesk", "body": "IBM Plex Sans", "mood": "technical, trustworthy, precise", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');"},
-        "healthcare": {"heading": "Plus Jakarta Sans", "body": "Nunito Sans", "mood": "calming, professional, accessible", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Nunito+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');"},
-        "education": {"heading": "Outfit", "body": "Source Sans 3", "mood": "clear, friendly, encouraging", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Outfit:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap');"},
-        "gaming": {"heading": "Rajdhani", "body": "Exo 2", "mood": "bold, energetic, futuristic", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Exo+2:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap');"},
-        "beauty-spa": {"heading": "Cormorant Garamond", "body": "Montserrat", "mood": "elegant, calming, sophisticated", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600&display=swap');"},
-        "content": {"heading": "Merriweather", "body": "Source Sans 3", "mood": "readable, editorial, classic", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Merriweather:wght@400;700&family=Source+Sans+3:wght@400;500;600&display=swap');"},
-        "dashboard": {"heading": "IBM Plex Sans", "body": "Public Sans", "mood": "dense, operational, precise", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Public+Sans:wght@400;500;600&display=swap');"},
-        "portfolio": {"heading": "Space Grotesk", "body": "Inter", "mood": "creative, distinctive, modern", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');"},
-        "landing": {"heading": "Space Grotesk", "body": "DM Sans", "mood": "confident, distinctive, conversion-focused", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=DM+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap');"},
-        "social-media": {"heading": "Poppins", "body": "Open Sans", "mood": "modern, friendly, social", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Open+Sans:wght@400;500;600&family=Poppins:wght@400;500;600;700&display=swap');"},
-        "restaurant": {"heading": "Playfair Display", "body": "Lato", "mood": "warm, appetizing, inviting", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Lato:wght@400;700&family=Playfair+Display:wght@400;500;600;700&display=swap');"},
-        "real-estate": {"heading": "DM Serif Display", "body": "DM Sans", "mood": "premium, trustworthy, established", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap');"},
-        "legal": {"heading": "EB Garamond", "body": "Source Sans 3", "mood": "authoritative, traditional, trustworthy", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=EB+Garamond:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap');"},
-        "general": {"heading": "Manrope", "body": "Source Sans 3", "mood": "modern, professional, adaptable", "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Manrope:wght@500;600;700;800&family=Source+Sans+3:wght@400;500;600&display=swap');"},
+        "saas": {
+            "heading": "Manrope",
+            "body": "Source Sans 3",
+            "mood": "professional, clear, product-focused",
+            "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Manrope:wght@500;600;700;800&family=Source+Sans+3:wght@400;500;600&display=swap');",
+        },
+        "ecommerce": {
+            "heading": "DM Sans",
+            "body": "Inter",
+            "mood": "friendly, approachable, trustworthy",
+            "css_import": "@import url('https://fonts.googleapis.cn/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');",
+        },
+        "ecommerce-luxury": {
+            "heading": "Cormorant Garamond",
+            "body": "Montserrat",
+            "mood": "elegant, luxury, sophisticated",
+            "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600&display=swap');",
+        },
+        "fintech": {
+            "heading": "Space Grotesk",
+            "body": "IBM Plex Sans",
+            "mood": "technical, trustworthy, precise",
+            "css_import": "@import url('https://fonts.googleapis.cn/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');",
+        },
+        "healthcare": {
+            "heading": "Plus Jakarta Sans",
+            "body": "Nunito Sans",
+            "mood": "calming, professional, accessible",
+            "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Nunito+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');",
+        },
+        "education": {
+            "heading": "Outfit",
+            "body": "Source Sans 3",
+            "mood": "clear, friendly, encouraging",
+            "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Outfit:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap');",
+        },
+        "gaming": {
+            "heading": "Rajdhani",
+            "body": "Exo 2",
+            "mood": "bold, energetic, futuristic",
+            "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Exo+2:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap');",
+        },
+        "beauty-spa": {
+            "heading": "Cormorant Garamond",
+            "body": "Montserrat",
+            "mood": "elegant, calming, sophisticated",
+            "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600&display=swap');",
+        },
+        "content": {
+            "heading": "Merriweather",
+            "body": "Source Sans 3",
+            "mood": "readable, editorial, classic",
+            "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Merriweather:wght@400;700&family=Source+Sans+3:wght@400;500;600&display=swap');",
+        },
+        "dashboard": {
+            "heading": "IBM Plex Sans",
+            "body": "Public Sans",
+            "mood": "dense, operational, precise",
+            "css_import": "@import url('https://fonts.googleapis.cn/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Public+Sans:wght@400;500;600&display=swap');",
+        },
+        "portfolio": {
+            "heading": "Space Grotesk",
+            "body": "Inter",
+            "mood": "creative, distinctive, modern",
+            "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');",
+        },
+        "landing": {
+            "heading": "Space Grotesk",
+            "body": "DM Sans",
+            "mood": "confident, distinctive, conversion-focused",
+            "css_import": "@import url('https://fonts.googleapis.cn/css2?family=DM+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap');",
+        },
+        "social-media": {
+            "heading": "Poppins",
+            "body": "Open Sans",
+            "mood": "modern, friendly, social",
+            "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Open+Sans:wght@400;500;600&family=Poppins:wght@400;500;600;700&display=swap');",
+        },
+        "restaurant": {
+            "heading": "Playfair Display",
+            "body": "Lato",
+            "mood": "warm, appetizing, inviting",
+            "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Lato:wght@400;700&family=Playfair+Display:wght@400;500;600;700&display=swap');",
+        },
+        "real-estate": {
+            "heading": "DM Serif Display",
+            "body": "DM Sans",
+            "mood": "premium, trustworthy, established",
+            "css_import": "@import url('https://fonts.googleapis.cn/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap');",
+        },
+        "legal": {
+            "heading": "EB Garamond",
+            "body": "Source Sans 3",
+            "mood": "authoritative, traditional, trustworthy",
+            "css_import": "@import url('https://fonts.googleapis.cn/css2?family=EB+Garamond:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap');",
+        },
+        "general": {
+            "heading": "Manrope",
+            "body": "Source Sans 3",
+            "mood": "modern, professional, adaptable",
+            "css_import": "@import url('https://fonts.googleapis.cn/css2?family=Manrope:wght@500;600;700;800&family=Source+Sans+3:wght@400;500;600&display=swap');",
+        },
     }
 
     PRE_DELIVERY_CHECKLIST: list[str] = [
@@ -1677,7 +2602,9 @@ class UIIntelligenceAdvisor:
         raw_frontend = frontend.lower().strip()
         normalized_frontend = self.FRONTEND_ALIASES.get(raw_frontend, raw_frontend)
         profile = self.PRODUCT_PROFILES.get(product_type, self.PRODUCT_PROFILES["general"])
-        industry_rules = self.INDUSTRY_TRUST_RULES.get(industry, self.INDUSTRY_TRUST_RULES["general"])
+        industry_rules = self.INDUSTRY_TRUST_RULES.get(
+            industry, self.INDUSTRY_TRUST_RULES["general"]
+        )
         library_options = self.STACK_RECOMMENDATIONS.get(
             normalized_frontend, self.STACK_RECOMMENDATIONS["default"]
         )
@@ -1721,11 +2648,15 @@ class UIIntelligenceAdvisor:
         ]
 
         trust_modules = list(industry_rules["trust_modules"]) + list(profile["conversion_modules"])
-        banned_patterns = list(profile["banned_patterns"]) + list(industry_rules["banned_patterns"]) + [
-            "emoji 充当功能图标或临时占位图标",
-            "Claude / ChatGPT 同款侧栏聊天骨架与窄中栏对话壳层",
-            "以灰黑中性色为主、几乎无品牌辨识度的聊天式产品外壳",
-        ]
+        banned_patterns = (
+            list(profile["banned_patterns"])
+            + list(industry_rules["banned_patterns"])
+            + [
+                "emoji 充当功能图标或临时占位图标",
+                "Claude / ChatGPT 同款侧栏聊天骨架与窄中栏对话壳层",
+                "以灰黑中性色为主、几乎无品牌辨识度的聊天式产品外壳",
+            ]
+        )
 
         state_requirements = [
             "normal",
@@ -1748,12 +2679,36 @@ class UIIntelligenceAdvisor:
             "icons": icon_library,
         }
         ui_library_matrix = [
-            {"scene": "Web 工作台", "libraries": "shadcn/ui + Radix + Tailwind", "focus": "高密度任务与状态可见性"},
-            {"scene": "品牌官网/H5", "libraries": "Tailwind + Aceternity UI / Magic UI", "focus": "叙事转化与视觉识别"},
-            {"scene": "多主题业务", "libraries": "Tailwind + DaisyUI", "focus": "主题系统与快速迭代"},
-            {"scene": "微信小程序", "libraries": "TDesign 小程序 + Taro / UniApp", "focus": "腾讯生态规范、触控效率与性能包体"},
-            {"scene": "APP", "libraries": "React Native / Flutter / SwiftUI", "focus": "手势、反馈、导航与原生体验一致性"},
-            {"scene": "桌面端", "libraries": "Electron / Tauri + React/Vue + Tailwind", "focus": "窗口范式、快捷键与本地能力集成"},
+            {
+                "scene": "Web 工作台",
+                "libraries": "shadcn/ui + Radix + Tailwind",
+                "focus": "高密度任务与状态可见性",
+            },
+            {
+                "scene": "品牌官网/H5",
+                "libraries": "Tailwind + Aceternity UI / Magic UI",
+                "focus": "叙事转化与视觉识别",
+            },
+            {
+                "scene": "多主题业务",
+                "libraries": "Tailwind + DaisyUI",
+                "focus": "主题系统与快速迭代",
+            },
+            {
+                "scene": "微信小程序",
+                "libraries": "TDesign 小程序 + Taro / UniApp",
+                "focus": "腾讯生态规范、触控效率与性能包体",
+            },
+            {
+                "scene": "APP",
+                "libraries": "React Native / Flutter / SwiftUI",
+                "focus": "手势、反馈、导航与原生体验一致性",
+            },
+            {
+                "scene": "桌面端",
+                "libraries": "Electron / Tauri + React/Vue + Tailwind",
+                "focus": "窗口范式、快捷键与本地能力集成",
+            },
         ]
         quality_checklist = [
             "必须提供 token（color/typography/spacing/radius/shadow/motion）并可复用",
@@ -1763,7 +2718,9 @@ class UIIntelligenceAdvisor:
             "必须通过品牌差异化检查（字体层级、配色节奏、图形语言）",
         ]
 
-        style_direction = self._build_style_direction(style=style, product_type=product_type, industry=industry)
+        style_direction = self._build_style_direction(
+            style=style, product_type=product_type, industry=industry
+        )
         database_keywords = self._knowledge_keywords(
             description=description,
             product_type=product_type,
@@ -1776,13 +2733,17 @@ class UIIntelligenceAdvisor:
         if palette_key not in self.PRODUCT_COLOR_PALETTES:
             # Try industry match
             palette_key = industry if industry in self.PRODUCT_COLOR_PALETTES else "general"
-        color_palette = self.PRODUCT_COLOR_PALETTES.get(palette_key, self.PRODUCT_COLOR_PALETTES["general"])
+        color_palette = self.PRODUCT_COLOR_PALETTES.get(
+            palette_key, self.PRODUCT_COLOR_PALETTES["general"]
+        )
 
         # Find matching typography
         typo_key = product_type
         if typo_key not in self.PRODUCT_TYPOGRAPHY_PRESETS:
             typo_key = industry if industry in self.PRODUCT_TYPOGRAPHY_PRESETS else "general"
-        typography_preset = self.PRODUCT_TYPOGRAPHY_PRESETS.get(typo_key, self.PRODUCT_TYPOGRAPHY_PRESETS["general"])
+        typography_preset = self.PRODUCT_TYPOGRAPHY_PRESETS.get(
+            typo_key, self.PRODUCT_TYPOGRAPHY_PRESETS["general"]
+        )
         selected_reference = self.get_design_reference(preferred_design_reference_slug)
         design_reference_items = self._select_design_references(
             product_type=product_type,
@@ -1822,7 +2783,9 @@ class UIIntelligenceAdvisor:
             "color_palette_dark": self.generate_dark_variant(color_palette),
             "typography_preset": typography_preset,
             "design_references": design_references,
-            "selected_design_reference": selected_reference.to_dict() if selected_reference else None,
+            "selected_design_reference": (
+                selected_reference.to_dict() if selected_reference else None
+            ),
             "framework_playbook": framework_playbook.to_dict() if framework_playbook else None,
             "pre_delivery_checklist": list(self.PRE_DELIVERY_CHECKLIST),
         }
@@ -1961,7 +2924,9 @@ class UIIntelligenceAdvisor:
                 return "AG Grid / Naive DataTable + Split View + Local Index"
         return "Semantic table + lightweight sorting/filtering"
 
-    def _build_style_direction(self, *, style: str, product_type: str, industry: str) -> dict[str, str]:
+    def _build_style_direction(
+        self, *, style: str, product_type: str, industry: str
+    ) -> dict[str, str]:
         mappings = {
             "minimal": {
                 "direction": "克制、清晰、减少装饰噪音",
@@ -2009,9 +2974,14 @@ class UIIntelligenceAdvisor:
             "trust design",
         ]
         lowered = description.lower()
-        if any(token in lowered for token in ["dashboard", "后台", "仪表盘", "workbench", "工作台"]):
+        if any(
+            token in lowered for token in ["dashboard", "后台", "仪表盘", "workbench", "工作台"]
+        ):
             words.extend(["data table", "filter bar", "audit trail", "dense workspace"])
-        if any(token in lowered for token in ["landing", "官网", "marketing", "official website", "落地页"]):
+        if any(
+            token in lowered
+            for token in ["landing", "官网", "marketing", "official website", "落地页"]
+        ):
             words.extend(["hero", "social proof", "pricing", "conversion"])
         if any(token in lowered for token in ["checkout", "支付", "billing", "order", "cart"]):
             words.extend(["checkout", "trust badges", "payment status"])
@@ -2053,18 +3023,22 @@ class UIIntelligenceAdvisor:
         missing_breakpoints = standard_breakpoints - set(media_breakpoints)
 
         if not media_queries:
-            issues.append({
-                "severity": "high",
-                "message": "CSS 中未发现任何媒体查询（@media），页面可能无法在不同屏幕尺寸下正常显示",
-                "fix": "添加至少 3 个断点的媒体查询：768px（平板）、1024px（小桌面）、1440px（大桌面）",
-            })
+            issues.append(
+                {
+                    "severity": "high",
+                    "message": "CSS 中未发现任何媒体查询（@media），页面可能无法在不同屏幕尺寸下正常显示",
+                    "fix": "添加至少 3 个断点的媒体查询：768px（平板）、1024px（小桌面）、1440px（大桌面）",
+                }
+            )
             score -= 30
         elif len(media_queries) < 3:
-            issues.append({
-                "severity": "medium",
-                "message": f"仅发现 {len(media_queries)} 个媒体查询，建议覆盖更多断点",
-                "fix": "建议至少覆盖 375px / 768px / 1024px / 1440px 四个常用断点",
-            })
+            issues.append(
+                {
+                    "severity": "medium",
+                    "message": f"仅发现 {len(media_queries)} 个媒体查询，建议覆盖更多断点",
+                    "fix": "建议至少覆盖 375px / 768px / 1024px / 1440px 四个常用断点",
+                }
+            )
             score -= 15
 
         # 2. Check for responsive units usage
@@ -2084,58 +3058,67 @@ class UIIntelligenceAdvisor:
         total_px_units = len(re.findall(r"[\d.]+px", css_content))
 
         if total_responsive_units == 0:
-            issues.append({
-                "severity": "high",
-                "message": "未使用任何响应式单位（rem/em/%/vw/vh/clamp），全部使用固定像素",
-                "fix": "字体建议使用 rem，容器宽度建议使用 % 或 max-width，间距建议使用 rem 或 em",
-            })
+            issues.append(
+                {
+                    "severity": "high",
+                    "message": "未使用任何响应式单位（rem/em/%/vw/vh/clamp），全部使用固定像素",
+                    "fix": "字体建议使用 rem，容器宽度建议使用 % 或 max-width，间距建议使用 rem 或 em",
+                }
+            )
             score -= 25
-        elif total_px_units > 0 and total_responsive_units / (total_px_units + total_responsive_units) < 0.3:
-            issues.append({
-                "severity": "medium",
-                "message": f"响应式单位占比偏低（{total_responsive_units}/{total_px_units + total_responsive_units}），大量使用固定像素",
-                "fix": "建议将字体、间距和容器尺寸逐步迁移到 rem/% 等响应式单位",
-            })
+        elif (
+            total_px_units > 0
+            and total_responsive_units / (total_px_units + total_responsive_units) < 0.3
+        ):
+            issues.append(
+                {
+                    "severity": "medium",
+                    "message": f"响应式单位占比偏低（{total_responsive_units}/{total_px_units + total_responsive_units}），大量使用固定像素",
+                    "fix": "建议将字体、间距和容器尺寸逐步迁移到 rem/% 等响应式单位",
+                }
+            )
             score -= 10
 
         # 3. Check for hardcoded pixel widths (anti-pattern)
-        hardcoded_width_pattern = re.compile(
-            r"(?:^|\s|;)width\s*:\s*(\d+)px", re.MULTILINE
-        )
+        hardcoded_width_pattern = re.compile(r"(?:^|\s|;)width\s*:\s*(\d+)px", re.MULTILINE)
         hardcoded_widths = hardcoded_width_pattern.findall(css_content)
         problematic_widths = [w for w in hardcoded_widths if int(w) > 320]
 
         if problematic_widths:
-            issues.append({
-                "severity": "medium",
-                "message": f"发现 {len(problematic_widths)} 个硬编码的大像素宽度值：{', '.join(problematic_widths[:5])}px",
-                "fix": "使用 max-width 代替 width，或使用百分比和 min()/max()/clamp() 函数",
-            })
+            issues.append(
+                {
+                    "severity": "medium",
+                    "message": f"发现 {len(problematic_widths)} 个硬编码的大像素宽度值：{', '.join(problematic_widths[:5])}px",
+                    "fix": "使用 max-width 代替 width，或使用百分比和 min()/max()/clamp() 函数",
+                }
+            )
             score -= min(len(problematic_widths) * 3, 15)
 
         # 4. Check for hardcoded pixel heights on containers
-        hardcoded_height_pattern = re.compile(
-            r"(?:^|\s|;)height\s*:\s*(\d+)px", re.MULTILINE
-        )
+        hardcoded_height_pattern = re.compile(r"(?:^|\s|;)height\s*:\s*(\d+)px", re.MULTILINE)
         hardcoded_heights = hardcoded_height_pattern.findall(css_content)
         large_fixed_heights = [h for h in hardcoded_heights if int(h) > 200]
         if large_fixed_heights:
-            issues.append({
-                "severity": "low",
-                "message": f"发现 {len(large_fixed_heights)} 个大的固定高度值，可能导致内容溢出",
-                "fix": "考虑使用 min-height 代替 height，或使用 auto/fit-content",
-            })
+            issues.append(
+                {
+                    "severity": "low",
+                    "message": f"发现 {len(large_fixed_heights)} 个大的固定高度值，可能导致内容溢出",
+                    "fix": "考虑使用 min-height 代替 height，或使用 auto/fit-content",
+                }
+            )
             score -= 5
 
         # 5. Check for flexible layout usage
         flexbox_count = len(re.findall(r"display\s*:\s*flex", css_content))
         grid_count = len(re.findall(r"display\s*:\s*grid", css_content))
         if flexbox_count == 0 and grid_count == 0:
-            issues.append({
-                "severity": "high",
-                "message": "未使用 Flexbox 或 Grid 布局，可能依赖过时的浮动或定位布局",
-                "fix": "优先使用 CSS Grid 进行页面布局，Flexbox 进行组件内部布局",
-            })
+            issues.append(
+                {
+                    "severity": "high",
+                    "message": "未使用 Flexbox 或 Grid 布局，可能依赖过时的浮动或定位布局",
+                    "fix": "优先使用 CSS Grid 进行页面布局，Flexbox 进行组件内部布局",
+                }
+            )
             score -= 20
 
         # 6. Check viewport meta in HTML
@@ -2143,11 +3126,13 @@ class UIIntelligenceAdvisor:
         if html_content:
             has_viewport_meta = "viewport" in html_content and "width=device-width" in html_content
             if not has_viewport_meta:
-                issues.append({
-                    "severity": "high",
-                    "message": "HTML 缺少正确的 viewport meta 标签",
-                    "fix": '添加 <meta name="viewport" content="width=device-width, initial-scale=1.0" />',
-                })
+                issues.append(
+                    {
+                        "severity": "high",
+                        "message": "HTML 缺少正确的 viewport meta 标签",
+                        "fix": '添加 <meta name="viewport" content="width=device-width, initial-scale=1.0" />',
+                    }
+                )
                 score -= 15
 
         # 7. Check for container queries (modern CSS)
@@ -2155,24 +3140,36 @@ class UIIntelligenceAdvisor:
 
         # 8. Check for overflow handling
         overflow_hidden_count = len(re.findall(r"overflow\s*:\s*hidden", css_content))
-        overflow_auto_count = len(re.findall(r"overflow(?:-[xy])?\s*:\s*(?:auto|scroll)", css_content))
+        overflow_auto_count = len(
+            re.findall(r"overflow(?:-[xy])?\s*:\s*(?:auto|scroll)", css_content)
+        )
         text_overflow_count = len(re.findall(r"text-overflow\s*:\s*ellipsis", css_content))
 
         # Generate suggestions
         if not container_queries:
-            suggestions.append("考虑使用 @container 查询实现组件级响应式设计（现代浏览器已广泛支持）")
+            suggestions.append(
+                "考虑使用 @container 查询实现组件级响应式设计（现代浏览器已广泛支持）"
+            )
         if responsive_units.get("clamp", 0) == 0:
-            suggestions.append("建议使用 clamp() 实现流畅的字体和间距缩放，例如 font-size: clamp(1rem, 2.5vw, 2rem)")
+            suggestions.append(
+                "建议使用 clamp() 实现流畅的字体和间距缩放，例如 font-size: clamp(1rem, 2.5vw, 2rem)"
+            )
         if not text_overflow_count:
             suggestions.append("建议为文本内容添加 text-overflow: ellipsis 处理溢出场景")
         if len(covered_breakpoints) < 3:
-            suggestions.append(f"建议补充以下断点的媒体查询：{', '.join(sorted(missing_breakpoints)[:3])}px")
+            suggestions.append(
+                f"建议补充以下断点的媒体查询：{', '.join(sorted(missing_breakpoints)[:3])}px"
+            )
 
         score = max(0, min(100, score))
 
         return {
             "score": score,
-            "grade": "A" if score >= 90 else "B" if score >= 75 else "C" if score >= 60 else "D" if score >= 40 else "F",
+            "grade": (
+                "A"
+                if score >= 90
+                else "B" if score >= 75 else "C" if score >= 60 else "D" if score >= 40 else "F"
+            ),
             "media_queries": {
                 "count": len(media_queries),
                 "breakpoints_found": sorted(set(media_breakpoints)),
@@ -2206,7 +3203,9 @@ class UIIntelligenceAdvisor:
     # Accessibility Depth Check
     # ------------------------------------------------------------------
 
-    def _check_accessibility_depth(self, html_content: str, css_content: str = "") -> dict[str, Any]:
+    def _check_accessibility_depth(
+        self, html_content: str, css_content: str = ""
+    ) -> dict[str, Any]:
         """
         深度检查无障碍（A11y）合规性。
 
@@ -2233,7 +3232,7 @@ class UIIntelligenceAdvisor:
         imgs_with_alt = 0
 
         for img in img_tags:
-            if 'alt=' not in img.lower():
+            if "alt=" not in img.lower():
                 src_match = re.search(r'src\s*=\s*["\']([^"\']*)', img)
                 imgs_without_alt.append(src_match.group(1) if src_match else "(unknown)")
             elif re.search(r'alt\s*=\s*["\'][\s]*["\']', img):
@@ -2242,22 +3241,24 @@ class UIIntelligenceAdvisor:
                 imgs_with_alt += 1
 
         if imgs_without_alt:
-            issues.append({
-                "severity": "high",
-                "message": f"{len(imgs_without_alt)} 个图片缺少 alt 属性：{', '.join(imgs_without_alt[:5])}",
-                "fix": "为所有 <img> 标签添加描述性 alt 属性。纯装饰图片使用 alt=\"\"",
-                "wcag": "WCAG 2.1 SC 1.1.1 Non-text Content (Level A)",
-            })
+            issues.append(
+                {
+                    "severity": "high",
+                    "message": f"{len(imgs_without_alt)} 个图片缺少 alt 属性：{', '.join(imgs_without_alt[:5])}",
+                    "fix": '为所有 <img> 标签添加描述性 alt 属性。纯装饰图片使用 alt=""',
+                    "wcag": "WCAG 2.1 SC 1.1.1 Non-text Content (Level A)",
+                }
+            )
             score -= min(len(imgs_without_alt) * 5, 20)
         else:
             passes.append("所有图片均包含 alt 属性")
 
         # 2. Check forms for label associations
-        input_tags = re.findall(
-            r"<(?:input|select|textarea)\b[^>]*>", html_content, re.IGNORECASE
-        )
+        input_tags = re.findall(r"<(?:input|select|textarea)\b[^>]*>", html_content, re.IGNORECASE)
         inputs_without_label: list[str] = []
-        label_for_ids = set(re.findall(r'<label\b[^>]*for\s*=\s*["\']([^"\']+)', html_content, re.IGNORECASE))
+        label_for_ids = set(
+            re.findall(r'<label\b[^>]*for\s*=\s*["\']([^"\']+)', html_content, re.IGNORECASE)
+        )
         aria_labelled_ids = set()
 
         for inp in input_tags:
@@ -2265,7 +3266,7 @@ class UIIntelligenceAdvisor:
             if re.search(r'type\s*=\s*["\'](?:hidden|submit|button)["\']', inp, re.IGNORECASE):
                 continue
             inp_id_match = re.search(r'id\s*=\s*["\']([^"\']+)', inp)
-            has_aria_label = 'aria-label=' in inp.lower() or 'aria-labelledby=' in inp.lower()
+            has_aria_label = "aria-label=" in inp.lower() or "aria-labelledby=" in inp.lower()
             if inp_id_match:
                 inp_id = inp_id_match.group(1)
                 if inp_id in label_for_ids or has_aria_label:
@@ -2277,12 +3278,14 @@ class UIIntelligenceAdvisor:
                 inputs_without_label.append(name_match.group(1) if name_match else "(unnamed)")
 
         if inputs_without_label:
-            issues.append({
-                "severity": "high",
-                "message": f"{len(inputs_without_label)} 个表单元素缺少关联的 <label> 或 aria-label",
-                "fix": "使用 <label for=\"id\"> 或 aria-label / aria-labelledby 关联表单控件",
-                "wcag": "WCAG 2.1 SC 1.3.1 Info and Relationships (Level A)",
-            })
+            issues.append(
+                {
+                    "severity": "high",
+                    "message": f"{len(inputs_without_label)} 个表单元素缺少关联的 <label> 或 aria-label",
+                    "fix": '使用 <label for="id"> 或 aria-label / aria-labelledby 关联表单控件',
+                    "wcag": "WCAG 2.1 SC 1.3.1 Info and Relationships (Level A)",
+                }
+            )
             score -= min(len(inputs_without_label) * 5, 20)
         elif input_tags:
             passes.append("所有表单元素均有正确的 label 关联")
@@ -2292,13 +3295,21 @@ class UIIntelligenceAdvisor:
         if css_content:
             # Extract CSS custom properties (color values)
             color_vars: dict[str, str] = {}
-            var_pattern = re.compile(r"--([a-zA-Z0-9_-]+)\s*:\s*(#[0-9a-fA-F]{3,8}|rgb[a]?\([^)]+\))")
+            var_pattern = re.compile(
+                r"--([a-zA-Z0-9_-]+)\s*:\s*(#[0-9a-fA-F]{3,8}|rgb[a]?\([^)]+\))"
+            )
             for match in var_pattern.finditer(css_content):
                 color_vars[match.group(1)] = match.group(2)
 
             # Check text/background contrast pairs
-            text_keys = [k for k in color_vars if any(t in k.lower() for t in ["text", "foreground", "fg"])]
-            bg_keys = [k for k in color_vars if any(t in k.lower() for t in ["background", "bg", "surface"])]
+            text_keys = [
+                k for k in color_vars if any(t in k.lower() for t in ["text", "foreground", "fg"])
+            ]
+            bg_keys = [
+                k
+                for k in color_vars
+                if any(t in k.lower() for t in ["background", "bg", "surface"])
+            ]
 
             for text_key in text_keys:
                 for bg_key in bg_keys:
@@ -2306,60 +3317,80 @@ class UIIntelligenceAdvisor:
                     bg_color = color_vars[bg_key]
                     contrast = self._calculate_contrast_ratio(text_color, bg_color)
                     if contrast is not None and contrast < 4.5:
-                        color_contrast_issues.append({
-                            "text_var": f"--{text_key}",
-                            "bg_var": f"--{bg_key}",
-                            "text_color": text_color,
-                            "bg_color": bg_color,
-                            "ratio": f"{contrast:.2f}:1",
-                            "required": "4.5:1 (WCAG AA)",
-                        })
+                        color_contrast_issues.append(
+                            {
+                                "text_var": f"--{text_key}",
+                                "bg_var": f"--{bg_key}",
+                                "text_color": text_color,
+                                "bg_color": bg_color,
+                                "ratio": f"{contrast:.2f}:1",
+                                "required": "4.5:1 (WCAG AA)",
+                            }
+                        )
 
             if color_contrast_issues:
-                issues.append({
-                    "severity": "high",
-                    "message": f"{len(color_contrast_issues)} 对文字/背景色对比度不满足 WCAG AA (4.5:1)",
-                    "fix": "调整颜色变量确保文字与背景的对比度至少为 4.5:1（大文字至少 3:1）",
-                    "wcag": "WCAG 2.1 SC 1.4.3 Contrast (Minimum) (Level AA)",
-                })
+                issues.append(
+                    {
+                        "severity": "high",
+                        "message": f"{len(color_contrast_issues)} 对文字/背景色对比度不满足 WCAG AA (4.5:1)",
+                        "fix": "调整颜色变量确保文字与背景的对比度至少为 4.5:1（大文字至少 3:1）",
+                        "wcag": "WCAG 2.1 SC 1.4.3 Contrast (Minimum) (Level AA)",
+                    }
+                )
                 score -= min(len(color_contrast_issues) * 5, 20)
             elif color_vars:
                 passes.append("CSS 变量中的颜色对比度满足 WCAG AA 标准")
 
         # 4. Check for skip navigation link
-        has_skip_nav = bool(re.search(
-            r'<a\b[^>]*href\s*=\s*["\']#(?:main|content|maincontent)["\'][^>]*>',
-            html_content, re.IGNORECASE,
-        ))
-        skip_nav_class = bool(re.search(
-            r'(?:skip[-_]?nav|skip[-_]?to[-_]?(?:main|content))',
-            html_content, re.IGNORECASE,
-        ))
+        has_skip_nav = bool(
+            re.search(
+                r'<a\b[^>]*href\s*=\s*["\']#(?:main|content|maincontent)["\'][^>]*>',
+                html_content,
+                re.IGNORECASE,
+            )
+        )
+        skip_nav_class = bool(
+            re.search(
+                r"(?:skip[-_]?nav|skip[-_]?to[-_]?(?:main|content))",
+                html_content,
+                re.IGNORECASE,
+            )
+        )
 
         if not has_skip_nav and not skip_nav_class:
-            issues.append({
-                "severity": "medium",
-                "message": "未发现 Skip Navigation 链接",
-                "fix": "在页面顶部添加 <a href=\"#main\" class=\"skip-nav\">跳到主内容</a>",
-                "wcag": "WCAG 2.1 SC 2.4.1 Bypass Blocks (Level A)",
-            })
+            issues.append(
+                {
+                    "severity": "medium",
+                    "message": "未发现 Skip Navigation 链接",
+                    "fix": '在页面顶部添加 <a href="#main" class="skip-nav">跳到主内容</a>',
+                    "wcag": "WCAG 2.1 SC 2.4.1 Bypass Blocks (Level A)",
+                }
+            )
             score -= 10
         else:
             passes.append("页面包含 Skip Navigation 链接")
 
         # 5. Check ARIA landmarks
-        has_main = bool(re.search(r'<main\b|role\s*=\s*["\']main["\']', html_content, re.IGNORECASE))
-        has_nav = bool(re.search(r'<nav\b|role\s*=\s*["\']navigation["\']', html_content, re.IGNORECASE))
-        has_banner = bool(re.search(r'<header\b|role\s*=\s*["\']banner["\']', html_content, re.IGNORECASE))
+        has_main = bool(
+            re.search(r'<main\b|role\s*=\s*["\']main["\']', html_content, re.IGNORECASE)
+        )
+        has_nav = bool(
+            re.search(r'<nav\b|role\s*=\s*["\']navigation["\']', html_content, re.IGNORECASE)
+        )
+        has_banner = bool(
+            re.search(r'<header\b|role\s*=\s*["\']banner["\']', html_content, re.IGNORECASE)
+        )
 
         landmark_coverage = sum([has_main, has_nav, has_banner])
         if not has_main:
-            issues.append({
-                "severity": "medium",
-                "message": "缺少 <main> 元素或 role=\"main\" 标记",
-                "fix": "使用 <main> 语义元素包裹页面主要内容区域",
-                "wcag": "WCAG 2.1 SC 1.3.1 Info and Relationships (Level A)",
-            })
+            issues.append(
+                {
+                    "severity": "medium",
+                    "message": '缺少 <main> 元素或 role="main" 标记',
+                    "fix": "使用 <main> 语义元素包裹页面主要内容区域",
+                    "wcag": "WCAG 2.1 SC 1.3.1 Info and Relationships (Level A)",
+                }
+            )
             score -= 8
 
         # 6. Check for focus styles
@@ -2368,30 +3399,39 @@ class UIIntelligenceAdvisor:
         has_outline_none = bool(re.search(r"outline\s*:\s*(?:none|0)", css_content or ""))
 
         if has_outline_none and not has_focus_visible and not has_focus:
-            issues.append({
-                "severity": "high",
-                "message": "移除了 outline 但未提供替代的 focus 样式",
-                "fix": "如果移除 outline，必须使用 :focus-visible 提供替代的焦点指示器",
-                "wcag": "WCAG 2.1 SC 2.4.7 Focus Visible (Level AA)",
-            })
+            issues.append(
+                {
+                    "severity": "high",
+                    "message": "移除了 outline 但未提供替代的 focus 样式",
+                    "fix": "如果移除 outline，必须使用 :focus-visible 提供替代的焦点指示器",
+                    "wcag": "WCAG 2.1 SC 2.4.7 Focus Visible (Level AA)",
+                }
+            )
             score -= 15
 
         if has_focus_visible:
             passes.append("使用了 :focus-visible 伪类提供键盘焦点样式")
 
         # 7. Check for reduced motion preference
-        has_reduced_motion = bool(re.search(
-            r"prefers-reduced-motion", css_content or "",
-        ))
-        if not has_reduced_motion and css_content and (
-            "animation" in css_content or "transition" in css_content
+        has_reduced_motion = bool(
+            re.search(
+                r"prefers-reduced-motion",
+                css_content or "",
+            )
+        )
+        if (
+            not has_reduced_motion
+            and css_content
+            and ("animation" in css_content or "transition" in css_content)
         ):
-            issues.append({
-                "severity": "medium",
-                "message": "页面包含动画/过渡效果但未处理 prefers-reduced-motion 偏好",
-                "fix": "添加 @media (prefers-reduced-motion: reduce) { * { animation-duration: 0s; transition-duration: 0s; } }",
-                "wcag": "WCAG 2.1 SC 2.3.3 Animation from Interactions (Level AAA)",
-            })
+            issues.append(
+                {
+                    "severity": "medium",
+                    "message": "页面包含动画/过渡效果但未处理 prefers-reduced-motion 偏好",
+                    "fix": "添加 @media (prefers-reduced-motion: reduce) { * { animation-duration: 0s; transition-duration: 0s; } }",
+                    "wcag": "WCAG 2.1 SC 2.3.3 Animation from Interactions (Level AAA)",
+                }
+            )
             score -= 8
         elif has_reduced_motion:
             passes.append("尊重 prefers-reduced-motion 用户偏好设置")
@@ -2412,23 +3452,29 @@ class UIIntelligenceAdvisor:
                     break
 
         if heading_issues:
-            issues.append({
-                "severity": "medium",
-                "message": "标题层级结构不正确：" + "；".join(heading_issues),
-                "fix": "确保标题层级从 h1 开始且不跳级（h1 > h2 > h3 ...）",
-                "wcag": "WCAG 2.1 SC 1.3.1 Info and Relationships (Level A)",
-            })
+            issues.append(
+                {
+                    "severity": "medium",
+                    "message": "标题层级结构不正确：" + "；".join(heading_issues),
+                    "fix": "确保标题层级从 h1 开始且不跳级（h1 > h2 > h3 ...）",
+                    "wcag": "WCAG 2.1 SC 1.3.1 Info and Relationships (Level A)",
+                }
+            )
             score -= 8
 
         # 9. Check lang attribute
-        has_lang = bool(re.search(r'<html\b[^>]*\blang\s*=\s*["\'][^"\']+["\']', html_content, re.IGNORECASE))
+        has_lang = bool(
+            re.search(r'<html\b[^>]*\blang\s*=\s*["\'][^"\']+["\']', html_content, re.IGNORECASE)
+        )
         if not has_lang:
-            issues.append({
-                "severity": "medium",
-                "message": "HTML 标签缺少 lang 属性",
-                "fix": '在 <html> 标签添加 lang 属性，如 <html lang="zh-CN">',
-                "wcag": "WCAG 2.1 SC 3.1.1 Language of Page (Level A)",
-            })
+            issues.append(
+                {
+                    "severity": "medium",
+                    "message": "HTML 标签缺少 lang 属性",
+                    "fix": '在 <html> 标签添加 lang 属性，如 <html lang="zh-CN">',
+                    "wcag": "WCAG 2.1 SC 3.1.1 Language of Page (Level A)",
+                }
+            )
             score -= 5
         else:
             passes.append("HTML 标签包含 lang 属性")
@@ -2436,26 +3482,34 @@ class UIIntelligenceAdvisor:
         # 10. Check for button accessibility
         buttons_without_text = re.findall(
             r"<button\b[^>]*>\s*<(?:img|svg|i|span)\b[^>]*/?>\s*</button>",
-            html_content, re.IGNORECASE,
+            html_content,
+            re.IGNORECASE,
         )
         icon_buttons_without_label = [
-            btn for btn in buttons_without_text
+            btn
+            for btn in buttons_without_text
             if "aria-label" not in btn.lower() and "title" not in btn.lower()
         ]
         if icon_buttons_without_label:
-            issues.append({
-                "severity": "medium",
-                "message": f"{len(icon_buttons_without_label)} 个图标按钮缺少 aria-label 或 title",
-                "fix": "为仅包含图标的按钮添加 aria-label 描述其功能",
-                "wcag": "WCAG 2.1 SC 4.1.2 Name, Role, Value (Level A)",
-            })
+            issues.append(
+                {
+                    "severity": "medium",
+                    "message": f"{len(icon_buttons_without_label)} 个图标按钮缺少 aria-label 或 title",
+                    "fix": "为仅包含图标的按钮添加 aria-label 描述其功能",
+                    "wcag": "WCAG 2.1 SC 4.1.2 Name, Role, Value (Level A)",
+                }
+            )
             score -= min(len(icon_buttons_without_label) * 3, 10)
 
         score = max(0, min(100, score))
 
         return {
             "score": score,
-            "grade": "A" if score >= 90 else "B" if score >= 75 else "C" if score >= 60 else "D" if score >= 40 else "F",
+            "grade": (
+                "A"
+                if score >= 90
+                else "B" if score >= 75 else "C" if score >= 60 else "D" if score >= 40 else "F"
+            ),
             "wcag_level": "AA" if score >= 75 else "A" if score >= 50 else "Fail",
             "images": {
                 "total": len(img_tags),
@@ -2550,6 +3604,7 @@ class UIIntelligenceAdvisor:
             def srgb(c: int) -> float:
                 s = c / 255.0
                 return s / 12.92 if s <= 0.04045 else ((s + 0.055) / 1.055) ** 2.4
+
             return 0.2126 * srgb(r) + 0.7152 * srgb(g) + 0.0722 * srgb(b)
 
         rgb1 = parse_color(color1)
@@ -2621,7 +3676,8 @@ class UIIntelligenceAdvisor:
             for category in tailwind_tokens:
                 # Simple extraction from JS/TS config
                 cat_pattern = re.compile(
-                    rf"{category}\s*:\s*\{{([^}}]+)\}}", re.DOTALL,
+                    rf"{category}\s*:\s*\{{([^}}]+)\}}",
+                    re.DOTALL,
                 )
                 cat_match = cat_pattern.search(tailwind_config)
                 if cat_match:
@@ -2639,18 +3695,24 @@ class UIIntelligenceAdvisor:
 
         if all_source:
             # Check for inline hex colors not using tokens
-            inline_hex = re.findall(r'(?:color|background|border|fill|stroke)\s*[:=]\s*["\']?(#[0-9a-fA-F]{3,8})', all_source)
+            inline_hex = re.findall(
+                r'(?:color|background|border|fill|stroke)\s*[:=]\s*["\']?(#[0-9a-fA-F]{3,8})',
+                all_source,
+            )
             token_color_values = {v["value"].lower() for v in color_tokens.values()}
             for hex_val in inline_hex:
                 if hex_val.lower() not in token_color_values:
-                    hardcoded_colors.append({
-                        "value": hex_val,
-                        "suggestion": self._find_closest_token(hex_val, color_tokens),
-                    })
+                    hardcoded_colors.append(
+                        {
+                            "value": hex_val,
+                            "suggestion": self._find_closest_token(hex_val, color_tokens),
+                        }
+                    )
 
             # Check for inline font-family not using tokens
             inline_fonts = re.findall(
-                r'font-?[Ff]amily\s*[:=]\s*["\']([^"\']+)', all_source,
+                r'font-?[Ff]amily\s*[:=]\s*["\']([^"\']+)',
+                all_source,
             )
             for font in inline_fonts:
                 if "var(--" not in font:
@@ -2658,43 +3720,59 @@ class UIIntelligenceAdvisor:
 
             # Check for inline pixel spacing not using tokens
             inline_spacing = re.findall(
-                r'(?:margin|padding|gap)\s*[:=]\s*["\']?(\d+px)', all_source,
+                r'(?:margin|padding|gap)\s*[:=]\s*["\']?(\d+px)',
+                all_source,
             )
             for sp in inline_spacing:
                 hardcoded_spacing.append({"value": sp})
 
             # Check for inline border-radius
             inline_radius = re.findall(
-                r'border-?[Rr]adius\s*[:=]\s*["\']?(\d+px)', all_source,
+                r'border-?[Rr]adius\s*[:=]\s*["\']?(\d+px)',
+                all_source,
             )
             for rd in inline_radius:
                 hardcoded_radius.append({"value": rd})
 
         if hardcoded_colors:
-            issues.append({
-                "severity": "medium",
-                "message": f"发现 {len(hardcoded_colors)} 个硬编码颜色值未使用 Token",
-                "fix": "将硬编码颜色替换为 var(--token-name) 或 Tailwind 语义类",
-            })
+            issues.append(
+                {
+                    "severity": "medium",
+                    "message": f"发现 {len(hardcoded_colors)} 个硬编码颜色值未使用 Token",
+                    "fix": "将硬编码颜色替换为 var(--token-name) 或 Tailwind 语义类",
+                }
+            )
         if hardcoded_fonts:
-            issues.append({
-                "severity": "medium",
-                "message": f"发现 {len(hardcoded_fonts)} 个硬编码字体声明未使用 Token",
-                "fix": "将字体声明统一使用 var(--font-heading) / var(--font-body) Token",
-            })
+            issues.append(
+                {
+                    "severity": "medium",
+                    "message": f"发现 {len(hardcoded_fonts)} 个硬编码字体声明未使用 Token",
+                    "fix": "将字体声明统一使用 var(--font-heading) / var(--font-body) Token",
+                }
+            )
         if hardcoded_spacing and spacing_tokens:
-            issues.append({
-                "severity": "low",
-                "message": f"发现 {len(hardcoded_spacing)} 个硬编码间距值，建议使用 Token 或 Tailwind 预设类",
-                "fix": "定义间距 Token 并统一引用",
-            })
+            issues.append(
+                {
+                    "severity": "low",
+                    "message": f"发现 {len(hardcoded_spacing)} 个硬编码间距值，建议使用 Token 或 Tailwind 预设类",
+                    "fix": "定义间距 Token 并统一引用",
+                }
+            )
 
         # 4. Token coverage analysis
         total_token_count = len(css_tokens)
-        total_hardcoded = len(hardcoded_colors) + len(hardcoded_fonts) + len(hardcoded_spacing) + len(hardcoded_radius)
-        token_usage_count = len(re.findall(r"var\(--[a-zA-Z0-9_-]+\)", all_source)) if all_source else 0
+        total_hardcoded = (
+            len(hardcoded_colors)
+            + len(hardcoded_fonts)
+            + len(hardcoded_spacing)
+            + len(hardcoded_radius)
+        )
+        token_usage_count = (
+            len(re.findall(r"var\(--[a-zA-Z0-9_-]+\)", all_source)) if all_source else 0
+        )
         coverage_ratio = round(
-            token_usage_count / max(token_usage_count + total_hardcoded, 1), 2,
+            token_usage_count / max(token_usage_count + total_hardcoded, 1),
+            2,
         )
 
         # 5. Check token naming convention
@@ -2703,7 +3781,10 @@ class UIIntelligenceAdvisor:
             # Check for semantic naming
             if re.match(r"^(color|bg|text|border|font|spacing|radius|shadow)-", token_name):
                 continue  # Good semantic prefix
-            if re.match(r"^(primary|secondary|accent|muted|surface|foreground|background|card|destructive|ring|input|chart)-?", token_name):
+            if re.match(
+                r"^(primary|secondary|accent|muted|surface|foreground|background|card|destructive|ring|input|chart)-?",
+                token_name,
+            ):
                 continue  # Good semantic name
             if re.match(r"^(--)?[a-z]+-\d+$", token_name):
                 naming_issues.append(f"--{token_name} 使用了数字后缀命名，建议使用语义化名称")
@@ -2729,11 +3810,13 @@ class UIIntelligenceAdvisor:
                 missing_categories.append(desc)
 
         if missing_categories:
-            issues.append({
-                "severity": "medium",
-                "message": f"缺少以下类别的 Token 定义：{'、'.join(missing_categories)}",
-                "fix": "补充完整的设计 Token 体系，确保颜色、字体、间距、圆角、阴影全部覆盖",
-            })
+            issues.append(
+                {
+                    "severity": "medium",
+                    "message": f"缺少以下类别的 Token 定义：{'、'.join(missing_categories)}",
+                    "fix": "补充完整的设计 Token 体系，确保颜色、字体、间距、圆角、阴影全部覆盖",
+                }
+            )
 
         score = 100
         score -= min(len(hardcoded_colors) * 2, 20)
@@ -2744,7 +3827,11 @@ class UIIntelligenceAdvisor:
 
         return {
             "score": score,
-            "grade": "A" if score >= 90 else "B" if score >= 75 else "C" if score >= 60 else "D" if score >= 40 else "F",
+            "grade": (
+                "A"
+                if score >= 90
+                else "B" if score >= 75 else "C" if score >= 60 else "D" if score >= 40 else "F"
+            ),
             "token_inventory": {
                 "total": total_token_count,
                 "by_category": {
@@ -2780,21 +3867,49 @@ class UIIntelligenceAdvisor:
         value_lower = value.lower().strip()
 
         # Color detection
-        if any(kw in name_lower for kw in [
-            "color", "primary", "secondary", "accent", "background", "bg",
-            "foreground", "fg", "text", "muted", "border", "surface", "card",
-            "destructive", "ring", "input", "chart", "stroke", "fill",
-        ]):
+        if any(
+            kw in name_lower
+            for kw in [
+                "color",
+                "primary",
+                "secondary",
+                "accent",
+                "background",
+                "bg",
+                "foreground",
+                "fg",
+                "text",
+                "muted",
+                "border",
+                "surface",
+                "card",
+                "destructive",
+                "ring",
+                "input",
+                "chart",
+                "stroke",
+                "fill",
+            ]
+        ):
             return "color"
-        if value_lower.startswith("#") or value_lower.startswith("rgb") or value_lower.startswith("hsl"):
+        if (
+            value_lower.startswith("#")
+            or value_lower.startswith("rgb")
+            or value_lower.startswith("hsl")
+        ):
             return "color"
 
         # Typography detection
-        if any(kw in name_lower for kw in ["font", "text-size", "line-height", "letter-spacing", "heading", "body"]):
+        if any(
+            kw in name_lower
+            for kw in ["font", "text-size", "line-height", "letter-spacing", "heading", "body"]
+        ):
             return "typography"
 
         # Spacing detection
-        if any(kw in name_lower for kw in ["spacing", "gap", "padding", "margin", "space", "inset"]):
+        if any(
+            kw in name_lower for kw in ["spacing", "gap", "padding", "margin", "space", "inset"]
+        ):
             return "spacing"
 
         # Radius detection

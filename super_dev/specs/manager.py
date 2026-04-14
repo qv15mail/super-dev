@@ -68,13 +68,13 @@ class SpecManager:
         if not self.specs_dir.exists():
             return []
         return [
-            d.name for d in self.specs_dir.iterdir()
-            if d.is_dir() and not d.name.startswith(".")
+            d.name for d in self.specs_dir.iterdir() if d.is_dir() and not d.name.startswith(".")
         ]
 
     def delete_spec(self, spec_name: str):
         """删除规范"""
         import shutil
+
         spec_path = self.get_spec_path(spec_name)
         if spec_path.exists():
             shutil.rmtree(spec_path.parent)
@@ -236,13 +236,17 @@ class ChangeManager:
         # 保存元数据
         meta_path = change_path / "change.yaml"
         with open(meta_path, "w", encoding="utf-8") as f:
-            yaml.dump({
-                "id": change.id,
-                "title": change.title,
-                "status": change.status.value,
-                "created_at": change.created_at.isoformat(),
-                "updated_at": change.updated_at.isoformat()
-            }, f, allow_unicode=True)
+            yaml.dump(
+                {
+                    "id": change.id,
+                    "title": change.title,
+                    "status": change.status.value,
+                    "created_at": change.created_at.isoformat(),
+                    "updated_at": change.updated_at.isoformat(),
+                },
+                f,
+                allow_unicode=True,
+            )
 
     def list_changes(self, status: ChangeStatus | None = None) -> list[Change]:
         """列出所有变更"""
@@ -263,6 +267,7 @@ class ChangeManager:
         change_path = self.get_change_path(change_id)
         if change_path.exists():
             import shutil
+
             shutil.rmtree(change_path)
 
     def archive_change(self, change_id: str, spec_manager: SpecManager):
@@ -291,7 +296,8 @@ class ChangeManager:
             elif delta.delta_type == DeltaType.REMOVED:
                 # 移除指定需求
                 spec.requirements = [
-                    r for r in spec.requirements
+                    r
+                    for r in spec.requirements
                     if r.name not in {req.name for req in delta.requirements}
                 ]
 
@@ -304,6 +310,7 @@ class ChangeManager:
         archive_dir = self.changes_dir.parent / "archive" / change_id
         archive_dir.parent.mkdir(parents=True, exist_ok=True)
         import shutil
+
         shutil.move(str(self.get_change_path(change_id)), str(archive_dir))
 
         return change
@@ -330,7 +337,6 @@ class ChangeManager:
         proposal.motivation = proposal.motivation.strip()
         proposal.impact = proposal.impact.strip()
         return proposal
-
 
     def _normalize_datetime(self, value: datetime) -> datetime:
         if value.tzinfo is None:
@@ -469,7 +475,7 @@ class ChangeManager:
                         if line.startswith("### Requirement:"):
                             if current_req:
                                 requirements.append(current_req)
-                            req_name = line[len("### Requirement:"):].strip()
+                            req_name = line[len("### Requirement:") :].strip()
                             current_req = Requirement(name=req_name)
                             current_scenario = None
                             continue
@@ -492,32 +498,34 @@ class ChangeManager:
                             if current_scenario is None:
                                 current_scenario = Scenario()
                                 current_req.scenarios.append(current_scenario)
-                            current_scenario.given = line[len("- GIVEN"):].strip()
+                            current_scenario.given = line[len("- GIVEN") :].strip()
                             continue
 
                         if line.startswith("- WHEN"):
                             if current_scenario is None:
                                 current_scenario = Scenario()
                                 current_req.scenarios.append(current_scenario)
-                            current_scenario.when = line[len("- WHEN"):].strip()
+                            current_scenario.when = line[len("- WHEN") :].strip()
                             continue
 
                         if line.startswith("- THEN"):
                             if current_scenario is None:
                                 current_scenario = Scenario()
                                 current_req.scenarios.append(current_scenario)
-                            current_scenario.then = line[len("- THEN"):].strip()
+                            current_scenario.then = line[len("- THEN") :].strip()
                             continue
 
                     if current_req:
                         requirements.append(current_req)
 
-                    deltas.append(SpecDelta(
-                        spec_name=spec_dir.name,
-                        delta_type=delta_type,
-                        description="",
-                        requirements=requirements
-                    ))
+                    deltas.append(
+                        SpecDelta(
+                            spec_name=spec_dir.name,
+                            delta_type=delta_type,
+                            description="",
+                            requirements=requirements,
+                        )
+                    )
 
         return deltas
 
@@ -708,11 +716,13 @@ class ChangeManager:
             if change_id not in visited:
                 cycle = _has_cycle(change_id, [change_id])
                 if cycle:
-                    issues.append({
-                        "severity": "high",
-                        "message": f"循环依赖: {' -> '.join(cycle)}",
-                        "fix": "移除或重构循环引用中的某个依赖",
-                    })
+                    issues.append(
+                        {
+                            "severity": "high",
+                            "message": f"循环依赖: {' -> '.join(cycle)}",
+                            "fix": "移除或重构循环引用中的某个依赖",
+                        }
+                    )
 
         # Check for missing dependencies
         all_change_ids = {c.id for c in changes}
@@ -724,11 +734,13 @@ class ChangeManager:
         for change_id, deps in dependency_graph.items():
             for dep in deps:
                 if dep not in all_change_ids and dep not in all_task_ids:
-                    issues.append({
-                        "severity": "medium",
-                        "message": f"变更 '{change_id}' 依赖未知的 '{dep}'",
-                        "fix": f"确认 '{dep}' 是否存在，或移除该依赖声明",
-                    })
+                    issues.append(
+                        {
+                            "severity": "medium",
+                            "message": f"变更 '{change_id}' 依赖未知的 '{dep}'",
+                            "fix": f"确认 '{dep}' 是否存在，或移除该依赖声明",
+                        }
+                    )
 
         return {
             "dependency_graph": {k: v for k, v in dependency_graph.items() if v},
@@ -785,20 +797,24 @@ class ChangeManager:
 
             # Estimate complexity from task attributes
             complexity = self._estimate_task_complexity(task)
-            hours = self.COMPLEXITY_HOURS.get(category, self.COMPLEXITY_HOURS["integration"])[complexity]
+            hours = self.COMPLEXITY_HOURS.get(category, self.COMPLEXITY_HOURS["integration"])[
+                complexity
+            ]
 
             # Adjust for dependencies
             if task.dependencies:
                 hours *= 1.2  # 20% overhead for coordination
 
-            estimates.append({
-                "task_id": task.id,
-                "title": task.title,
-                "category": category,
-                "complexity": complexity,
-                "estimated_hours": round(hours, 1),
-                "status": task.status.value,
-            })
+            estimates.append(
+                {
+                    "task_id": task.id,
+                    "title": task.title,
+                    "category": category,
+                    "complexity": complexity,
+                    "estimated_hours": round(hours, 1),
+                    "status": task.status.value,
+                }
+            )
             total_hours += hours
 
         # Add buffer (15% for unknowns)
@@ -821,20 +837,49 @@ class ChangeManager:
             "buffer_hours": round(buffer_hours, 1),
             "total_hours": round(grand_total, 1),
             "estimated_days": round(grand_total / 8, 1),
-            "confidence": "low" if len(change.tasks) < 3 else "medium" if len(change.tasks) < 10 else "high",
+            "confidence": (
+                "low" if len(change.tasks) < 3 else "medium" if len(change.tasks) < 10 else "high"
+            ),
         }
 
     def _estimate_task_complexity(self, task: Task) -> str:
         """根据任务描述和引用推断复杂度"""
         desc = (task.description or "").lower() + " " + task.title.lower()
         high_keywords = [
-            "migration", "架构", "重构", "database", "security", "认证", "auth",
-            "payment", "支付", "integration", "集成", "performance", "性能",
-            "deployment", "部署", "infra", "基础设施",
+            "migration",
+            "架构",
+            "重构",
+            "database",
+            "security",
+            "认证",
+            "auth",
+            "payment",
+            "支付",
+            "integration",
+            "集成",
+            "performance",
+            "性能",
+            "deployment",
+            "部署",
+            "infra",
+            "基础设施",
         ]
         medium_keywords = [
-            "api", "接口", "component", "组件", "page", "页面", "form", "表单",
-            "crud", "list", "列表", "filter", "筛选", "search", "搜索",
+            "api",
+            "接口",
+            "component",
+            "组件",
+            "page",
+            "页面",
+            "form",
+            "表单",
+            "crud",
+            "list",
+            "列表",
+            "filter",
+            "筛选",
+            "search",
+            "搜索",
         ]
 
         if any(kw in desc for kw in high_keywords):
@@ -910,12 +955,14 @@ class ChangeManager:
             other_specs = {d.spec_name for d in other.spec_deltas}
             overlap = set(affected_specs) & other_specs
             if overlap:
-                potential_conflicts.append({
-                    "change_id": other.id,
-                    "title": other.title,
-                    "conflict_type": "spec_overlap",
-                    "details": f"共同修改的规范: {', '.join(overlap)}",
-                })
+                potential_conflicts.append(
+                    {
+                        "change_id": other.id,
+                        "title": other.title,
+                        "conflict_type": "spec_overlap",
+                        "details": f"共同修改的规范: {', '.join(overlap)}",
+                    }
+                )
 
             # Check file reference overlap
             other_files = set()
@@ -923,12 +970,14 @@ class ChangeManager:
                 other_files.update(task.spec_refs)
             file_overlap = set(affected_files) & other_files
             if file_overlap:
-                potential_conflicts.append({
-                    "change_id": other.id,
-                    "title": other.title,
-                    "conflict_type": "file_overlap",
-                    "details": f"共同引用的文件: {', '.join(list(file_overlap)[:5])}",
-                })
+                potential_conflicts.append(
+                    {
+                        "change_id": other.id,
+                        "title": other.title,
+                        "conflict_type": "file_overlap",
+                        "details": f"共同引用的文件: {', '.join(list(file_overlap)[:5])}",
+                    }
+                )
 
         # 4. Risk assessment
         risk_factors: list[str] = []

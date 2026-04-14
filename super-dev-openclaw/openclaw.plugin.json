@@ -2,7 +2,7 @@
   "id": "super-dev",
   "name": "Super Dev Pipeline",
   "description": "AI development orchestration - research-first, commercial-grade delivery pipeline with SEEAI competition mode",
-  "version": "2.3.7",
+  "version": "2.3.8",
   "skills": ["./skills/super-dev", "./skills/super-dev-seeai"],
   "configSchema": {
     "type": "object",

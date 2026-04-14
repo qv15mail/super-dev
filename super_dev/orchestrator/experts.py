@@ -21,18 +21,19 @@ from typing import Literal, cast
 
 class ExpertRole(Enum):
     """专家角色枚举"""
-    PRODUCT = "PRODUCT"             # 产品负责人
-    PM = "PM"                       # 产品经理
-    ARCHITECT = "ARCHITECT"         # 架构师
-    UI = "UI"                       # UI 设计师
-    UX = "UX"                       # UX 设计师
-    SECURITY = "SECURITY"           # 安全专家
-    CODE = "CODE"                   # 代码专家
-    DBA = "DBA"                     # 数据库专家
-    QA = "QA"                       # 质量保证专家
-    DEVOPS = "DEVOPS"               # DevOps 工程师
-    RCA = "RCA"                     # 根因分析专家
-    OVERSEER = "OVERSEER"           # 监督者（质量观测 Agent）
+
+    PRODUCT = "PRODUCT"  # 产品负责人
+    PM = "PM"  # 产品经理
+    ARCHITECT = "ARCHITECT"  # 架构师
+    UI = "UI"  # UI 设计师
+    UX = "UX"  # UX 设计师
+    SECURITY = "SECURITY"  # 安全专家
+    CODE = "CODE"  # 代码专家
+    DBA = "DBA"  # 数据库专家
+    QA = "QA"  # 质量保证专家
+    DEVOPS = "DEVOPS"  # DevOps 工程师
+    RCA = "RCA"  # 根因分析专家
+    OVERSEER = "OVERSEER"  # 监督者（质量观测 Agent）
 
 
 EXPERT_DESCRIPTIONS: dict[ExpertRole, str] = {
@@ -54,6 +55,7 @@ EXPERT_DESCRIPTIONS: dict[ExpertRole, str] = {
 @dataclass
 class ExpertProfile:
     """专家完整画像"""
+
     role: ExpertRole
     title: str
     goal: str
@@ -459,16 +461,18 @@ def get_expert_prompt_section(role: ExpertRole) -> str:
 @dataclass
 class ExpertOutput:
     """专家输出"""
+
     role: ExpertRole
-    document_type: str          # prd | architecture | uiux | redteam | quality-gate | ...
+    document_type: str  # prd | architecture | uiux | redteam | quality-gate | ...
     content: str
-    quality_score: int = 85      # 0-100
+    quality_score: int = 85  # 0-100
     metadata: dict = field(default_factory=dict)
 
 
 @dataclass
 class ExpertTeamResult:
     """专家团队协作结果"""
+
     outputs: list[ExpertOutput] = field(default_factory=list)
     total_score: float = 0.0
     summary: str = ""
@@ -544,13 +548,15 @@ class ExpertDispatcher:
         # 专家自检：用 quality_criteria 验证生成内容
         if pm_profile:
             prd_score = self._expert_quality_check(prd_content, pm_profile, prd_score)
-        result.outputs.append(ExpertOutput(
-            role=ExpertRole.PM,
-            document_type="prd",
-            content=prd_content,
-            quality_score=prd_score,
-            metadata={"name": name, "platform": platform, "expert_active": True},
-        ))
+        result.outputs.append(
+            ExpertOutput(
+                role=ExpertRole.PM,
+                document_type="prd",
+                content=prd_content,
+                quality_score=prd_score,
+                metadata={"name": name, "platform": platform, "expert_active": True},
+            )
+        )
 
         # 2. ARCHITECT 专家：生成架构文档（带专家视角）
         if arch_profile:
@@ -564,13 +570,15 @@ class ExpertDispatcher:
         arch_score = self._score_document(arch_content, ["技术栈", "数据库", "API", "安全"])
         if arch_profile:
             arch_score = self._expert_quality_check(arch_content, arch_profile, arch_score)
-        result.outputs.append(ExpertOutput(
-            role=ExpertRole.ARCHITECT,
-            document_type="architecture",
-            content=arch_content,
-            quality_score=arch_score,
-            metadata={"frontend": frontend, "backend": backend, "expert_active": True},
-        ))
+        result.outputs.append(
+            ExpertOutput(
+                role=ExpertRole.ARCHITECT,
+                document_type="architecture",
+                content=arch_content,
+                quality_score=arch_score,
+                metadata={"frontend": frontend, "backend": backend, "expert_active": True},
+            )
+        )
 
         # 3. UI/UX 专家：生成 UI/UX 文档（带专家视角）
         if ui_profile:
@@ -584,13 +592,15 @@ class ExpertDispatcher:
         uiux_score = self._score_document(uiux_content, ["设计系统", "色彩", "组件"])
         if ui_profile:
             uiux_score = self._expert_quality_check(uiux_content, ui_profile, uiux_score)
-        result.outputs.append(ExpertOutput(
-            role=ExpertRole.UI,
-            document_type="uiux",
-            content=uiux_content,
-            quality_score=uiux_score,
-            metadata={"platform": platform, "expert_active": True},
-        ))
+        result.outputs.append(
+            ExpertOutput(
+                role=ExpertRole.UI,
+                document_type="uiux",
+                content=uiux_content,
+                quality_score=uiux_score,
+                metadata={"platform": platform, "expert_active": True},
+            )
+        )
 
         # 4. 计算团队总分（含专家自检结果）
         scores = [o.quality_score for o in result.outputs]
@@ -645,7 +655,9 @@ class ExpertDispatcher:
             uiux_future = loop.run_in_executor(executor, gen.generate_uiux)
 
             prd_content, arch_content, uiux_content = await asyncio.gather(
-                prd_future, arch_future, uiux_future,
+                prd_future,
+                arch_future,
+                uiux_future,
             )
             executor.shutdown(wait=False)
             logger.info("并行文档生成完成 (3 docs)")
@@ -664,29 +676,39 @@ class ExpertDispatcher:
 
         result = ExpertTeamResult()
 
-        result.outputs.append(ExpertOutput(
-            role=ExpertRole.PM,
-            document_type="prd",
-            content=prd_content,
-            quality_score=self._score_document(prd_content, ["产品愿景", "功能需求", "验收标准"]),
-            metadata={"name": name, "platform": platform},
-        ))
+        result.outputs.append(
+            ExpertOutput(
+                role=ExpertRole.PM,
+                document_type="prd",
+                content=prd_content,
+                quality_score=self._score_document(
+                    prd_content, ["产品愿景", "功能需求", "验收标准"]
+                ),
+                metadata={"name": name, "platform": platform},
+            )
+        )
 
-        result.outputs.append(ExpertOutput(
-            role=ExpertRole.ARCHITECT,
-            document_type="architecture",
-            content=arch_content,
-            quality_score=self._score_document(arch_content, ["技术栈", "数据库", "API", "安全"]),
-            metadata={"frontend": frontend, "backend": backend},
-        ))
+        result.outputs.append(
+            ExpertOutput(
+                role=ExpertRole.ARCHITECT,
+                document_type="architecture",
+                content=arch_content,
+                quality_score=self._score_document(
+                    arch_content, ["技术栈", "数据库", "API", "安全"]
+                ),
+                metadata={"frontend": frontend, "backend": backend},
+            )
+        )
 
-        result.outputs.append(ExpertOutput(
-            role=ExpertRole.UI,
-            document_type="uiux",
-            content=uiux_content,
-            quality_score=self._score_document(uiux_content, ["设计系统", "色彩", "组件"]),
-            metadata={"platform": platform},
-        ))
+        result.outputs.append(
+            ExpertOutput(
+                role=ExpertRole.UI,
+                document_type="uiux",
+                content=uiux_content,
+                quality_score=self._score_document(uiux_content, ["设计系统", "色彩", "组件"]),
+                metadata={"platform": platform},
+            )
+        )
 
         scores = [o.quality_score for o in result.outputs]
         result.total_score = sum(scores) / len(scores) if scores else 0.0
@@ -724,9 +746,15 @@ class ExpertDispatcher:
                 "blocking_reasons": report.blocking_reasons,
                 "critical_count": report.critical_count,
                 "high_count": report.high_count,
-                "security_issues": [self._serialize_security_issue(i) for i in report.security_issues],
-                "performance_issues": [self._serialize_performance_issue(i) for i in report.performance_issues],
-                "architecture_issues": [self._serialize_architecture_issue(i) for i in report.architecture_issues],
+                "security_issues": [
+                    self._serialize_security_issue(i) for i in report.security_issues
+                ],
+                "performance_issues": [
+                    self._serialize_performance_issue(i) for i in report.performance_issues
+                ],
+                "architecture_issues": [
+                    self._serialize_architecture_issue(i) for i in report.architecture_issues
+                ],
             },
         )
 
@@ -904,9 +932,7 @@ class ExpertDispatcher:
         length_bonus = min(10, len(content) // 2000)
         return min(100, base + length_bonus)
 
-    def _expert_quality_check(
-        self, content: str, profile: ExpertProfile, base_score: int
-    ) -> int:
+    def _expert_quality_check(self, content: str, profile: ExpertProfile, base_score: int) -> int:
         """用专家的 quality_criteria 验证文档内容，调整评分。"""
         if not content or not profile.quality_criteria:
             return base_score

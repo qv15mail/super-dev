@@ -20,7 +20,7 @@ class CICDGenerator:
         project_dir: Path,
         name: str,
         tech_stack: dict,
-        platform: Literal["github", "gitlab", "jenkins", "azure", "bitbucket", "all"] = "github"
+        platform: Literal["github", "gitlab", "jenkins", "azure", "bitbucket", "all"] = "github",
     ):
         self.project_dir = Path(project_dir).resolve()
         self.display_name = name
@@ -1139,7 +1139,6 @@ stages:
                     containers: |
                       $(imageName):$(Build.BuildId)
 """
-
 
     def _generate_bitbucket(self) -> str:
         """生成 Bitbucket Pipelines 配置"""

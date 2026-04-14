@@ -20,7 +20,15 @@ GAP_KEYWORDS = ("未实现", "待实现", "未完成", "missing", "not implement
 PRIORITY_PATTERN = re.compile(r"\b(P[0-3])\b", re.IGNORECASE)
 EXPLICIT_GAP_SOURCE_KEYWORDS = ("gap", "research", "execution-plan", "coverage", "compare")
 EXPLICIT_GAP_SECTION_KEYWORDS = ("missing", "gap", "未实现", "待实现", "差距", "缺口", "coverage")
-FEATURE_GROUP_HEADING_KEYWORDS = ("核心功能", "扩展功能", "高级功能", "功能模块", "核心模块", "mvp", "phase")
+FEATURE_GROUP_HEADING_KEYWORDS = (
+    "核心功能",
+    "扩展功能",
+    "高级功能",
+    "功能模块",
+    "核心模块",
+    "mvp",
+    "phase",
+)
 NON_FEATURE_HEADING_KEYWORDS = (
     "用户故事",
     "优先级",
@@ -95,7 +103,9 @@ class FeatureCoverageReport:
         }
 
     def to_markdown(self) -> str:
-        coverage_text = f"{self.coverage_rate:.1f}%" if self.coverage_rate is not None else "unknown"
+        coverage_text = (
+            f"{self.coverage_rate:.1f}%" if self.coverage_rate is not None else "unknown"
+        )
         lines = [
             "# Feature Checklist",
             "",
@@ -172,7 +182,9 @@ class FeatureChecklistBuilder:
         )
 
         total_features = len(items)
-        coverage_rate = None if total_features == 0 else round((covered_count / total_features) * 100, 1)
+        coverage_rate = (
+            None if total_features == 0 else round((covered_count / total_features) * 100, 1)
+        )
         if explicit_gaps:
             status = "partial"
         elif total_features == 0:
@@ -182,7 +194,9 @@ class FeatureChecklistBuilder:
         else:
             status = "partial"
 
-        summary = self._summary(status, coverage_rate, explicit_gaps, total_features, covered_count, unknown_count)
+        summary = self._summary(
+            status, coverage_rate, explicit_gaps, total_features, covered_count, unknown_count
+        )
         return FeatureCoverageReport(
             project_name=self.project_name,
             project_path=str(self.project_dir),
@@ -204,7 +218,9 @@ class FeatureChecklistBuilder:
         md_path = self.output_dir / f"{self.project_name}-feature-checklist.md"
         json_path = self.output_dir / f"{self.project_name}-feature-checklist.json"
         md_path.write_text(report.to_markdown(), encoding="utf-8")
-        json_path.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        json_path.write_text(
+            json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         return {"markdown": md_path, "json": json_path}
 
     def _latest(self, pattern: str, base_dir: Path | None = None) -> Path | None:
@@ -250,7 +266,9 @@ class FeatureChecklistBuilder:
                     if (
                         normalized_title
                         and normalized_title not in seen
-                        and not any(keyword in title_lower for keyword in FEATURE_GROUP_HEADING_KEYWORDS)
+                        and not any(
+                            keyword in title_lower for keyword in FEATURE_GROUP_HEADING_KEYWORDS
+                        )
                     ):
                         seen.add(normalized_title)
                         heading_items.append(
@@ -310,11 +328,14 @@ class FeatureChecklistBuilder:
                 heading = re.match(r"^(#{2,4})\s+(.+)$", line)
                 if heading:
                     in_gap_section = any(
-                        keyword in heading.group(2).lower() for keyword in EXPLICIT_GAP_SECTION_KEYWORDS
+                        keyword in heading.group(2).lower()
+                        for keyword in EXPLICIT_GAP_SECTION_KEYWORDS
                     )
                     continue
                 priority_match = PRIORITY_PATTERN.search(line)
-                has_gap_keyword = any(keyword in line.lower() for keyword in GAP_KEYWORDS) or bool(priority_match)
+                has_gap_keyword = any(keyword in line.lower() for keyword in GAP_KEYWORDS) or bool(
+                    priority_match
+                )
                 if not in_gap_section and not priority_match:
                     continue
                 if not has_gap_keyword:

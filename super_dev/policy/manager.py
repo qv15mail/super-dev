@@ -117,7 +117,9 @@ class PipelinePolicyManager:
             violations.append("policy.require_quality_gate=true，不允许使用 --skip-quality-gate")
 
         if policy.require_rehearsal_verify and bool(getattr(args, "skip_rehearsal_verify", False)):
-            violations.append("policy.require_rehearsal_verify=true，不允许使用 --skip-rehearsal-verify")
+            violations.append(
+                "policy.require_rehearsal_verify=true，不允许使用 --skip-rehearsal-verify"
+            )
 
         requested_threshold = getattr(args, "quality_threshold", None)
         effective_threshold = (
@@ -139,11 +141,15 @@ class PipelinePolicyManager:
         if policy.require_host_profile:
             targets = [item for item in config.host_profile_targets if item]
             if not targets:
-                violations.append("policy.require_host_profile=true，但 super-dev.yaml 未配置 host_profile_targets")
+                violations.append(
+                    "policy.require_host_profile=true，但 super-dev.yaml 未配置 host_profile_targets"
+                )
             elif policy.required_hosts:
                 missing = [item for item in policy.required_hosts if item not in targets]
                 if missing:
-                    violations.append(f"host_profile_targets 缺少策略要求宿主: {', '.join(missing)}")
+                    violations.append(
+                        f"host_profile_targets 缺少策略要求宿主: {', '.join(missing)}"
+                    )
 
         if policy.required_hosts and policy.enforce_required_hosts_ready:
             compatibility_hosts = self._load_latest_host_compatibility_hosts()
@@ -179,7 +185,11 @@ class PipelinePolicyManager:
             allowed_cicd = list(CICD_PLATFORM_IDS)
 
         require_host_profile = bool(raw.get("require_host_profile", False))
-        required_hosts = [item for item in self._normalize_list(raw.get("required_hosts")) if item in HOST_TOOL_IDS]
+        required_hosts = [
+            item
+            for item in self._normalize_list(raw.get("required_hosts"))
+            if item in HOST_TOOL_IDS
+        ]
         enforce_required_hosts_ready = bool(raw.get("enforce_required_hosts_ready", False))
         min_required_host_score = self._coerce_int(raw.get("min_required_host_score"), default=80)
         min_required_host_score = max(0, min(100, min_required_host_score))

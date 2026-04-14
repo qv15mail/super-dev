@@ -235,7 +235,11 @@ class CliGovernanceMixin:
                     message = str(first.get("message", "")).strip()
                     if message:
                         return message
-                return str(item.get("current_step_label") or item.get("workflow_status") or "workflow continuity 正常")
+                return str(
+                    item.get("current_step_label")
+                    or item.get("workflow_status")
+                    or "workflow continuity 正常"
+                )
             if kind == "framework":
                 return f"{item.get('framework') or 'framework'} harness 已通过"
             if kind == "hooks":
@@ -248,7 +252,11 @@ class CliGovernanceMixin:
 
     def _render_harness_item(self, item: dict[str, Any]) -> None:
         label = str(item.get("label") or str(item.get("kind", "")) or "Harness")
-        status = "ready" if item.get("passed") else ("disabled" if not item.get("enabled") else "pending")
+        status = (
+            "ready"
+            if item.get("passed")
+            else ("disabled" if not item.get("enabled") else "pending")
+        )
         self.console.print(f"[cyan]{label}[/cyan] [{status}]")
         self.console.print(f"  概览: {self._summarize_harness_item(item)}")
         self.console.print(f"  JSON: {item.get('json_file', '-')}")
@@ -304,7 +312,9 @@ class CliGovernanceMixin:
                 item = harnesses.get(key, {})
                 self.console.print(f"{key}: {self._summarize_harness_item(item)}")
         self.console.print(f"[dim]Operational Harness JSON:[/dim] {payload.get('json_file', '-')}")
-        self.console.print(f"[dim]Operational Harness Markdown:[/dim] {payload.get('report_file', '-')}")
+        self.console.print(
+            f"[dim]Operational Harness Markdown:[/dim] {payload.get('report_file', '-')}"
+        )
         focus = payload.get("operational_focus", {})
         if isinstance(focus, dict) and str(focus.get("summary", "")).strip():
             self.console.print(f"[dim]当前治理焦点:[/dim] {focus.get('summary')}")
@@ -752,8 +762,7 @@ class CliGovernanceMixin:
         script_path = project_dir / "scripts" / "validate-superdev.sh"
         if not script_path.exists():
             self.console.print(
-                "[yellow]未找到验证脚本。"
-                "请先运行 'super-dev enforce install'。[/yellow]"
+                "[yellow]未找到验证脚本。" "请先运行 'super-dev enforce install'。[/yellow]"
             )
             return 1
 
@@ -1013,11 +1022,11 @@ class CliGovernanceMixin:
     # ------------------------------------------------------------------
 
     def _cmd_migrate(self, _args: Any) -> int:
-        """执行项目迁移 (2.2.0+ -> 2.3.7)。"""
+        """执行项目迁移 (2.2.0+ -> 2.3.8)。"""
         from .migrate import migrate_project
 
         project_dir = Path.cwd()
-        self.console.print("[cyan]正在执行 2.2.0+ → 2.3.7 迁移...[/cyan]\n")
+        self.console.print("[cyan]正在执行 2.2.0+ → 2.3.8 迁移...[/cyan]\n")
 
         changes = migrate_project(project_dir)
 
@@ -1103,14 +1112,16 @@ class CliGovernanceMixin:
         if pipeline_state_file.exists():
             try:
                 data = json.loads(pipeline_state_file.read_text(encoding="utf-8"))
-                checkpoints.append({
-                    "phase": data.get("current_phase", "unknown"),
-                    "timestamp": data.get("last_updated", ""),
-                    "_source": "pipeline-state",
-                    "_file": str(pipeline_state_file),
-                    "phases_completed": data.get("phases_completed", []),
-                    "phases_remaining": data.get("phases_remaining", []),
-                })
+                checkpoints.append(
+                    {
+                        "phase": data.get("current_phase", "unknown"),
+                        "timestamp": data.get("last_updated", ""),
+                        "_source": "pipeline-state",
+                        "_file": str(pipeline_state_file),
+                        "phases_completed": data.get("phases_completed", []),
+                        "phases_remaining": data.get("phases_remaining", []),
+                    }
+                )
             except Exception:
                 pass
 
@@ -1178,18 +1189,26 @@ class CliGovernanceMixin:
     ) -> int:
         """回退到上一个检查点。"""
         # 收集历史检查点（按时间排序）
-        history_files = sorted(
-            history_dir.glob("*.json"),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        ) if history_dir.exists() else []
+        history_files = (
+            sorted(
+                history_dir.glob("*.json"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+            if history_dir.exists()
+            else []
+        )
 
         # 也收集 checkpoint 文件
-        checkpoint_files = sorted(
-            checkpoint_dir.glob("*.json"),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        ) if checkpoint_dir.exists() else []
+        checkpoint_files = (
+            sorted(
+                checkpoint_dir.glob("*.json"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+            if checkpoint_dir.exists()
+            else []
+        )
 
         # 合并所有来源，排除 pipeline-state
         all_candidates: list[tuple[float, Path]] = []
@@ -1239,7 +1258,10 @@ class CliGovernanceMixin:
                 for hf in history_dir.glob("*.json"):
                     try:
                         data = json.loads(hf.read_text(encoding="utf-8"))
-                        if data.get("phase") == phase_name or data.get("current_phase") == phase_name:
+                        if (
+                            data.get("phase") == phase_name
+                            or data.get("current_phase") == phase_name
+                        ):
                             candidates.append(hf)
                     except Exception:
                         pass
@@ -1420,14 +1442,11 @@ class CliGovernanceMixin:
         # 如果指定了 run-id，筛选数据
         if run_id:
             phases_data = [
-                p for p in phases_data
-                if str(p.get("run_id", "")) == run_id
-                or str(p.get("project", "")) == run_id
+                p
+                for p in phases_data
+                if str(p.get("run_id", "")) == run_id or str(p.get("project", "")) == run_id
             ]
-            events = [
-                e for e in events
-                if str(e.get("run_id", "")) == run_id
-            ]
+            events = [e for e in events if str(e.get("run_id", "")) == run_id]
 
         if not phases_data and not events and not history_snapshots:
             self.console.print("[yellow]未找到任何流水线执行记录。[/yellow]")
@@ -1466,7 +1485,9 @@ class CliGovernanceMixin:
                 current = pipeline_state.get("current_phase", "-")
                 completed_list = pipeline_state.get("phases_completed", [])
                 overview_text += f"\n  当前阶段: [cyan]{current}[/cyan]"
-                overview_text += f"\n  已完成阶段: {', '.join(completed_list) if completed_list else '-'}"
+                overview_text += (
+                    f"\n  已完成阶段: {', '.join(completed_list) if completed_list else '-'}"
+                )
 
             self.console.print(Panel(overview_text, title="Pipeline Replay", border_style="cyan"))
             self.console.print("")
@@ -1587,8 +1608,10 @@ class CliGovernanceMixin:
             # 历史快照概要
             if history_snapshots:
                 self.console.print("")
-                self.console.print(f"[dim]历史快照: {len(history_snapshots)} 个 "
-                                   f"(位于 .super-dev/workflow-history/)[/dim]")
+                self.console.print(
+                    f"[dim]历史快照: {len(history_snapshots)} 个 "
+                    f"(位于 .super-dev/workflow-history/)[/dim]"
+                )
 
         else:
             # 非 Rich 模式

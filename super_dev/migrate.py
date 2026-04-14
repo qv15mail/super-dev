@@ -64,9 +64,7 @@ def _cleanup_claude_code_legacy(project_dir: Path, changes: list[str]) -> None:
                 pass
 
 
-def _cleanup_legacy_skill_for_target(
-    project_dir: Path, target: str, changes: list[str]
-) -> None:
+def _cleanup_legacy_skill_for_target(project_dir: Path, target: str, changes: list[str]) -> None:
     """清理指定宿主的旧版 super-dev-core 残留。"""
     from .skills.manager import SkillManager
 

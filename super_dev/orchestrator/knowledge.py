@@ -150,10 +150,14 @@ class KnowledgeAugmenter:
             if item.strip()
         ]
         selected_domains = allowed_web_domains if allowed_web_domains is not None else env_domains
-        self.allowed_web_domains = [item.strip().lower() for item in selected_domains if item.strip()]
+        self.allowed_web_domains = [
+            item.strip().lower() for item in selected_domains if item.strip()
+        ]
         env_cache_ttl = os.getenv("SUPER_DEV_KNOWLEDGE_CACHE_TTL_SECONDS", "").strip()
         env_cache_ttl_value = int(env_cache_ttl) if env_cache_ttl.isdigit() else 1800
-        self.cache_ttl_seconds = cache_ttl_seconds if cache_ttl_seconds is not None else env_cache_ttl_value
+        self.cache_ttl_seconds = (
+            cache_ttl_seconds if cache_ttl_seconds is not None else env_cache_ttl_value
+        )
         self._last_web_stats: dict[str, Any] = {
             "provider": "none",
             "raw_count": 0,
@@ -295,7 +299,12 @@ class KnowledgeAugmenter:
         if isinstance(stage_guidance, dict) and stage_guidance:
             for stage in self._STAGE_ORDER:
                 entries = stage_guidance.get(stage, [])
-                lines.extend(self._render_summary_section(f"### {self._stage_label(stage)}", entries if isinstance(entries, list) else []))
+                lines.extend(
+                    self._render_summary_section(
+                        f"### {self._stage_label(stage)}",
+                        entries if isinstance(entries, list) else [],
+                    )
+                )
         else:
             lines.append("- 当前未生成阶段化知识应用计划。")
             lines.append("")
@@ -339,12 +348,36 @@ class KnowledgeAugmenter:
 
         research_summary = bundle.get("research_summary", {}) or {}
         lines.extend(["## 同类产品研究与机会洞察", ""])
-        lines.extend(self._render_summary_section("### 1. 对标产品", research_summary.get("benchmark_products", [])))
-        lines.extend(self._render_summary_section("### 2. 共性功能模式", research_summary.get("feature_patterns", [])))
-        lines.extend(self._render_summary_section("### 3. 交互与体验模式", research_summary.get("interaction_patterns", [])))
-        lines.extend(self._render_summary_section("### 4. 信任与商业化信号", research_summary.get("trust_signals", [])))
-        lines.extend(self._render_summary_section("### 5. 差异化机会", research_summary.get("differentiation_opportunities", [])))
-        lines.extend(self._render_summary_section("### 6. 交付建议", research_summary.get("delivery_recommendations", [])))
+        lines.extend(
+            self._render_summary_section(
+                "### 1. 对标产品", research_summary.get("benchmark_products", [])
+            )
+        )
+        lines.extend(
+            self._render_summary_section(
+                "### 2. 共性功能模式", research_summary.get("feature_patterns", [])
+            )
+        )
+        lines.extend(
+            self._render_summary_section(
+                "### 3. 交互与体验模式", research_summary.get("interaction_patterns", [])
+            )
+        )
+        lines.extend(
+            self._render_summary_section(
+                "### 4. 信任与商业化信号", research_summary.get("trust_signals", [])
+            )
+        )
+        lines.extend(
+            self._render_summary_section(
+                "### 5. 差异化机会", research_summary.get("differentiation_opportunities", [])
+            )
+        )
+        lines.extend(
+            self._render_summary_section(
+                "### 6. 交付建议", research_summary.get("delivery_recommendations", [])
+            )
+        )
         evidence_distribution = research_summary.get("evidence_distribution", {}) or {}
         lines.extend(
             [
@@ -429,7 +462,9 @@ class KnowledgeAugmenter:
                 domain=domain or "",
             )
         cached_bundle["cache_ttl_seconds"] = self.cache_ttl_seconds
-        cache_file.write_text(json.dumps(cached_bundle, ensure_ascii=False, indent=2), encoding="utf-8")
+        cache_file.write_text(
+            json.dumps(cached_bundle, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         return cache_file
 
     def load_cached_bundle(
@@ -532,7 +567,9 @@ class KnowledgeAugmenter:
             files.extend(self.builtin_data_dir.rglob("*.csv"))
         return files
 
-    def _collect_local_items(self, keywords: list[str], max_results: int, current_stage: str = "research") -> list[KnowledgeItem]:
+    def _collect_local_items(
+        self, keywords: list[str], max_results: int, current_stage: str = "research"
+    ) -> list[KnowledgeItem]:
         if not keywords:
             return []
 
@@ -626,7 +663,7 @@ class KnowledgeAugmenter:
             lowered = line.lower()
             if any(keyword in lowered for keyword in keywords):
                 return line[:220]
-        return (lines[0][:220] if lines else "")
+        return lines[0][:220] if lines else ""
 
     def _format_source_path(self, file_path: Path) -> str:
         try:
@@ -690,7 +727,10 @@ class KnowledgeAugmenter:
             netloc = parsed.netloc.lower()
             if netloc.startswith("www."):
                 netloc = netloc[4:]
-            if any(netloc == domain or netloc.endswith(f".{domain}") for domain in self.allowed_web_domains):
+            if any(
+                netloc == domain or netloc.endswith(f".{domain}")
+                for domain in self.allowed_web_domains
+            ):
                 filtered.append(item)
         return filtered
 
@@ -712,11 +752,28 @@ class KnowledgeAugmenter:
         text = f"{title} {snippet} {domain}".lower()
         if any(token in domain for token in ("docs.", "developer.", "api.", "platform.")):
             return "official"
-        if any(token in text for token in ("official", "documentation", "developer", "changelog", "release notes", "pricing")):
+        if any(
+            token in text
+            for token in (
+                "official",
+                "documentation",
+                "developer",
+                "changelog",
+                "release notes",
+                "pricing",
+            )
+        ):
             return "official"
         if any(
             token in domain
-            for token in ("github.com", "gitlab.com", "stackshare.io", "g2.com", "capterra.com", "producthunt.com")
+            for token in (
+                "github.com",
+                "gitlab.com",
+                "stackshare.io",
+                "g2.com",
+                "capterra.com",
+                "producthunt.com",
+            )
         ):
             return "industry"
         return "community"
@@ -790,7 +847,8 @@ class KnowledgeAugmenter:
             results.append(
                 KnowledgeItem(
                     source="web",
-                    title=str(data.get("Heading", "DuckDuckGo Result")).strip() or "DuckDuckGo Result",
+                    title=str(data.get("Heading", "DuckDuckGo Result")).strip()
+                    or "DuckDuckGo Result",
                     snippet=abstract[:220],
                     link=abstract_url,
                     score=float(max_results),
@@ -868,16 +926,15 @@ class KnowledgeAugmenter:
         source_domains: dict[str, int] = {}
         for item in web_items[:5]:
             benchmark_products.append(self._format_research_item(item, include_link=True))
-            level = item.evidence_level if item.evidence_level in evidence_distribution else "community"
+            level = (
+                item.evidence_level if item.evidence_level in evidence_distribution else "community"
+            )
             evidence_distribution[level] += 1
             if item.source_domain:
                 source_domains[item.source_domain] = source_domains.get(item.source_domain, 0) + 1
 
         feature_patterns = self._unique_preserve_order(
-            [
-                f"围绕“{keyword}”建立清晰功能分区、任务入口与状态反馈。"
-                for keyword in keywords[:4]
-            ]
+            [f"围绕“{keyword}”建立清晰功能分区、任务入口与状态反馈。" for keyword in keywords[:4]]
             + [self._format_research_item(item) for item in web_items[:3]]
             + [self._format_research_item(item) for item in local_items[:2]]
         )
@@ -917,7 +974,9 @@ class KnowledgeAugmenter:
         )
 
         if not benchmark_products:
-            benchmark_products.append("未获取到可靠联网结果时，应由宿主继续使用原生联网能力补充同类产品研究。")
+            benchmark_products.append(
+                "未获取到可靠联网结果时，应由宿主继续使用原生联网能力补充同类产品研究。"
+            )
 
         implementation_options = [
             {
@@ -943,8 +1002,18 @@ class KnowledgeAugmenter:
         competitor_matrix = []
         for item in web_items[:5]:
             content = f"{item.title} {item.snippet}".lower()
-            capability = "工作台/协作" if any(token in content for token in ("dashboard", "workspace", "platform", "workflow")) else "垂直功能"
-            pricing_signal = "已提及" if any(token in content for token in ("pricing", "price", "plan", "套餐")) else "未提及"
+            capability = (
+                "工作台/协作"
+                if any(
+                    token in content for token in ("dashboard", "workspace", "platform", "workflow")
+                )
+                else "垂直功能"
+            )
+            pricing_signal = (
+                "已提及"
+                if any(token in content for token in ("pricing", "price", "plan", "套餐"))
+                else "未提及"
+            )
             trust_signal = "较强" if item.evidence_level in {"official", "industry"} else "基础"
             competitor_matrix.append(
                 {
@@ -1027,9 +1096,7 @@ class KnowledgeAugmenter:
             return "operating-guidance"
         return "knowledge"
 
-    def _infer_framework_guidance(
-        self, *, requirement: str, keywords: list[str]
-    ) -> dict[str, Any]:
+    def _infer_framework_guidance(self, *, requirement: str, keywords: list[str]) -> dict[str, Any]:
         normalized = f"{requirement} {' '.join(keywords)}".lower()
         mapping = [
             (
@@ -1150,9 +1217,7 @@ class KnowledgeAugmenter:
                     hard_constraints.append(hard_rule)
 
         normalized_stage_guidance = {
-            stage: entries[:5]
-            for stage, entries in stage_guidance.items()
-            if entries
+            stage: entries[:5] for stage, entries in stage_guidance.items() if entries
         }
         framework_guidance = self._infer_framework_guidance(
             requirement=requirement,
@@ -1182,7 +1247,9 @@ class KnowledgeAugmenter:
         normalized_requirement = requirement.strip().lower()
         normalized_domain = domain.strip().lower()
         allowed_domains = ",".join(sorted(self.allowed_web_domains))
-        payload = f"{normalized_requirement}|{normalized_domain}|{self.web_enabled}|{allowed_domains}"
+        payload = (
+            f"{normalized_requirement}|{normalized_domain}|{self.web_enabled}|{allowed_domains}"
+        )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     def _parse_datetime(self, value: str) -> datetime | None:

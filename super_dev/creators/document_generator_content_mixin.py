@@ -11,42 +11,42 @@ class DocumentGeneratorContentMixin:
     def _get_product_type_desc(self, product_type: str) -> str:
         """获取产品类型描述"""
         descs = {
-            'saas': 'SaaS 软件服务，需要专业可信的设计',
-            'ecommerce': '电商平台，注重转化和购买体验',
-            'landing': '营销落地页，强调 CTA 和转化',
-            'dashboard': '管理后台，注重数据展示和操作效率',
-            'content': '内容平台，注重阅读体验',
-            'general': '通用产品'
+            "saas": "SaaS 软件服务，需要专业可信的设计",
+            "ecommerce": "电商平台，注重转化和购买体验",
+            "landing": "营销落地页，强调 CTA 和转化",
+            "dashboard": "管理后台，注重数据展示和操作效率",
+            "content": "内容平台，注重阅读体验",
+            "general": "通用产品",
         }
-        return descs.get(product_type, '常规产品')
+        return descs.get(product_type, "常规产品")
 
     def _get_industry_desc(self, industry: str) -> str:
         """获取行业描述"""
         descs = {
-            'healthcare': '医疗健康行业，需要传递安全、专业感',
-            'fintech': '金融科技，需要信任、安全的设计语言',
-            'education': '教育行业，需要亲和力、专业性',
-            'legal': '法律服务行业，需要权威、可信和清晰表达',
-            'government': '政务/公共服务，需要高可读性与可访问性',
-            'beauty': '美业/健康服务，需要品牌感、精致感与转化路径',
-            'general': '通用行业'
+            "healthcare": "医疗健康行业，需要传递安全、专业感",
+            "fintech": "金融科技，需要信任、安全的设计语言",
+            "education": "教育行业，需要亲和力、专业性",
+            "legal": "法律服务行业，需要权威、可信和清晰表达",
+            "government": "政务/公共服务，需要高可读性与可访问性",
+            "beauty": "美业/健康服务，需要品牌感、精致感与转化路径",
+            "general": "通用行业",
         }
-        return descs.get(industry, '常规行业')
+        return descs.get(industry, "常规行业")
 
     def _get_style_desc(self, style: str) -> str:
         """获取风格描述"""
         descs = {
-            'minimal': '极简风格，去除冗余，突出核心',
-            'professional': '专业风格，商务、正式',
-            'playful': '活泼风格，有趣、生动',
-            'luxury': '奢华风格，高端、精致',
-            'modern': '现代风格，时尚、前沿'
+            "minimal": "极简风格，去除冗余，突出核心",
+            "professional": "专业风格，商务、正式",
+            "playful": "活泼风格，有趣、生动",
+            "luxury": "奢华风格，高端、精致",
+            "modern": "现代风格，时尚、前沿",
         }
-        return descs.get(style, '现代风格')
+        return descs.get(style, "现代风格")
 
     def _lighten(self, hex_color: str, factor: float) -> str:
         """将颜色变浅"""
-        hex_color = hex_color.lstrip('#')
+        hex_color = hex_color.lstrip("#")
         if len(hex_color) != 6:
             return f"#{hex_color}"
         r, g, b = int(hex_color[:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
@@ -57,7 +57,7 @@ class DocumentGeneratorContentMixin:
 
     def _darken(self, hex_color: str, factor: float) -> str:
         """将颜色加深"""
-        hex_color = hex_color.lstrip('#')
+        hex_color = hex_color.lstrip("#")
         if len(hex_color) != 6:
             return f"#{hex_color}"
         r, g, b = int(hex_color[:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
@@ -97,12 +97,18 @@ class DocumentGeneratorContentMixin:
             ],
         }
 
-        selected = principles.get(product_type, [
-            ("用户价值", f"围绕{self.description[:30]}的核心场景设计，每个页面都服务于明确的用户目标"),
-            ("专业品质", "组件、间距、字体和配色体现成熟商业产品的品质感，拒绝粗糙和模板化"),
-            ("一致体验", "跨页面的视觉语言、交互模式和信息架构保持统一"),
-            ("渐进增强", "核心功能简洁直观，高级功能按需展开，不同用户有不同的最优体验路径"),
-        ])
+        selected = principles.get(
+            product_type,
+            [
+                (
+                    "用户价值",
+                    f"围绕{self.description[:30]}的核心场景设计，每个页面都服务于明确的用户目标",
+                ),
+                ("专业品质", "组件、间距、字体和配色体现成熟商业产品的品质感，拒绝粗糙和模板化"),
+                ("一致体验", "跨页面的视觉语言、交互模式和信息架构保持统一"),
+                ("渐进增强", "核心功能简洁直观，高级功能按需展开，不同用户有不同的最优体验路径"),
+            ],
+        )
 
         lines = []
         for title, desc in selected:
@@ -236,14 +242,20 @@ const theme: ThemeConfig = {
             )
             return {
                 "design_system": design_system,
-                "css_variables_preview": "\n".join(design_system.to_css_variables().splitlines()[:28]),
-                "tailwind_preview": json.dumps(design_system.to_tailwind_config(), ensure_ascii=False, indent=2),
+                "css_variables_preview": "\n".join(
+                    design_system.to_css_variables().splitlines()[:28]
+                ),
+                "tailwind_preview": json.dumps(
+                    design_system.to_tailwind_config(), ensure_ascii=False, indent=2
+                ),
             }
         except Exception as exc:
             logging.getLogger(__name__).warning("Design system bundle failed: %s", exc)
             return {"design_system": None, "css_variables_preview": "", "tailwind_preview": ""}
 
-    def _build_ui_contract_payload(self, analysis: dict, profile: dict, design_bundle: dict | None = None) -> dict:
+    def _build_ui_contract_payload(
+        self, analysis: dict, profile: dict, design_bundle: dict | None = None
+    ) -> dict:
         design_bundle = design_bundle or {}
         design_system = design_bundle.get("design_system")
         typography = profile.get("typography_preset", {})
@@ -302,7 +314,8 @@ const theme: ThemeConfig = {
             "ui_library_preference": {
                 "preferred": (
                     "shadcn/ui + Radix UI + Tailwind CSS"
-                    if self.frontend in {"react", "next", "nextjs", "web"} and self.platform in {"web", "desktop", "saas", "landing"}
+                    if self.frontend in {"react", "next", "nextjs", "web"}
+                    and self.platform in {"web", "desktop", "saas", "landing"}
                     else primary.get("name")
                 ),
                 "strict": False,
@@ -341,6 +354,7 @@ const theme: ThemeConfig = {
                     },
                 }
         return payload
+
     def _get_state_management(self) -> str:
         """获取状态管理方案"""
         mapping = {
@@ -416,14 +430,16 @@ const theme: ThemeConfig = {
         keywords = self._extract_tech_keywords()
 
         # 检查是否有任何 AI/ML 相关技术
-        has_ai_content = any([
-            keywords["ai_frameworks"],
-            keywords["agent_tools"],
-            keywords["ml_libraries"],
-            keywords["vector_stores"],
-            keywords["orchestration"],
-            keywords["other_keywords"],
-        ])
+        has_ai_content = any(
+            [
+                keywords["ai_frameworks"],
+                keywords["agent_tools"],
+                keywords["ml_libraries"],
+                keywords["vector_stores"],
+                keywords["orchestration"],
+                keywords["other_keywords"],
+            ]
+        )
 
         if not has_ai_content:
             return ""  # 如果没有 AI/ML 内容，返回空字符串
@@ -479,25 +495,89 @@ const theme: ThemeConfig = {
     def _domain_category(self) -> str:
         """根据 self.domain 和 self.description 推断领域分类"""
         combined = f"{self.domain} {self.description}".lower()
-        if any(w in combined for w in ["教育", "培训", "education", "learning", "课程", "学习", "school", "university", "学校"]):
+        if any(
+            w in combined
+            for w in [
+                "教育",
+                "培训",
+                "education",
+                "learning",
+                "课程",
+                "学习",
+                "school",
+                "university",
+                "学校",
+            ]
+        ):
             return "education"
-        if any(w in combined for w in ["医疗", "健康", "health", "medical", "hospital", "patient", "诊所", "clinic", "护理"]):
+        if any(
+            w in combined
+            for w in [
+                "医疗",
+                "健康",
+                "health",
+                "medical",
+                "hospital",
+                "patient",
+                "诊所",
+                "clinic",
+                "护理",
+            ]
+        ):
             return "healthcare"
-        if any(w in combined for w in ["电商", "商城", "shop", "store", "mall", "购物", "ecommerce", "零售", "retail"]):
+        if any(
+            w in combined
+            for w in [
+                "电商",
+                "商城",
+                "shop",
+                "store",
+                "mall",
+                "购物",
+                "ecommerce",
+                "零售",
+                "retail",
+            ]
+        ):
             return "ecommerce"
-        if any(w in combined for w in ["金融", "支付", "fintech", "banking", "投资", "交易", "股票", "基金", "理财", "finance"]):
+        if any(
+            w in combined
+            for w in [
+                "金融",
+                "支付",
+                "fintech",
+                "banking",
+                "投资",
+                "交易",
+                "股票",
+                "基金",
+                "理财",
+                "finance",
+            ]
+        ):
             return "fintech"
-        if any(w in combined for w in ["内容", "社区", "content", "community", "blog", "cms", "媒体", "资讯", "新闻"]):
+        if any(
+            w in combined
+            for w in ["内容", "社区", "content", "community", "blog", "cms", "媒体", "资讯", "新闻"]
+        ):
             return "content"
-        if any(w in combined for w in ["saas", "平台", "管理系统", "erp", "crm", "oa", "办公", "协作"]):
+        if any(
+            w in combined for w in ["saas", "平台", "管理系统", "erp", "crm", "oa", "办公", "协作"]
+        ):
             return "saas"
-        if any(w in combined for w in ["求职", "招聘", "job", "resume", "career", "简历", "hr", "人才"]):
+        if any(
+            w in combined for w in ["求职", "招聘", "job", "resume", "career", "简历", "hr", "人才"]
+        ):
             return "recruitment"
-        if any(w in combined for w in ["物流", "配送", "logistics", "delivery", "仓储", "supply chain"]):
+        if any(
+            w in combined for w in ["物流", "配送", "logistics", "delivery", "仓储", "supply chain"]
+        ):
             return "logistics"
         if any(w in combined for w in ["餐饮", "外卖", "food", "restaurant", "点餐", "菜单"]):
             return "food"
-        if any(w in combined for w in ["旅游", "酒店", "travel", "hotel", "booking", "景点", "民宿"]):
+        if any(
+            w in combined for w in ["旅游", "酒店", "travel", "hotel", "booking", "景点", "民宿"]
+        ):
             return "travel"
         return "general"
 
@@ -505,13 +585,45 @@ const theme: ThemeConfig = {
         """从 self.description 中提取关键名词用于 general 场景下的内容生成"""
         desc = self.description
         # 中文关键词提取：按常见分隔符拆分后取有意义的词
-        stop_words = {"的", "了", "和", "与", "或", "在", "是", "有", "一个", "这个", "那个",
-                      "可以", "需要", "支持", "实现", "使用", "通过", "进行", "提供", "包括",
-                      "a", "an", "the", "is", "are", "for", "to", "and", "or", "with", "that", "this"}
+        stop_words = {
+            "的",
+            "了",
+            "和",
+            "与",
+            "或",
+            "在",
+            "是",
+            "有",
+            "一个",
+            "这个",
+            "那个",
+            "可以",
+            "需要",
+            "支持",
+            "实现",
+            "使用",
+            "通过",
+            "进行",
+            "提供",
+            "包括",
+            "a",
+            "an",
+            "the",
+            "is",
+            "are",
+            "for",
+            "to",
+            "and",
+            "or",
+            "with",
+            "that",
+            "this",
+        }
         tokens: list[str] = []
         # 按空格和标点拆分
         import re
-        parts = re.split(r'[\s,，。、；;：:！!？?\-/\\|（）()\[\]{}]+', desc)
+
+        parts = re.split(r"[\s,，。、；;：:！!？?\-/\\|（）()\[\]{}]+", desc)
         for part in parts:
             part = part.strip()
             if len(part) >= 2 and part.lower() not in stop_words:
@@ -523,84 +635,234 @@ const theme: ThemeConfig = {
         category = self._domain_category()
         segments = {
             "education": [
-                ("学生用户", "65%", "18-30 岁", "在校学生、考证学员、终身学习者",
-                 "追求高效学习、需要个性化学习路径、注重学习效果反馈"),
-                ("教师/讲师", "25%", "25-55 岁", "在职教师、培训讲师、课程创作者",
-                 "需要教学管理工具、关注学生学习数据、重视内容创作效率"),
-                ("教务管理员", "10%", "30-50 岁", "学校教务、培训机构运营人员",
-                 "关注整体运营数据、需要排课排班功能、重视报表和统计"),
+                (
+                    "学生用户",
+                    "65%",
+                    "18-30 岁",
+                    "在校学生、考证学员、终身学习者",
+                    "追求高效学习、需要个性化学习路径、注重学习效果反馈",
+                ),
+                (
+                    "教师/讲师",
+                    "25%",
+                    "25-55 岁",
+                    "在职教师、培训讲师、课程创作者",
+                    "需要教学管理工具、关注学生学习数据、重视内容创作效率",
+                ),
+                (
+                    "教务管理员",
+                    "10%",
+                    "30-50 岁",
+                    "学校教务、培训机构运营人员",
+                    "关注整体运营数据、需要排课排班功能、重视报表和统计",
+                ),
             ],
             "healthcare": [
-                ("患者/就诊者", "60%", "20-70 岁", "慢性病患者、体检用户、门诊就诊者",
-                 "需要便捷预约挂号、关注就诊记录查询、重视隐私数据安全"),
-                ("医护人员", "30%", "25-55 岁", "医生、护士、药剂师",
-                 "需要高效查看病历、关注诊断辅助工具、重视处方管理规范"),
-                ("医院管理者", "10%", "35-55 岁", "科室主任、院长、运营人员",
-                 "关注科室运营指标、需要排班管理、重视医疗质量监控"),
+                (
+                    "患者/就诊者",
+                    "60%",
+                    "20-70 岁",
+                    "慢性病患者、体检用户、门诊就诊者",
+                    "需要便捷预约挂号、关注就诊记录查询、重视隐私数据安全",
+                ),
+                (
+                    "医护人员",
+                    "30%",
+                    "25-55 岁",
+                    "医生、护士、药剂师",
+                    "需要高效查看病历、关注诊断辅助工具、重视处方管理规范",
+                ),
+                (
+                    "医院管理者",
+                    "10%",
+                    "35-55 岁",
+                    "科室主任、院长、运营人员",
+                    "关注科室运营指标、需要排班管理、重视医疗质量监控",
+                ),
             ],
             "ecommerce": [
-                ("消费者/买家", "70%", "18-45 岁", "线上购物用户、比价用户、品牌忠实用户",
-                 "关注商品质量与价格、需要便捷支付与物流追踪、重视售后服务"),
-                ("商家/卖家", "20%", "25-50 岁", "个体商户、品牌运营、供应商",
-                 "需要商品管理工具、关注订单与库存、重视销售数据分析"),
-                ("平台运营", "10%", "25-40 岁", "平台客服、运营专员、审核人员",
-                 "关注平台整体GMV、需要纠纷处理工具、重视用户投诉管理"),
+                (
+                    "消费者/买家",
+                    "70%",
+                    "18-45 岁",
+                    "线上购物用户、比价用户、品牌忠实用户",
+                    "关注商品质量与价格、需要便捷支付与物流追踪、重视售后服务",
+                ),
+                (
+                    "商家/卖家",
+                    "20%",
+                    "25-50 岁",
+                    "个体商户、品牌运营、供应商",
+                    "需要商品管理工具、关注订单与库存、重视销售数据分析",
+                ),
+                (
+                    "平台运营",
+                    "10%",
+                    "25-40 岁",
+                    "平台客服、运营专员、审核人员",
+                    "关注平台整体GMV、需要纠纷处理工具、重视用户投诉管理",
+                ),
             ],
             "fintech": [
-                ("个人投资者", "55%", "25-55 岁", "散户投资者、理财用户、储蓄用户",
-                 "关注资产安全与收益、需要实时行情与交易、重视风险提示"),
-                ("金融顾问/分析师", "30%", "28-50 岁", "理财规划师、基金经理、风控专员",
-                 "需要专业分析工具、关注客户资产配置、重视合规审查"),
-                ("合规与风控人员", "15%", "30-50 岁", "合规主管、审计人员、风控专员",
-                 "关注交易合规性、需要反洗钱监控、重视监管报告生成"),
+                (
+                    "个人投资者",
+                    "55%",
+                    "25-55 岁",
+                    "散户投资者、理财用户、储蓄用户",
+                    "关注资产安全与收益、需要实时行情与交易、重视风险提示",
+                ),
+                (
+                    "金融顾问/分析师",
+                    "30%",
+                    "28-50 岁",
+                    "理财规划师、基金经理、风控专员",
+                    "需要专业分析工具、关注客户资产配置、重视合规审查",
+                ),
+                (
+                    "合规与风控人员",
+                    "15%",
+                    "30-50 岁",
+                    "合规主管、审计人员、风控专员",
+                    "关注交易合规性、需要反洗钱监控、重视监管报告生成",
+                ),
             ],
             "recruitment": [
-                ("求职者", "60%", "20-40 岁", "应届毕业生、在职跳槽者、自由职业者",
-                 "需要简历优化工具、关注职位匹配度、重视面试准备与反馈"),
-                ("HR/招聘方", "30%", "25-45 岁", "企业HR、猎头、招聘专员",
-                 "需要高效筛选简历、关注人才库管理、重视招聘流程自动化"),
-                ("企业管理者", "10%", "30-55 岁", "部门主管、CEO、CTO",
-                 "关注团队人才结构、需要审批招聘需求、重视人力成本控制"),
+                (
+                    "求职者",
+                    "60%",
+                    "20-40 岁",
+                    "应届毕业生、在职跳槽者、自由职业者",
+                    "需要简历优化工具、关注职位匹配度、重视面试准备与反馈",
+                ),
+                (
+                    "HR/招聘方",
+                    "30%",
+                    "25-45 岁",
+                    "企业HR、猎头、招聘专员",
+                    "需要高效筛选简历、关注人才库管理、重视招聘流程自动化",
+                ),
+                (
+                    "企业管理者",
+                    "10%",
+                    "30-55 岁",
+                    "部门主管、CEO、CTO",
+                    "关注团队人才结构、需要审批招聘需求、重视人力成本控制",
+                ),
             ],
             "content": [
-                ("内容消费者", "65%", "18-45 岁", "阅读用户、视频观众、社区浏览者",
-                 "追求高质量内容、需要个性化推荐、重视互动与社交"),
-                ("内容创作者", "25%", "20-40 岁", "作者、博主、KOL、自媒体运营",
-                 "需要创作与发布工具、关注粉丝互动与数据、重视内容变现"),
-                ("平台运营", "10%", "25-40 岁", "内容审核、社区运营、数据分析师",
-                 "关注内容质量管控、需要审核与推荐策略、重视社区氛围维护"),
+                (
+                    "内容消费者",
+                    "65%",
+                    "18-45 岁",
+                    "阅读用户、视频观众、社区浏览者",
+                    "追求高质量内容、需要个性化推荐、重视互动与社交",
+                ),
+                (
+                    "内容创作者",
+                    "25%",
+                    "20-40 岁",
+                    "作者、博主、KOL、自媒体运营",
+                    "需要创作与发布工具、关注粉丝互动与数据、重视内容变现",
+                ),
+                (
+                    "平台运营",
+                    "10%",
+                    "25-40 岁",
+                    "内容审核、社区运营、数据分析师",
+                    "关注内容质量管控、需要审核与推荐策略、重视社区氛围维护",
+                ),
             ],
             "saas": [
-                ("终端用户", "60%", "22-45 岁", "企业员工、团队成员、项目参与者",
-                 "需要高效完成日常工作、关注功能易用性、重视协作体验"),
-                ("团队管理者", "25%", "28-50 岁", "项目经理、部门主管、团队负责人",
-                 "需要团队管理与权限控制、关注工作进度与报表、重视数据安全"),
-                ("系统管理员", "15%", "25-45 岁", "IT管理员、运维人员、安全管理员",
-                 "关注系统稳定性与安全、需要配置与集成管理、重视日志与审计"),
+                (
+                    "终端用户",
+                    "60%",
+                    "22-45 岁",
+                    "企业员工、团队成员、项目参与者",
+                    "需要高效完成日常工作、关注功能易用性、重视协作体验",
+                ),
+                (
+                    "团队管理者",
+                    "25%",
+                    "28-50 岁",
+                    "项目经理、部门主管、团队负责人",
+                    "需要团队管理与权限控制、关注工作进度与报表、重视数据安全",
+                ),
+                (
+                    "系统管理员",
+                    "15%",
+                    "25-45 岁",
+                    "IT管理员、运维人员、安全管理员",
+                    "关注系统稳定性与安全、需要配置与集成管理、重视日志与审计",
+                ),
             ],
             "logistics": [
-                ("发货方/商家", "45%", "25-50 岁", "电商商家、工厂、贸易公司",
-                 "需要高效发货管理、关注物流成本与时效、重视包裹追踪"),
-                ("配送人员", "35%", "20-45 岁", "快递员、司机、仓库管理员",
-                 "需要路线规划与任务分配、关注签收确认、重视工作效率"),
-                ("收货方/消费者", "20%", "18-60 岁", "线上购物用户、企业收件人",
-                 "关注物流状态查询、需要预约送达、重视签收便捷性"),
+                (
+                    "发货方/商家",
+                    "45%",
+                    "25-50 岁",
+                    "电商商家、工厂、贸易公司",
+                    "需要高效发货管理、关注物流成本与时效、重视包裹追踪",
+                ),
+                (
+                    "配送人员",
+                    "35%",
+                    "20-45 岁",
+                    "快递员、司机、仓库管理员",
+                    "需要路线规划与任务分配、关注签收确认、重视工作效率",
+                ),
+                (
+                    "收货方/消费者",
+                    "20%",
+                    "18-60 岁",
+                    "线上购物用户、企业收件人",
+                    "关注物流状态查询、需要预约送达、重视签收便捷性",
+                ),
             ],
             "food": [
-                ("消费者/食客", "65%", "18-45 岁", "上班族、学生、家庭用户",
-                 "关注菜品质量与价格、需要便捷点餐与配送、重视用餐体验"),
-                ("商家/餐厅", "25%", "25-55 岁", "餐饮老板、厨师、门店管理",
-                 "需要菜单与订单管理、关注营业数据、重视库存与供应链"),
-                ("配送骑手", "10%", "20-40 岁", "全职骑手、兼职配送员",
-                 "需要订单接单与导航、关注配送时效、重视收入统计"),
+                (
+                    "消费者/食客",
+                    "65%",
+                    "18-45 岁",
+                    "上班族、学生、家庭用户",
+                    "关注菜品质量与价格、需要便捷点餐与配送、重视用餐体验",
+                ),
+                (
+                    "商家/餐厅",
+                    "25%",
+                    "25-55 岁",
+                    "餐饮老板、厨师、门店管理",
+                    "需要菜单与订单管理、关注营业数据、重视库存与供应链",
+                ),
+                (
+                    "配送骑手",
+                    "10%",
+                    "20-40 岁",
+                    "全职骑手、兼职配送员",
+                    "需要订单接单与导航、关注配送时效、重视收入统计",
+                ),
             ],
             "travel": [
-                ("旅行者/游客", "65%", "20-55 岁", "自由行用户、商务出差、家庭游客",
-                 "需要便捷预订与行程规划、关注价格与评价、重视出行体验"),
-                ("供应商/商家", "25%", "30-55 岁", "酒店经营者、景区管理、旅行社",
-                 "需要房态与库存管理、关注订单与营收、重视用户评价"),
-                ("平台运营", "10%", "25-40 岁", "运营专员、客服、数据分析",
-                 "关注平台交易数据、需要供应商管理、重视用户投诉处理"),
+                (
+                    "旅行者/游客",
+                    "65%",
+                    "20-55 岁",
+                    "自由行用户、商务出差、家庭游客",
+                    "需要便捷预订与行程规划、关注价格与评价、重视出行体验",
+                ),
+                (
+                    "供应商/商家",
+                    "25%",
+                    "30-55 岁",
+                    "酒店经营者、景区管理、旅行社",
+                    "需要房态与库存管理、关注订单与营收、重视用户评价",
+                ),
+                (
+                    "平台运营",
+                    "10%",
+                    "25-40 岁",
+                    "运营专员、客服、数据分析",
+                    "关注平台交易数据、需要供应商管理、重视用户投诉处理",
+                ),
             ],
         }
 
@@ -611,21 +873,38 @@ const theme: ThemeConfig = {
             nouns = self._extract_description_nouns()
             desc_hint = f"（基于 {self.name} 的核心功能: {self.description[:80]}）"
             user_list = [
-                ("核心用户", "65%", "22-40 岁", f"{self.name} 的主要使用者",
-                 f"直接使用 {nouns[0] if nouns else '核心功能'}、追求效率与体验、{desc_hint}"),
-                ("管理用户", "25%", "28-50 岁", "后台管理者、运营人员、数据分析人员",
-                 f"负责 {self.name} 的内容管理与运营、关注数据指标、需要管理工具"),
-                ("外部协作者", "10%", "25-45 岁", "合作方、第三方集成用户、API 调用方",
-                 f"通过 API 或集成方式与 {self.name} 交互、关注接口稳定性与文档"),
+                (
+                    "核心用户",
+                    "65%",
+                    "22-40 岁",
+                    f"{self.name} 的主要使用者",
+                    f"直接使用 {nouns[0] if nouns else '核心功能'}、追求效率与体验、{desc_hint}",
+                ),
+                (
+                    "管理用户",
+                    "25%",
+                    "28-50 岁",
+                    "后台管理者、运营人员、数据分析人员",
+                    f"负责 {self.name} 的内容管理与运营、关注数据指标、需要管理工具",
+                ),
+                (
+                    "外部协作者",
+                    "10%",
+                    "25-45 岁",
+                    "合作方、第三方集成用户、API 调用方",
+                    f"通过 API 或集成方式与 {self.name} 交互、关注接口稳定性与文档",
+                ),
             ]
 
         lines = ["\n**主要用户群体**:\n"]
         for i, (name, pct, age, role, traits) in enumerate(user_list, 1):
-            lines.append(f"""{i}. **{name}** ({pct})
+            lines.append(
+                f"""{i}. **{name}** ({pct})
    - 年龄: {age}
    - 角色: {role}
    - 特征: {traits}
-""")
+"""
+            )
         return "\n".join(lines)
 
     def _generate_value_proposition(self) -> str:
@@ -729,7 +1008,10 @@ const theme: ThemeConfig = {
         business_features = ""
 
         # 求职招聘领域
-        if any(word in description_lower for word in ["求职", "招聘", "job", "resume", "career", "简历", "职位"]):
+        if any(
+            word in description_lower
+            for word in ["求职", "招聘", "job", "resume", "career", "简历", "职位"]
+        ):
             business_features = """
 3. **简历管理**
    - 在线简历创建与编辑
@@ -746,7 +1028,11 @@ const theme: ThemeConfig = {
 
 5. **求职助手"""
             # 如果有 AI/Agent 相关技术，添加智能功能
-            if keywords["ai_frameworks"] or keywords["agent_tools"] or "Multi-Agent System" in keywords["other_keywords"]:
+            if (
+                keywords["ai_frameworks"]
+                or keywords["agent_tools"]
+                or "Multi-Agent System" in keywords["other_keywords"]
+            ):
                 business_features += """
    - 多 Agent 智能求职助手：
      * **简历匹配 Agent**: JD 与简历匹配度分析，识别技能差距，提供优化建议
@@ -764,7 +1050,9 @@ const theme: ThemeConfig = {
    - 求职数据分析"""
 
         # 电商领域
-        elif any(word in description_lower for word in ["电商", "商城", "shop", "store", "mall", "购物"]):
+        elif any(
+            word in description_lower for word in ["电商", "商城", "shop", "store", "mall", "购物"]
+        ):
             business_features = """
 3. **商品管理**
    - 商品浏览与搜索
@@ -782,7 +1070,10 @@ const theme: ThemeConfig = {
    - 优惠券管理"""
 
         # 内容/社区领域
-        elif any(word in description_lower for word in ["内容", "社区", "content", "community", "blog", "forum", "社交"]):
+        elif any(
+            word in description_lower
+            for word in ["内容", "社区", "content", "community", "blog", "forum", "社交"]
+        ):
             business_features = """
 3. **内容管理**
    - 内容发布与编辑
@@ -795,7 +1086,10 @@ const theme: ThemeConfig = {
    - 消息通知"""
 
         # 教育领域
-        elif any(word in description_lower for word in ["教育", "培训", "education", "learning", "课程", "学习"]):
+        elif any(
+            word in description_lower
+            for word in ["教育", "培训", "education", "learning", "课程", "学习"]
+        ):
             business_features = """
 3. **课程管理**
    - 课程浏览与购买
@@ -1105,7 +1399,9 @@ const theme: ThemeConfig = {
             ]
 
         header = "\n| 作为 | 我想要 | 以便于 | 优先级 |\n|:---|:---|:---|:---:|\n"
-        rows = "".join(f"| {role} | {want} | {benefit} | {pri} |\n" for role, want, benefit, pri in stories)
+        rows = "".join(
+            f"| {role} | {want} | {benefit} | {pri} |\n" for role, want, benefit, pri in stories
+        )
         return header + rows
 
     def _generate_data_entities(self) -> str:
@@ -1527,7 +1823,9 @@ const theme: ThemeConfig = {
         second = nouns[1] if len(nouns) > 1 else "Category"
         third = nouns[2] if len(nouns) > 2 else "Record"
 
-        return user_entity + f"""
+        return (
+            user_entity
+            + f"""
 ### {core}（核心业务实体）
 
 **属性**:
@@ -1585,6 +1883,7 @@ const theme: ThemeConfig = {
 - is_read (boolean) - 是否已读
 - created_at (datetime) - 创建时间
 """
+        )
 
     def _generate_user_journeys(self) -> str:
         """生成用户旅程 - 根据领域生成 3-4 个具体旅程"""
@@ -2202,14 +2501,17 @@ const theme: ThemeConfig = {
                 "- 数据最小化原则 + 自动化数据生命周期管理\n"
             ),
         }
-        domain_section = domain_risks.get(category, (
-            "\n### 领域特定风险\n"
-            f"- **业务复杂度**: {self.description[:60]} 涉及的业务规则复杂\n"
-            "- **第三方依赖**: 外部服务的稳定性直接影响系统可用性\n"
-            "\n**缓解方案**:\n"
-            "- 领域驱动设计（DDD）明确限界上下文\n"
-            "- 第三方服务封装隔离层 + 降级预案\n"
-        ))
+        domain_section = domain_risks.get(
+            category,
+            (
+                "\n### 领域特定风险\n"
+                f"- **业务复杂度**: {self.description[:60]} 涉及的业务规则复杂\n"
+                "- **第三方依赖**: 外部服务的稳定性直接影响系统可用性\n"
+                "\n**缓解方案**:\n"
+                "- 领域驱动设计（DDD）明确限界上下文\n"
+                "- 第三方服务封装隔离层 + 降级预案\n"
+            ),
+        )
         return (
             f"\n### 前端技术风险\n"
             f"- {fe_risk}\n"
@@ -3039,7 +3341,9 @@ spec:
                     continue
                 signals = " / ".join(item.get("signals", [])[:3])
                 cautions = "；".join(item.get("cautions", [])[:2])
-                selected_tag = "（已选灵感）" if selected_slug and item.get("slug") == selected_slug else ""
+                selected_tag = (
+                    "（已选灵感）" if selected_slug and item.get("slug") == selected_slug else ""
+                )
                 lines.append(
                     f"- **{item.get('name', 'N/A')}{selected_tag}**: {item.get('rationale', 'N/A')} 参考信号：{signals or 'N/A'}。避免：{cautions or 'N/A'}"
                 )
@@ -3071,7 +3375,9 @@ spec:
             )
         return "\n".join(lines)
 
-    def _render_design_token_freeze_output(self, profile: dict, design_bundle: dict | None = None) -> str:
+    def _render_design_token_freeze_output(
+        self, profile: dict, design_bundle: dict | None = None
+    ) -> str:
         design_system = (design_bundle or {}).get("design_system")
         if not design_system:
             return (
@@ -3081,12 +3387,44 @@ spec:
             )
 
         token_rows = [
-            ("颜色 token", ", ".join(f"{name}={value}" for name, value in list(design_system.colors.items())[:5])),
-            ("字体 token", ", ".join(f"{name}={value}" for name, value in list(design_system.typography.items()) if value)),
-            ("间距 token", ", ".join(f"{name}={value}" for name, value in list(design_system.spacing.items())[:5])),
-            ("圆角 token", ", ".join(f"{name}={value}" for name, value in list(design_system.radius.items())[:4])),
-            ("阴影 token", ", ".join(f"{name}={value}" for name, value in list(design_system.shadows.items())[:4])),
-            ("动效 token", ", ".join(f"{name}={value}" for name, value in list(design_system.animations.items())[:3])),
+            (
+                "颜色 token",
+                ", ".join(
+                    f"{name}={value}" for name, value in list(design_system.colors.items())[:5]
+                ),
+            ),
+            (
+                "字体 token",
+                ", ".join(
+                    f"{name}={value}"
+                    for name, value in list(design_system.typography.items())
+                    if value
+                ),
+            ),
+            (
+                "间距 token",
+                ", ".join(
+                    f"{name}={value}" for name, value in list(design_system.spacing.items())[:5]
+                ),
+            ),
+            (
+                "圆角 token",
+                ", ".join(
+                    f"{name}={value}" for name, value in list(design_system.radius.items())[:4]
+                ),
+            ),
+            (
+                "阴影 token",
+                ", ".join(
+                    f"{name}={value}" for name, value in list(design_system.shadows.items())[:4]
+                ),
+            ),
+            (
+                "动效 token",
+                ", ".join(
+                    f"{name}={value}" for name, value in list(design_system.animations.items())[:3]
+                ),
+            ),
         ]
 
         lines = [
@@ -3206,11 +3544,17 @@ spec:
                     "- **必须优先落实**:",
                 ]
             )
-            lines.extend(f"- {item}" for item in framework_playbook.get("implementation_modules", [])[:4])
+            lines.extend(
+                f"- {item}" for item in framework_playbook.get("implementation_modules", [])[:4]
+            )
             lines.extend(["", "**平台差异/限制**:"])
-            lines.extend(f"- {item}" for item in framework_playbook.get("platform_constraints", [])[:4])
+            lines.extend(
+                f"- {item}" for item in framework_playbook.get("platform_constraints", [])[:4]
+            )
             lines.extend(["", "**执行护栏**:"])
-            lines.extend(f"- {item}" for item in framework_playbook.get("execution_guardrails", [])[:3])
+            lines.extend(
+                f"- {item}" for item in framework_playbook.get("execution_guardrails", [])[:3]
+            )
             anti_patterns = framework_playbook.get("anti_patterns", [])
             if anti_patterns:
                 lines.extend(["", "**框架级反模式**:"])
@@ -3255,7 +3599,9 @@ spec:
     def _render_ui_execution_workflow(self, profile: dict) -> str:
         primary = profile.get("primary_library", {}).get("name", "UI 组件生态")
         alternatives = profile.get("alternative_libraries", [])
-        alternative_names = " / ".join(item.get("name", "") for item in alternatives[:3] if isinstance(item, dict))
+        alternative_names = " / ".join(
+            item.get("name", "") for item in alternatives[:3] if isinstance(item, dict)
+        )
         return (
             "1. **Intent → 目标建模**: 先明确业务目标、目标用户、转化动作、信任模块，禁止直接生成页面。\n"
             "2. **System → 设计系统编译**: 先冻结 token（颜色/字体/间距/圆角/阴影/动效）和页面骨架。\n"
@@ -3362,75 +3708,83 @@ spec:
             # 1. 风格推荐
             style_query = f"{analysis['style']} {analysis['product_type']} {analysis['industry']}"
             style_results = design_engine.search(style_query, domain="style", max_results=3)
-            recommendations['styles'] = style_results.get("results", [])[:3]
+            recommendations["styles"] = style_results.get("results", [])[:3]
 
             # 2. 配色推荐
-            color_query = f"{analysis['industry']} {analysis['product_type']}" if analysis['industry'] != 'general' else analysis['product_type']
+            color_query = (
+                f"{analysis['industry']} {analysis['product_type']}"
+                if analysis["industry"] != "general"
+                else analysis["product_type"]
+            )
             color_results = design_engine.search(color_query, domain="color", max_results=1)
-            recommendations['colors'] = (color_results.get("results", []) or [None])[0]
+            recommendations["colors"] = (color_results.get("results", []) or [None])[0]
 
             # 3. 字体推荐
             font_query = f"{analysis['style']} professional"
             font_results = design_engine.search(font_query, domain="typography", max_results=2)
-            recommendations['fonts'] = font_results.get("results", [])[:2]
+            recommendations["fonts"] = font_results.get("results", [])[:2]
 
             # 4. Landing 页面推荐（如果适用）
-            if analysis['product_type'] in ['landing', 'saas', 'ecommerce']:
+            if analysis["product_type"] in ["landing", "saas", "ecommerce"]:
                 landing_pattern = landing_gen.recommend(
-                    product_type=analysis['product_type'],
-                    goal='signup',
-                    audience='B2C' if analysis['industry'] == 'general' else 'B2B'
+                    product_type=analysis["product_type"],
+                    goal="signup",
+                    audience="B2C" if analysis["industry"] == "general" else "B2B",
                 )
-                recommendations['landing'] = (
+                recommendations["landing"] = (
                     landing_pattern.to_dict()
                     if landing_pattern and hasattr(landing_pattern, "to_dict")
                     else None
                 )
             else:
-                recommendations['landing'] = None
+                recommendations["landing"] = None
 
             # 5. UX 最佳实践
             ux_quick_wins = ux_guide.get_quick_wins(max_results=5)
             ux_tips = []
             for rec in ux_quick_wins:
                 guideline = rec.guideline
-                ux_tips.append({
-                    "guideline": {
-                        "domain": guideline.domain.value if hasattr(guideline.domain, "value") else str(guideline.domain),
-                        "topic": guideline.topic,
-                        "best_practice": guideline.best_practice,
-                        "anti_pattern": guideline.anti_pattern,
-                        "impact": guideline.impact,
-                        "complexity": guideline.complexity,
-                    },
-                    "priority": rec.priority,
-                    "implementation_effort": rec.implementation_effort,
-                    "user_impact": rec.user_impact,
-                })
-            recommendations['ux_tips'] = ux_tips
+                ux_tips.append(
+                    {
+                        "guideline": {
+                            "domain": (
+                                guideline.domain.value
+                                if hasattr(guideline.domain, "value")
+                                else str(guideline.domain)
+                            ),
+                            "topic": guideline.topic,
+                            "best_practice": guideline.best_practice,
+                            "anti_pattern": guideline.anti_pattern,
+                            "impact": guideline.impact,
+                            "complexity": guideline.complexity,
+                        },
+                        "priority": rec.priority,
+                        "implementation_effort": rec.implementation_effort,
+                        "user_impact": rec.user_impact,
+                    }
+                )
+            recommendations["ux_tips"] = ux_tips
 
             return recommendations
 
         except Exception as e:
             # 如果设计引擎失败，返回空推荐
             logging.getLogger(__name__).warning(f"Design engine failed: {e}")
-            return {
-                'styles': [],
-                'colors': None,
-                'fonts': [],
-                'landing': None,
-                'ux_tips': []
-            }
+            return {"styles": [], "colors": None, "fonts": [], "landing": None, "ux_tips": []}
 
     def extract_requirements(self) -> list:
         """从描述提取需求列表"""
         return self.requirement_parser.parse_requirements(self.description)
 
-    def generate_execution_plan(self, scenario: str = "0-1", request_mode: str | None = None) -> str:
+    def generate_execution_plan(
+        self, scenario: str = "0-1", request_mode: str | None = None
+    ) -> str:
         """生成分阶段执行路线图（支持 0-1 / 1-N+1）"""
         requirements = self.extract_requirements()
         mode = request_mode or self.requirement_parser.detect_request_mode(self.description)
-        phases = self.requirement_parser.build_execution_phases(scenario, requirements, request_mode=mode)
+        phases = self.requirement_parser.build_execution_phases(
+            scenario, requirements, request_mode=mode
+        )
 
         lines = [
             f"# {self.name} - 执行路线图",
@@ -3562,7 +3916,11 @@ spec:
     def _generate_research_evidence_brief(self) -> str:
         summary = self.knowledge_summary or {}
         evidence = summary.get("evidence_distribution", {}) if isinstance(summary, dict) else {}
-        confidence = summary.get("research_confidence", "baseline") if isinstance(summary, dict) else "baseline"
+        confidence = (
+            summary.get("research_confidence", "baseline")
+            if isinstance(summary, dict)
+            else "baseline"
+        )
         benchmark = summary.get("benchmark_products", []) if isinstance(summary, dict) else []
         sources = summary.get("primary_sources", []) if isinstance(summary, dict) else []
         lines = [
@@ -3633,8 +3991,12 @@ spec:
                 )
         else:
             lines.append("| 稳健商业方案 | 企业级交付 | 组件标准化 + 质量门禁 | 前期规范成本更高 |")
-            lines.append("| 快速验证方案 | MVP 上线 | 核心路径最小化 + 埋点先行 | 视觉与扩展能力后补 |")
-            lines.append("| 品牌差异化方案 | 竞争市场 | 品牌 token + 叙事页面 + 转化实验 | 设计与内容投入更高 |")
+            lines.append(
+                "| 快速验证方案 | MVP 上线 | 核心路径最小化 + 埋点先行 | 视觉与扩展能力后补 |"
+            )
+            lines.append(
+                "| 品牌差异化方案 | 竞争市场 | 品牌 token + 叙事页面 + 转化实验 | 设计与内容投入更高 |"
+            )
         return "\n".join(lines)
 
     def _generate_decision_ledger(self) -> str:

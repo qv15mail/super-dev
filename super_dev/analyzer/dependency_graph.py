@@ -124,7 +124,9 @@ class DependencyGraphBuilder:
 
     def build(self) -> DependencyGraphReport:
         files = self._collect_source_files()
-        path_index = {str(path.relative_to(self.project_dir)).replace("\\", "/"): path for path in files}
+        path_index = {
+            str(path.relative_to(self.project_dir)).replace("\\", "/"): path for path in files
+        }
         module_index = self._build_module_index(files)
         edges = self._build_edges(files, module_index, path_index)
         inbound, outbound = self._degree(edges)
@@ -152,7 +154,9 @@ class DependencyGraphBuilder:
         md_path = self.output_dir / f"{self.project_name}-dependency-graph.md"
         json_path = self.output_dir / f"{self.project_name}-dependency-graph.json"
         md_path.write_text(report.to_markdown(), encoding="utf-8")
-        json_path.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        json_path.write_text(
+            json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         return {"markdown": md_path, "json": json_path}
 
     def _collect_source_files(self) -> list[Path]:
@@ -244,7 +248,10 @@ class DependencyGraphBuilder:
     @staticmethod
     def _extract_js_imports(content: str) -> list[tuple[str, str]]:
         imports: list[tuple[str, str]] = []
-        for match in re.finditer(r"""from\s+['"]([^'"]+)['"]|require\(\s*['"]([^'"]+)['"]\s*\)|import\(\s*['"]([^'"]+)['"]\s*\)""", content):
+        for match in re.finditer(
+            r"""from\s+['"]([^'"]+)['"]|require\(\s*['"]([^'"]+)['"]\s*\)|import\(\s*['"]([^'"]+)['"]\s*\)""",
+            content,
+        ):
             raw = match.group(1) or match.group(2) or match.group(3)
             if raw:
                 imports.append((raw, "module-import"))
@@ -312,7 +319,9 @@ class DependencyGraphBuilder:
             role = "entry-point" if rel in entry_paths else "internal"
             if score > 0 or role == "entry-point":
                 nodes.append(
-                    DependencyNode(path=rel, inbound=in_count, outbound=out_count, score=score, role=role)
+                    DependencyNode(
+                        path=rel, inbound=in_count, outbound=out_count, score=score, role=role
+                    )
                 )
         nodes.sort(key=lambda item: (item.score, item.inbound, item.outbound), reverse=True)
         return nodes[:10]

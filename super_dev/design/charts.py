@@ -15,6 +15,7 @@ from pathlib import Path
 
 class ChartCategory(str, Enum):
     """图表类别"""
+
     TIME_SERIES = "Time Series"
     CATEGORICAL = "Categorical"
     PROPORTION = "Proportion"
@@ -30,6 +31,7 @@ class ChartCategory(str, Enum):
 
 class DataType(str, Enum):
     """数据类型"""
+
     CONTINUOUS = "Continuous"
     DISCRETE = "Discrete"
     PART_TO_WHOLE = "Part-to-whole"
@@ -44,6 +46,7 @@ class DataType(str, Enum):
 @dataclass
 class ChartType:
     """图表类型"""
+
     name: str
     category: ChartCategory
     data_type: DataType
@@ -58,6 +61,7 @@ class ChartType:
 @dataclass
 class ChartRecommendation:
     """图表推荐"""
+
     chart_type: ChartType
     confidence: float  # 0-1
     reasoning: str
@@ -101,7 +105,7 @@ class ChartRecommender:
             self.chart_types = self._get_default_chart_types()
             return
 
-        with open(csv_path, encoding='utf-8') as f:
+        with open(csv_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
@@ -114,7 +118,7 @@ class ChartRecommender:
                         accessibility_notes=row["accessibility_notes"],
                         use_cases=row["use_cases"].split(","),
                         limitations=row["limitations"].split(",") if row.get("limitations") else [],
-                        keywords=row["keywords"].split(",") if row.get("keywords") else []
+                        keywords=row["keywords"].split(",") if row.get("keywords") else [],
                     )
                     self.chart_types.append(chart_type)
                 except Exception as e:
@@ -132,7 +136,7 @@ class ChartRecommender:
                 accessibility_notes="Provide data table as fallback",
                 use_cases=["Stock prices", "Weather", "Temperature"],
                 limitations=["Not for categorical data"],
-                keywords=["line", "trend", "time", "series"]
+                keywords=["line", "trend", "time", "series"],
             ),
             ChartType(
                 name="Bar Chart",
@@ -143,7 +147,7 @@ class ChartRecommender:
                 accessibility_notes="Use sufficient color contrast",
                 use_cases=["Sales by region", "Survey results", "Population"],
                 limitations=["Not for many categories"],
-                keywords=["bar", "column", "compare", "categorical"]
+                keywords=["bar", "column", "compare", "categorical"],
             ),
             ChartType(
                 name="Pie Chart",
@@ -154,15 +158,12 @@ class ChartRecommender:
                 accessibility_notes="Provide legend and percentages",
                 use_cases=["Market share", "Budget allocation", "Demographics"],
                 limitations=["Not for more than 5-7 categories"],
-                keywords=["pie", "proportion", "percentage"]
-            )
+                keywords=["pie", "proportion", "percentage"],
+            ),
         ]
 
     def recommend(
-        self,
-        data_description: str,
-        framework: str = "react",
-        max_results: int = 3
+        self, data_description: str, framework: str = "react", max_results: int = 3
     ) -> list[ChartRecommendation]:
         """
         推荐图表类型
@@ -209,7 +210,10 @@ class ChartRecommender:
                     reasons.append(f"Use case '{use_case}' matched")
 
             # 基于分析的其他匹配
-            if analysis.get("has_time_component") and chart_type.category == ChartCategory.TIME_SERIES:
+            if (
+                analysis.get("has_time_component")
+                and chart_type.category == ChartCategory.TIME_SERIES
+            ):
                 score += 10
                 reasons.append("Time series data detected")
 
@@ -234,14 +238,16 @@ class ChartRecommender:
                 # 无障碍考虑
                 a11y_considerations = self._get_accessibility_considerations(chart_type)
 
-                scored_charts.append(ChartRecommendation(
-                    chart_type=chart_type,
-                    confidence=confidence,
-                    reasoning="; ".join(reasons),
-                    alternatives=alternatives[:2],
-                    library_recommendation=lib_rec,
-                    accessibility_considerations=a11y_considerations
-                ))
+                scored_charts.append(
+                    ChartRecommendation(
+                        chart_type=chart_type,
+                        confidence=confidence,
+                        reasoning="; ".join(reasons),
+                        alternatives=alternatives[:2],
+                        library_recommendation=lib_rec,
+                        accessibility_considerations=a11y_considerations,
+                    )
+                )
 
         # 按置信度排序
         scored_charts.sort(key=lambda x: x.confidence, reverse=True)
@@ -253,24 +259,45 @@ class ChartRecommender:
         desc_lower = description.lower()
 
         return {
-            "has_time_component": any(word in desc_lower for word in [
-                "time", "date", "month", "year", "trend", "over time", "series"
-            ]),
-            "has_comparison": any(word in desc_lower for word in [
-                "compare", "vs", "versus", "between", "across", "by region", "by category"
-            ]),
-            "has_proportions": any(word in desc_lower for word in [
-                "percentage", "proportion", "share", "of total", "breakdown", "part of"
-            ]),
-            "has_correlation": any(word in desc_lower for word in [
-                "relationship", "correlation", "vs", "relationship between"
-            ]),
-            "has_distribution": any(word in desc_lower for word in [
-                "distribution", "frequency", "histogram", "spread", "range"
-            ]),
-            "has_geography": any(word in desc_lower for word in [
-                "map", "region", "country", "state", "location", "geographic"
-            ])
+            "has_time_component": any(
+                word in desc_lower
+                for word in ["time", "date", "month", "year", "trend", "over time", "series"]
+            ),
+            "has_comparison": any(
+                word in desc_lower
+                for word in [
+                    "compare",
+                    "vs",
+                    "versus",
+                    "between",
+                    "across",
+                    "by region",
+                    "by category",
+                ]
+            ),
+            "has_proportions": any(
+                word in desc_lower
+                for word in [
+                    "percentage",
+                    "proportion",
+                    "share",
+                    "of total",
+                    "breakdown",
+                    "part of",
+                ]
+            ),
+            "has_correlation": any(
+                word in desc_lower
+                for word in ["relationship", "correlation", "vs", "relationship between"]
+            ),
+            "has_distribution": any(
+                word in desc_lower
+                for word in ["distribution", "frequency", "histogram", "spread", "range"]
+            ),
+            "has_geography": any(
+                word in desc_lower
+                for word in ["map", "region", "country", "state", "location", "geographic"]
+            ),
         }
 
     def _get_alternatives(self, chart_type: ChartType, framework: str) -> list[ChartType]:
@@ -283,7 +310,10 @@ class ChartRecommender:
                 continue
 
             # 同类别但不同类型
-            if other_chart.category == chart_type.category and other_chart.data_type != chart_type.data_type:
+            if (
+                other_chart.category == chart_type.category
+                and other_chart.data_type != chart_type.data_type
+            ):
                 alternatives.append(other_chart)
 
             # 相似的用例
@@ -295,7 +325,9 @@ class ChartRecommender:
     def _recommend_library(self, chart_type: ChartType, framework: str) -> str:
         """推荐图表库"""
         # 获取框架特定的推荐
-        framework_libs = self.RECOMMENDED_LIBRARIES.get(framework.lower(), self.RECOMMENDED_LIBRARIES["vanilla"])
+        framework_libs = self.RECOMMENDED_LIBRARIES.get(
+            framework.lower(), self.RECOMMENDED_LIBRARIES["vanilla"]
+        )
 
         # 找到图表类型支持的库
         for lib in framework_libs:

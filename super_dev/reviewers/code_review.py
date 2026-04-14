@@ -607,7 +607,7 @@ jobs:
             "- [ ] 自定义错误类型实现 `error` 接口",
             "- [ ] 使用 `errors.Is` / `errors.As` 进行错误匹配",
             "- [ ] 错误信息小写开头，不以标点结尾",
-            "- [ ] 使用 `fmt.Errorf(\"%w\", err)` 进行错误包装",
+            '- [ ] 使用 `fmt.Errorf("%w", err)` 进行错误包装',
             "",
             "**并发安全:**",
             "- [ ] goroutine 有退出机制（context/done channel）",
@@ -804,108 +804,118 @@ jobs:
         ]
 
         # SQL 注入检测规则
-        sections.extend([
-            "### SQL 注入检测\n",
-            "**检测模式:**",
-            "```regex",
-            r"# Python f-string SQL",
-            r'f["\'].*?(SELECT|INSERT|UPDATE|DELETE|DROP)\s.*?\{',
-            r"# JS template literal SQL",
-            r'`.*?(SELECT|INSERT|UPDATE|DELETE|DROP)\s.*?\$\{',
-            r"# 字符串拼接 SQL",
-            r"(SELECT|INSERT|UPDATE|DELETE|DROP)\s.*?\+\s*(req\.|request\.|params\.|query\.)",
-            "```",
-            "",
-            "**修复模式:**",
-            "- Python: 使用 SQLAlchemy ORM 或 `cursor.execute(sql, params)`",
-            "- Node.js: 使用 Prisma/Knex 参数化或 `pg` 的 `$1` 占位符",
-            "- Go: 使用 `db.Query(sql, args...)` 参数化查询",
-            "",
-        ])
+        sections.extend(
+            [
+                "### SQL 注入检测\n",
+                "**检测模式:**",
+                "```regex",
+                r"# Python f-string SQL",
+                r'f["\'].*?(SELECT|INSERT|UPDATE|DELETE|DROP)\s.*?\{',
+                r"# JS template literal SQL",
+                r"`.*?(SELECT|INSERT|UPDATE|DELETE|DROP)\s.*?\$\{",
+                r"# 字符串拼接 SQL",
+                r"(SELECT|INSERT|UPDATE|DELETE|DROP)\s.*?\+\s*(req\.|request\.|params\.|query\.)",
+                "```",
+                "",
+                "**修复模式:**",
+                "- Python: 使用 SQLAlchemy ORM 或 `cursor.execute(sql, params)`",
+                "- Node.js: 使用 Prisma/Knex 参数化或 `pg` 的 `$1` 占位符",
+                "- Go: 使用 `db.Query(sql, args...)` 参数化查询",
+                "",
+            ]
+        )
 
         # XSS 检测规则
-        sections.extend([
-            "### XSS 检测\n",
-            "**检测模式:**",
-            "```regex",
-            r"# React dangerouslySetInnerHTML",
-            r"dangerouslySetInnerHTML\s*=\s*\{\s*\{.*__html\s*:",
-            r"# 直接 innerHTML 赋值",
-            r"\.innerHTML\s*=",
-            r"# document.write",
-            r"document\.write\s*\(",
-            r"# v-html (Vue)",
-            r'v-html\s*=\s*"',
-            "```",
-            "",
-            "**修复模式:**",
-            "- 使用 `DOMPurify.sanitize()` 清洗 HTML",
-            "- React: 优先使用 JSX 文本节点而非 dangerouslySetInnerHTML",
-            "- 服务端渲染: 使用模板引擎的自动转义功能",
-            "",
-        ])
+        sections.extend(
+            [
+                "### XSS 检测\n",
+                "**检测模式:**",
+                "```regex",
+                r"# React dangerouslySetInnerHTML",
+                r"dangerouslySetInnerHTML\s*=\s*\{\s*\{.*__html\s*:",
+                r"# 直接 innerHTML 赋值",
+                r"\.innerHTML\s*=",
+                r"# document.write",
+                r"document\.write\s*\(",
+                r"# v-html (Vue)",
+                r'v-html\s*=\s*"',
+                "```",
+                "",
+                "**修复模式:**",
+                "- 使用 `DOMPurify.sanitize()` 清洗 HTML",
+                "- React: 优先使用 JSX 文本节点而非 dangerouslySetInnerHTML",
+                "- 服务端渲染: 使用模板引擎的自动转义功能",
+                "",
+            ]
+        )
 
         # 认证检测规则
-        sections.extend([
-            "### 认证/授权检测\n",
-            "**检测模式:**",
-            "```regex",
-            r"# 路由缺少认证中间件",
-            r"(app|router)\.(get|post|put|delete|patch)\s*\(\s*['\"].*['\"],\s*(async\s+)?\(?",
-            r"# 权限硬编码",
-            r'role\s*===?\s*["\']admin["\']',
-            r"# JWT 无过期设置",
-            r"jwt\.sign\s*\([^)]*(?!expiresIn)[^)]*\)",
-            "```",
-            "",
-            "**检查清单:**",
-            "- [ ] 所有非公开路由有认证中间件",
-            "- [ ] 权限检查使用 RBAC/ABAC 而非硬编码角色",
-            "- [ ] JWT 有过期时间（建议 15 分钟 access + 7 天 refresh）",
-            "- [ ] 敏感操作有二次认证或 CSRF token",
-            "",
-        ])
+        sections.extend(
+            [
+                "### 认证/授权检测\n",
+                "**检测模式:**",
+                "```regex",
+                r"# 路由缺少认证中间件",
+                r"(app|router)\.(get|post|put|delete|patch)\s*\(\s*['\"].*['\"],\s*(async\s+)?\(?",
+                r"# 权限硬编码",
+                r'role\s*===?\s*["\']admin["\']',
+                r"# JWT 无过期设置",
+                r"jwt\.sign\s*\([^)]*(?!expiresIn)[^)]*\)",
+                "```",
+                "",
+                "**检查清单:**",
+                "- [ ] 所有非公开路由有认证中间件",
+                "- [ ] 权限检查使用 RBAC/ABAC 而非硬编码角色",
+                "- [ ] JWT 有过期时间（建议 15 分钟 access + 7 天 refresh）",
+                "- [ ] 敏感操作有二次认证或 CSRF token",
+                "",
+            ]
+        )
 
         # 日志安全检测
-        sections.extend([
-            "### 日志安全检测\n",
-            "**检测模式:**",
-            "```regex",
-            r"# 密码/密钥记录到日志",
-            r"(log|logger|console)\.(info|debug|warn|error|log)\s*\(.*?(password|secret|token|key|credential)",
-            r"# 信用卡号记录",
-            r"(log|logger|console)\.\w+\(.*?\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}",
-            "```",
-            "",
-            "**修复模式:**",
-            "- 实施日志脱敏中间件，自动掩码敏感字段",
-            "- 使用结构化日志，敏感字段标记为 `[REDACTED]`",
-            "- 生产环境禁用 debug 级别日志",
-            "",
-        ])
+        sections.extend(
+            [
+                "### 日志安全检测\n",
+                "**检测模式:**",
+                "```regex",
+                r"# 密码/密钥记录到日志",
+                r"(log|logger|console)\.(info|debug|warn|error|log)\s*\(.*?(password|secret|token|key|credential)",
+                r"# 信用卡号记录",
+                r"(log|logger|console)\.\w+\(.*?\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}",
+                "```",
+                "",
+                "**修复模式:**",
+                "- 实施日志脱敏中间件，自动掩码敏感字段",
+                "- 使用结构化日志，敏感字段标记为 `[REDACTED]`",
+                "- 生产环境禁用 debug 级别日志",
+                "",
+            ]
+        )
 
         # 错误处理检测
-        sections.extend([
-            "### 错误处理检测\n",
-            "**检测模式:**",
-            "```regex",
-            r"# Python 裸 except",
-            r"except\s*:",
-            r"# JS 空 catch",
-            r"catch\s*\(\w*\)\s*\{\s*\}",
-            r"# Go 忽略 error",
-            r"\w+,\s*_\s*:?=\s*\w+\(",
-            r"# 错误信息暴露内部细节",
-            r'(res|response)\.(json|send)\s*\(\s*\{.*?(stack|trace|internal)',
-            "```",
-            "",
-            "**检查清单:**",
-            "- [ ] 不吞掉异常（空 catch 块）",
-            "- [ ] 生产环境不返回堆栈跟踪",
-            "- [ ] 错误边界（React ErrorBoundary）覆盖关键路由",
-            "- [ ] 500 错误有通用错误响应格式",
-            "",
-        ])
+        sections.extend(
+            [
+                "### 错误处理检测\n",
+                "**检测模式:**",
+                "```regex",
+                r"# Python 裸 except",
+                r"except\s*:",
+                r"# JS 空 catch",
+                r"catch\s*\(\w*\)\s*\{\s*\}",
+                r"# Go 忽略 error",
+                r"\w+,\s*_\s*:?=\s*\w+\(",
+                r"# 错误信息暴露内部细节",
+                r"(res|response)\.(json|send)\s*\(\s*\{.*?(stack|trace|internal)",
+                "```",
+                "",
+                "**检查清单:**",
+                "- [ ] 不吞掉异常（空 catch 块）",
+                "- [ ] 生产环境不返回堆栈跟踪",
+                "- [ ] 错误边界（React ErrorBoundary）覆盖关键路由",
+                "- [ ] 500 错误有通用错误响应格式",
+                "",
+            ]
+        )
 
         return "\n".join(sections)
 
@@ -926,7 +936,9 @@ jobs:
 
             # 注入代码专家的验证规则 ID 供追溯
             if self._code_toolkit.rules.validation_rule_ids:
-                sections.append(f"**关联验证规则**: {', '.join(self._code_toolkit.rules.validation_rule_ids)}\n")
+                sections.append(
+                    f"**关联验证规则**: {', '.join(self._code_toolkit.rules.validation_rule_ids)}\n"
+                )
 
             # 注入代码专家的 Playbook
             if self._code_toolkit.playbook:
@@ -941,14 +953,18 @@ jobs:
             if sec_items:
                 sections.append("\n---\n")
                 sections.append("## 安全专家交叉审查（自动注入）\n")
-                sections.append("> 以下检查项由安全专家工具箱交叉注入，确保代码审查覆盖安全维度。\n")
+                sections.append(
+                    "> 以下检查项由安全专家工具箱交叉注入，确保代码审查覆盖安全维度。\n"
+                )
                 for item in sec_items:
                     sections.append(f"- [ ] {item}")
                 sections.append("")
 
             # 注入安全专家的验证规则 ID 供追溯
             if self._security_toolkit.rules.validation_rule_ids:
-                sections.append(f"**关联安全规则**: {', '.join(self._security_toolkit.rules.validation_rule_ids)}\n")
+                sections.append(
+                    f"**关联安全规则**: {', '.join(self._security_toolkit.rules.validation_rule_ids)}\n"
+                )
 
             # 注入安全专家的交叉审查维度
             for dim in self._security_toolkit.protocol.review_dimensions:

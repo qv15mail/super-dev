@@ -1249,11 +1249,17 @@ project-root/
                     "- **必须优先落实**:",
                 ]
             )
-            lines.extend(f"- {item}" for item in framework_playbook.get("implementation_modules", [])[:4])
+            lines.extend(
+                f"- {item}" for item in framework_playbook.get("implementation_modules", [])[:4]
+            )
             lines.extend(["", "- **平台差异/限制**:"])
-            lines.extend(f"- {item}" for item in framework_playbook.get("platform_constraints", [])[:4])
+            lines.extend(
+                f"- {item}" for item in framework_playbook.get("platform_constraints", [])[:4]
+            )
             lines.extend(["", "- **执行护栏**:"])
-            lines.extend(f"- {item}" for item in framework_playbook.get("execution_guardrails", [])[:3])
+            lines.extend(
+                f"- {item}" for item in framework_playbook.get("execution_guardrails", [])[:3]
+            )
             anti_patterns = framework_playbook.get("anti_patterns", [])
             if anti_patterns:
                 lines.extend(["", "- **框架级反模式**:"])

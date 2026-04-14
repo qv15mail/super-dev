@@ -5,14 +5,15 @@ import type { SiteLocale } from '@/lib/site-locale';
 
 const CHANGELOG = {
   zh: [
-    { version: '2.3.7', date: '2026-04-13', type: 'patch' as const, changes: [
+    { version: '2.3.8', date: '2026-04-14', type: 'patch' as const, changes: [
+      'SEEAI 比赛验收升级为四段结构化证据：first_response / runtime_checkpoint / fallback_decision / demo_path 缺一段就阻塞，passed 不再等于 ready',
+      'SEEAI 证据新增内容质量校验：每段最小 8 字符 + 模板 required 关键词覆盖检查，封堵 "ok / done / 跑通了" 这类糊弄填写',
+      'SEEAI 证据写入入口贯通：CLI 新增 --competition-evidence-json，Web POST /api/hosts/runtime-validation 支持 competition_evidence 字段，runtime 报告高亮缺段与浅段',
+      '新增设计灵感工作流（PR #11）：UIUX 生成阶段引入 design inspiration prompt，配色 / 版式 / 组件参考自动接入文档与 Spec',
       '修复 WorkBuddy doctor 报错 user_surfaces 缺失：从 NO_SKILL_TARGETS 移除，onboard 自动安装 Skill',
       '修复补充 Skill（super-dev-seeai）重复安装报错：已存在时静默跳过，不再 --force 才能安装',
       '全局清理 super-dev-core 残留：扫描所有宿主 skills 目录（包括未列表的），自动删除旧名称',
-      '优化旧版文案：WorkBuddy 描述更新为"通过官方 Skills 接入"',
-      'CI 配置重写：从 Node.js 全栈模板改为 Python CLI 项目，CI 不再 2 秒失败',
-      'README 媒体路径修正：指向 super-dev-website/public/ 下的实际文件',
-      '仓库清理：.gitignore 补全 runtime state 路径，避免误提交运行时数据',
+      'CI 配置重写：从 Node.js 全栈模板改为 Python CLI 项目，CI 不再 2 秒失败；ruff/black 仓库范围全量整改',
     ] },
     { version: '2.3.6', date: '2026-04-13', type: 'patch' as const, changes: [
       '修复 Skill 重复安装问题：清空 Codex mirror 路径，安装时自动清理 super-dev-core 残留',
@@ -161,14 +162,15 @@ const CHANGELOG = {
     { version: '1.0.0', date: '2025-12-29', type: 'major' as const, changes: ['首次发布', '基础流水线框架（research / documents / spec / implement）', 'Spec-Driven Development 模块', '支持 Claude Code、Cursor、Windsurf 宿主', 'PyPI 正式发布'] },
   ],
   en: [
-    { version: '2.3.7', date: '2026-04-13', type: 'patch' as const, changes: [
+    { version: '2.3.8', date: '2026-04-14', type: 'patch' as const, changes: [
+      'SEEAI competition acceptance upgraded to four-section structured evidence (first_response / runtime_checkpoint / fallback_decision / demo_path); any missing section blocks ready_for_delivery — passed no longer means ready',
+      'Evidence content-quality gates added: each section requires ≥8 chars plus template `required` keyword coverage, blocking "ok / done / works" placeholder fills',
+      'Evidence write paths wired end-to-end: CLI gains --competition-evidence-json, Web POST /api/hosts/runtime-validation accepts competition_evidence, runtime reports highlight missing and shallow sections',
+      'New design inspiration workflow (PR #11): UIUX stage now injects design inspiration prompt; palette / layout / component references flow into documents and Spec automatically',
       'Fixed WorkBuddy doctor reporting missing user_surfaces: removed from NO_SKILL_TARGETS, onboard now installs Skill automatically',
       'Fixed supplemental skill (super-dev-seeai) install collision: silently skip if exists, no --force required',
       'Global super-dev-core cleanup: scan all host skills directories (including unlisted), auto-remove legacy names',
-      'Updated WorkBuddy description: now reflects official Skills integration',
-      'CI config rewritten: from Node.js fullstack template to Python CLI project, CI no longer fails in 2s',
-      'README media paths corrected: point to super-dev-website/public/ actual files',
-      'Repo cleanup: .gitignore covers all runtime state paths to prevent accidental commits',
+      'CI config rewritten: from Node.js fullstack template to Python CLI project, CI no longer fails in 2s; repo-wide ruff/black cleanup',
     ] },
     { version: '2.3.6', date: '2026-04-13', type: 'patch' as const, changes: [
       'Fixed skill duplication: cleared Codex mirror paths, auto-cleanup of legacy super-dev-core',

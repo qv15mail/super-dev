@@ -242,9 +242,9 @@ Fill `.super-dev/project.md` with domain constraints, architecture notes, delive
 
         installed_section = ""
         if installed_items:
-            installed_section = "\n## 已安装\n\n" + "\n".join(
-                f"- {item}" for item in installed_items
-            ) + "\n"
+            installed_section = (
+                "\n## 已安装\n\n" + "\n".join(f"- {item}" for item in installed_items) + "\n"
+            )
 
         return f"""# {config.name} Bootstrap
 

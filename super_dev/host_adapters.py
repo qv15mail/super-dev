@@ -265,10 +265,12 @@ HOST_SPECIAL_ADAPTERS: dict[str, HostSpecialAdapter] = {
             "确认文档返工与确认门阶段仍然保持在 Super Dev 流程内。",
             "比赛模式验收时，确认 `/super-dev-seeai` 或 `super-dev-seeai:` 会进入半小时时间盒，而不是回到标准长链路。",
             "确认比赛模式会按 P0/P1/P2 控制范围，优先保住主演示路径，再补 wow 点。",
+            "确认 SEEAI 会在 12 分钟内先跑出第一个可见、可点击、可截图的界面，而不是卡在初始化或配置阶段。",
         ),
         pass_criteria=(
             "CodeBuddy CLI 真实读取了项目级 commands、skills 与兼容规则面。",
             "CodeBuddy CLI 的 SEEAI 入口会进入 compact docs + compact spec + full-stack sprint 的比赛合同。",
+            "CodeBuddy CLI 的 SEEAI 模式在初始化失败一次后会切到更轻的回退栈，而不是继续死磕重配置方案。",
         ),
         resume_checklist=(
             "CodeBuddy CLI 恢复时要确认仍在目标项目目录，并重新加载 `.codebuddy/commands/` 与 skills。",
@@ -276,6 +278,7 @@ HOST_SPECIAL_ADAPTERS: dict[str, HostSpecialAdapter] = {
         ),
         competition_smoke_extra_steps=(
             "确认宿主首轮先给出作品类型、wow 点、P0 主路径和主动放弃项，再声明 30 分钟比赛链路与 P0/P1/P2 取舍。",
+            "确认宿主首轮同时承诺 12 分钟内先跑出首个可见界面，并在初始化失败时立即切轻量回退栈。",
         ),
         flow_probe={
             "enabled": True,
@@ -286,6 +289,7 @@ HOST_SPECIAL_ADAPTERS: dict[str, HostSpecialAdapter] = {
                 "再用 `/super-dev-seeai` 或 `super-dev-seeai:` 触发一次，确认进入 30 分钟比赛链路，而不是标准 preview gate 流程。",
                 "在 SEEAI 会话里继续说“继续改 / 再炫一点 / 补一个功能”，确认仍留在当前比赛冲刺，不会退回普通聊天。",
                 "确认 Slash 如果刷新较慢，回退到 `super-dev-seeai:` 仍会进入同一条 SEEAI 比赛合同。",
+                "确认 SEEAI 不会长时间卡在初始化；若原技术栈起不来，会主动降级到更轻的回退栈并保住主演示路径。",
             ),
             "success_signal": "CodeBuddy CLI 的标准入口和 SEEAI 入口都能稳定进入对应合同，并在多轮修改、确认和恢复时保持流程连续。",
         },
@@ -318,10 +322,12 @@ HOST_SPECIAL_ADAPTERS: dict[str, HostSpecialAdapter] = {
             "确认用户继续说“改一下 / 补充 / 继续改”时，CodeBuddy 仍然停留在当前确认门内。",
             "比赛模式验收时，确认 `/super-dev-seeai` 或 `super-dev-seeai:` 进入的是 30 分钟比赛链路，而不是标准 preview gate 流程。",
             "确认比赛模式下固定同一个 Agent Chat 仍能持续沿用当前上下文，不因子会话切换而丢失范围控制。",
+            "确认 SEEAI 会在 12 分钟内先跑出第一个可见、可点击、可截图的界面，而不是停留在初始化阶段。",
         ),
         pass_criteria=(
             "CodeBuddy IDE 在目标工作区真实读取了 commands、agents 与 skills。",
             "CodeBuddy IDE 的 SEEAI 入口会保留 compact 文档确认门，并在 Spec 后直接进入一体化快速开发。",
+            "CodeBuddy IDE 的 SEEAI 模式在初始化失败一次后会主动切到更轻的回退栈，优先保住主路径。",
         ),
         resume_checklist=(
             "CodeBuddy IDE 恢复时要确认 Agent Chat 仍在目标项目，并继续当前确认门而不是重新开题。",
@@ -329,6 +335,7 @@ HOST_SPECIAL_ADAPTERS: dict[str, HostSpecialAdapter] = {
         ),
         competition_smoke_extra_steps=(
             "确认宿主首轮先给出作品类型、wow 点、P0 主路径和主动放弃项，再声明 30 分钟比赛链路与 P0/P1/P2 取舍。",
+            "确认宿主首轮同时承诺 12 分钟内先跑出首个可见界面，并在初始化失败时立即切轻量回退栈。",
         ),
         flow_probe={
             "enabled": True,
@@ -339,6 +346,7 @@ HOST_SPECIAL_ADAPTERS: dict[str, HostSpecialAdapter] = {
                 "再用 `/super-dev-seeai` 或 `super-dev-seeai:` 触发一次，确认进入 30 分钟比赛链路，而不是标准 preview gate 流程。",
                 "在 SEEAI 会话里继续说“继续改 / 再炫一点 / 补一个功能”，确认仍留在当前比赛冲刺，不会退回普通聊天。",
                 "确认 Slash 如果刷新较慢，回退到 `super-dev-seeai:` 仍会进入同一条 SEEAI 比赛合同。",
+                "确认 SEEAI 不会长时间卡在初始化；若原技术栈起不来，会主动降级到更轻的回退栈并保住主演示路径。",
             ),
             "success_signal": "CodeBuddy 的标准入口和 SEEAI 入口都能稳定进入对应合同，并在多轮修改、确认和恢复时保持流程连续。",
         },
@@ -362,10 +370,12 @@ HOST_SPECIAL_ADAPTERS: dict[str, HostSpecialAdapter] = {
             "确认 `.openclaw/rules/super-dev.md`、`.openclaw/commands/super-dev.md`、`.openclaw/commands/super-dev-seeai.md` 与 `~/.openclaw/skills/` 已被当前会话真实加载。",
             "确认比赛模式优先可通过 `/super-dev-seeai` 或 `super-dev-seeai:` 进入；如果 slash 面板未刷新，也不会阻塞比赛入口。",
             "确认比赛模式中段不会频繁调用 Tool 打断开发，而是在 sprint 末段再统一做质量/状态收口。",
+            "确认 SEEAI 会在 12 分钟内先跑出第一个可见界面；如果插件宿主里的原方案初始化失败，会立刻切更轻的回退栈。",
         ),
         pass_criteria=(
             "OpenClaw 在目标工作区真实读取了 rules、commands 与 skills，且标准模式与 SEEAI 比赛模式都能进入同一条 Super Dev 合同体系。",
             "OpenClaw 的 SEEAI 入口会保留 compact 文档确认门，并在 Spec 后直接进入一体化快速开发与最终 polish。",
+            "OpenClaw 的 SEEAI 模式在比赛中会优先保住主演示路径，不因初始化卡死或重配置拖垮半小时冲刺。",
         ),
         resume_checklist=(
             "OpenClaw 恢复时要确认重新打开的 Agent 会话仍绑定目标项目，并重新加载 `.openclaw/commands/` 与 skills。",
@@ -374,6 +384,7 @@ HOST_SPECIAL_ADAPTERS: dict[str, HostSpecialAdapter] = {
         competition_smoke_extra_steps=(
             "如果 `/super-dev-seeai` 还没出现在命令面板，直接用 `super-dev-seeai:` 验收文本入口。",
             "确认宿主首轮先给出作品类型、wow 点、P0 主路径和主动放弃项，再进入 compact 文档。",
+            "确认宿主首轮同时承诺 12 分钟内先跑出首个可见界面，并在初始化失败时立即切轻量回退栈。",
         ),
         flow_probe={
             "enabled": True,
@@ -384,6 +395,7 @@ HOST_SPECIAL_ADAPTERS: dict[str, HostSpecialAdapter] = {
                 "再用 `super-dev-seeai:` 或 `/super-dev-seeai` 触发一次，确认进入 30 分钟比赛链路，并保留 compact docs confirm gate。",
                 "在 SEEAI 模式里继续说“继续做 / 做最终 polish / 补一个 wow 点”，确认 OpenClaw 不会切回普通聊天或重新开题。",
                 "确认比赛中段不需要频繁切 Tool；只在 sprint 末段使用质量/状态 Tool 做收口即可。",
+                "确认 SEEAI 不会卡在初始化；若当前栈起不来，会主动降级到更轻的回退栈并继续交付主路径。",
             ),
             "success_signal": "OpenClaw 的标准入口和 SEEAI 入口都能在当前项目会话里稳定进入对应 Super Dev 合同，并保持比赛冲刺连续性。",
         },
@@ -407,20 +419,20 @@ HOST_SPECIAL_ADAPTERS: dict[str, HostSpecialAdapter] = {
         adapter_mode_override="skill-only",
         install_surfaces={
             "official_project_surfaces": (),
-            "official_user_surfaces": (
-                "~/.workbuddy/skills/super-dev/SKILL.md",
-            ),
+            "official_user_surfaces": ("~/.workbuddy/skills/super-dev/SKILL.md",),
             "observed_compatibility_surfaces": (),
         },
         runtime_checklist=(
             "确认任务会话已经手动启用 Super Dev 标准版与 SEEAI 比赛版 Skills。",
             "确认自然语言入口可用且保持当前项目上下文。",
             "确认恢复后仍继续同一个 task/chat，而不是跳转成新任务。",
+            "确认 SEEAI 会在 12 分钟内先跑出第一个可见界面；如果原方案起不来，会直接改走更轻的回退栈。",
         ),
         pass_criteria=(
             "手动启用的 Skills 可稳定接管标准流程与 SEEAI 比赛流程。",
             "自然语言入口可在当前会话中直接触发。",
             "恢复会话后仍可继续同一作品任务。",
+            "SEEAI 比赛模式不会长时间卡在初始化或配置阶段，而会主动降级方案保住演示闭环。",
         ),
         resume_checklist=(
             "检查当前任务是否已经锁定作品类型。",
@@ -429,6 +441,7 @@ HOST_SPECIAL_ADAPTERS: dict[str, HostSpecialAdapter] = {
         ),
         competition_smoke_extra_steps=(
             "确认 WorkBuddy 首轮先给出作品类型、wow 点、P0 主路径和主动放弃项，再进入 fast research 与 compact 文档。",
+            "确认 WorkBuddy 首轮同时承诺 12 分钟内先跑出首个可见界面，并在初始化失败时立即切轻量回退栈。",
         ),
         manual_install_guidance=ManualInstallGuidance(
             title="WorkBuddy 手动安装",

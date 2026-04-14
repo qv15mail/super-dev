@@ -192,6 +192,7 @@ def _load_ui_review_summary(project_dir_path: Path) -> dict[str, Any] | None:
             return payload
         except Exception as e:
             import logging
+
             logging.getLogger("super_dev.web.api").debug(f"Failed to parse UI review JSON: {e}")
     return None
 
@@ -207,6 +208,7 @@ def _find_ui_review_screenshot(project_dir_path: Path) -> Path | None:
 def _get_api_key_dependency():
     """Lazy import of get_api_key to avoid circular imports."""
     from super_dev.web.api import get_api_key
+
     return Depends(get_api_key)
 
 

@@ -81,7 +81,11 @@ class HookManager:
 
         items: list[HookResult] = []
         try:
-            lines = [line for line in history_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+            lines = [
+                line
+                for line in history_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
         except Exception as exc:
             logger.warning(f"读取 hook 历史失败: {exc}")
             return []

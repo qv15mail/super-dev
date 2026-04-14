@@ -55,7 +55,9 @@ class ImpactAnalysisReport:
             "summary": self.summary,
             "affected_modules": [item.to_dict() for item in self.affected_modules],
             "affected_entry_points": [item.to_dict() for item in self.affected_entry_points],
-            "affected_integration_surfaces": [item.to_dict() for item in self.affected_integration_surfaces],
+            "affected_integration_surfaces": [
+                item.to_dict() for item in self.affected_integration_surfaces
+            ],
             "regression_focus": list(self.regression_focus),
             "recommended_steps": list(self.recommended_steps),
         }
@@ -75,7 +77,9 @@ class ImpactAnalysisReport:
         lines.extend(["", self.summary, ""])
         self._append_items(lines, "Affected Modules", self.affected_modules)
         self._append_items(lines, "Affected Entry Points", self.affected_entry_points)
-        self._append_items(lines, "Affected Integration Surfaces", self.affected_integration_surfaces)
+        self._append_items(
+            lines, "Affected Integration Surfaces", self.affected_integration_surfaces
+        )
         lines.extend(["", "## Regression Focus", ""])
         if self.regression_focus:
             for item in self.regression_focus:
@@ -113,14 +117,34 @@ class ImpactAnalyzer:
         description_tokens = _tokenize(description)
         normalized_files = [str(Path(file)).replace("\\", "/") for file in files]
 
-        affected_modules = self._score_repo_items(repo_map.top_modules, normalized_files, description_tokens, "module")
-        affected_entry_points = self._score_repo_items(repo_map.entry_points, normalized_files, description_tokens, "entry-point")
-        affected_surfaces = self._score_repo_items(repo_map.integration_surfaces, normalized_files, description_tokens, "integration-surface")
+        affected_modules = self._score_repo_items(
+            repo_map.top_modules, normalized_files, description_tokens, "module"
+        )
+        affected_entry_points = self._score_repo_items(
+            repo_map.entry_points, normalized_files, description_tokens, "entry-point"
+        )
+        affected_surfaces = self._score_repo_items(
+            repo_map.integration_surfaces,
+            normalized_files,
+            description_tokens,
+            "integration-surface",
+        )
 
         risk_level = self._risk_level(affected_modules, affected_entry_points, affected_surfaces)
-        summary = self._summary(description, normalized_files, risk_level, affected_modules, affected_entry_points, affected_surfaces)
-        regression_focus = self._regression_focus(affected_modules, affected_surfaces, normalized_files)
-        recommended_steps = self._recommended_steps(risk_level, affected_modules, affected_surfaces, normalized_files)
+        summary = self._summary(
+            description,
+            normalized_files,
+            risk_level,
+            affected_modules,
+            affected_entry_points,
+            affected_surfaces,
+        )
+        regression_focus = self._regression_focus(
+            affected_modules, affected_surfaces, normalized_files
+        )
+        recommended_steps = self._recommended_steps(
+            risk_level, affected_modules, affected_surfaces, normalized_files
+        )
 
         return ImpactAnalysisReport(
             project_name=self.project_name,
@@ -140,7 +164,9 @@ class ImpactAnalyzer:
         md_path = self.output_dir / f"{self.project_name}-impact-analysis.md"
         json_path = self.output_dir / f"{self.project_name}-impact-analysis.json"
         md_path.write_text(report.to_markdown(), encoding="utf-8")
-        json_path.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        json_path.write_text(
+            json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         return {"markdown": md_path, "json": json_path}
 
     def _score_repo_items(
@@ -160,7 +186,11 @@ class ImpactAnalyzer:
             for file in files:
                 file_lower = file.lower()
                 top = file_lower.split("/")[0]
-                if item_path == file_lower or item_path.startswith(file_lower) or file_lower.startswith(item_path):
+                if (
+                    item_path == file_lower
+                    or item_path.startswith(file_lower)
+                    or file_lower.startswith(item_path)
+                ):
                     confidence = max(confidence, 0.95)
                     reasons.append("direct file/path overlap")
                 elif item_path == top or item_path.startswith(f"{top}/") or top == item_path:
@@ -219,19 +249,27 @@ class ImpactAnalyzer:
         )
 
     @staticmethod
-    def _regression_focus(modules: list[ImpactItem], surfaces: list[ImpactItem], files: list[str]) -> list[str]:
+    def _regression_focus(
+        modules: list[ImpactItem], surfaces: list[ImpactItem], files: list[str]
+    ) -> list[str]:
         focus: list[str] = []
-        joined_paths = " ".join([item.path.lower() for item in modules + surfaces] + [file.lower() for file in files])
+        joined_paths = " ".join(
+            [item.path.lower() for item in modules + surfaces] + [file.lower() for file in files]
+        )
         if any(token in joined_paths for token in ["auth", "login", "session", "permission"]):
             focus.append("Authentication, session, and permission regression checks")
         if any(token in joined_paths for token in ["api", "controller", "route", "router"]):
             focus.append("API contract and route-level regression checks")
         if any(token in joined_paths for token in ["component", "ui", "page", "screen", "view"]):
             focus.append("Critical UI paths, navigation, and state transition checks")
-        if any(token in joined_paths for token in ["db", "database", "repository", "model", "entity"]):
+        if any(
+            token in joined_paths for token in ["db", "database", "repository", "model", "entity"]
+        ):
             focus.append("Data model, persistence, and migration regression checks")
         if not focus:
-            focus.append("Smoke test the primary user flow and the modules most likely to be touched")
+            focus.append(
+                "Smoke test the primary user flow and the modules most likely to be touched"
+            )
         return focus
 
     @staticmethod
@@ -246,10 +284,16 @@ class ImpactAnalyzer:
             "Limit edits to the highest-confidence modules before expanding the scope.",
         ]
         if risk_level == "high":
-            steps.append("Freeze the affected surface in PRD / Architecture / UIUX or patch docs before coding.")
+            steps.append(
+                "Freeze the affected surface in PRD / Architecture / UIUX or patch docs before coding."
+            )
         if surfaces:
-            steps.append("Re-test the affected integration surfaces before declaring the change complete.")
+            steps.append(
+                "Re-test the affected integration surfaces before declaring the change complete."
+            )
         if files:
-            steps.append("Use the changed file list as the minimum review set, then inspect adjacent modules only if impact expands.")
+            steps.append(
+                "Use the changed file list as the minimum review set, then inspect adjacent modules only if impact expands."
+            )
         steps.append("Rerun bugfix/runtime/quality validation after implementation.")
         return steps

@@ -71,14 +71,9 @@ class ProjectCreator:
             knowledge_summary=knowledge_summary,
         )
         self.spec_builder = SpecBuilder(
-            project_dir=self.project_dir,
-            name=name,
-            description=description
+            project_dir=self.project_dir, name=name, description=description
         )
-        self.prompt_generator = AIPromptGenerator(
-            project_dir=self.project_dir,
-            name=name
-        )
+        self.prompt_generator = AIPromptGenerator(project_dir=self.project_dir, name=name)
 
     def generate_documents(self) -> dict:
         """生成所有文档 (PRD, 架构, UI/UX)"""
@@ -88,43 +83,46 @@ class ProjectCreator:
         prd_path = self.output_dir / f"{self.name}-prd.md"
         prd_content = self.doc_generator.generate_prd()
         prd_path.write_text(prd_content, encoding="utf-8")
-        docs['prd'] = str(prd_path)
+        docs["prd"] = str(prd_path)
 
         # 2. 架构文档
         arch_path = self.output_dir / f"{self.name}-architecture.md"
         arch_content = self.doc_generator.generate_architecture()
         arch_path.write_text(arch_content, encoding="utf-8")
-        docs['architecture'] = str(arch_path)
+        docs["architecture"] = str(arch_path)
 
         # 3. UI/UX 文档
         uiux_path = self.output_dir / f"{self.name}-uiux.md"
         uiux_content = self.doc_generator.generate_uiux()
         uiux_path.write_text(uiux_content, encoding="utf-8")
-        docs['uiux'] = str(uiux_path)
+        docs["uiux"] = str(uiux_path)
 
         ui_contract_path = self.output_dir / f"{self.name}-ui-contract.json"
         ui_contract_path.write_text(
             json.dumps(self.doc_generator.generate_ui_contract(), ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        docs['ui_contract'] = str(ui_contract_path)
+        docs["ui_contract"] = str(ui_contract_path)
 
         # 4. 执行路线图
         scenario = self.doc_generator.requirement_parser.detect_scenario(self.project_dir)
-        request_mode = self.request_mode or self.doc_generator.requirement_parser.detect_request_mode(self.description)
+        request_mode = (
+            self.request_mode
+            or self.doc_generator.requirement_parser.detect_request_mode(self.description)
+        )
         plan_path = self.output_dir / f"{self.name}-execution-plan.md"
         plan_content = self.doc_generator.generate_execution_plan(
             scenario=scenario,
             request_mode=request_mode,
         )
         plan_path.write_text(plan_content, encoding="utf-8")
-        docs['plan'] = str(plan_path)
+        docs["plan"] = str(plan_path)
 
         # 5. 前端蓝图
         frontend_blueprint_path = self.output_dir / f"{self.name}-frontend-blueprint.md"
         frontend_blueprint_content = self.doc_generator.generate_frontend_blueprint()
         frontend_blueprint_path.write_text(frontend_blueprint_content, encoding="utf-8")
-        docs['frontend_blueprint'] = str(frontend_blueprint_path)
+        docs["frontend_blueprint"] = str(frontend_blueprint_path)
 
         return docs
 
@@ -137,11 +135,11 @@ class ProjectCreator:
         change_id = self.spec_builder.create_change(
             requirements=requirements,
             tech_stack={
-                'platform': self.platform,
-                'frontend': self.frontend,
-                'backend': self.backend,
-                'domain': self.domain
-            }
+                "platform": self.platform,
+                "frontend": self.frontend,
+                "backend": self.backend,
+                "domain": self.domain,
+            },
         )
 
         return change_id

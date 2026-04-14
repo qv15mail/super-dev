@@ -111,17 +111,25 @@ class HookHarnessBuilder:
         report.enabled = True
         report.source_files["hook_history"] = str(history_path)
         report.recent_events = [item.to_dict() for item in items]
-        report.total_events = len([line for line in history_path.read_text(encoding="utf-8").splitlines() if line.strip()])
+        report.total_events = len(
+            [line for line in history_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        )
         report.failed_count = sum(1 for item in items if not item.success)
         report.blocked_count = sum(1 for item in items if item.blocked)
 
         if report.blocked_count:
-            report.blockers.append(f"最近 {limit} 条 hook 历史中存在 {report.blocked_count} 条阻断事件")
+            report.blockers.append(
+                f"最近 {limit} 条 hook 历史中存在 {report.blocked_count} 条阻断事件"
+            )
         if report.failed_count and not report.blocked_count:
-            report.blockers.append(f"最近 {limit} 条 hook 历史中存在 {report.failed_count} 条失败事件")
+            report.blockers.append(
+                f"最近 {limit} 条 hook 历史中存在 {report.failed_count} 条失败事件"
+            )
 
         if report.blockers:
-            report.next_actions.append("检查 .super-dev/hook-history.jsonl 中最近失败/阻断的 hook，修复命令或放宽 blocking 策略后重新执行对应阶段。")
+            report.next_actions.append(
+                "检查 .super-dev/hook-history.jsonl 中最近失败/阻断的 hook，修复命令或放宽 blocking 策略后重新执行对应阶段。"
+            )
         else:
             report.next_actions.append("当前 hook 审计历史干净，可作为发布前辅助证据。")
         return report
@@ -132,5 +140,7 @@ class HookHarnessBuilder:
         md_path = base.with_suffix(".md")
         json_path = base.with_suffix(".json")
         md_path.write_text(report.to_markdown(), encoding="utf-8")
-        json_path.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        json_path.write_text(
+            json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         return {"markdown": md_path, "json": json_path}

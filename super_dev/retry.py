@@ -3,7 +3,8 @@
 import functools
 import logging
 import time
-from typing import Callable, TypeVar
+from collections.abc import Callable
+from typing import TypeVar
 
 _logger = logging.getLogger("super_dev.retry")
 _T = TypeVar("_T")

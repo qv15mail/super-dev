@@ -306,7 +306,7 @@ class ValidationScriptGenerator:
                     "LARGE_FILES=$(find $SRC_DIRS -type f "
                     "\\( -name '*.tsx' -o -name '*.ts' -o -name '*.jsx' -o -name '*.js' \\) "
                     "2>/dev/null | while read f; do "
-                    "  lines=$(wc -l < \"$f\" 2>/dev/null || echo 0); "
+                    '  lines=$(wc -l < "$f" 2>/dev/null || echo 0); '
                     '  [ "$lines" -gt 500 ] && echo "$f ($lines lines)"; '
                     "done || true)"
                 ),
@@ -327,11 +327,11 @@ class ValidationScriptGenerator:
                 "# ------------------------------------------------------------------",
                 'if [ -f "package.json" ]; then',
                 '  echo "Checking package.json scripts..."',
-                '  if ! grep -q \'"build"\' package.json 2>/dev/null; then',
+                "  if ! grep -q '\"build\"' package.json 2>/dev/null; then",
                 '    echo "WARN: package.json missing \\"build\\" script"',
                 "    WARNINGS=$((WARNINGS + 1))",
                 "  fi",
-                '  if ! grep -q \'"lint"\' package.json 2>/dev/null; then',
+                "  if ! grep -q '\"lint\"' package.json 2>/dev/null; then",
                 '    echo "WARN: package.json missing \\"lint\\" script"',
                 "    WARNINGS=$((WARNINGS + 1))",
                 "  fi",
@@ -353,11 +353,11 @@ class ValidationScriptGenerator:
                 'echo "  WARN:    $WARNINGS"',
                 'echo ""',
                 "if [ $BLOCKS -eq 0 ]; then",
-                '  if [ $WARNINGS -eq 0 ]; then',
+                "  if [ $WARNINGS -eq 0 ]; then",
                 '    echo "All Super Dev validation checks passed"',
-                '  else',
+                "  else",
                 '    echo "$WARNINGS warning(s) — review recommended but not blocking"',
-                '  fi',
+                "  fi",
                 "  exit 0",
                 "else",
                 '  echo "$BLOCKS blocking issue(s) must be fixed before delivery"',

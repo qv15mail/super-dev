@@ -212,7 +212,9 @@ class SuperDevCLI(
             suggestions = self._suggest_commands(unknown)
             self.console.print(f"[red]未知命令: '{unknown}'[/red]")
             self.console.print(f"你是否想输入: {', '.join(suggestions)}?")
-            self.console.print("运行 'super-dev --help' 查看公开入口，运行 'super-dev --help-all' 查看内部维护命令。")
+            self.console.print(
+                "运行 'super-dev --help' 查看公开入口，运行 'super-dev --help-all' 查看内部维护命令。"
+            )
             return 2
 
         # 直达入口：`super-dev <需求描述>`
@@ -751,9 +753,10 @@ class SuperDevCLI(
         )
         if recent_snapshots and isinstance(recent_snapshots[0], dict):
             first = recent_snapshots[0]
-            step = str(first.get("current_step_label", "")).strip() or str(
-                first.get("status", "")
-            ).strip()
+            step = (
+                str(first.get("current_step_label", "")).strip()
+                or str(first.get("status", "")).strip()
+            )
             updated_at = str(first.get("updated_at", "")).strip() or "-"
             self.console.print(f"  最近快照: {updated_at} · {step}")
         if payload.get("evidence"):
@@ -808,7 +811,9 @@ class SuperDevCLI(
         run_state = self._read_pipeline_run_state(project_dir)
         if not run_state:
             self.console.print("[red]未找到最近一次 pipeline 运行记录[/red]")
-            self.console.print("[dim]请先运行 `super-dev` 完成宿主接入，再在宿主里用 `/super-dev` 或 `super-dev:` 启动流程[/dim]")
+            self.console.print(
+                "[dim]请先运行 `super-dev` 完成宿主接入，再在宿主里用 `/super-dev` 或 `super-dev:` 启动流程[/dim]"
+            )
             return 1
 
         status = str(run_state.get("status", "")).strip().lower()
@@ -820,9 +825,7 @@ class SuperDevCLI(
                 self.console.print(
                     "[yellow]最近一次 pipeline 已停在文档确认门，请先确认三文档后再恢复[/yellow]"
                 )
-                self.console.print(
-                    '[dim]请回到宿主里明确回复：“文档确认，可以继续”[/dim]'
-                )
+                self.console.print("[dim]请回到宿主里明确回复：“文档确认，可以继续”[/dim]")
                 return 1
             if any(
                 (project_dir / "output").glob("*-frontend-runtime.json")
@@ -830,24 +833,20 @@ class SuperDevCLI(
                 self.console.print(
                     "[yellow]最近一次 pipeline 还缺前端预览确认，请先确认预览后再恢复[/yellow]"
                 )
-                self.console.print(
-                    '[dim]请回到宿主里明确回复：“前端预览确认，可以继续”[/dim]'
-                )
+                self.console.print("[dim]请回到宿主里明确回复：“前端预览确认，可以继续”[/dim]")
                 return 1
             if not self._ui_revision_is_clear(project_dir):
                 self.console.print(
                     "[yellow]最近一次 pipeline 存在待处理 UI 改版请求，请先完成 UI 返工再恢复[/yellow]"
                 )
-                self.console.print(
-                    '[dim]请回到宿主里明确回复：“UI 改版已完成，继续当前流程”[/dim]'
-                )
+                self.console.print("[dim]请回到宿主里明确回复：“UI 改版已完成，继续当前流程”[/dim]")
                 return 1
             if not self._architecture_revision_is_clear(project_dir):
                 self.console.print(
                     "[yellow]最近一次 pipeline 存在待处理架构返工请求，请先完成架构修订再恢复[/yellow]"
                 )
                 self.console.print(
-                    '[dim]请回到宿主里明确回复：“架构调整已完成，继续当前流程”[/dim]'
+                    "[dim]请回到宿主里明确回复：“架构调整已完成，继续当前流程”[/dim]"
                 )
                 return 1
             if not self._quality_revision_is_clear(project_dir):
@@ -855,7 +854,7 @@ class SuperDevCLI(
                     "[yellow]最近一次 pipeline 存在待处理质量返工请求，请先完成质量整改再恢复[/yellow]"
                 )
                 self.console.print(
-                    '[dim]请回到宿主里明确回复：“质量整改已完成，继续当前流程”[/dim]'
+                    "[dim]请回到宿主里明确回复：“质量整改已完成，继续当前流程”[/dim]"
                 )
                 return 1
         elif status == "waiting_preview_confirmation":
@@ -863,18 +862,14 @@ class SuperDevCLI(
                 self.console.print(
                     "[yellow]最近一次 pipeline 已停在前端预览确认门，请先确认预览或继续完成前端返工[/yellow]"
                 )
-                self.console.print(
-                    '[dim]请回到宿主里明确回复：“前端预览确认，可以继续”[/dim]'
-                )
+                self.console.print("[dim]请回到宿主里明确回复：“前端预览确认，可以继续”[/dim]")
                 return 1
         elif status == "waiting_ui_revision":
             if not self._ui_revision_is_clear(project_dir):
                 self.console.print(
                     "[yellow]最近一次 pipeline 已停在 UI 改版门，请先完成 UIUX 更新、前端返工与 UI review[/yellow]"
                 )
-                self.console.print(
-                    '[dim]请回到宿主里明确回复：“UI 改版已完成，继续当前流程”[/dim]'
-                )
+                self.console.print("[dim]请回到宿主里明确回复：“UI 改版已完成，继续当前流程”[/dim]")
                 return 1
         elif status == "waiting_architecture_revision":
             if not self._architecture_revision_is_clear(project_dir):
@@ -882,7 +877,7 @@ class SuperDevCLI(
                     "[yellow]最近一次 pipeline 已停在架构返工门，请先完成 output/*-architecture.md 修订和实现同步[/yellow]"
                 )
                 self.console.print(
-                    '[dim]请回到宿主里明确回复：“架构调整已完成，继续当前流程”[/dim]'
+                    "[dim]请回到宿主里明确回复：“架构调整已完成，继续当前流程”[/dim]"
                 )
                 return 1
         elif status == "waiting_quality_revision":
@@ -891,7 +886,7 @@ class SuperDevCLI(
                     "[yellow]最近一次 pipeline 已停在质量返工门，请先完成质量整改并重新执行 quality gate[/yellow]"
                 )
                 self.console.print(
-                    '[dim]请回到宿主里明确回复：“质量整改已完成，继续当前流程”[/dim]'
+                    "[dim]请回到宿主里明确回复：“质量整改已完成，继续当前流程”[/dim]"
                 )
                 return 1
         elif status not in {"failed", "running"}:
@@ -935,7 +930,10 @@ class SuperDevCLI(
         run_state = self._read_pipeline_run_state(project_dir) or {}
         if not run_state and not self._project_has_super_dev_context(project_dir):
             if getattr(args, "json", False):
-                payload = {"status": "not_initialized", "recommended_next": "super-dev init <项目名>"}
+                payload = {
+                    "status": "not_initialized",
+                    "recommended_next": "super-dev init <项目名>",
+                }
                 self.console.print(json.dumps(payload, ensure_ascii=False, indent=2))
                 return 0
             self.console.print("[cyan]Super Dev 流程状态: 尚未开始[/cyan]")
@@ -956,14 +954,21 @@ class SuperDevCLI(
                         recent_snapshots = [pipeline_summary]
                 recent_events = load_recent_workflow_events(project_dir, limit=3)
                 if not recent_events and recent_snapshots:
-                    first_snapshot = recent_snapshots[0] if isinstance(recent_snapshots[0], dict) else {}
+                    first_snapshot = (
+                        recent_snapshots[0] if isinstance(recent_snapshots[0], dict) else {}
+                    )
                     recent_events = [
                         {
                             "event": "workflow_context_detected",
-                            "phase": str(first_snapshot.get("workflow_mode", "")).strip() or "continue",
-                            "timestamp": str(first_snapshot.get("updated_at", "")).strip() or datetime.now(timezone.utc).isoformat(),
-                            "status": str(first_snapshot.get("status", "")).strip() or "initialized_waiting",
-                            "current_step_label": str(first_snapshot.get("current_step_label", "")).strip(),
+                            "phase": str(first_snapshot.get("workflow_mode", "")).strip()
+                            or "continue",
+                            "timestamp": str(first_snapshot.get("updated_at", "")).strip()
+                            or datetime.now(timezone.utc).isoformat(),
+                            "status": str(first_snapshot.get("status", "")).strip()
+                            or "initialized_waiting",
+                            "current_step_label": str(
+                                first_snapshot.get("current_step_label", "")
+                            ).strip(),
                         }
                     ]
                 initialized_payload = {
@@ -976,7 +981,8 @@ class SuperDevCLI(
                     "recent_snapshots": recent_snapshots,
                     "recent_events": recent_events,
                     "recent_hook_events": [
-                        item.to_dict() for item in HookManager.load_recent_history(project_dir, limit=3)
+                        item.to_dict()
+                        for item in HookManager.load_recent_history(project_dir, limit=3)
                     ],
                     "operational_harnesses": summarize_operational_harnesses(
                         project_dir, write_reports=False
@@ -984,7 +990,9 @@ class SuperDevCLI(
                     "operational_focus": derive_operational_focus(project_dir),
                 }
                 if getattr(args, "json", False):
-                    sys.stdout.write(json.dumps(initialized_payload, ensure_ascii=False, indent=2) + "\n")
+                    sys.stdout.write(
+                        json.dumps(initialized_payload, ensure_ascii=False, indent=2) + "\n"
+                    )
                     return 0
                 self.console.print("[cyan]Super Dev 流程状态: 已初始化，等待开始[/cyan]")
                 self.console.print(f"  项目: {initialized_payload['project']}")
@@ -996,9 +1004,10 @@ class SuperDevCLI(
                 recent_snapshots = initialized_payload.get("recent_snapshots", [])
                 if isinstance(recent_snapshots, list) and recent_snapshots:
                     first = recent_snapshots[0] if isinstance(recent_snapshots[0], dict) else {}
-                    step = str(first.get("current_step_label", "")).strip() or str(
-                        first.get("status", "")
-                    ).strip()
+                    step = (
+                        str(first.get("current_step_label", "")).strip()
+                        or str(first.get("status", "")).strip()
+                    )
                     updated_at = str(first.get("updated_at", "")).strip() or "-"
                     self.console.print(f"  最近快照: {updated_at} · {step}")
                 harnesses = initialized_payload.get("operational_harnesses", [])
@@ -1007,7 +1016,9 @@ class SuperDevCLI(
                     for item in harnesses[:3]:
                         if not isinstance(item, dict):
                             continue
-                        label = str(item.get("label", "")).strip() or str(item.get("kind", "")).strip()
+                        label = (
+                            str(item.get("label", "")).strip() or str(item.get("kind", "")).strip()
+                        )
                         passed = bool(item.get("all_passed", False))
                         blocker = str(item.get("first_blocker", "")).strip()
                         line = f"    - {label}: {'ok' if passed else 'needs attention'}"
@@ -1118,7 +1129,9 @@ class SuperDevCLI(
             if native:
                 self.console.print(f"  原生能力面: {' / '.join(str(item) for item in native[:3])}")
             if validation:
-                self.console.print(f"  必验场景: {' / '.join(str(item) for item in validation[:3])}")
+                self.console.print(
+                    f"  必验场景: {' / '.join(str(item) for item in validation[:3])}"
+                )
         if phase_confirmations:
             self.console.print("  阶段确认:")
             for phase, item in sorted(phase_confirmations.items()):
@@ -1134,9 +1147,10 @@ class SuperDevCLI(
         recent_snapshots = payload.get("recent_snapshots", [])
         if isinstance(recent_snapshots, list) and recent_snapshots:
             first = recent_snapshots[0] if isinstance(recent_snapshots[0], dict) else {}
-            step = str(first.get("current_step_label", "")).strip() or str(
-                first.get("status", "")
-            ).strip()
+            step = (
+                str(first.get("current_step_label", "")).strip()
+                or str(first.get("status", "")).strip()
+            )
             updated_at = str(first.get("updated_at", "")).strip() or "-"
             self.console.print(f"  最近快照: {updated_at} · {step}")
         recent_events = payload.get("recent_events", [])
@@ -1418,10 +1432,13 @@ class SuperDevCLI(
             return normalized_status
 
         phase_confirmations = run_state.get("phase_confirmations")
-        has_phase_confirmations = isinstance(phase_confirmations, dict) and bool(phase_confirmations)
+        has_phase_confirmations = isinstance(phase_confirmations, dict) and bool(
+            phase_confirmations
+        )
         review_states = (docs_state, ui_state, architecture_state, quality_state)
         has_review_evidence = any(
-            bool(state.get("exists")) or str(state.get("status", "")).strip() not in {"", "pending_review"}
+            bool(state.get("exists"))
+            or str(state.get("status", "")).strip() not in {"", "pending_review"}
             for state in review_states
         )
         if has_phase_confirmations or has_review_evidence:
@@ -1439,15 +1456,15 @@ class SuperDevCLI(
         quality_state: dict[str, Any],
     ) -> str:
         if docs_state.get("status") != "confirmed":
-            return '在宿主里确认三文档；如果通过，直接说“文档确认，可以继续”'
+            return "在宿主里确认三文档；如果通过，直接说“文档确认，可以继续”"
         if preview_state.get("status") == "revision_requested":
-            return '在宿主里继续修改前端；确认后直接说“前端预览确认，可以继续”'
+            return "在宿主里继续修改前端；确认后直接说“前端预览确认，可以继续”"
         if ui_state.get("status") == "revision_requested":
-            return '在宿主里完成 UI 改版后直接说“UI 改版已完成，继续当前流程”'
+            return "在宿主里完成 UI 改版后直接说“UI 改版已完成，继续当前流程”"
         if architecture_state.get("status") == "revision_requested":
-            return '在宿主里完成架构返工后直接说“架构调整已完成，继续当前流程”'
+            return "在宿主里完成架构返工后直接说“架构调整已完成，继续当前流程”"
         if quality_state.get("status") == "revision_requested":
-            return '在宿主里完成质量整改后直接说“质量整改已完成，继续当前流程”'
+            return "在宿主里完成质量整改后直接说“质量整改已完成，继续当前流程”"
         status = self._effective_run_status(
             run_state=run_state,
             docs_state=docs_state,
@@ -1471,8 +1488,8 @@ class SuperDevCLI(
             "waiting_architecture_revision",
             "waiting_quality_revision",
         }:
-            return '在宿主里说“继续当前流程，不要重新开题”'
-        return '在宿主里说“继续当前流程，进入前端实现与运行验证”'
+            return "在宿主里说“继续当前流程，不要重新开题”"
+        return "在宿主里说“继续当前流程，进入前端实现与运行验证”"
 
     def _current_workflow_description(self, project_dir: Path) -> str:
         run_state = self._read_pipeline_run_state(project_dir) or {}
@@ -1658,9 +1675,10 @@ class SuperDevCLI(
             for item in recent_snapshots[:3]:
                 if not isinstance(item, dict):
                     continue
-                step = str(item.get("current_step_label", "")).strip() or str(
-                    item.get("status", "")
-                ).strip()
+                step = (
+                    str(item.get("current_step_label", "")).strip()
+                    or str(item.get("status", "")).strip()
+                )
                 updated_at = str(item.get("updated_at", "")).strip() or "-"
                 lines.append(f"- {updated_at} · {step}")
         recent_events = load_recent_workflow_events(project_dir, limit=3)
@@ -1941,11 +1959,11 @@ class SuperDevCLI(
             return status_map[status]
 
         command_map = {
-            '在宿主里说“继续当前流程，不要重新开题”': (
+            "在宿主里说“继续当前流程，不要重新开题”": (
                 "当前流程可从中断点恢复",
                 "先从上次中断的位置继续，不要重新开一轮。",
             ),
-            '在宿主里说“继续当前流程”': (
+            "在宿主里说“继续当前流程”": (
                 "当前流程需要先看状态面板",
                 "先看状态面板，确认当前卡在哪一步。",
             ),
@@ -2064,7 +2082,7 @@ class SuperDevCLI(
         )
         checkpoint_status = str(summary.get("workflow_status", "")).strip() or "ready"
         recommended_command = (
-            str(summary.get("recommended_command", "")).strip() or '在宿主里说“继续当前流程”'
+            str(summary.get("recommended_command", "")).strip() or "在宿主里说“继续当前流程”"
         )
         blocker = str(summary.get("blocker", "")).strip()
         evidence = str(summary.get("evidence", "")).strip()
@@ -2147,7 +2165,7 @@ class SuperDevCLI(
             payload={
                 "status": "ready",
                 "reason": blocker or "当前没有检测到待恢复的流程门禁，建议从状态面板继续。",
-                "recommended_command": '在宿主里说“继续当前流程”',
+                "recommended_command": "在宿主里说“继续当前流程”",
                 "evidence": evidence or "未检测到更高优先级阻断项",
                 "workflow_mode": str(summary.get("workflow_mode", "")).strip(),
                 "action_card": summary.get("action_card"),
@@ -2898,9 +2916,7 @@ class SuperDevCLI(
                 self.console.print(
                     "  1. 在宿主中查看并修订 output/*-prd.md / *-architecture.md / *-uiux.md"
                 )
-                self.console.print(
-                    '  2. 在宿主中明确回复：“文档确认，可以继续”'
-                )
+                self.console.print("  2. 在宿主中明确回复：“文档确认，可以继续”")
                 self.console.print("  3. 继续留在当前 Super Dev 流程内，不要切回普通聊天")
                 metric_files = _finalize_metrics(success=False, reason="waiting_confirmation")
                 contract_files = _finalize_contract(success=False, reason="waiting_confirmation")
@@ -2933,9 +2949,7 @@ class SuperDevCLI(
                 self.console.print("[cyan]继续方式:[/cyan]")
                 self.console.print("  1. 先更新 output/*-uiux.md")
                 self.console.print("  2. 重做前端并重新执行 frontend runtime 与 UI review")
-                self.console.print(
-                    '  3. 在宿主中明确回复：“UI 改版已完成，继续当前流程”'
-                )
+                self.console.print("  3. 在宿主中明确回复：“UI 改版已完成，继续当前流程”")
                 self.console.print("  4. 继续留在当前 Super Dev 流程内，不要重新开题")
                 metric_files = _finalize_metrics(success=False, reason="waiting_ui_revision")
                 contract_files = _finalize_contract(success=False, reason="waiting_ui_revision")
@@ -2970,9 +2984,7 @@ class SuperDevCLI(
                 self.console.print("[cyan]继续方式:[/cyan]")
                 self.console.print("  1. 先更新 output/*-architecture.md")
                 self.console.print("  2. 同步调整任务拆解与相关实现方案")
-                self.console.print(
-                    '  3. 在宿主中明确回复：“架构调整已完成，继续当前流程”'
-                )
+                self.console.print("  3. 在宿主中明确回复：“架构调整已完成，继续当前流程”")
                 self.console.print("  4. 继续留在当前 Super Dev 流程内，不要重新开题")
                 metric_files = _finalize_metrics(
                     success=False, reason="waiting_architecture_revision"
@@ -3011,9 +3023,7 @@ class SuperDevCLI(
                 self.console.print("[cyan]继续方式:[/cyan]")
                 self.console.print("  1. 先修复质量门禁或安全问题")
                 self.console.print("  2. 重新执行 quality gate 与 release proof-pack")
-                self.console.print(
-                    '  3. 在宿主中明确回复：“质量整改已完成，继续当前流程”'
-                )
+                self.console.print("  3. 在宿主中明确回复：“质量整改已完成，继续当前流程”")
                 self.console.print("  4. 继续留在当前 Super Dev 流程内，不要重新开题")
                 metric_files = _finalize_metrics(success=False, reason="waiting_quality_revision")
                 contract_files = _finalize_contract(
@@ -4713,12 +4723,23 @@ class SuperDevCLI(
             project_dir = Path.cwd()
             available_targets = [item.name for item in manager.list_targets()]
             detected_meta: dict[str, list[str]] = {}
+            competition_evidence: dict[str, object] = {}
             if args.status and not args.target:
                 self.console.print("[red]--status 仅可与 --target 一起使用[/red]")
                 return 1
             if args.status and args.status not in {"pending", "passed", "failed"}:
                 self.console.print("[red]无效的运行时验收状态[/red]")
                 return 1
+            if args.competition_evidence_json:
+                try:
+                    parsed_evidence = json.loads(args.competition_evidence_json)
+                except json.JSONDecodeError as exc:
+                    self.console.print(f"[red]比赛验收证据 JSON 无效:[/red] {exc}")
+                    return 1
+                if not isinstance(parsed_evidence, dict):
+                    self.console.print("[red]比赛验收证据必须是 JSON object[/red]")
+                    return 1
+                competition_evidence = parsed_evidence
             if args.status and args.target:
                 runtime_state, file_path = self._update_host_runtime_validation_state(
                     project_dir=project_dir,
@@ -4726,6 +4747,7 @@ class SuperDevCLI(
                     status=args.status,
                     comment=args.comment or "",
                     actor=args.actor or "user",
+                    competition_evidence=competition_evidence,
                 )
                 status_label = self._host_runtime_status_label(args.status)
                 if args.json:
@@ -4742,7 +4764,14 @@ class SuperDevCLI(
                                 "comment": args.comment or "",
                                 "actor": args.actor or "user",
                                 "file_path": str(file_path),
-                                "updated_at": runtime_state.get("updated_at", ""),
+                                "updated_at": str(host_entry.get("updated_at", "")).strip(),
+                                "competition_evidence": host_entry.get("competition_evidence", {}),
+                                "competition_evidence_ready": bool(
+                                    host_entry.get("competition_evidence_ready", False)
+                                ),
+                                "competition_evidence_missing": list(
+                                    host_entry.get("competition_evidence_missing", [])
+                                ),
                                 "runtime_evidence": self._build_runtime_evidence_record(
                                     host_id=args.target,
                                     surface_ready=True,
@@ -4760,6 +4789,16 @@ class SuperDevCLI(
                 )
                 if args.comment:
                     self.console.print(f"[dim]备注: {args.comment}[/dim]")
+                missing_competition_sections = (
+                    runtime_state.get("hosts", {})
+                    .get(args.target, {})
+                    .get("competition_evidence_missing", [])
+                )
+                if isinstance(missing_competition_sections, list) and missing_competition_sections:
+                    self.console.print(
+                        "[yellow]SEEAI 比赛证据仍未补齐[/yellow] "
+                        + "、".join(str(item) for item in missing_competition_sections)
+                    )
                 self.console.print(f"[dim]状态文件: {file_path}[/dim]")
                 return 0
 
@@ -5225,9 +5264,7 @@ class SuperDevCLI(
         if current["comment"]:
             self.console.print(f"[dim]备注: {current['comment']}[/dim]")
         self.console.print("[dim]先查看 output/*-prd.md、*-architecture.md、*-uiux.md[/dim]")
-        self.console.print(
-            '[dim]然后回到宿主里明确回复：“文档确认，可以继续”[/dim]'
-        )
+        self.console.print("[dim]然后回到宿主里明确回复：“文档确认，可以继续”[/dim]")
         return False
 
     def _ensure_ui_revision_clear_for_execution(
@@ -5246,9 +5283,7 @@ class SuperDevCLI(
         self.console.print(
             "[dim]先更新 output/*-uiux.md，再重做前端，并重新执行 frontend runtime 与 UI review[/dim]"
         )
-        self.console.print(
-            '[dim]完成后回到宿主里明确回复：“UI 改版已完成，继续当前流程”[/dim]'
-        )
+        self.console.print("[dim]完成后回到宿主里明确回复：“UI 改版已完成，继续当前流程”[/dim]")
         return False
 
     def _ensure_preview_confirmation_for_execution(
@@ -5271,9 +5306,7 @@ class SuperDevCLI(
         self.console.print(
             "[dim]先评审当前前端预览；若需要继续修改，完成前端返工并重跑 frontend runtime 后再确认[/dim]"
         )
-        self.console.print(
-            '[dim]完成后回到宿主里明确回复：“前端预览确认，可以继续”[/dim]'
-        )
+        self.console.print("[dim]完成后回到宿主里明确回复：“前端预览确认，可以继续”[/dim]")
         return False
 
     def _ensure_architecture_revision_clear_for_execution(
@@ -5292,9 +5325,7 @@ class SuperDevCLI(
         self.console.print(
             "[dim]先更新 output/*-architecture.md，再同步调整实现方案与相关任务拆解[/dim]"
         )
-        self.console.print(
-            '[dim]完成后回到宿主里明确回复：“架构调整已完成，继续当前流程”[/dim]'
-        )
+        self.console.print("[dim]完成后回到宿主里明确回复：“架构调整已完成，继续当前流程”[/dim]")
         return False
 
     def _ensure_quality_revision_clear_for_execution(
@@ -5313,9 +5344,7 @@ class SuperDevCLI(
         self.console.print(
             "[dim]先修复质量/安全问题，重新执行 quality gate 与 release proof-pack[/dim]"
         )
-        self.console.print(
-            '[dim]完成后回到宿主里明确回复：“质量整改已完成，继续当前流程”[/dim]'
-        )
+        self.console.print("[dim]完成后回到宿主里明确回复：“质量整改已完成，继续当前流程”[/dim]")
         return False
 
     def _ensure_execution_gates(self, project_dir: Path, *, action_label: str) -> bool:

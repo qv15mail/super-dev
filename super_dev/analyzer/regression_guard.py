@@ -123,7 +123,9 @@ class RegressionGuardBuilder:
         md_path = self.output_dir / f"{self.project_name}-regression-guard.md"
         json_path = self.output_dir / f"{self.project_name}-regression-guard.json"
         md_path.write_text(report.to_markdown(), encoding="utf-8")
-        json_path.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        json_path.write_text(
+            json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         return {"markdown": md_path, "json": json_path}
 
     def _build_checks(

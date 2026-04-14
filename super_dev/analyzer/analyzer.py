@@ -268,10 +268,7 @@ class ProjectAnalyzer:
         except Exception:
             parts = path.parts
 
-        return any(
-            part.startswith(".") or part in self._ignored_dir_names
-            for part in parts
-        )
+        return any(part.startswith(".") or part in self._ignored_dir_names for part in parts)
 
     def _check_file_for_patterns(
         self, file_path: Path, patterns: list[DesignPattern], language: str
@@ -295,9 +292,7 @@ class ProjectAnalyzer:
         except (OSError, UnicodeDecodeError):
             pass
 
-    def _detect_python_ast_patterns(
-        self, file_path: Path, patterns: list[DesignPattern]
-    ) -> None:
+    def _detect_python_ast_patterns(self, file_path: Path, patterns: list[DesignPattern]) -> None:
         """使用 AST 检测 Python 设计模式"""
         try:
             content = file_path.read_text(encoding="utf-8")
@@ -465,7 +460,4 @@ class ProjectAnalyzer:
         if total == 0:
             return {}
 
-        return {
-            lang: (count / total) * 100
-            for lang, count in self._report.languages_used.items()
-        }
+        return {lang: (count / total) * 100 for lang, count in self._report.languages_used.items()}

@@ -22,6 +22,11 @@ from ..host_adapters import (
     get_special_install_surfaces,
 )
 from ..host_registry import get_protocol_mode, get_protocol_summary
+from ..seeai_smoke_scenarios import (
+    build_seeai_evidence_template,
+    build_seeai_smoke_suite,
+    get_seeai_acceptance_gates,
+)
 from .manager_content_mixin import IntegrationManagerContentMixin
 
 
@@ -68,6 +73,9 @@ class HostAdapterProfile:
     competition_smoke_test_prompt: str
     competition_smoke_test_steps: list[str]
     competition_smoke_success_signal: str
+    competition_smoke_suite: list[dict[str, object]]
+    competition_acceptance_gates: list[str]
+    competition_evidence_template: dict[str, object]
     precondition_status: str
     precondition_label: str
     precondition_guidance: list[str]
@@ -1121,6 +1129,9 @@ class IntegrationManager(IntegrationManagerContentMixin):
             competition_smoke_test_prompt=str(smoke["competition_smoke_test_prompt"]),
             competition_smoke_test_steps=list(smoke["competition_smoke_test_steps"]),
             competition_smoke_success_signal=str(smoke["competition_smoke_success_signal"]),
+            competition_smoke_suite=list(smoke["competition_smoke_suite"]),
+            competition_acceptance_gates=list(smoke["competition_acceptance_gates"]),
+            competition_evidence_template=dict(smoke["competition_evidence_template"]),
             precondition_status=str(preconditions["status"]),
             precondition_label=str(preconditions["label"]),
             precondition_guidance=list(preconditions["guidance"]),
@@ -2117,11 +2128,11 @@ class IntegrationManager(IntegrationManagerContentMixin):
         )
         competition_trigger = (
             self.SEEAI_TEXT_TRIGGER_PREFIX
-            + " 请先不要开始编码，只回复 SEEAI_SMOKE_OK，并说明你会按半小时比赛链路执行：先 fast research、再 compact 三文档、确认后 compact Spec、然后 full-stack sprint。"
+            + " 请先不要开始编码，只回复 SEEAI_SMOKE_OK，并说明你会按半小时比赛链路执行：先 fast research、再 compact 三文档、确认后 compact Spec、然后 full-stack sprint；同时承诺 12 分钟内先跑出第一个可见界面，若初始化失败会立刻切轻量回退栈，且保留下来的模块都必须真实启动并进入主演示路径。"
         )
         if self.supports_slash(target):
             trigger = '/super-dev "请先不要开始编码，只回复 SMOKE_OK，并确认已读取当前项目中的 Super Dev 规则。"'
-            competition_trigger = '/super-dev-seeai "请先不要开始编码，只回复 SEEAI_SMOKE_OK，并说明你会按半小时比赛链路执行：先 fast research、再 compact 三文档、确认后 compact Spec、然后 full-stack sprint。"'
+            competition_trigger = '/super-dev-seeai "请先不要开始编码，只回复 SEEAI_SMOKE_OK，并说明你会按半小时比赛链路执行：先 fast research、再 compact 三文档、确认后 compact Spec、然后 full-stack sprint；同时承诺 12 分钟内先跑出第一个可见界面，若初始化失败会立刻切轻量回退栈，且保留下来的模块都必须真实启动并进入主演示路径。"'
         if target == "codex-cli":
             steps = [
                 "完成接入后先重启 codex。",
@@ -2148,13 +2159,25 @@ class IntegrationManager(IntegrationManagerContentMixin):
             steps.insert(1, "确认当前 Agent Chat/Workflow 绑定的是目标项目。")
             competition_steps.insert(1, "确认当前 Agent Chat/Workflow 绑定的是目标项目。")
         competition_steps.extend(get_competition_smoke_extra_steps(target))
+        competition_suite = build_seeai_smoke_suite(
+            "$super-dev-seeai"
+            if target == "codex-cli"
+            else (
+                "/super-dev-seeai"
+                if self.supports_slash(target)
+                else self.SEEAI_TEXT_TRIGGER_PREFIX
+            )
+        )
         return {
             "smoke_test_prompt": trigger,
             "smoke_test_steps": steps,
             "smoke_success_signal": "宿主回复 SMOKE_OK，并明确表示已读取当前项目内的 Super Dev 规则/AGENTS/命令映射，且没有直接开始编码。",
             "competition_smoke_test_prompt": competition_trigger,
             "competition_smoke_test_steps": competition_steps,
-            "competition_smoke_success_signal": "宿主回复 SEEAI_SMOKE_OK，并在首轮明确给出作品类型、wow 点、P0 主路径、主动放弃项，同时表示将按半小时比赛链路执行：fast research -> compact 三文档 -> docs confirm -> compact Spec -> full-stack sprint。",
+            "competition_smoke_success_signal": "宿主回复 SEEAI_SMOKE_OK，并在首轮明确给出作品类型、wow 点、P0 主路径、主动放弃项，同时表示将按半小时比赛链路执行：fast research -> compact 三文档 -> docs confirm -> compact Spec -> full-stack sprint；且明确承诺 12 分钟内先跑出首个可见界面，初始化失败会立刻切轻量回退栈，保留下来的模块都必须真实启动并进入主演示路径。",
+            "competition_smoke_suite": competition_suite,
+            "competition_acceptance_gates": get_seeai_acceptance_gates(),
+            "competition_evidence_template": build_seeai_evidence_template(),
         }
 
     def _precondition_profile(self, *, target: str) -> dict[str, object]:

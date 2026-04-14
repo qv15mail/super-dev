@@ -115,6 +115,13 @@ class TestIntegrationManager:
         assert "默认 sprint：输入页/主流程 -> 结果页" in content
         assert "题型识别提示" in content
         assert "品牌、官网、落地页、活动宣传、首屏" in content
+        assert "比赛设计包（先选后做）" in content
+        assert "Arena Neon" in content
+        assert "快而稳的执行守卫" in content
+        assert "12 分钟内必须跑出第一个可见" in content
+        assert "模块真实生效规则" in content
+        assert "每个保留下来的模块都必须真实启动" in content
+        assert "失败优先回退协议" in content
 
     def test_setup_creates_host_specific_seeai_surfaces_for_codebuddy_and_openclaw(
         self, temp_project_dir: Path

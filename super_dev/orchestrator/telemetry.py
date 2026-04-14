@@ -59,7 +59,9 @@ class PipelineTelemetryReport:
             )
         )
 
-    def finalize(self, success: bool, total_duration_seconds: float, failure_reason: str = "") -> None:
+    def finalize(
+        self, success: bool, total_duration_seconds: float, failure_reason: str = ""
+    ) -> None:
         self.success = success
         self.total_duration_seconds = max(0.0, total_duration_seconds)
         self.failure_reason = failure_reason
@@ -97,7 +99,15 @@ class PipelineTelemetryReport:
         ]
         if self.failure_reason:
             lines.append(f"- Failure reason: {self.failure_reason}")
-        lines.extend(["", "## Stages", "", "| Stage | Name | Status | Duration(s) |", "|:---|:---|:---:|---:|"])
+        lines.extend(
+            [
+                "",
+                "## Stages",
+                "",
+                "| Stage | Name | Status | Duration(s) |",
+                "|:---|:---|:---:|---:|",
+            ]
+        )
         for stage in self.stages:
             status = "PASS" if stage.success else "FAIL"
             lines.append(
@@ -111,7 +121,9 @@ class PipelineTelemetryReport:
         output_dir.mkdir(parents=True, exist_ok=True)
         json_file = output_dir / f"{self.project_name}-pipeline-metrics.json"
         md_file = output_dir / f"{self.project_name}-pipeline-metrics.md"
-        json_file.write_text(json.dumps(self.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
+        json_file.write_text(
+            json.dumps(self.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         md_file.write_text(self.to_markdown(), encoding="utf-8")
 
         history_dir = output_dir / "metrics-history"
@@ -119,7 +131,9 @@ class PipelineTelemetryReport:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         history_json_file = history_dir / f"{self.project_name}-pipeline-metrics-{stamp}.json"
         history_md_file = history_dir / f"{self.project_name}-pipeline-metrics-{stamp}.md"
-        history_json_file.write_text(json.dumps(self.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
+        history_json_file.write_text(
+            json.dumps(self.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         history_md_file.write_text(self.to_markdown(), encoding="utf-8")
         return {
             "json": json_file,

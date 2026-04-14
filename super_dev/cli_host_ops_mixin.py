@@ -69,6 +69,10 @@ from .runtime_evidence import (
     IntegrationStatusRecord,
     RuntimeStatus,
     RuntimeStatusRecord,
+    competition_evidence_missing_sections,
+    competition_evidence_ready,
+    competition_evidence_shallow_sections,
+    normalize_competition_evidence,
     serialize_host_runtime_evidence,
 )
 from .terminal import normalize_terminal_text, output_mode_label, output_mode_reason
@@ -490,9 +494,7 @@ class CliHostOpsMixin:
             max_visible = max(5, term_height - 10)
             compact = term_width < 100
 
-            subtitle = (
-                "Space 勾选  Enter 安装  U 卸载  ↑↓ 移动  A 全选  R 清空  Esc 取消"
-            )
+            subtitle = "Space 勾选  Enter 安装  U 卸载  ↑↓ 移动  A 全选  R 清空  Esc 取消"
             header = Panel(
                 normalize_terminal_text(subtitle),
                 title="Super Dev",
@@ -500,9 +502,7 @@ class CliHostOpsMixin:
                 padding=(0, 1),
             )
 
-            table = Table(
-                show_header=True, header_style="bold cyan", expand=True, padding=(0, 1)
-            )
+            table = Table(show_header=True, header_style="bold cyan", expand=True, padding=(0, 1))
             table.add_column("", max_width=3, justify="center")
             table.add_column("#", max_width=3, style="cyan", justify="center")
             table.add_column("宿主", style="bold", ratio=3)
@@ -772,19 +772,16 @@ class CliHostOpsMixin:
             lines.append(f"当前模式: 仅接入 {self._host_label(args.host)}。")
         elif getattr(args, "all", False):
             lines.append("当前模式: 接入全部宿主。")
-        self.console.print(
-            Panel("\n".join(lines), title="Super Dev", padding=(1, 1), expand=True)
-        )
+        self.console.print(Panel("\n".join(lines), title="Super Dev", padding=(1, 1), expand=True))
         if not runtime_health.get("healthy", False):
-            self.console.print(
-                "[yellow]检测到旧版本残留，正在自动清理...[/yellow]"
-            )
+            self.console.print("[yellow]检测到旧版本残留，正在自动清理...[/yellow]")
             self._auto_fix_runtime_install(runtime_health)
             self.console.print("")
 
         # After runtime health fix, clean up legacy skills globally + refresh outdated
         try:
             from .skills import SkillManager
+
             cleaned = SkillManager.cleanup_all_legacy()
             if cleaned:
                 for path in cleaned:
@@ -3499,9 +3496,7 @@ class CliHostOpsMixin:
             skill_manager = SkillManager(Path.cwd())
             refreshed = skill_manager.refresh_all_installed()
             if refreshed:
-                self.console.print(
-                    f"[green]✓ 已刷新 {len(refreshed)} 个宿主的 Skills[/green]"
-                )
+                self.console.print(f"[green]✓ 已刷新 {len(refreshed)} 个宿主的 Skills[/green]")
         except Exception:
             self.console.print(
                 "[yellow]Skills 刷新未完成，可手动执行: super-dev setup --all --force[/yellow]"
@@ -4496,6 +4491,9 @@ class CliHostOpsMixin:
             "competition_smoke_test_prompt": profile.competition_smoke_test_prompt,
             "competition_smoke_test_steps": list(profile.competition_smoke_test_steps),
             "competition_smoke_success_signal": profile.competition_smoke_success_signal,
+            "competition_smoke_suite": list(profile.competition_smoke_suite),
+            "competition_acceptance_gates": list(profile.competition_acceptance_gates),
+            "competition_evidence_template": dict(profile.competition_evidence_template),
             "supports_skill_slash_entry": profile.host == "codex-cli",
             "skill_slash_entry_command": "/super-dev" if profile.host == "codex-cli" else "",
             "skill_slash_entry_note": (
@@ -4549,10 +4547,18 @@ class CliHostOpsMixin:
         else:
             integration_status = IntegrationStatus.MISSING
         comment = str(runtime_entry.get("comment", "")).strip()
+        competition_evidence = normalize_competition_evidence(
+            runtime_entry.get("competition_evidence", {})
+        )
         evidence = HostRuntimeEvidence(
             host_id=host_id,
             host_display_name=get_display_name(host_id) or host_id,
             summary="integration and runtime evidence are tracked separately",
+            competition_evidence=competition_evidence,
+            competition_evidence_ready=competition_evidence_ready(competition_evidence),
+            competition_evidence_missing=competition_evidence_missing_sections(
+                competition_evidence
+            ),
             integration_status=IntegrationStatusRecord(
                 status=integration_status,
                 evidence=("surface audit passed",) if surface_ready else ("surface gaps detected",),
@@ -4578,6 +4584,7 @@ class CliHostOpsMixin:
         status: str,
         comment: str,
         actor: str,
+        competition_evidence: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], Path]:
         payload = self._load_host_runtime_validation_state(project_dir=project_dir)
         hosts = dict(payload.get("hosts", {}))
@@ -4585,12 +4592,25 @@ class CliHostOpsMixin:
         if not isinstance(current, dict):
             current = {}
         timestamp = datetime.now(timezone.utc).isoformat()
+        existing_competition_evidence = normalize_competition_evidence(
+            current.get("competition_evidence", {})
+        )
+        incoming_competition_evidence = normalize_competition_evidence(competition_evidence or {})
+        merged_competition_evidence = {
+            **existing_competition_evidence,
+            **incoming_competition_evidence,
+        }
         hosts[target] = {
             "status": status,
             "comment": comment.strip(),
             "actor": actor.strip() or "user",
             "updated_at": timestamp,
             "status_source": str(current.get("status_source", "")).strip() or "manual",
+            "competition_evidence": merged_competition_evidence,
+            "competition_evidence_ready": competition_evidence_ready(merged_competition_evidence),
+            "competition_evidence_missing": list(
+                competition_evidence_missing_sections(merged_competition_evidence)
+            ),
         }
         file_path = save_host_runtime_validation(
             project_dir,
@@ -4646,6 +4666,21 @@ class CliHostOpsMixin:
                 runtime_entry = {}
             runtime_status = str(runtime_entry.get("status", "")).strip() or "pending"
             surface_ready = bool(host.get("ready", False))
+            competition_evidence = normalize_competition_evidence(
+                runtime_entry.get("competition_evidence", {})
+            )
+            competition_template = usage.get("competition_evidence_template", {})
+            competition_evidence_missing = list(
+                competition_evidence_missing_sections(competition_evidence)
+            )
+            competition_evidence_shallow = list(
+                competition_evidence_shallow_sections(competition_evidence, competition_template)
+            )
+            competition_evidence_ok = (
+                competition_evidence_ready(competition_evidence)
+                and not competition_evidence_shallow
+            )
+            competition_required = bool(competition_template)
             precondition_label = usage.get("precondition_label", "-")
             precondition_guidance = usage.get("precondition_guidance", [])
             precondition_items = usage.get("precondition_items", [])
@@ -4660,12 +4695,38 @@ class CliHostOpsMixin:
                 blocking_reason = "宿主真人运行时验收失败"
                 recommended_action = f"super-dev integrate audit --target {target} --repair --force"
                 blocker_type = "runtime"
+            elif (
+                competition_required and runtime_status == "passed" and not competition_evidence_ok
+            ):
+                if competition_evidence_shallow and not competition_evidence_missing:
+                    blocking_reason = "SEEAI 比赛验收证据内容过浅：" + "、".join(
+                        competition_evidence_shallow
+                    )
+                else:
+                    blocking_reason = "SEEAI 比赛验收证据不完整"
+                recommended_action = (
+                    f"super-dev integrate validate --target {target} --status passed "
+                    '--comment "补齐比赛验收证据" --competition-evidence-json '
+                    '\'{"first_response":{"summary":"作品类型 / wow 点 / P0 / 放弃项"},'
+                    '"runtime_checkpoint":{"summary":"12 分钟内首个可见界面 + 主路径首个点击动作 + 真实启动模块"},'
+                    '"fallback_decision":{"summary":"失败点 / 回退栈 / 降级原因"},'
+                    '"demo_path":{"summary":"30-60 秒主演示路径 + 结果页/结束态 + wow 点截图"}}\''
+                )
+                blocker_type = "competition_evidence"
             elif runtime_status != "passed":
                 blocking_reason = "宿主尚未完成真人运行时验收"
                 recommended_action = f'super-dev integrate validate --target {target} --status passed --comment "首轮先进入 research，三文档已真实落盘"'
                 blocker_type = "validation"
 
-            if not surface_ready or runtime_status != "passed":
+            if (
+                not surface_ready
+                or runtime_status != "passed"
+                or (
+                    competition_required
+                    and runtime_status == "passed"
+                    and not competition_evidence_ok
+                )
+            ):
                 blocker_entry = {
                     "host": target,
                     "type": blocker_type or "runtime",
@@ -4693,7 +4754,11 @@ class CliHostOpsMixin:
                     "integration_status": (
                         "project_and_global_installed" if surface_ready else "repair_needed"
                     ),
-                    "ready_for_delivery": surface_ready and runtime_status == "passed",
+                    "ready_for_delivery": (
+                        surface_ready
+                        and runtime_status == "passed"
+                        and (not competition_required or competition_evidence_ok)
+                    ),
                     "blocking_reason": blocking_reason,
                     "recommended_action": recommended_action,
                     "runtime_status": runtime_status,
@@ -4703,6 +4768,11 @@ class CliHostOpsMixin:
                     "manual_runtime_comment": str(runtime_entry.get("comment", "")).strip(),
                     "manual_runtime_actor": str(runtime_entry.get("actor", "")).strip(),
                     "manual_runtime_updated_at": str(runtime_entry.get("updated_at", "")).strip(),
+                    "competition_evidence": competition_evidence,
+                    "competition_evidence_ready": competition_evidence_ok,
+                    "competition_evidence_missing": competition_evidence_missing,
+                    "competition_evidence_shallow": competition_evidence_shallow,
+                    "competition_evidence_required": competition_required,
                     "runtime_evidence": self._build_runtime_evidence_record(
                         host_id=target,
                         surface_ready=surface_ready,

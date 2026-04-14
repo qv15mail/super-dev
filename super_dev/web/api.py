@@ -112,7 +112,32 @@ from super_dev.runtime_evidence import (
     IntegrationStatusRecord,
     RuntimeStatus,
     RuntimeStatusRecord,
+    competition_evidence_missing_sections,
+    competition_evidence_ready,
+    competition_evidence_shallow_sections,
+    normalize_competition_evidence,
     serialize_host_runtime_evidence,
+)
+from super_dev.seeai_design_system import (
+    SEEAI_ARCHETYPE_DETECTION_HINTS,
+    SEEAI_COMPACT_DOC_SECTIONS,
+    SEEAI_COMPLEXITY_PATTERNS,
+    SEEAI_COMPLEXITY_REDUCTION_RULES,
+    SEEAI_DEGRADE_RULE,
+    SEEAI_EXECUTION_GUARDRAILS,
+    SEEAI_FAILURE_PROTOCOL,
+    SEEAI_FIRST_RESPONSE_TEMPLATE,
+    SEEAI_MODULE_TRUTH_RULES,
+    SEEAI_RESEARCH_PRIORITIES,
+    SEEAI_SCOPE_RULE,
+    SEEAI_SEARCH_QUERIES,
+    SEEAI_TIMEBOX_BREAKDOWN,
+    get_seeai_archetype_playbook_map,
+    get_seeai_design_pack_map,
+)
+from super_dev.seeai_smoke_scenarios import (
+    get_seeai_acceptance_gates,
+    get_seeai_smoke_scenarios,
 )
 from super_dev.skills import SkillManager
 from super_dev.web.rate_limit import RateLimitMiddleware
@@ -284,6 +309,7 @@ class HostRuntimeValidationRequest(BaseModel):
     status: Literal["pending", "passed", "failed"]
     comment: str = ""
     actor: str = "user"
+    competition_evidence: dict[str, Any] = Field(default_factory=dict)
 
 
 class ExpertAdviceRequest(BaseModel):
@@ -757,56 +783,28 @@ def _competition_mode_payload(host_id: str, *, supports_slash: bool) -> dict[str
         "phase_chain": [phase.key for phase in contract.phase_chain],
         "agent_team": [agent.key for agent in get_agent_team("seeai")],
         "summary": "比赛快链路：保留 research/三文档/spec，但压缩成半小时内可展示的成品交付。",
-        "scope_rule": "先保主路径，再做 wow 点，最后才补额外工程深度。",
-        "degrade_rule": "后端或外部集成拖慢节奏时，优先 mock / 本地数据 / 高保真演示流。",
-        "first_response_template": [
-            "作品类型",
-            "评委 wow 点",
-            "P0 主路径",
-            "主动放弃项",
-            "关键假设",
-        ],
-        "timebox_breakdown": [
-            "0-4 分钟：fast research",
-            "4-8 分钟：compact 文档",
-            "8-10 分钟：docs confirm",
-            "10-12 分钟：compact spec",
-            "12-27 分钟：full-stack sprint",
-            "27-30 分钟：polish/handoff",
-        ],
-        "archetype_detection_hints": [
-            "品牌、官网、落地页、活动宣传、首屏 -> 官网类",
-            "玩法、得分、胜负、闯关、点击反馈 -> 小游戏类",
-            "生成、分析、查询、输入输出、结果页、效率提升 -> 工具类",
-        ],
+        "scope_rule": SEEAI_SCOPE_RULE,
+        "degrade_rule": SEEAI_DEGRADE_RULE,
+        "research_priorities": list(SEEAI_RESEARCH_PRIORITIES),
+        "default_search_queries": list(SEEAI_SEARCH_QUERIES),
+        "first_response_template": list(SEEAI_FIRST_RESPONSE_TEMPLATE),
+        "timebox_breakdown": list(SEEAI_TIMEBOX_BREAKDOWN),
+        "archetype_detection_hints": list(SEEAI_ARCHETYPE_DETECTION_HINTS),
         "compact_doc_sections": {
-            "research": ["题目理解", "参考风格", "Wow 点", "主动放弃项"],
-            "prd": ["作品目标", "P0 主路径", "P1 Wow 点", "P2 可选项", "非目标"],
-            "architecture": ["主循环", "技术栈", "数据流", "最小后端", "降级方案"],
-            "uiux": ["视觉方向", "首屏/主界面", "关键交互", "动效重点", "设计 Token"],
-            "spec": ["P0", "P1", "Polish"],
+            key: list(value) for key, value in SEEAI_COMPACT_DOC_SECTIONS.items()
         },
         "quality_floor": list(contract.quality_floor),
-        "archetype_playbooks": {
-            "landing_page": {
-                "label": "官网类",
-                "default_stack": "React/Vite 或 Next.js + Tailwind + Framer Motion",
-                "sprint_plan": ["Hero/首屏", "亮点区/品牌叙事", "CTA/滚动动效", "最终 polish"],
-                "focus": "主视觉、信息密度、滚动节奏、首屏转化",
-            },
-            "mini_game": {
-                "label": "小游戏类",
-                "default_stack": "HTML Canvas + Vanilla JS；复杂玩法再上 Phaser",
-                "sprint_plan": ["主循环可玩", "积分/胜负反馈", "特效/音效", "复玩和 polish"],
-                "focus": "玩法闭环、反馈感、积分胜负、再次游玩",
-            },
-            "tool": {
-                "label": "工具类",
-                "default_stack": "React + Vite + Tailwind；必要时补最小 Express/Fastify 后端",
-                "sprint_plan": ["输入页/主流程", "结果页", "分享/导出", "最终 polish"],
-                "focus": "高价值主流程、输入输出清晰、结果页直观",
-            },
-        },
+        "judge_checklist": list(contract.judge_checklist),
+        "execution_guardrails": list(SEEAI_EXECUTION_GUARDRAILS),
+        "module_truth_rules": list(SEEAI_MODULE_TRUTH_RULES),
+        "complexity_reduction_rules": list(SEEAI_COMPLEXITY_REDUCTION_RULES),
+        "complexity_patterns": list(SEEAI_COMPLEXITY_PATTERNS),
+        "failure_protocol": list(SEEAI_FAILURE_PROTOCOL),
+        "design_packs": get_seeai_design_pack_map(),
+        "archetype_playbooks": get_seeai_archetype_playbook_map(),
+        "module_activation_gate": "仅保留真实启动、真实交互、真实进入主演示路径的模块；未接入主路径的模块默认删除。",
+        "smoke_scenarios": get_seeai_smoke_scenarios(),
+        "acceptance_gates": get_seeai_acceptance_gates(),
         "host_tips": [],
     }
 
@@ -882,6 +880,9 @@ def _build_host_tool_catalog_payload() -> list[dict[str, Any]]:
                 "competition_smoke_test_prompt": profile.competition_smoke_test_prompt,
                 "competition_smoke_test_steps": list(profile.competition_smoke_test_steps),
                 "competition_smoke_success_signal": profile.competition_smoke_success_signal,
+                "competition_smoke_suite": list(profile.competition_smoke_suite),
+                "competition_acceptance_gates": list(profile.competition_acceptance_gates),
+                "competition_evidence_template": dict(profile.competition_evidence_template),
                 "supports_skill_slash_entry": host_id == "codex-cli",
                 "skill_slash_entry_command": "/super-dev" if host_id == "codex-cli" else "",
                 "skill_slash_entry_note": (
@@ -1838,6 +1839,9 @@ def _serialize_host_usage_profile(
         "competition_smoke_test_prompt": profile.competition_smoke_test_prompt,
         "competition_smoke_test_steps": list(profile.competition_smoke_test_steps),
         "competition_smoke_success_signal": profile.competition_smoke_success_signal,
+        "competition_smoke_suite": list(profile.competition_smoke_suite),
+        "competition_acceptance_gates": list(profile.competition_acceptance_gates),
+        "competition_evidence_template": dict(profile.competition_evidence_template),
         "supports_skill_slash_entry": target == "codex-cli",
         "skill_slash_entry_command": "/super-dev" if target == "codex-cli" else "",
         "skill_slash_entry_note": (
@@ -1893,10 +1897,16 @@ def _build_runtime_evidence_record(
     else:
         integration_status = IntegrationStatus.MISSING
     comment = str(runtime_entry.get("comment", "")).strip()
+    competition_evidence = normalize_competition_evidence(
+        runtime_entry.get("competition_evidence", {})
+    )
     evidence = HostRuntimeEvidence(
         host_id=host_id,
         host_display_name=get_display_name(host_id) or host_id,
         summary="integration and runtime evidence are tracked separately",
+        competition_evidence=competition_evidence,
+        competition_evidence_ready=competition_evidence_ready(competition_evidence),
+        competition_evidence_missing=competition_evidence_missing_sections(competition_evidence),
         integration_status=IntegrationStatusRecord(
             status=integration_status,
             evidence=("surface audit passed",) if surface_ready else ("surface gaps detected",),
@@ -1922,6 +1932,7 @@ def _update_host_runtime_validation_state(
     status: str,
     comment: str,
     actor: str,
+    competition_evidence: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], Path]:
     payload = _load_host_runtime_validation_state(project_dir=project_dir)
     hosts = dict(payload.get("hosts", {}))
@@ -1929,12 +1940,25 @@ def _update_host_runtime_validation_state(
     if not isinstance(current, dict):
         current = {}
     timestamp = datetime.now(timezone.utc).isoformat()
+    existing_competition_evidence = normalize_competition_evidence(
+        current.get("competition_evidence", {})
+    )
+    incoming_competition_evidence = normalize_competition_evidence(competition_evidence or {})
+    merged_competition_evidence = {
+        **existing_competition_evidence,
+        **incoming_competition_evidence,
+    }
     hosts[host] = {
         "status": status,
         "comment": comment.strip(),
         "actor": actor.strip() or "user",
         "updated_at": timestamp,
         "status_source": str(current.get("status_source", "")).strip() or "manual",
+        "competition_evidence": merged_competition_evidence,
+        "competition_evidence_ready": competition_evidence_ready(merged_competition_evidence),
+        "competition_evidence_missing": list(
+            competition_evidence_missing_sections(merged_competition_evidence)
+        ),
     }
     file_path = save_host_runtime_validation(project_dir, {"hosts": hosts})
     updated = _load_host_runtime_validation_state(project_dir=project_dir)
@@ -1971,6 +1995,20 @@ def _build_host_runtime_validation_payload(
             runtime_entry = {}
         runtime_status = str(runtime_entry.get("status", "")).strip() or "pending"
         surface_ready = bool(host.get("ready", False))
+        competition_evidence = normalize_competition_evidence(
+            runtime_entry.get("competition_evidence", {})
+        )
+        competition_template = usage.get("competition_evidence_template", {})
+        competition_evidence_missing = list(
+            competition_evidence_missing_sections(competition_evidence)
+        )
+        competition_evidence_shallow = list(
+            competition_evidence_shallow_sections(competition_evidence, competition_template)
+        )
+        competition_evidence_ok = (
+            competition_evidence_ready(competition_evidence) and not competition_evidence_shallow
+        )
+        competition_required = bool(competition_template)
         precondition_label = usage.get("precondition_label", "-")
         precondition_guidance = usage.get("precondition_guidance", [])
         precondition_items = usage.get("precondition_items", [])
@@ -1985,12 +2023,32 @@ def _build_host_runtime_validation_payload(
             blocking_reason = "宿主真人运行时验收失败"
             recommended_action = f"super-dev integrate audit --target {target} --repair --force"
             blocker_type = "runtime"
+        elif competition_required and runtime_status == "passed" and not competition_evidence_ok:
+            if competition_evidence_shallow and not competition_evidence_missing:
+                blocking_reason = "SEEAI 比赛验收证据内容过浅：" + "、".join(
+                    competition_evidence_shallow
+                )
+            else:
+                blocking_reason = "SEEAI 比赛验收证据不完整"
+            recommended_action = (
+                f"super-dev integrate validate --target {target} --status passed "
+                '--comment "补齐比赛验收证据" --competition-evidence-json '
+                '\'{"first_response":{"summary":"作品类型 / wow 点 / P0 / 放弃项"},'
+                '"runtime_checkpoint":{"summary":"12 分钟内首个可见界面 + 主路径首个点击动作 + 真实启动模块"},'
+                '"fallback_decision":{"summary":"失败点 / 回退栈 / 降级原因"},'
+                '"demo_path":{"summary":"30-60 秒主演示路径 + 结果页/结束态 + wow 点截图"}}\''
+            )
+            blocker_type = "competition_evidence"
         elif runtime_status != "passed":
             blocking_reason = "宿主尚未完成真人运行时验收"
             recommended_action = f'super-dev integrate validate --target {target} --status passed --comment "首轮先进入 research，三文档已真实落盘"'
             blocker_type = "validation"
 
-        if not surface_ready or runtime_status != "passed":
+        if (
+            not surface_ready
+            or runtime_status != "passed"
+            or (competition_required and runtime_status == "passed" and not competition_evidence_ok)
+        ):
             blockers.append(
                 {
                     "host": target,
@@ -2030,7 +2088,11 @@ def _build_host_runtime_validation_payload(
                 "integration_status": (
                     "project_and_global_installed" if surface_ready else "repair_needed"
                 ),
-                "ready_for_delivery": surface_ready and runtime_status == "passed",
+                "ready_for_delivery": (
+                    surface_ready
+                    and runtime_status == "passed"
+                    and (not competition_required or competition_evidence_ok)
+                ),
                 "blocking_reason": blocking_reason,
                 "recommended_action": recommended_action,
                 "runtime_status": runtime_status,
@@ -2040,6 +2102,11 @@ def _build_host_runtime_validation_payload(
                 "manual_runtime_comment": str(runtime_entry.get("comment", "")).strip(),
                 "manual_runtime_actor": str(runtime_entry.get("actor", "")).strip(),
                 "manual_runtime_updated_at": str(runtime_entry.get("updated_at", "")).strip(),
+                "competition_evidence": competition_evidence,
+                "competition_evidence_ready": competition_evidence_ok,
+                "competition_evidence_missing": competition_evidence_missing,
+                "competition_evidence_shallow": competition_evidence_shallow,
+                "competition_evidence_required": competition_required,
                 "runtime_evidence": _build_runtime_evidence_record(
                     host_id=target,
                     surface_ready=surface_ready,
@@ -3762,6 +3829,7 @@ async def update_hosts_runtime_validation(
         status=request.status,
         comment=request.comment,
         actor=request.actor,
+        competition_evidence=request.competition_evidence,
     )
     host_entry = runtime_state.get("hosts", {}).get(request.host, {})
     if not isinstance(host_entry, dict):
@@ -3774,6 +3842,11 @@ async def update_hosts_runtime_validation(
         "comment": str(host_entry.get("comment", "")).strip(),
         "actor": str(host_entry.get("actor", "")).strip(),
         "updated_at": str(host_entry.get("updated_at", "")).strip(),
+        "competition_evidence": normalize_competition_evidence(
+            host_entry.get("competition_evidence", {})
+        ),
+        "competition_evidence_ready": bool(host_entry.get("competition_evidence_ready", False)),
+        "competition_evidence_missing": list(host_entry.get("competition_evidence_missing", [])),
         "runtime_evidence": _build_runtime_evidence_record(
             host_id=request.host,
             surface_ready=True,

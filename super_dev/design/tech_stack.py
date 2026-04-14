@@ -15,6 +15,7 @@ from pathlib import Path
 
 class TechStack(str, Enum):
     """技术栈枚举"""
+
     NEXTJS = "Next.js"
     REMIX = "Remix"
     REACT = "React"
@@ -31,6 +32,7 @@ class TechStack(str, Enum):
 
 class PracticeCategory(str, Enum):
     """实践类别"""
+
     ARCHITECTURE = "architecture"
     PERFORMANCE = "performance"
     STATE_MANAGEMENT = "state_management"
@@ -44,6 +46,7 @@ class PracticeCategory(str, Enum):
 @dataclass
 class TechBestPractice:
     """技术栈最佳实践"""
+
     stack: TechStack
     category: PracticeCategory
     topic: str
@@ -57,6 +60,7 @@ class TechBestPractice:
 @dataclass
 class TechPattern:
     """设计模式"""
+
     stack: TechStack
     name: str
     description: str
@@ -69,6 +73,7 @@ class TechPattern:
 @dataclass
 class PerformanceTip:
     """性能优化建议"""
+
     stack: TechStack
     topic: str
     technique: str
@@ -81,6 +86,7 @@ class PerformanceTip:
 @dataclass
 class StackRecommendation:
     """技术栈推荐"""
+
     practice: TechBestPractice
     priority: str  # critical, high, medium, low
     context: str
@@ -132,7 +138,7 @@ class TechStackEngine:
 
     def _load_practices(self, csv_path: Path):
         """加载最佳实践数据"""
-        with open(csv_path, encoding='utf-8') as f:
+        with open(csv_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
@@ -144,7 +150,7 @@ class TechStackEngine:
                         anti_pattern=row["anti_pattern"],
                         code_example=row["code_example"],
                         benefits=row["benefits"],
-                        complexity=row["complexity"]
+                        complexity=row["complexity"],
                     )
                     self.practices.append(practice)
                 except Exception as e:
@@ -152,7 +158,7 @@ class TechStackEngine:
 
     def _load_patterns(self, csv_path: Path):
         """加载设计模式数据"""
-        with open(csv_path, encoding='utf-8') as f:
+        with open(csv_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
@@ -163,7 +169,7 @@ class TechStackEngine:
                         use_case=row["use_case"],
                         implementation=row["implementation"],
                         pros=row["pros"].split(";"),
-                        cons=row["cons"].split(";")
+                        cons=row["cons"].split(";"),
                     )
                     self.patterns.append(pattern)
                 except Exception as e:
@@ -171,7 +177,7 @@ class TechStackEngine:
 
     def _load_performance(self, csv_path: Path):
         """加载性能建议数据"""
-        with open(csv_path, encoding='utf-8') as f:
+        with open(csv_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
@@ -182,7 +188,7 @@ class TechStackEngine:
                         impact=row["impact"],
                         effort=row["effort"],
                         description=row["description"],
-                        code_snippet=row["code_snippet"]
+                        code_snippet=row["code_snippet"],
                     )
                     self.performance_tips.append(tip)
                 except Exception as e:
@@ -199,7 +205,7 @@ class TechStackEngine:
                 anti_pattern="Mark all components with 'use client'",
                 code_example="// Server Component (default)\nexport default function Profile() {\n  return <div>{user.name}</div>\n}\n\n// Client Component\n'use client'\nexport function Button() { return <button>Click</button> }",
                 benefits="Reduced bundle size, improved performance, simpler data fetching",
-                complexity="low"
+                complexity="low",
             ),
             TechBestPractice(
                 stack=TechStack.REACT,
@@ -209,7 +215,7 @@ class TechStackEngine:
                 anti_pattern="Load entire application bundle upfront",
                 code_example="const Dashboard = React.lazy(() => import('./Dashboard'));\n\n<Suspense fallback={<Loading />}>\n  <Dashboard />\n</Suspense>",
                 benefits="Faster initial load, better user experience",
-                complexity="medium"
+                complexity="medium",
             ),
             TechBestPractice(
                 stack=TechStack.VUE,
@@ -219,8 +225,8 @@ class TechStackEngine:
                 anti_pattern="Mix Options API and Composition API",
                 code_example="<script setup>\nimport { ref, computed } from 'vue'\nconst count = ref(0)\nconst doubled = computed(() => count.value * 2)\n</script>",
                 benefits="Better type inference, code organization, tree-shaking",
-                complexity="low"
-            )
+                complexity="low",
+            ),
         ]
 
     def _get_default_patterns(self) -> list[TechPattern]:
@@ -233,7 +239,7 @@ class TechStackEngine:
                 use_case="Dashboard with independent sections",
                 implementation="// app/dashboard/layout.tsx\nexport default function Layout({\n  children,\n  analytics,\n  users\n}: {\n  children: React.ReactNode\n  analytics: React.ReactNode\n  users: React.ReactNode\n}) {\n  return (\n    <div>\n      {children}\n      {analytics}\n      {users}\n    </div>\n  )\n}",
                 pros=["Independent loading states", "Parallel rendering", "Better UX"],
-                cons=["More complex routing", "Not suitable for all layouts"]
+                cons=["More complex routing", "Not suitable for all layouts"],
             ),
             TechPattern(
                 stack=TechStack.REACT,
@@ -242,8 +248,8 @@ class TechStackEngine:
                 use_case="Modals, Dropdowns, Tabs",
                 implementation="const Tabs = ({ children }) => {\n  const [active, setActive] = useState(0)\n  return (\n    <TabsContext value={{ active, setActive }}>\n      {children}\n    </TabsContext>\n  )\n}",
                 pros=["Flexible API", "Less prop drilling", "Intuitive usage"],
-                cons=["Harder to understand", "Requires context"]
-            )
+                cons=["Harder to understand", "Requires context"],
+            ),
         ]
 
     def _get_default_performance(self) -> list[PerformanceTip]:
@@ -256,7 +262,7 @@ class TechStackEngine:
                 impact="high",
                 effort="low",
                 description="Automatic optimization, lazy loading, and responsive images",
-                code_snippet="import Image from 'next/image'\n\n<Image\n  src='/hero.jpg'\n  alt='Hero'\n  width={1200}\n  height={600}\n  priority\n/>"
+                code_snippet="import Image from 'next/image'\n\n<Image\n  src='/hero.jpg'\n  alt='Hero'\n  width={1200}\n  height={600}\n  priority\n/>",
             ),
             PerformanceTip(
                 stack=TechStack.REACT,
@@ -265,8 +271,8 @@ class TechStackEngine:
                 impact="medium",
                 effort="medium",
                 description="Memoize expensive computations and callbacks",
-                code_snippet="const memoizedValue = useMemo(() => {\n  return computeExpensiveValue(a, b)\n}, [a, b])"
-            )
+                code_snippet="const memoizedValue = useMemo(() => {\n  return computeExpensiveValue(a, b)\n}, [a, b])",
+            ),
         ]
 
     def search_practices(
@@ -274,7 +280,7 @@ class TechStackEngine:
         stack: str,
         query: str | None = None,
         category: str | None = None,
-        max_results: int = 5
+        max_results: int = 5,
     ) -> list[StackRecommendation]:
         """
         搜索最佳实践
@@ -326,13 +332,15 @@ class TechStackEngine:
             alternatives = self._get_alternatives(practice)
             resources = self._get_resources(practice)
 
-            recommendations.append(StackRecommendation(
-                practice=practice,
-                priority=priority,
-                context=context,
-                alternatives=alternatives,
-                resources=resources
-            ))
+            recommendations.append(
+                StackRecommendation(
+                    practice=practice,
+                    priority=priority,
+                    context=context,
+                    alternatives=alternatives,
+                    resources=resources,
+                )
+            )
 
         return recommendations
 
@@ -347,16 +355,10 @@ class TechStackEngine:
             设计模式列表
         """
         stack_lower = stack.lower()
-        return [
-            p for p in self.patterns
-            if p.stack.value.lower() == stack_lower
-        ]
+        return [p for p in self.patterns if p.stack.value.lower() == stack_lower]
 
     def get_performance_tips(
-        self,
-        stack: str,
-        impact: str | None = None,
-        effort: str | None = None
+        self, stack: str, impact: str | None = None, effort: str | None = None
     ) -> list[PerformanceTip]:
         """
         获取性能优化建议
@@ -402,16 +404,9 @@ class TechStackEngine:
         """
         tips = self.get_performance_tips(stack)
 
-        return [
-            tip for tip in tips
-            if tip.impact.lower() == "high" and tip.effort.lower() == "low"
-        ]
+        return [tip for tip in tips if tip.impact.lower() == "high" and tip.effort.lower() == "low"]
 
-    def get_migration_guide(
-        self,
-        from_stack: str,
-        to_stack: str
-    ) -> dict[str, str]:
+    def get_migration_guide(self, from_stack: str, to_stack: str) -> dict[str, str]:
         """
         获取技术栈迁移指南
 
@@ -429,14 +424,14 @@ class TechStackEngine:
                 "routing": "Replace react-router with Next.js App Router file-based routing",
                 "data_fetching": "Move from useEffect to Server Components and async/await",
                 "styling": "Keep existing CSS solutions, they work with Next.js",
-                "deployment": "Deploy to Vercel for zero-config hosting"
+                "deployment": "Deploy to Vercel for zero-config hosting",
             },
             "vue->nuxt": {
                 "routing": "Replace vue-router with file-based routing in pages/",
                 "data_fetching": "Use useAsyncData and useFetch composables",
                 "styling": "Vue SFC styles work the same way",
-                "deployment": "Deploy to Vercel, Netlify, or Node.js server"
-            }
+                "deployment": "Deploy to Vercel, Netlify, or Node.js server",
+            },
         }
 
         key = f"{from_stack.lower()}->{to_stack.lower()}"
@@ -465,7 +460,7 @@ class TechStackEngine:
             PracticeCategory.TESTING: "测试策略，确保代码质量",
             PracticeCategory.DEPLOYMENT: "部署方案，简化发布流程",
             PracticeCategory.SECURITY: "安全实践，保护应用和用户",
-            PracticeCategory.ACCESSIBILITY: "无障碍性，确保所有用户可用"
+            PracticeCategory.ACCESSIBILITY: "无障碍性，确保所有用户可用",
         }
 
         return contexts.get(practice.category, "通用最佳实践")
@@ -480,20 +475,20 @@ class TechStackEngine:
         resources = {
             TechStack.NEXTJS: [
                 "Next.js Documentation: https://nextjs.org/docs",
-                "Next.js Learn: https://nextjs.org/learn"
+                "Next.js Learn: https://nextjs.org/learn",
             ],
             TechStack.REACT: [
                 "React Documentation: https://react.dev",
-                "React Patterns: https://reactpatterns.com"
+                "React Patterns: https://reactpatterns.com",
             ],
             TechStack.VUE: [
                 "Vue Documentation: https://vuejs.org/guide/",
-                "Vue Style Guide: https://vuejs.org/style-guide/"
+                "Vue Style Guide: https://vuejs.org/style-guide/",
             ],
             TechStack.SVELTEKIT: [
                 "SvelteKit Docs: https://kit.svelte.dev/docs",
-                "Svelte Docs: https://svelte.dev/docs"
-            ]
+                "Svelte Docs: https://svelte.dev/docs",
+            ],
         }
 
         return resources.get(practice.stack, [])

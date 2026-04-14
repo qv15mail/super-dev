@@ -22,8 +22,12 @@ class LaunchRehearsalGenerator:
     def generate(self, cicd_platform: str) -> dict[str, str]:
         files: dict[str, str] = {}
         base = "output/rehearsal"
-        files[f"{base}/{self.name}-launch-rehearsal.md"] = self._build_launch_rehearsal(cicd_platform)
-        files[f"{base}/{self.name}-rollback-playbook.md"] = self._build_rollback_playbook(cicd_platform)
+        files[f"{base}/{self.name}-launch-rehearsal.md"] = self._build_launch_rehearsal(
+            cicd_platform
+        )
+        files[f"{base}/{self.name}-rollback-playbook.md"] = self._build_rollback_playbook(
+            cicd_platform
+        )
         files[f"{base}/{self.name}-smoke-checklist.md"] = self._build_smoke_checklist()
         return files
 
@@ -110,4 +114,3 @@ class LaunchRehearsalGenerator:
 - [ ] No new critical security findings
 - [ ] Alerting rules and dashboards are active
 """
-

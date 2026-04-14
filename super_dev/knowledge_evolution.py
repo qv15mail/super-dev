@@ -283,7 +283,8 @@ class KnowledgeStatsDB:
         if conn is None:
             return
         try:
-            conn.executescript("""
+            conn.executescript(
+                """
                 CREATE TABLE IF NOT EXISTS knowledge_stats (
                     file_path     TEXT PRIMARY KEY,
                     domain        TEXT DEFAULT '',
@@ -330,7 +331,8 @@ class KnowledgeStatsDB:
                 CREATE INDEX IF NOT EXISTS idx_violation_run ON constraint_violations(run_id);
                 CREATE INDEX IF NOT EXISTS idx_violation_file ON constraint_violations(file_path);
                 CREATE INDEX IF NOT EXISTS idx_suggestion_run ON evolution_suggestions(run_id);
-            """)
+            """
+            )
             conn.commit()
         except Exception as exc:
             _logger.warning("数据库表初始化失败: %s", exc)
@@ -346,8 +348,9 @@ class KnowledgeStatsDB:
 
     # ── 写入操作 ─────────────────────────────────────────────
 
-    def record_usage(self, file_path: str, phase: str, run_id: str,
-                     domain: str = "", category: str = "") -> None:
+    def record_usage(
+        self, file_path: str, phase: str, run_id: str, domain: str = "", category: str = ""
+    ) -> None:
         """记录一次知识引用"""
         conn = self._get_conn()
         if conn is None:
@@ -355,7 +358,8 @@ class KnowledgeStatsDB:
         now = datetime.now(timezone.utc).isoformat()
         try:
             # 更新或插入 knowledge_stats
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO knowledge_stats (file_path, domain, category, total_references, last_used, last_updated)
                 VALUES (?, ?, ?, 1, ?, ?)
                 ON CONFLICT(file_path) DO UPDATE SET
@@ -364,20 +368,26 @@ class KnowledgeStatsDB:
                     category = CASE WHEN excluded.category != '' THEN excluded.category ELSE category END,
                     last_used = excluded.last_used,
                     last_updated = excluded.last_updated
-            """, (file_path, domain, category, now, now))
+            """,
+                (file_path, domain, category, now, now),
+            )
 
             # 插入使用记录
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO pipeline_knowledge_usage (run_id, file_path, phase, timestamp)
                 VALUES (?, ?, ?, ?)
-            """, (run_id, file_path, phase, now))
+            """,
+                (run_id, file_path, phase, now),
+            )
 
             conn.commit()
         except Exception as exc:
             _logger.debug("记录知识使用失败: %s", exc)
 
-    def record_constraint_result(self, file_path: str, constraint: str,
-                                 followed: bool, run_id: str) -> None:
+    def record_constraint_result(
+        self, file_path: str, constraint: str, followed: bool, run_id: str
+    ) -> None:
         """记录约束遵循/违反"""
         conn = self._get_conn()
         if conn is None:
@@ -385,26 +395,35 @@ class KnowledgeStatsDB:
         now = datetime.now(timezone.utc).isoformat()
         try:
             # 记录约束结果
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO constraint_violations (run_id, file_path, constraint_text, followed, timestamp)
                 VALUES (?, ?, ?, ?, ?)
-            """, (run_id, file_path, constraint, 1 if followed else 0, now))
+            """,
+                (run_id, file_path, constraint, 1 if followed else 0, now),
+            )
 
             # 更新统计
             if followed:
-                conn.execute("""
+                conn.execute(
+                    """
                     UPDATE knowledge_stats SET
                         constraints_followed = constraints_followed + 1,
                         last_updated = ?
                     WHERE file_path = ?
-                """, (now, file_path))
+                """,
+                    (now, file_path),
+                )
             else:
-                conn.execute("""
+                conn.execute(
+                    """
                     UPDATE knowledge_stats SET
                         constraints_violated = constraints_violated + 1,
                         last_updated = ?
                     WHERE file_path = ?
-                """, (now, file_path))
+                """,
+                    (now, file_path),
+                )
 
             conn.commit()
         except Exception as exc:
@@ -417,13 +436,16 @@ class KnowledgeStatsDB:
             return
         now = datetime.now(timezone.utc).isoformat()
         try:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO knowledge_stats (file_path, total_constraints_pushed, last_updated)
                 VALUES (?, ?, ?)
                 ON CONFLICT(file_path) DO UPDATE SET
                     total_constraints_pushed = total_constraints_pushed + excluded.total_constraints_pushed,
                     last_updated = excluded.last_updated
-            """, (file_path, count, now))
+            """,
+                (file_path, count, now),
+            )
             conn.commit()
         except Exception as exc:
             _logger.debug("记录约束推送数失败: %s", exc)
@@ -438,10 +460,12 @@ class KnowledgeStatsDB:
         if conn is None:
             return
         try:
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT file_path, total_references, constraints_followed, constraints_violated
                 FROM knowledge_stats
-            """).fetchall()
+            """
+            ).fetchall()
 
             if not rows:
                 return
@@ -461,10 +485,13 @@ class KnowledgeStatsDB:
                 )
                 effectiveness = ref_score * 0.4 + compliance * 0.6
 
-                conn.execute("""
+                conn.execute(
+                    """
                     UPDATE knowledge_stats SET effectiveness_score = ?, last_updated = ?
                     WHERE file_path = ?
-                """, (round(effectiveness, 4), now, row["file_path"]))
+                """,
+                    (round(effectiveness, 4), now, row["file_path"]),
+                )
 
             conn.commit()
         except Exception as exc:
@@ -477,19 +504,22 @@ class KnowledgeStatsDB:
             return
         now = datetime.now(timezone.utc).isoformat()
         try:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO evolution_suggestions
                     (run_id, suggestion_type, file_path, reason, priority, data_json, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
-                run_id,
-                suggestion.suggestion_type,
-                suggestion.file_path,
-                suggestion.reason,
-                suggestion.priority,
-                json.dumps(suggestion.data, ensure_ascii=False),
-                now,
-            ))
+            """,
+                (
+                    run_id,
+                    suggestion.suggestion_type,
+                    suggestion.file_path,
+                    suggestion.reason,
+                    suggestion.priority,
+                    json.dumps(suggestion.data, ensure_ascii=False),
+                    now,
+                ),
+            )
             conn.commit()
         except Exception as exc:
             _logger.debug("保存改进建议失败: %s", exc)
@@ -529,12 +559,15 @@ class KnowledgeStatsDB:
         if conn is None:
             return []
         try:
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT * FROM knowledge_stats
                 WHERE total_references > 0
                 ORDER BY effectiveness_score DESC, total_references DESC
                 LIMIT ?
-            """, (limit,)).fetchall()
+            """,
+                (limit,),
+            ).fetchall()
             return [self._row_to_stats(r) for r in rows]
         except Exception as exc:
             _logger.debug("获取最有效文件失败: %s", exc)
@@ -546,12 +579,15 @@ class KnowledgeStatsDB:
         if conn is None:
             return []
         try:
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT * FROM knowledge_stats
                 WHERE total_references > 0
                 ORDER BY effectiveness_score ASC, constraints_violated DESC
                 LIMIT ?
-            """, (limit,)).fetchall()
+            """,
+                (limit,),
+            ).fetchall()
             return [self._row_to_stats(r) for r in rows]
         except Exception as exc:
             _logger.debug("获取最无效文件失败: %s", exc)
@@ -592,7 +628,8 @@ class KnowledgeStatsDB:
         if conn is None:
             return []
         try:
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT
                     constraint_text,
                     file_path,
@@ -603,7 +640,9 @@ class KnowledgeStatsDB:
                 HAVING violated > 0
                 ORDER BY violated DESC
                 LIMIT ?
-            """, (limit,)).fetchall()
+            """,
+                (limit,),
+            ).fetchall()
             return [
                 {
                     "constraint": r["constraint_text"],
@@ -651,11 +690,14 @@ class KnowledgeStatsDB:
         if conn is None:
             return []
         try:
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT * FROM evolution_suggestions
                 ORDER BY timestamp DESC
                 LIMIT ?
-            """, (limit,)).fetchall()
+            """,
+                (limit,),
+            ).fetchall()
             return [
                 EvolutionSuggestion(
                     suggestion_type=r["suggestion_type"],
@@ -707,9 +749,7 @@ class KnowledgeEvolutionAnalyzer:
 
     def __init__(self, project_dir: Path | str = "."):
         self.project_dir = Path(project_dir).resolve()
-        self.db = KnowledgeStatsDB(
-            self.project_dir / ".super-dev" / "knowledge-stats.db"
-        )
+        self.db = KnowledgeStatsDB(self.project_dir / ".super-dev" / "knowledge-stats.db")
         self.knowledge_dir = self.project_dir / "knowledge"
 
     # ── 单次分析 ──────────────────────────────────────────────
@@ -836,8 +876,7 @@ class KnowledgeEvolutionAnalyzer:
             weight_adjustments=weights,
         )
 
-    def save_evolution_report(self, report: EvolutionReport,
-                              output_dir: str = "output") -> Path:
+    def save_evolution_report(self, report: EvolutionReport, output_dir: str = "output") -> Path:
         """保存演化报告到文件"""
         out = Path(output_dir)
         out.mkdir(parents=True, exist_ok=True)
@@ -926,10 +965,12 @@ class KnowledgeEvolutionAnalyzer:
                         suggestion_type="boost",
                         file_path=s.file_path,
                         reason=f"高效知识 (有效性={s.effectiveness_score:.0%}, "
-                               f"引用={s.total_references})，建议提高推送优先级",
+                        f"引用={s.total_references})，建议提高推送优先级",
                         priority=3,
-                        data={"effectiveness": s.effectiveness_score,
-                              "references": s.total_references},
+                        data={
+                            "effectiveness": s.effectiveness_score,
+                            "references": s.total_references,
+                        },
                     )
                     suggestions.append(sug)
                     self.db.save_suggestion(sug, run_id)
@@ -942,10 +983,12 @@ class KnowledgeEvolutionAnalyzer:
                         suggestion_type="demote",
                         file_path=s.file_path,
                         reason=f"低效知识 (有效性={s.effectiveness_score:.0%}, "
-                               f"违反={s.constraints_violated})，建议降低推送优先级或修订内容",
+                        f"违反={s.constraints_violated})，建议降低推送优先级或修订内容",
                         priority=4,
-                        data={"effectiveness": s.effectiveness_score,
-                              "violations": s.constraints_violated},
+                        data={
+                            "effectiveness": s.effectiveness_score,
+                            "violations": s.constraints_violated,
+                        },
                     )
                     suggestions.append(sug)
                     self.db.save_suggestion(sug, run_id)
@@ -958,11 +1001,13 @@ class KnowledgeEvolutionAnalyzer:
                         suggestion_type="review",
                         file_path=v["file_path"],
                         reason=f"约束 '{v['constraint'][:50]}' 被违反 {v['violated']} 次，"
-                               f"建议检查约束表述是否清晰、是否需要拆分或强化",
+                        f"建议检查约束表述是否清晰、是否需要拆分或强化",
                         priority=5,
-                        data={"constraint": v["constraint"],
-                              "violated": v["violated"],
-                              "followed": v["followed"]},
+                        data={
+                            "constraint": v["constraint"],
+                            "violated": v["violated"],
+                            "followed": v["followed"],
+                        },
                     )
                     suggestions.append(sug)
                     self.db.save_suggestion(sug, run_id)

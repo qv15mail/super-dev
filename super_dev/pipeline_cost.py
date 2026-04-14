@@ -12,7 +12,6 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-
 # Rough per-token pricing (USD per 1M tokens) by model family.
 _MODEL_PRICING: dict[str, tuple[float, float]] = {
     "opus": (3.0, 15.0),

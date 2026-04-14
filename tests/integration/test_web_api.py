@@ -2013,6 +2013,10 @@ class TestWebAPI:
         assert claude_host["competition_mode"]["trigger"].startswith("/super-dev-seeai")
         assert "SEEAI_SMOKE_OK" in claude_host["competition_smoke_test_prompt"]
         assert any("半小时比赛链路" in item for item in claude_host["competition_smoke_test_steps"])
+        assert any(
+            "12 分钟内先跑出第一个可见界面" in item
+            for item in claude_host["competition_smoke_test_steps"]
+        )
 
         language_ids = {item["id"] for item in payload["languages"]}
         assert {"python", "typescript", "rust", "sql", "assembly"}.issubset(language_ids)
@@ -2471,14 +2475,10 @@ class TestWebAPI:
             in codex_host["optional_project_surfaces"]
         )
         assert (
-            "~/.agents/skills/super-dev/SKILL.md"
-            in codex_host["observed_compatibility_surfaces"]
+            "~/.agents/skills/super-dev/SKILL.md" in codex_host["observed_compatibility_surfaces"]
         )
         assert "~/.codex/skills/super-dev/SKILL.md" in codex_host["observed_compatibility_surfaces"]
-        assert (
-            "~/.codex/skills/super-dev/SKILL.md"
-            in codex_host["observed_compatibility_surfaces"]
-        )
+        assert "~/.codex/skills/super-dev/SKILL.md" in codex_host["observed_compatibility_surfaces"]
         assert (
             codex_host["commands"]["trigger"]
             == "App/Desktop: /super-dev | CLI: $super-dev | 回退: super-dev: 你的需求"
@@ -2550,6 +2550,13 @@ class TestWebAPI:
         assert codebuddy_host["competition_mode"]["enabled"] is True
         assert codebuddy_host["competition_mode"]["trigger"] == '/super-dev-seeai "比赛需求"'
         assert codebuddy_host["competition_mode"]["agent_team"][0] == "rapid_researcher"
+        assert codebuddy_host["competition_mode"]["research_priorities"][0].startswith(
+            "先判断题型和复杂度"
+        )
+        assert any(
+            "交互" in item or "技术风险" in item
+            for item in codebuddy_host["competition_mode"]["default_search_queries"]
+        )
         assert codebuddy_host["competition_mode"]["first_response_template"][0] == "作品类型"
         assert (
             codebuddy_host["competition_mode"]["timebox_breakdown"][0] == "0-4 分钟：fast research"
@@ -2563,14 +2570,65 @@ class TestWebAPI:
             ]
             == "React/Vite 或 Next.js + Tailwind + Framer Motion"
         )
+        assert codebuddy_host["competition_mode"]["archetype_playbooks"]["landing_page"][
+            "runtime_checkpoint"
+        ].startswith("12 分钟内")
         assert (
             codebuddy_host["competition_mode"]["archetype_playbooks"]["mini_game"]["sprint_plan"][0]
             == "主循环可玩"
+        )
+        assert "arena_neon" in codebuddy_host["competition_mode"]["design_packs"]
+        assert any(
+            "初始化失败一次后" in item
+            for item in codebuddy_host["competition_mode"]["failure_protocol"]
+        )
+        assert any(
+            "12 分钟内必须跑出第一个可见" in item
+            for item in codebuddy_host["competition_mode"]["execution_guardrails"]
+        )
+        assert any(
+            "真实启动" in item for item in codebuddy_host["competition_mode"]["module_truth_rules"]
+        )
+        assert any(
+            "demo slice" in item
+            for item in codebuddy_host["competition_mode"]["complexity_reduction_rules"]
+        )
+        assert any(
+            item["pattern"] == "系统/桌面/操作系统/IDE/复杂软件复刻"
+            for item in codebuddy_host["competition_mode"]["complexity_patterns"]
+        )
+        assert "真实启动、真实交互" in codebuddy_host["competition_mode"]["module_activation_gate"]
+        assert len(codebuddy_host["competition_mode"]["smoke_scenarios"]) >= 4
+        assert (
+            codebuddy_host["competition_mode"]["smoke_scenarios"][0]["id"] == "system_retro_shell"
+        )
+        assert any(
+            "demo slice" in item for item in codebuddy_host["competition_mode"]["acceptance_gates"]
+        )
+        assert any(
+            "3 秒第一印象" in item for item in codebuddy_host["competition_mode"]["judge_checklist"]
         )
         assert any("P0/P1/P2" in tip for tip in codebuddy_host["competition_mode"]["host_tips"])
         assert "SEEAI_SMOKE_OK" in codebuddy_host["competition_smoke_test_prompt"]
         assert any("P0/P1/P2" in item for item in codebuddy_host["competition_smoke_test_steps"])
         assert any("作品类型" in item for item in codebuddy_host["competition_smoke_test_steps"])
+        assert any(
+            "12 分钟内先跑出首个可见界面" in item
+            for item in codebuddy_host["competition_smoke_test_steps"]
+        )
+        assert any(
+            "真实启动并进入主演示路径" in item
+            for item in codebuddy_host["competition_smoke_test_steps"]
+        )
+        assert len(codebuddy_host["competition_smoke_suite"]) >= 4
+        assert codebuddy_host["competition_smoke_suite"][0]["trigger"].startswith(
+            "/super-dev-seeai"
+        )
+        assert any("demo slice" in item for item in codebuddy_host["competition_acceptance_gates"])
+        assert (
+            codebuddy_host["competition_evidence_template"]["runtime_checkpoint"]["required"][0]
+            == "12 分钟内首个可见界面"
+        )
 
         openclaw_host = next(item for item in payload["host_tools"] if item["id"] == "openclaw")
         assert ".openclaw/commands/super-dev-seeai.md" in openclaw_host["official_project_surfaces"]
@@ -2587,6 +2645,10 @@ class TestWebAPI:
             "super-dev-seeai:" in item for item in openclaw_host["competition_smoke_test_steps"]
         )
         assert any("作品类型" in item for item in openclaw_host["competition_smoke_test_steps"])
+        assert any(
+            "12 分钟内先跑出首个可见界面" in item
+            for item in openclaw_host["competition_smoke_test_steps"]
+        )
 
         workbuddy_host = next(item for item in payload["host_tools"] if item["id"] == "workbuddy")
         assert workbuddy_host["install_mode"] == "hybrid"
@@ -2598,6 +2660,10 @@ class TestWebAPI:
             "super-dev-seeai:" in item for item in workbuddy_host["competition_smoke_test_steps"]
         )
         assert any("作品类型" in item for item in workbuddy_host["competition_smoke_test_steps"])
+        assert any(
+            "12 分钟内先跑出首个可见界面" in item
+            for item in workbuddy_host["competition_smoke_test_steps"]
+        )
 
     def test_cursor_host_catalog_exposes_agents_compatibility(self):
         client = _make_client()
@@ -3176,6 +3242,8 @@ class TestWebAPI:
             payload["report"]["hosts"][0]["runtime_evidence"]["runtime_status"]["status"]
             == "pending"
         )
+        assert payload["report"]["hosts"][0]["competition_evidence_ready"] is False
+        assert "first_response" in payload["report"]["hosts"][0]["competition_evidence_missing"]
         assert payload["report"]["summary"]["total_hosts"] == 1
         assert payload["report"]["summary"]["blocking_count"] >= 1
         assert payload["report"]["blockers"][0]["host"] == "kiro-cli"
@@ -3208,9 +3276,14 @@ class TestWebAPI:
         assert any(".agents/skills/super-dev" in item for item in host["runtime_checklist"])
         assert any(".agents/plugins/marketplace.json" in item for item in host["runtime_checklist"])
         assert any("当前终端就在目标项目目录" in item for item in host["runtime_checklist"])
+        assert any(
+            "12 分钟内先跑出第一个可见、可点击、可截图的界面" in item
+            for item in host["runtime_checklist"]
+        )
         assert any(".agents/skills/super-dev" in item for item in host["pass_criteria"])
         assert any("官方 Skills" in item for item in host["pass_criteria"])
         assert any("$super-dev" in item for item in host["pass_criteria"])
+        assert any("回退栈" in item for item in host["pass_criteria"])
         assert host["flow_probe"]["enabled"] is True
         assert any("/` 列表选择 `super-dev`" in item for item in host["flow_probe"]["steps"])
         assert any("$super-dev" in item for item in host["flow_probe"]["steps"])
@@ -3270,7 +3343,12 @@ class TestWebAPI:
             for item in host["runtime_checklist"]
         )
         assert any("30 分钟比赛链路" in item for item in host["runtime_checklist"])
+        assert any(
+            "12 分钟内先跑出第一个可见、可点击、可截图的界面" in item
+            for item in host["runtime_checklist"]
+        )
         assert any("SEEAI" in item for item in host["pass_criteria"])
+        assert any("回退栈" in item for item in host["pass_criteria"])
         assert host["flow_probe"]["enabled"] is True
         assert any("/super-dev-seeai" in item for item in host["flow_probe"]["steps"])
 
@@ -3504,6 +3582,8 @@ class TestWebAPI:
         assert update_payload["manual_runtime_status"] == "passed"
         assert update_payload["manual_runtime_status_label"] == "已真人通过"
         assert update_payload["runtime_evidence"]["runtime_status"]["status"] == "passed"
+        assert update_payload["competition_evidence_ready"] is False
+        assert "first_response" in update_payload["competition_evidence_missing"]
         assert update_payload["updated_at"]
 
         resp = client.get(
@@ -3520,11 +3600,47 @@ class TestWebAPI:
         assert host["manual_runtime_status_label"] == "已真人通过"
         assert host["manual_runtime_comment"] == "首轮先进入 research，三文档已真实落盘"
         assert host["manual_runtime_updated_at"]
-        assert host["runtime_evidence"]["integration_status"]["status"] == "project_and_global_installed"
-        assert host["runtime_evidence"]["runtime_status"]["status"] == "passed"
+        assert host["competition_evidence_ready"] is False
+        assert host["ready_for_delivery"] is False
+        assert host["blocking_reason"] == "SEEAI 比赛验收证据不完整"
+        assert "first_response" in host["competition_evidence_missing"]
         assert (
-            host["runtime_evidence"]["host_display_name"] == "Codex"
+            host["runtime_evidence"]["integration_status"]["status"]
+            == "project_and_global_installed"
         )
+        assert host["runtime_evidence"]["runtime_status"]["status"] == "passed"
+        assert host["runtime_evidence"]["competition_evidence_ready"] is False
+        assert host["runtime_evidence"]["host_display_name"] == "Codex"
+
+        evidence_update = client.post(
+            "/api/hosts/runtime-validation",
+            params={"project_dir": str(temp_project_dir)},
+            json={
+                "host": "codex-cli",
+                "status": "passed",
+                "comment": "补齐比赛验收证据",
+                "actor": "user",
+                "competition_evidence": {
+                    "first_response": {"summary": "作品类型 / wow 点 / P0 / 放弃项"},
+                    "runtime_checkpoint": {
+                        "summary": "12 分钟内首个可见界面 + 主路径首个点击动作 + 真实启动模块"
+                    },
+                    "fallback_decision": {"summary": "失败点 / 回退栈 / 降级原因"},
+                    "demo_path": {"summary": "30-60 秒主演示路径 + 结果页/结束态 + wow 点截图"},
+                },
+            },
+        )
+        assert evidence_update.status_code == 200
+        assert evidence_update.json()["competition_evidence_ready"] is True
+
+        ready_resp = client.get(
+            "/api/hosts/runtime-validation",
+            params={"project_dir": str(temp_project_dir), "host": "codex-cli"},
+        )
+        ready_host = ready_resp.json()["report"]["hosts"][0]
+        assert ready_host["competition_evidence_ready"] is True
+        assert ready_host["competition_evidence_missing"] == []
+        assert ready_host["ready_for_delivery"] is True
 
     def test_hooks_history_endpoint_returns_recent_results(self, temp_project_dir: Path) -> None:
         marker = temp_project_dir / "hook-history-marker.txt"

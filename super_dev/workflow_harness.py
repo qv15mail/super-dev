@@ -44,7 +44,11 @@ class WorkflowHarnessReport:
 
     @property
     def passed(self) -> bool:
-        return self.enabled and not self.blockers and all(self.checks.values()) if self.checks else self.enabled and not self.blockers
+        return (
+            self.enabled and not self.blockers and all(self.checks.values())
+            if self.checks
+            else self.enabled and not self.blockers
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -102,9 +106,7 @@ class WorkflowHarnessReport:
         lines.extend(["", "## Recent Events", ""])
         if self.recent_events:
             for item in self.recent_events[:5]:
-                lines.append(
-                    f"- {item.get('timestamp') or '-'} · {describe_workflow_event(item)}"
-                )
+                lines.append(f"- {item.get('timestamp') or '-'} · {describe_workflow_event(item)}")
         else:
             lines.append("- 当前没有 workflow events。")
         lines.extend(["", "## Recent Timeline", ""])
@@ -147,7 +149,10 @@ class WorkflowHarnessBuilder:
             return report
 
         report.enabled = True
-        report.workflow_status = str((state_payload or {}).get("status", "") or (state_payload or {}).get("workflow_status", "")).strip()
+        report.workflow_status = str(
+            (state_payload or {}).get("status", "")
+            or (state_payload or {}).get("workflow_status", "")
+        ).strip()
         report.workflow_mode = str((state_payload or {}).get("workflow_mode", "")).strip()
         report.current_step_label = str((state_payload or {}).get("current_step_label", "")).strip()
         report.updated_at = str((state_payload or {}).get("updated_at", "")).strip()
@@ -178,15 +183,25 @@ class WorkflowHarnessBuilder:
             report.blockers.append("统一运行时时间线缺失")
 
         if not report.checks["workflow_state_present"]:
-            report.next_actions.append("重新写入 .super-dev/workflow-state.json，确保当前 workflow status、mode、step 已正式落盘。")
+            report.next_actions.append(
+                "重新写入 .super-dev/workflow-state.json，确保当前 workflow status、mode、step 已正式落盘。"
+            )
         if not report.checks["workflow_snapshots_present"]:
-            report.next_actions.append("补齐 .super-dev/workflow-history 快照，确保恢复链能回退到最近有效状态。")
+            report.next_actions.append(
+                "补齐 .super-dev/workflow-history 快照，确保恢复链能回退到最近有效状态。"
+            )
         if not report.checks["workflow_events_present"]:
-            report.next_actions.append("补齐 .super-dev/workflow-events.jsonl，确保恢复、返工和次日继续有正式事件轨迹。")
+            report.next_actions.append(
+                "补齐 .super-dev/workflow-events.jsonl，确保恢复、返工和次日继续有正式事件轨迹。"
+            )
         if not report.checks["operational_timeline_present"]:
-            report.next_actions.append("补齐统一运行时时间线，确保流程快照、语义事件和 Hook 事件可被恢复链与发布摘要直接消费。")
+            report.next_actions.append(
+                "补齐统一运行时时间线，确保流程快照、语义事件和 Hook 事件可被恢复链与发布摘要直接消费。"
+            )
         if not report.next_actions:
-            report.next_actions.append("当前 workflow continuity harness 已满足恢复与发布前证据要求。")
+            report.next_actions.append(
+                "当前 workflow continuity harness 已满足恢复与发布前证据要求。"
+            )
         return report
 
     def write(self, report: WorkflowHarnessReport) -> dict[str, Path]:
@@ -195,5 +210,7 @@ class WorkflowHarnessBuilder:
         md_path = base.with_suffix(".md")
         json_path = base.with_suffix(".json")
         md_path.write_text(report.to_markdown(), encoding="utf-8")
-        json_path.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        json_path.write_text(
+            json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         return {"markdown": md_path, "json": json_path}

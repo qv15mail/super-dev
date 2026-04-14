@@ -61,7 +61,8 @@ class SpecTaskExecutor:
                     continue
 
                 unmet_dependencies = [
-                    dep for dep in task.dependencies
+                    dep
+                    for dep in task.dependencies
                     if dep in task_map and task_map[dep].status != TaskStatus.COMPLETED
                 ]
                 if unmet_dependencies:
@@ -267,7 +268,9 @@ class SpecTaskExecutor:
                     encoding="utf-8",
                 )
 
-            migration_file = self.project_dir / "backend" / "migrations" / f"999_create_{identifier}.sql"
+            migration_file = (
+                self.project_dir / "backend" / "migrations" / f"999_create_{identifier}.sql"
+            )
             migration_file.parent.mkdir(parents=True, exist_ok=True)
             if not migration_file.exists():
                 migration_file.write_text(
@@ -500,21 +503,23 @@ class SpecTaskExecutor:
                 lines.append(f"- {task_id}")
         else:
             lines.append("- 无")
-        lines.extend([
-            "",
-            "## 执行期验证摘要",
-            "",
-            f"- 任务闭环: {'通过' if not failed_tasks else '未完成'}",
-            f"- 自动修复记录: {'有' if repaired_actions else '无'}",
-            "",
-            "## 宿主补充自检（交付前必做）",
-            "",
-            "- [ ] 运行项目原生 build / compile / type-check / test / runtime smoke，并确认没有编译错误",
-            "- [ ] 检查本轮新增函数、方法、字段、模块都已接入真实调用链；未接入则删除",
-            "- [ ] 检查没有新增 unused code、未引用文件或新增 warning",
-            "- [ ] 对本次 diff 做最小自审，确认新增日志、埋点、恢复逻辑真正生效",
-            "",
-        ])
+        lines.extend(
+            [
+                "",
+                "## 执行期验证摘要",
+                "",
+                f"- 任务闭环: {'通过' if not failed_tasks else '未完成'}",
+                f"- 自动修复记录: {'有' if repaired_actions else '无'}",
+                "",
+                "## 宿主补充自检（交付前必做）",
+                "",
+                "- [ ] 运行项目原生 build / compile / type-check / test / runtime smoke，并确认没有编译错误",
+                "- [ ] 检查本轮新增函数、方法、字段、模块都已接入真实调用链；未接入则删除",
+                "- [ ] 检查没有新增 unused code、未引用文件或新增 warning",
+                "- [ ] 对本次 diff 做最小自审，确认新增日志、埋点、恢复逻辑真正生效",
+                "",
+            ]
+        )
         report_path.write_text("\n".join(lines), encoding="utf-8")
         return report_path
 

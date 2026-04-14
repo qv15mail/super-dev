@@ -112,8 +112,12 @@ class OperationalHarnessBuilder:
             harnesses = {}
 
         report = OperationalHarnessReport(project_name=self.project_name)
-        report.all_passed = bool(payload.get("all_passed", True)) if isinstance(payload, dict) else True
-        report.recent_timeline = list(payload.get("recent_timeline", [])) if isinstance(payload, dict) else []
+        report.all_passed = (
+            bool(payload.get("all_passed", True)) if isinstance(payload, dict) else True
+        )
+        report.recent_timeline = (
+            list(payload.get("recent_timeline", [])) if isinstance(payload, dict) else []
+        )
 
         for key in ("workflow", "framework", "hooks"):
             item = harnesses.get(key, {})
@@ -123,7 +127,9 @@ class OperationalHarnessBuilder:
             if not summary:
                 blockers = item.get("blockers")
                 if isinstance(blockers, list) and blockers:
-                    summary = "；".join(str(part).strip() for part in blockers[:2] if str(part).strip())
+                    summary = "；".join(
+                        str(part).strip() for part in blockers[:2] if str(part).strip()
+                    )
             report.harnesses[key] = {
                 "kind": str(item.get("kind", key)),
                 "label": str(item.get("label", key)),
@@ -132,8 +138,14 @@ class OperationalHarnessBuilder:
                 "summary": summary or ("未启用" if not item.get("enabled") else "已通过"),
                 "json_file": str(item.get("json_file", "")).strip(),
                 "report_file": str(item.get("report_file", "")).strip(),
-                "blockers": list(item.get("blockers", [])) if isinstance(item.get("blockers"), list) else [],
-                "next_actions": list(item.get("next_actions", [])) if isinstance(item.get("next_actions"), list) else [],
+                "blockers": (
+                    list(item.get("blockers", [])) if isinstance(item.get("blockers"), list) else []
+                ),
+                "next_actions": (
+                    list(item.get("next_actions", []))
+                    if isinstance(item.get("next_actions"), list)
+                    else []
+                ),
             }
             if item.get("enabled"):
                 report.enabled_count += 1
@@ -142,13 +154,19 @@ class OperationalHarnessBuilder:
             if item.get("enabled") and not item.get("passed"):
                 blockers = item.get("blockers")
                 if isinstance(blockers, list):
-                    report.blockers.extend(str(blocker).strip() for blocker in blockers if str(blocker).strip())
+                    report.blockers.extend(
+                        str(blocker).strip() for blocker in blockers if str(blocker).strip()
+                    )
                 next_actions = item.get("next_actions")
                 if isinstance(next_actions, list):
-                    report.next_actions.extend(str(action).strip() for action in next_actions if str(action).strip())
+                    report.next_actions.extend(
+                        str(action).strip() for action in next_actions if str(action).strip()
+                    )
 
         if not report.next_actions and report.enabled:
-            report.next_actions.append("当前三个运行时 harness 已统一通过，可直接作为恢复与发布摘要真源。")
+            report.next_actions.append(
+                "当前三个运行时 harness 已统一通过，可直接作为恢复与发布摘要真源。"
+            )
         report.blockers = list(dict.fromkeys(report.blockers))
         report.next_actions = list(dict.fromkeys(report.next_actions))
         return report

@@ -311,10 +311,7 @@ class LayeredKnowledgePush:
         return {
             "phase": self.phase,
             "l1_index": self.l1_index,
-            "l2_details": [
-                {k: v for k, v in d.items() if k != "content"}
-                for d in self.l2_details
-            ],
+            "l2_details": [{k: v for k, v in d.items() if k != "content"} for d in self.l2_details],
             "l3_references": self.l3_references,
             "total_token_budget": self.total_token_budget,
             "l1_tokens_used": self.l1_tokens_used,
@@ -402,16 +399,18 @@ class LayeredKnowledgePush:
         """转换为传统 KnowledgePush 格式（向后兼容）"""
         files = []
         for f in self.l1_index:
-            files.append({
-                "path": f.get("path", ""),
-                "filename": f.get("filename", ""),
-                "domain": f.get("domain", ""),
-                "category": f.get("category", ""),
-                "title": f.get("title", ""),
-                "relevance": f.get("priority_score", 0.5),
-                "excerpt": f.get("summary", ""),
-                "tags": f.get("tech_trigger", []),
-            })
+            files.append(
+                {
+                    "path": f.get("path", ""),
+                    "filename": f.get("filename", ""),
+                    "domain": f.get("domain", ""),
+                    "category": f.get("category", ""),
+                    "title": f.get("title", ""),
+                    "relevance": f.get("priority_score", 0.5),
+                    "excerpt": f.get("summary", ""),
+                    "tags": f.get("tech_trigger", []),
+                }
+            )
         return KnowledgePush(
             phase=self.phase,
             files=files,
@@ -666,24 +665,24 @@ class KnowledgePusher:
         l1_index: list[dict[str, Any]] = []
         l1_tokens = 0
         for entry in entries:
-            summary_tokens = self._estimate_tokens(
-                f"{entry.title}: {entry.summary}"
+            summary_tokens = self._estimate_tokens(f"{entry.title}: {entry.summary}")
+            l1_index.append(
+                {
+                    "path": entry.path,
+                    "filename": entry.filename,
+                    "domain": entry.domain,
+                    "category": entry.category,
+                    "title": entry.title,
+                    "summary": entry.summary,
+                    "priority": self._priority_label(entry.priority),
+                    "priority_score": entry.priority,
+                    "phase_trigger": entry.phase_trigger,
+                    "tech_trigger": entry.tech_trigger,
+                    "token_budget": entry.token_budget,
+                    "related": entry.related,
+                    "summary_tokens": summary_tokens,
+                }
             )
-            l1_index.append({
-                "path": entry.path,
-                "filename": entry.filename,
-                "domain": entry.domain,
-                "category": entry.category,
-                "title": entry.title,
-                "summary": entry.summary,
-                "priority": self._priority_label(entry.priority),
-                "priority_score": entry.priority,
-                "phase_trigger": entry.phase_trigger,
-                "tech_trigger": entry.tech_trigger,
-                "token_budget": entry.token_budget,
-                "related": entry.related,
-                "summary_tokens": summary_tokens,
-            })
             l1_tokens += summary_tokens
 
         # Step 6: L2 详情层 — 最相关文件全文，填满剩余 token 预算
@@ -704,30 +703,34 @@ class KnowledgePusher:
 
             if remaining_budget >= file_tokens:
                 # 全文放入
-                l2_details.append({
-                    "path": entry.path,
-                    "filename": entry.filename,
-                    "title": entry.title,
-                    "domain": entry.domain,
-                    "content": full_content,
-                    "tokens": file_tokens,
-                    "compressed": False,
-                })
+                l2_details.append(
+                    {
+                        "path": entry.path,
+                        "filename": entry.filename,
+                        "title": entry.title,
+                        "domain": entry.domain,
+                        "content": full_content,
+                        "tokens": file_tokens,
+                        "compressed": False,
+                    }
+                )
                 remaining_budget -= file_tokens
                 l2_tokens += file_tokens
             elif remaining_budget > 200:
                 # 超预算 → 压缩到剩余预算
                 compressed = self._compress(full_content, remaining_budget)
                 compressed_tokens = self._estimate_tokens(compressed)
-                l2_details.append({
-                    "path": entry.path,
-                    "filename": entry.filename,
-                    "title": entry.title,
-                    "domain": entry.domain,
-                    "content": compressed,
-                    "tokens": compressed_tokens,
-                    "compressed": True,
-                })
+                l2_details.append(
+                    {
+                        "path": entry.path,
+                        "filename": entry.filename,
+                        "title": entry.title,
+                        "domain": entry.domain,
+                        "content": compressed,
+                        "tokens": compressed_tokens,
+                        "compressed": True,
+                    }
+                )
                 remaining_budget -= compressed_tokens
                 l2_tokens += compressed_tokens
 
@@ -791,9 +794,7 @@ class KnowledgePusher:
         # 分层加载不截断，但设一个合理上限避免扫描过多文件
         return candidates[:30]
 
-    def _build_layered_entries(
-        self, files: list[KnowledgeFileInfo]
-    ) -> list[LayeredFileEntry]:
+    def _build_layered_entries(self, files: list[KnowledgeFileInfo]) -> list[LayeredFileEntry]:
         """构建 LayeredFileEntry 列表，解析 frontmatter"""
         entries: list[LayeredFileEntry] = []
         for info in files:
@@ -805,9 +806,7 @@ class KnowledgePusher:
                 category=fm.get("category", info.category),
                 title=fm.get("title", info.title),
                 summary=fm.get("summary", ""),
-                priority=_PRIORITY_SCORES.get(
-                    fm.get("priority", "medium"), 2.0
-                ),
+                priority=_PRIORITY_SCORES.get(fm.get("priority", "medium"), 2.0),
                 phase_trigger=fm.get("phase_trigger", []),
                 tech_trigger=fm.get("tech_trigger", []),
                 token_budget=int(fm.get("token_budget", 500)),
@@ -816,9 +815,7 @@ class KnowledgePusher:
             # 如果 frontmatter 没有 summary，从内容提取
             if not entry.summary:
                 entry.summary = self._extract_excerpt(Path(info.path), max_chars=200)
-            entry.summary_tokens = self._estimate_tokens(
-                f"{entry.title}: {entry.summary}"
-            )
+            entry.summary_tokens = self._estimate_tokens(f"{entry.title}: {entry.summary}")
             entries.append(entry)
         return entries
 
@@ -881,7 +878,7 @@ class KnowledgePusher:
         if content.startswith("---"):
             end = content.find("\n---", 3)
             if end > 0:
-                content = content[end + 4:].lstrip("\n")
+                content = content[end + 4 :].lstrip("\n")
 
         return content
 
@@ -944,9 +941,9 @@ class KnowledgePusher:
                 continue
 
             # 检测 Agent Checklist 区域
-            if any(marker in stripped for marker in (
-                "Agent Checklist", "## Checklist", "## 检查清单"
-            )):
+            if any(
+                marker in stripped for marker in ("Agent Checklist", "## Checklist", "## 检查清单")
+            ):
                 if current_lines:
                     sections.append((current_type, list(current_lines)))
                 current_lines = [line]
@@ -1048,21 +1045,25 @@ class KnowledgePusher:
         for info in self._file_index:
             stem = Path(info.filename).stem.lower()
             if stem in related_ids and info.path not in l2_paths:
-                references.append({
-                    "path": info.path,
-                    "filename": info.filename,
-                    "title": info.title,
-                    "domain": info.domain,
-                    "category": info.category,
-                    "reason": "被 L2 文件的 related 字段引用",
-                })
+                references.append(
+                    {
+                        "path": info.path,
+                        "filename": info.filename,
+                        "title": info.title,
+                        "domain": info.domain,
+                        "category": info.category,
+                        "reason": "被 L2 文件的 related 字段引用",
+                    }
+                )
                 if len(references) >= 10:
                     break
 
         # 补充 playbook/case 引用
-        references.extend(self._get_domain_playbook_refs(l2_details, exclude={
-            r["path"] for r in references
-        } | l2_paths))
+        references.extend(
+            self._get_domain_playbook_refs(
+                l2_details, exclude={r["path"] for r in references} | l2_paths
+            )
+        )
 
         return references[:15]
 
@@ -1079,14 +1080,16 @@ class KnowledgePusher:
         for info in self._file_index:
             if info.category in ("02-playbooks", "05-cases"):
                 if info.domain in l2_domains and info.path not in exclude:
-                    references.append({
-                        "path": info.path,
-                        "filename": info.filename,
-                        "title": info.title,
-                        "domain": info.domain,
-                        "category": info.category,
-                        "reason": f"同领域 ({info.domain}) 的 {info.category} 资源",
-                    })
+                    references.append(
+                        {
+                            "path": info.path,
+                            "filename": info.filename,
+                            "title": info.title,
+                            "domain": info.domain,
+                            "category": info.category,
+                            "reason": f"同领域 ({info.domain}) 的 {info.category} 资源",
+                        }
+                    )
                     if len(references) >= 5:
                         break
 
@@ -1192,9 +1195,7 @@ class KnowledgePusher:
         # 使用文件名
         return path.stem.replace("-", " ").replace("_", " ").title()
 
-    def _extract_tags_from_path(
-        self, path: Path, domain: str, category: str
-    ) -> list[str]:
+    def _extract_tags_from_path(self, path: Path, domain: str, category: str) -> list[str]:
         """从文件路径和名称提取标签"""
         tags: list[str] = []
         name_lower = path.stem.lower()
@@ -1504,10 +1505,28 @@ class KnowledgePusher:
 
     # 反模式文件中常见的非反模式标题（需过滤掉）
     _AP_NOISE_TITLES: set[str] = {
-        "描述", "错误示例", "正确示例", "检测方法", "修复步骤",
-        "agent checklist", "问题代码", "修复代码", "问题", "解决方案",
-        "示例", "说明", "参考", "目录", "概述", "简介", "总结",
-        "背景", "原因", "影响", "建议", "前言",
+        "描述",
+        "错误示例",
+        "正确示例",
+        "检测方法",
+        "修复步骤",
+        "agent checklist",
+        "问题代码",
+        "修复代码",
+        "问题",
+        "解决方案",
+        "示例",
+        "说明",
+        "参考",
+        "目录",
+        "概述",
+        "简介",
+        "总结",
+        "背景",
+        "原因",
+        "影响",
+        "建议",
+        "前言",
     }
 
     def _extract_antipatterns(self, files: list[KnowledgeFileInfo]) -> list[str]:

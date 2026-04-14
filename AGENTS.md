@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Super Dev is a Python CLI tool (v2.3.7) that orchestrates AI-driven development pipelines inside host environments (e.g., Claude Code). It is a governance and quality layer — not an independent AI agent — enforcing phase-based workflows with confirmation gates, quality scoring, and audit artifact generation.
+Super Dev is a Python CLI tool (v2.3.8) that orchestrates AI-driven development pipelines inside host environments (e.g., Claude Code). It is a governance and quality layer — not an independent AI agent — enforcing phase-based workflows with confirmation gates, quality scoring, and audit artifact generation.
 
 ## Project Structure & Module Organization
 

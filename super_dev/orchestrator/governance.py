@@ -26,9 +26,7 @@ class GovernanceReport:
 
     project_name: str
     run_id: str
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     validation_report: ValidationReport | None = None
     knowledge_report: KnowledgeTrackingReport | None = None
@@ -75,9 +73,7 @@ class GovernanceReport:
             lines.append(f"- **质量门禁分数**: {m.quality_gate_score}/100")
             lines.append(f"- **返工次数**: {m.rework_count}")
             if m.phase_durations:
-                phases_str = ", ".join(
-                    f"{p}={d:.0f}s" for p, d in m.phase_durations.items()
-                )
+                phases_str = ", ".join(f"{p}={d:.0f}s" for p, d in m.phase_durations.items())
                 lines.append(f"- **各阶段耗时**: {phases_str}")
             lines.append("")
 
@@ -98,11 +94,7 @@ class GovernanceReport:
             lines.append("|------|------|------|----------|")
             for phase, vr in self.phase_validations.items():
                 p = "Y" if vr.passed else "N"
-                critical = sum(
-                    1
-                    for r in vr.results
-                    if not r.passed and r.severity == "critical"
-                )
+                critical = sum(1 for r in vr.results if not r.passed and r.severity == "critical")
                 lines.append(f"| {phase} | {p} | {vr.score} | {critical} |")
             lines.append("")
 
@@ -171,7 +163,9 @@ class PipelineGovernance:
         self.metrics_collector.record_phase_start(phase)
         _logger.info("Entered phase: %s", phase)
 
-    def exit_phase(self, phase: str, context: dict[str, Any] | None = None) -> ValidationReport | None:
+    def exit_phase(
+        self, phase: str, context: dict[str, Any] | None = None
+    ) -> ValidationReport | None:
         """退出阶段，执行该阶段的验证规则"""
         self.metrics_collector.record_phase_end(phase)
         self._current_phase = None
@@ -274,11 +268,13 @@ class PipelineGovernance:
                     phase = ref.phase
                     if phase not in knowledge_push_data:
                         knowledge_push_data[phase] = {"files": [], "constraints": []}
-                    knowledge_push_data[phase]["files"].append({
-                        "path": ref.knowledge_file,
-                        "domain": "",
-                        "category": "",
-                    })
+                    knowledge_push_data[phase]["files"].append(
+                        {
+                            "path": ref.knowledge_file,
+                            "domain": "",
+                            "category": "",
+                        }
+                    )
             quality_result: dict = {}
             if metrics:
                 quality_result["score"] = metrics.quality_gate_score

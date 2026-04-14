@@ -25,16 +25,13 @@ MAX_RESULTS = 5
 @dataclass
 class SearchResult:
     """搜索结果"""
+
     score: float
     relevance: str  # high, medium, low
     data: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "score": self.score,
-            "relevance": self.relevance,
-            **self.data
-        }
+        return {"score": self.score, "relevance": self.relevance, **self.data}
 
 
 # ============ 增强版 BM25 ============
@@ -64,11 +61,11 @@ class EnhancedBM25:
     def tokenize(self, text: str) -> list[str]:
         """分词 - 支持中英文"""
         # 移除标点
-        text = re.sub(r'[^\w\s\u4e00-\u9fff]', ' ', str(text).lower())
+        text = re.sub(r"[^\w\s\u4e00-\u9fff]", " ", str(text).lower())
         # 分词（英文按空格，中文按字符）
         words: list[str] = []
         for word in text.split():
-            if re.match(r'[\u4e00-\u9fff]', word):
+            if re.match(r"[\u4e00-\u9fff]", word):
                 # 中文，按字符分
                 words.extend(list(word))
             else:
@@ -164,66 +161,169 @@ class DesignIntelligenceEngine:
             "style": {
                 "file": "styles.csv",
                 "search_cols": ["name", "category", "keywords", "best_for"],
-                "output_cols": ["name", "category", "keywords", "description", "primary_colors",
-                              "effects", "animations", "best_for", "complexity", "accessibility",
-                              "performance", "frameworks", "example_prompt"],
+                "output_cols": [
+                    "name",
+                    "category",
+                    "keywords",
+                    "description",
+                    "primary_colors",
+                    "effects",
+                    "animations",
+                    "best_for",
+                    "complexity",
+                    "accessibility",
+                    "performance",
+                    "frameworks",
+                    "example_prompt",
+                ],
             },
             "color": {
                 "file": "colors.csv",
                 "search_cols": ["name", "category", "keywords", "mood", "best_for"],
-                "output_cols": ["name", "category", "primary", "secondary", "accent",
-                              "background", "surface", "text", "text_muted", "border",
-                              "keywords", "mood", "best_for", "css_vars"],
+                "output_cols": [
+                    "name",
+                    "category",
+                    "primary",
+                    "secondary",
+                    "accent",
+                    "background",
+                    "surface",
+                    "text",
+                    "text_muted",
+                    "border",
+                    "keywords",
+                    "mood",
+                    "best_for",
+                    "css_vars",
+                ],
             },
             "typography": {
                 "file": "typography.csv",
-                "search_cols": ["name", "category", "mood", "heading_font", "body_font", "keywords"],
-                "output_cols": ["name", "category", "heading_font", "body_font", "accent_font",
-                              "mood", "keywords", "best_for", "google_fonts_url", "css_import",
-                              "tailwind_config", "notes"],
+                "search_cols": [
+                    "name",
+                    "category",
+                    "mood",
+                    "heading_font",
+                    "body_font",
+                    "keywords",
+                ],
+                "output_cols": [
+                    "name",
+                    "category",
+                    "heading_font",
+                    "body_font",
+                    "accent_font",
+                    "mood",
+                    "keywords",
+                    "best_for",
+                    "google_fonts_url",
+                    "css_import",
+                    "tailwind_config",
+                    "notes",
+                ],
             },
             "component": {
                 "file": "components.csv",
                 "search_cols": ["name", "type", "keywords", "use_case", "complexity"],
-                "output_cols": ["name", "type", "description", "keywords", "use_case",
-                              "complexity", "accessibility", "responsive", "frameworks",
-                              "code_example", "props"],
+                "output_cols": [
+                    "name",
+                    "type",
+                    "description",
+                    "keywords",
+                    "use_case",
+                    "complexity",
+                    "accessibility",
+                    "responsive",
+                    "frameworks",
+                    "code_example",
+                    "props",
+                ],
             },
             "layout": {
                 "file": "layouts.csv",
                 "search_cols": ["name", "type", "keywords", "best_for"],
-                "output_cols": ["name", "type", "description", "keywords", "structure",
-                              "responsive", "best_for", "css_grid"],
+                "output_cols": [
+                    "name",
+                    "type",
+                    "description",
+                    "keywords",
+                    "structure",
+                    "responsive",
+                    "best_for",
+                    "css_grid",
+                ],
             },
             "animation": {
                 "file": "animations.csv",
                 "search_cols": ["name", "type", "keywords", "effect"],
-                "output_cols": ["name", "type", "description", "keywords", "css_code",
-                              "duration", "easing", "best_for", "accessibility"],
+                "output_cols": [
+                    "name",
+                    "type",
+                    "description",
+                    "keywords",
+                    "css_code",
+                    "duration",
+                    "easing",
+                    "best_for",
+                    "accessibility",
+                ],
             },
             "ux": {
                 "file": "ux_guidelines.csv",
                 "search_cols": ["domain", "topic", "best_practice", "anti_pattern", "impact"],
-                "output_cols": ["domain", "topic", "best_practice", "anti_pattern",
-                              "example", "impact", "complexity"],
+                "output_cols": [
+                    "domain",
+                    "topic",
+                    "best_practice",
+                    "anti_pattern",
+                    "example",
+                    "impact",
+                    "complexity",
+                ],
             },
             "chart": {
                 "file": "chart_types.csv",
                 "search_cols": ["name", "category", "data_type", "keywords", "description"],
-                "output_cols": ["name", "category", "data_type", "description",
-                              "best_libraries", "accessibility_notes", "use_cases", "limitations", "keywords"],
+                "output_cols": [
+                    "name",
+                    "category",
+                    "data_type",
+                    "description",
+                    "best_libraries",
+                    "accessibility_notes",
+                    "use_cases",
+                    "limitations",
+                    "keywords",
+                ],
             },
             "product": {
                 "file": "landing_patterns.csv",
                 "search_cols": ["name", "category", "description", "best_for", "keywords"],
-                "output_cols": ["name", "category", "description", "sections", "cta_strategy",
-                              "best_for", "conversion_tips", "complexity", "keywords"],
+                "output_cols": [
+                    "name",
+                    "category",
+                    "description",
+                    "sections",
+                    "cta_strategy",
+                    "best_for",
+                    "conversion_tips",
+                    "complexity",
+                    "keywords",
+                ],
             },
             "stack": {
                 "file": "tech_stacks.csv",
                 "search_cols": ["framework", "category", "topic", "recommendation", "use_cases"],
-                "output_cols": ["framework", "category", "topic", "recommendation",
-                              "code_example", "benefits", "use_cases", "complexity"],
+                "output_cols": [
+                    "framework",
+                    "category",
+                    "topic",
+                    "recommendation",
+                    "code_example",
+                    "benefits",
+                    "use_cases",
+                    "complexity",
+                ],
             },
         }
 
@@ -333,16 +433,28 @@ class DesignIntelligenceEngine:
 
         # 综合推荐
         return {
-            "product_analysis": product_result.get("results", [{}])[0] if product_result.get("results") else {},
-            "recommended_style": style_result.get("results", [{}])[0] if style_result.get("results") else {},
-            "color_palette": color_result.get("results", [{}])[0] if color_result.get("results") else {},
-            "typography": typography_result.get("results", [{}])[0] if typography_result.get("results") else {},
+            "product_analysis": (
+                product_result.get("results", [{}])[0] if product_result.get("results") else {}
+            ),
+            "recommended_style": (
+                style_result.get("results", [{}])[0] if style_result.get("results") else {}
+            ),
+            "color_palette": (
+                color_result.get("results", [{}])[0] if color_result.get("results") else {}
+            ),
+            "typography": (
+                typography_result.get("results", [{}])[0]
+                if typography_result.get("results")
+                else {}
+            ),
             "aesthetic_direction": {
                 "name": aesthetic.name,
                 "description": aesthetic.description,
                 "differentiation": aesthetic.differentiation,
             },
-            "ux_guidelines": self.search(f"{product_type} best practices", domain="ux").get("results", []),
+            "ux_guidelines": self.search(f"{product_type} best practices", domain="ux").get(
+                "results", []
+            ),
             "implementation_stack": self._get_stack_recommendation(platform),
         }
 
@@ -363,7 +475,16 @@ class DesignIntelligenceEngine:
 
         # 颜色 tokens
         colors = design_system.get("color_palette", {})
-        for key in ["primary", "secondary", "accent", "background", "surface", "text", "text_muted", "border"]:
+        for key in [
+            "primary",
+            "secondary",
+            "accent",
+            "background",
+            "surface",
+            "text",
+            "text_muted",
+            "border",
+        ]:
             value = colors.get(key, "")
             if value:
                 css_var = f"--color-{key}"
@@ -417,14 +538,50 @@ class DesignIntelligenceEngine:
         # 关键词映射（扩展版）
         domain_keywords = {
             "color": ["color", "palette", "hex", "#", "rgb", "hsl", "主题色", "配色"],
-            "typography": ["font", "type", "typography", "heading", "body", "serif", "sans", "字体", "排版"],
+            "typography": [
+                "font",
+                "type",
+                "typography",
+                "heading",
+                "body",
+                "serif",
+                "sans",
+                "字体",
+                "排版",
+            ],
             "component": ["component", "button", "modal", "navbar", "card", "form", "组件", "按钮"],
             "layout": ["layout", "grid", "flex", "structure", "布局", "网格"],
             "animation": ["animation", "transition", "motion", "effect", "动画", "过渡", "特效"],
             "chart": ["chart", "graph", "visualization", "trend", "data", "图表", "可视化", "数据"],
-            "ux": ["ux", "usability", "accessibility", "wcag", "experience", "体验", "可用性", "无障碍"],
-            "product": ["saas", "ecommerce", "fintech", "healthcare", "portfolio", "dashboard", "产品"],
-            "style": ["style", "design", "ui", "minimalism", "glassmorphism", "brutalism", "风格", "设计"],
+            "ux": [
+                "ux",
+                "usability",
+                "accessibility",
+                "wcag",
+                "experience",
+                "体验",
+                "可用性",
+                "无障碍",
+            ],
+            "product": [
+                "saas",
+                "ecommerce",
+                "fintech",
+                "healthcare",
+                "portfolio",
+                "dashboard",
+                "产品",
+            ],
+            "style": [
+                "style",
+                "design",
+                "ui",
+                "minimalism",
+                "glassmorphism",
+                "brutalism",
+                "风格",
+                "设计",
+            ],
             "stack": ["react", "vue", "nextjs", "tailwind", "framework", "框架"],
         }
 
@@ -457,10 +614,7 @@ class DesignIntelligenceEngine:
             return []
 
         # 构建文档
-        documents = [
-            " ".join(str(row.get(col, "")) for col in search_cols)
-            for row in data
-        ]
+        documents = [" ".join(str(row.get(col, "")) for col in search_cols) for row in data]
 
         # BM25 搜索
         bm25 = EnhancedBM25()
@@ -477,11 +631,13 @@ class DesignIntelligenceEngine:
                 # 计算相关性
                 relevance = "high" if score > 2.0 else "medium" if score > 1.0 else "low"
 
-                results.append(SearchResult(
-                    score=round(score, 3),
-                    relevance=relevance,
-                    data=result,
-                ).to_dict())
+                results.append(
+                    SearchResult(
+                        score=round(score, 3),
+                        relevance=relevance,
+                        data=result,
+                    ).to_dict()
+                )
 
         return results
 

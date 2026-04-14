@@ -88,9 +88,7 @@ class TechStack:
         """转换为字典"""
         # 处理 framework 可能是字符串或枚举
         framework_value = (
-            self.framework.value
-            if isinstance(self.framework, FrameworkType)
-            else self.framework
+            self.framework.value if isinstance(self.framework, FrameworkType) else self.framework
         )
 
         return {
@@ -231,31 +229,37 @@ class ArchitectureReport:
             lines.append(f"- **测试框架**: {self.tech_stack.testing_framework}")
 
         if self.architecture_pattern:
-            lines.extend([
-                "",
-                "## 架构模式",
-                "",
-                f"识别到: **{self.architecture_pattern.value}**",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "## 架构模式",
+                    "",
+                    f"识别到: **{self.architecture_pattern.value}**",
+                ]
+            )
 
         if self.design_patterns:
-            lines.extend([
-                "",
-                "## 设计模式",
-                "",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "## 设计模式",
+                    "",
+                ]
+            )
             for pattern in self.design_patterns:
                 lines.append(f"- **{pattern.name.value}**: `{pattern.location}`")
                 if pattern.description:
                     lines.append(f"  - {pattern.description}")
 
-        lines.extend([
-            "",
-            "## 项目统计",
-            "",
-            f"- **文件数量**: {self.file_count}",
-            f"- **代码行数**: {self.total_lines:,}",
-        ])
+        lines.extend(
+            [
+                "",
+                "## 项目统计",
+                "",
+                f"- **文件数量**: {self.file_count}",
+                f"- **代码行数**: {self.total_lines:,}",
+            ]
+        )
 
         if self.languages_used:
             lines.append("- **语言分布**:")
@@ -266,11 +270,13 @@ class ArchitectureReport:
                 lines.append(f"  - {lang}: {count:,} 行 ({percentage:.1f}%)")
 
         if self.tech_stack.dependencies:
-            lines.extend([
-                "",
-                f"## 主要依赖 ({len(self.tech_stack.dependencies)})",
-                "",
-            ])
+            lines.extend(
+                [
+                    "",
+                    f"## 主要依赖 ({len(self.tech_stack.dependencies)})",
+                    "",
+                ]
+            )
             for dep in self.tech_stack.dependencies[:20]:  # 只显示前20个
                 lines.append(f"- {dep}")
 

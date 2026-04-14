@@ -280,7 +280,9 @@ class CliSpecMixin:
             console.print(Panel(title, padding=(0, 1), expand=True))
 
             if changes:
-                table = Table(title="活跃变更", show_header=True, header_style="bold magenta", expand=True)
+                table = Table(
+                    title="活跃变更", show_header=True, header_style="bold magenta", expand=True
+                )
                 table.add_column("ID", style="cyan", ratio=2)
                 table.add_column("标题", style="white", ratio=3)
                 table.add_column("状态", style="yellow", min_width=8)
@@ -304,7 +306,9 @@ class CliSpecMixin:
 
             if specs:
                 console.print("")
-                specs_table = Table(title="当前规范", show_header=True, header_style="bold green", expand=True)
+                specs_table = Table(
+                    title="当前规范", show_header=True, header_style="bold green", expand=True
+                )
                 specs_table.add_column("规范名称", style="cyan", ratio=1)
                 specs_table.add_column("文件路径", style="dim", ratio=2, overflow="fold")
 
@@ -598,16 +602,20 @@ class CliSpecMixin:
                     preview_lines = content.splitlines()[start:end]
                     break
 
-            preview = " [...] ".join(
-                line.strip()[:120] for line in preview_lines
-            ) if preview_lines else ""
+            preview = (
+                " [...] ".join(line.strip()[:120] for line in preview_lines)
+                if preview_lines
+                else ""
+            )
 
-            results.append({
-                "path": str(rel_path),
-                "domain": str(rel_path.parts[0]) if len(rel_path.parts) > 1 else "",
-                "score": score,
-                "preview": preview,
-            })
+            results.append(
+                {
+                    "path": str(rel_path),
+                    "domain": str(rel_path.parts[0]) if len(rel_path.parts) > 1 else "",
+                    "score": score,
+                    "preview": preview,
+                }
+            )
 
         # Sort by score descending and limit
         results.sort(key=lambda r: r["score"], reverse=True)
@@ -683,9 +691,7 @@ class CliSpecMixin:
             self.console.print("[dim]暂无使用统计数据。运行 pipeline 后数据将自动积累。[/dim]\n")
 
         if least_effective:
-            self.console.print(
-                f"[red]最无效的 Bottom {len(least_effective)} 知识文件:[/red]\n"
-            )
+            self.console.print(f"[red]最无效的 Bottom {len(least_effective)} 知识文件:[/red]\n")
             for i, s in enumerate(least_effective, 1):
                 self.console.print(
                     f"  {i}. {s.file_path}\n"
@@ -702,9 +708,7 @@ class CliSpecMixin:
         report = analyzer.generate_evolution_report()
 
         if getattr(args, "json", False):
-            sys.stdout.write(
-                json.dumps(report.to_dict(), ensure_ascii=False, indent=2) + "\n"
-            )
+            sys.stdout.write(json.dumps(report.to_dict(), ensure_ascii=False, indent=2) + "\n")
         else:
             self.console.print(report.to_markdown())
 
@@ -712,9 +716,7 @@ class CliSpecMixin:
             project_dir = Path.cwd()
             output_dir = project_dir / "output"
             saved_path = analyzer.save_evolution_report(report, str(output_dir))
-            self.console.print(
-                f"\n[green]已保存:[/green] {saved_path.relative_to(project_dir)}"
-            )
+            self.console.print(f"\n[green]已保存:[/green] {saved_path.relative_to(project_dir)}")
 
         return 0
 
@@ -723,15 +725,12 @@ class CliSpecMixin:
         weights = analyzer.suggest_knowledge_weights()
 
         if getattr(args, "json", False):
-            sys.stdout.write(
-                json.dumps(weights, ensure_ascii=False, indent=2) + "\n"
-            )
+            sys.stdout.write(json.dumps(weights, ensure_ascii=False, indent=2) + "\n")
             return 0
 
         if not weights:
             self.console.print(
-                "\n[dim]暂无权重调整建议。"
-                "需要多次 pipeline 执行后积累足够数据。[/dim]\n"
+                "\n[dim]暂无权重调整建议。" "需要多次 pipeline 执行后积累足够数据。[/dim]\n"
             )
             return 0
 
@@ -747,9 +746,7 @@ class CliSpecMixin:
             else:
                 color = "white"
                 marker = "=="
-            self.console.print(
-                f"  [{color}][{marker}] {w:.2f}x[/{color}]  {fp}"
-            )
+            self.console.print(f"  [{color}][{marker}] {w:.2f}x[/{color}]  {fp}")
         self.console.print()
 
         return 0

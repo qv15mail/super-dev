@@ -56,19 +56,29 @@ def summarize_framework_playbook(playbook: dict[str, Any], limit: int = 4) -> di
     return {
         "framework": str(playbook.get("framework", "")).strip(),
         "implementation_modules": [
-            str(item).strip() for item in playbook.get("implementation_modules", []) if str(item).strip()
+            str(item).strip()
+            for item in playbook.get("implementation_modules", [])
+            if str(item).strip()
         ][:limit],
         "platform_constraints": [
-            str(item).strip() for item in playbook.get("platform_constraints", []) if str(item).strip()
+            str(item).strip()
+            for item in playbook.get("platform_constraints", [])
+            if str(item).strip()
         ][:limit],
         "execution_guardrails": [
-            str(item).strip() for item in playbook.get("execution_guardrails", []) if str(item).strip()
+            str(item).strip()
+            for item in playbook.get("execution_guardrails", [])
+            if str(item).strip()
         ][:limit],
         "native_capabilities": [
-            str(item).strip() for item in playbook.get("native_capabilities", []) if str(item).strip()
+            str(item).strip()
+            for item in playbook.get("native_capabilities", [])
+            if str(item).strip()
         ][:limit],
         "validation_surfaces": [
-            str(item).strip() for item in playbook.get("validation_surfaces", []) if str(item).strip()
+            str(item).strip()
+            for item in playbook.get("validation_surfaces", [])
+            if str(item).strip()
         ][:limit],
         "delivery_evidence": [
             str(item).strip() for item in playbook.get("delivery_evidence", []) if str(item).strip()

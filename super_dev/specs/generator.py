@@ -34,12 +34,7 @@ class SpecGenerator:
         self.change_manager = ChangeManager(self.project_dir)
 
     def create_change(
-        self,
-        change_id: str,
-        title: str,
-        description: str,
-        motivation: str = "",
-        impact: str = ""
+        self, change_id: str, title: str, description: str, motivation: str = "", impact: str = ""
     ) -> Change:
         """创建新变更提案"""
         change = Change(
@@ -47,11 +42,8 @@ class SpecGenerator:
             title=title,
             status=ChangeStatus.PROPOSED,
             proposal=Proposal(
-                title=title,
-                description=description,
-                motivation=motivation,
-                impact=impact
-            )
+                title=title, description=description, motivation=motivation, impact=impact
+            ),
         )
         self.change_manager.save_change(change)
         return change
@@ -103,7 +95,7 @@ class SpecGenerator:
         requirement_name: str,
         description: str,
         scenarios: list[dict] | None = None,
-        delta_type: DeltaType = DeltaType.ADDED
+        delta_type: DeltaType = DeltaType.ADDED,
     ) -> SpecDelta:
         """向变更添加需求"""
         change = self.change_manager.load_change(change_id)
@@ -114,17 +106,13 @@ class SpecGenerator:
         req_scenarios = []
         if scenarios:
             for s in scenarios:
-                req_scenarios.append(Scenario(
-                    given=s.get("given", ""),
-                    when=s.get("when", ""),
-                    then=s.get("then", "")
-                ))
+                req_scenarios.append(
+                    Scenario(
+                        given=s.get("given", ""), when=s.get("when", ""), then=s.get("then", "")
+                    )
+                )
 
-        requirement = Requirement(
-            name=requirement_name,
-            description=description,
-            keyword="SHALL"
-        )
+        requirement = Requirement(name=requirement_name, description=description, keyword="SHALL")
         requirement.scenarios = req_scenarios
 
         # 查找或创建增量
@@ -134,9 +122,7 @@ class SpecGenerator:
                 break
         else:
             delta = SpecDelta(
-                spec_name=spec_name,
-                delta_type=delta_type,
-                requirements=[requirement]
+                spec_name=spec_name, delta_type=delta_type, requirements=[requirement]
             )
             change.spec_deltas.append(delta)
 
@@ -144,9 +130,7 @@ class SpecGenerator:
         return delta
 
     def generate_tasks_from_requirements(
-        self,
-        change_id: str,
-        tech_stack: dict | None = None
+        self, change_id: str, tech_stack: dict | None = None
     ) -> list[Task]:
         """从需求自动生成任务"""
         change = self.change_manager.load_change(change_id)
@@ -166,7 +150,7 @@ class SpecGenerator:
                     title=f"Implement: {req.name}",
                     description=req.description,
                     status=TaskStatus.PENDING,
-                    spec_refs=[f"{delta.spec_name}::{req.name}"]
+                    spec_refs=[f"{delta.spec_name}::{req.name}"],
                 )
                 tasks.append(task)
 
@@ -177,30 +161,36 @@ class SpecGenerator:
             frontend_tech = tech_stack.get("frontend")
             if frontend_tech:
                 task_id[1] += 1
-                tasks.append(Task(
-                    id=f"{task_id[0]}.{task_id[1]}",
-                    title=f"前端实现: {frontend_tech} 组件开发",
-                    description=f"基于 {frontend_tech} 技术栈实现前端组件与页面",
-                    status=TaskStatus.PENDING,
-                ))
+                tasks.append(
+                    Task(
+                        id=f"{task_id[0]}.{task_id[1]}",
+                        title=f"前端实现: {frontend_tech} 组件开发",
+                        description=f"基于 {frontend_tech} 技术栈实现前端组件与页面",
+                        status=TaskStatus.PENDING,
+                    )
+                )
             backend_tech = tech_stack.get("backend")
             if backend_tech:
                 task_id[1] += 1
-                tasks.append(Task(
-                    id=f"{task_id[0]}.{task_id[1]}",
-                    title=f"后端实现: {backend_tech} API 开发",
-                    description=f"基于 {backend_tech} 技术栈实现后端 API 接口",
-                    status=TaskStatus.PENDING,
-                ))
+                tasks.append(
+                    Task(
+                        id=f"{task_id[0]}.{task_id[1]}",
+                        title=f"后端实现: {backend_tech} API 开发",
+                        description=f"基于 {backend_tech} 技术栈实现后端 API 接口",
+                        status=TaskStatus.PENDING,
+                    )
+                )
             database_tech = tech_stack.get("database")
             if database_tech:
                 task_id[1] += 1
-                tasks.append(Task(
-                    id=f"{task_id[0]}.{task_id[1]}",
-                    title="数据库: Schema 设计与迁移脚本",
-                    description=f"设计 {database_tech} 数据库 Schema 并编写迁移脚本",
-                    status=TaskStatus.PENDING,
-                ))
+                tasks.append(
+                    Task(
+                        id=f"{task_id[0]}.{task_id[1]}",
+                        title="数据库: Schema 设计与迁移脚本",
+                        description=f"设计 {database_tech} 数据库 Schema 并编写迁移脚本",
+                        status=TaskStatus.PENDING,
+                    )
+                )
 
         # 添加测试任务
         task_id[0] += 1
@@ -212,7 +202,7 @@ class SpecGenerator:
                 title=f"Test: {delta.spec_name} requirements",
                 description=f"Verify all scenarios for {delta.spec_name}",
                 status=TaskStatus.PENDING,
-                spec_refs=[delta.spec_name]
+                spec_refs=[delta.spec_name],
             )
             tasks.append(task)
 
@@ -223,8 +213,22 @@ class SpecGenerator:
         return tasks
 
     # PRD 标题匹配模式（支持中英文变体）
-    _OVERVIEW_PATTERNS = ("## 概述", "## 产品概述", "## Overview", "## 1. 产品愿景", "## 简介", "## Introduction")
-    _FEATURES_PATTERNS = ("## 功能需求", "## 核心功能", "## Features", "## 2. 功能需求", "## 需求列表", "## Requirements")
+    _OVERVIEW_PATTERNS = (
+        "## 概述",
+        "## 产品概述",
+        "## Overview",
+        "## 1. 产品愿景",
+        "## 简介",
+        "## Introduction",
+    )
+    _FEATURES_PATTERNS = (
+        "## 功能需求",
+        "## 核心功能",
+        "## Features",
+        "## 2. 功能需求",
+        "## 需求列表",
+        "## Requirements",
+    )
 
     def propose_from_prd(self, prd_content: str) -> Change:
         """从 PRD 内容生成变更提案 (简化版)"""
@@ -260,7 +264,7 @@ class SpecGenerator:
             title=title,
             description=description.strip(),
             motivation="Derived from PRD",
-            impact=", ".join(features[:3])
+            impact=", ".join(features[:3]),
         )
 
         return change

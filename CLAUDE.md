@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Super Dev is a Python CLI tool (v2.3.7) that orchestrates AI-driven development pipelines inside host environments (e.g., Claude Code). It provides governance, quality gates, and audit artifacts for commercial-grade software delivery. It is NOT an independent AI agent — it's a governance layer that runs inside a host's coding environment.
+Super Dev is a Python CLI tool (v2.3.8) that orchestrates AI-driven development pipelines inside host environments (e.g., Claude Code). It provides governance, quality gates, and audit artifacts for commercial-grade software delivery. It is NOT an independent AI agent — it's a governance layer that runs inside a host's coding environment.
 
 ## Build & Development Commands
 

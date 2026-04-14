@@ -82,12 +82,14 @@ except ImportError:
 
 try:
     from .plan_executor import PlanExecutor
+
     PLAN_EXECUTOR_AVAILABLE = True
 except ImportError:
     PLAN_EXECUTOR_AVAILABLE = False
 
 try:
     from .overseer import Overseer
+
     OVERSEER_AVAILABLE = True
 except ImportError:
     OVERSEER_AVAILABLE = False
@@ -227,28 +229,26 @@ class WorkflowEngine:
             try:
                 self.plan_executor = PlanExecutor(self.project_dir)
             except Exception as e:
-                self.logger.warning(f'Plan-Execute 引擎初始化失败: {e}')
+                self.logger.warning(f"Plan-Execute 引擎初始化失败: {e}")
 
         # Initialize overseer (optional)
         self.overseer = None
         if OVERSEER_AVAILABLE:
             try:
                 config = self.config_manager.config
-                if getattr(config, 'overseer_enabled', False):
+                if getattr(config, "overseer_enabled", False):
                     self.overseer = Overseer(
                         project_dir=self.project_dir,
-                        project_name=getattr(config, 'name', ''),
-                        quality_threshold=getattr(config, 'quality_gate', 80),
-                        halt_on_critical=getattr(config, 'overseer_halt_on_critical', True),
+                        project_name=getattr(config, "name", ""),
+                        quality_threshold=getattr(config, "quality_gate", 80),
+                        halt_on_critical=getattr(config, "overseer_halt_on_critical", True),
                     )
             except Exception as e:
-                self.logger.warning(f'Overseer 初始化失败: {e}')
+                self.logger.warning(f"Overseer 初始化失败: {e}")
 
         self.logger.info("工作流引擎初始化完成", extra={"project_dir": str(self.project_dir)})
 
-    def _emit_state_event(
-        self, event: str, phase: str = "", **kwargs: Any
-    ) -> None:
+    def _emit_state_event(self, event: str, phase: str = "", **kwargs: Any) -> None:
         """Emit a pipeline state change event to interested subsystems.
 
         Events: ``phase_started``, ``phase_completed``, ``phase_failed``,
@@ -282,17 +282,17 @@ class WorkflowEngine:
                 pass
 
         # Overseer checkpoint on phase completion
-        if event == 'phase_completed' and self.overseer:
+        if event == "phase_completed" and self.overseer:
             try:
-                quality_score = kwargs.get('quality_score', 0.0)
+                quality_score = kwargs.get("quality_score", 0.0)
                 self.overseer.checkpoint_phase(
                     phase=phase,
                     quality_score=quality_score,
-                    actual_output=kwargs.get('output'),
+                    actual_output=kwargs.get("output"),
                 )
                 if self.overseer.should_halt():
                     self.logger.warning(
-                        f'Overseer 暂停流水线: {self.overseer.get_report().halt_reason}'
+                        f"Overseer 暂停流水线: {self.overseer.get_report().halt_reason}"
                     )
             except Exception:
                 pass
@@ -586,9 +586,7 @@ class WorkflowEngine:
 
             # Overseer halt check
             if self.overseer and self.overseer.should_halt():
-                self.logger.warning(
-                    f'Overseer 要求暂停，在阶段 {phase.value} 开始前终止'
-                )
+                self.logger.warning(f"Overseer 要求暂停，在阶段 {phase.value} 开始前终止")
                 break
 
             try:
@@ -646,9 +644,7 @@ class WorkflowEngine:
                                     else {}
                                 ),
                                 "metadata": (
-                                    dict(context.metadata)
-                                    if hasattr(context, "metadata")
-                                    else {}
+                                    dict(context.metadata) if hasattr(context, "metadata") else {}
                                 ),
                             },
                         )
@@ -817,11 +813,11 @@ class WorkflowEngine:
             try:
                 overseer_report = self.overseer.finalize()
                 self.logger.info(
-                    f'Overseer 报告: {overseer_report.overall_verdict.value}, '
-                    f'偏差数: {overseer_report.total_deviations}'
+                    f"Overseer 报告: {overseer_report.overall_verdict.value}, "
+                    f"偏差数: {overseer_report.total_deviations}"
                 )
             except Exception as e:
-                self.logger.warning(f'Overseer 最终报告生成失败: {e}')
+                self.logger.warning(f"Overseer 最终报告生成失败: {e}")
 
         # Session Brief: update status
         if SESSION_BRIEF_AVAILABLE:
@@ -956,7 +952,6 @@ class WorkflowEngine:
         """
         config = self.config_manager.config
         domain = config.domain or ""
-        description = config.description or ""
 
         estimates: dict[Phase, dict[str, Any]] = {
             Phase.DISCOVERY: {
@@ -1005,11 +1000,14 @@ class WorkflowEngine:
                 "key_activities": base["key_activities"],
             }
 
-        return estimates.get(phase, {
-            "estimated_minutes": 15,
-            "complexity": "medium",
-            "key_activities": [],
-        })
+        return estimates.get(
+            phase,
+            {
+                "estimated_minutes": 15,
+                "complexity": "medium",
+                "key_activities": [],
+            },
+        )
 
     async def _run_phase(
         self, phase: Phase, context: WorkflowContext, phase_timeout: int = 600

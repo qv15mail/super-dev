@@ -42,8 +42,13 @@ class FrontendScaffoldBuilder:
 
         html_path.write_text(self._build_html(ui_contract), encoding="utf-8")
         css_path.write_text(self._build_css(ui_contract), encoding="utf-8")
-        tokens_path.write_text(ui_contract.get("design_tokens", {}).get("css_variables") or ":root {}\n", encoding="utf-8")
-        js_path.write_text(self._build_js(requirements, phases, docs, ui_contract), encoding="utf-8")
+        tokens_path.write_text(
+            ui_contract.get("design_tokens", {}).get("css_variables") or ":root {}\n",
+            encoding="utf-8",
+        )
+        js_path.write_text(
+            self._build_js(requirements, phases, docs, ui_contract), encoding="utf-8"
+        )
 
         return {
             "html": str(html_path),
@@ -60,7 +65,11 @@ class FrontendScaffoldBuilder:
             if isinstance(ui_contract.get("framework_playbook"), dict)
             else {}
         )
-        component_stack = ui_contract.get("component_stack", {}) if isinstance(ui_contract.get("component_stack"), dict) else {}
+        component_stack = (
+            ui_contract.get("component_stack", {})
+            if isinstance(ui_contract.get("component_stack"), dict)
+            else {}
+        )
         icon_system = (
             ui_contract.get("icon_system")
             or component_stack.get("icon")
@@ -687,7 +696,9 @@ body {
             .replace("__ACCENT_DARK_60__", self._darken(accent, 0.6))
         )
 
-    def _build_js(self, requirements: list[dict], phases: list[dict], docs: dict, ui_contract: dict) -> str:
+    def _build_js(
+        self, requirements: list[dict], phases: list[dict], docs: dict, ui_contract: dict
+    ) -> str:
         payload = {
             "requirements": requirements,
             "phases": phases,
@@ -863,38 +874,42 @@ function relativePath(path) {{
 
         # package.json
         pkg = output_dir / "package.json"
-        pkg_content = json.dumps({
-            "name": f"{self.name}-frontend",
-            "version": "0.1.0",
-            "private": True,
-            "type": "module",
-            "scripts": {
-                "dev": "vite",
-                "build": "vue-tsc && vite build",
-                "preview": "vite preview",
-                "test": "vitest",
-                "test:e2e": "playwright test",
-                "storybook": "storybook dev -p 6006",
-                "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts",
+        pkg_content = json.dumps(
+            {
+                "name": f"{self.name}-frontend",
+                "version": "0.1.0",
+                "private": True,
+                "type": "module",
+                "scripts": {
+                    "dev": "vite",
+                    "build": "vue-tsc && vite build",
+                    "preview": "vite preview",
+                    "test": "vitest",
+                    "test:e2e": "playwright test",
+                    "storybook": "storybook dev -p 6006",
+                    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts",
+                },
+                "dependencies": {
+                    "vue": "^3.4.0",
+                    "vue-router": "^4.3.0",
+                    "pinia": "^2.1.0",
+                    "@vueuse/core": "^10.7.0",
+                },
+                "devDependencies": {
+                    "@vitejs/plugin-vue": "^5.0.0",
+                    "vite": "^5.0.0",
+                    "vue-tsc": "^2.0.0",
+                    "typescript": "^5.3.0",
+                    "vitest": "^1.2.0",
+                    "@vue/test-utils": "^2.4.0",
+                    "tailwindcss": "^3.4.0",
+                    "postcss": "^8.4.0",
+                    "autoprefixer": "^10.4.0",
+                },
             },
-            "dependencies": {
-                "vue": "^3.4.0",
-                "vue-router": "^4.3.0",
-                "pinia": "^2.1.0",
-                "@vueuse/core": "^10.7.0",
-            },
-            "devDependencies": {
-                "@vitejs/plugin-vue": "^5.0.0",
-                "vite": "^5.0.0",
-                "vue-tsc": "^2.0.0",
-                "typescript": "^5.3.0",
-                "vitest": "^1.2.0",
-                "@vue/test-utils": "^2.4.0",
-                "tailwindcss": "^3.4.0",
-                "postcss": "^8.4.0",
-                "autoprefixer": "^10.4.0",
-            },
-        }, indent=2, ensure_ascii=False)
+            indent=2,
+            ensure_ascii=False,
+        )
         pkg.write_text(pkg_content, encoding="utf-8")
         files["package.json"] = str(pkg)
 
@@ -964,7 +979,7 @@ function relativePath(path) {{
         app_vue = src_dir / "App.vue"
         app_vue.write_text(
             (
-                "<script setup lang=\"ts\">\n"
+                '<script setup lang="ts">\n'
                 "import { RouterView } from 'vue-router';\n"
                 "</script>\n\n"
                 "<template>\n"
@@ -1016,12 +1031,12 @@ function relativePath(path) {{
         views_dir.mkdir(parents=True, exist_ok=True)
         (views_dir / "HomeView.vue").write_text(
             (
-                "<script setup lang=\"ts\">\n"
+                '<script setup lang="ts">\n'
                 "</script>\n\n"
                 "<template>\n"
-                "  <main class=\"max-w-5xl mx-auto px-4 py-12\">\n"
-                f"    <h1 class=\"text-3xl font-heading font-bold\">{html.escape(self.name)}</h1>\n"
-                f"    <p class=\"mt-2 text-gray-600\">{html.escape(self.description)}</p>\n"
+                '  <main class="max-w-5xl mx-auto px-4 py-12">\n'
+                f'    <h1 class="text-3xl font-heading font-bold">{html.escape(self.name)}</h1>\n'
+                f'    <p class="mt-2 text-gray-600">{html.escape(self.description)}</p>\n'
                 "  </main>\n"
                 "</template>\n"
             ),
@@ -1044,34 +1059,41 @@ function relativePath(path) {{
 
         # package.json
         pkg = output_dir / "package.json"
-        pkg.write_text(json.dumps({
-            "name": f"{self.name}-frontend",
-            "version": "0.1.0",
-            "scripts": {
-                "start": "ng serve",
-                "build": "ng build",
-                "test": "ng test",
-                "lint": "ng lint",
-            },
-            "dependencies": {
-                "@angular/animations": "^18.0.0",
-                "@angular/common": "^18.0.0",
-                "@angular/compiler": "^18.0.0",
-                "@angular/core": "^18.0.0",
-                "@angular/forms": "^18.0.0",
-                "@angular/platform-browser": "^18.0.0",
-                "@angular/router": "^18.0.0",
-                "rxjs": "^7.8.0",
-                "zone.js": "^0.14.0",
-            },
-            "devDependencies": {
-                "@angular/cli": "^18.0.0",
-                "@angular/compiler-cli": "^18.0.0",
-                "typescript": "^5.4.0",
-                "karma": "^6.4.0",
-                "jasmine-core": "^5.1.0",
-            },
-        }, indent=2, ensure_ascii=False), encoding="utf-8")
+        pkg.write_text(
+            json.dumps(
+                {
+                    "name": f"{self.name}-frontend",
+                    "version": "0.1.0",
+                    "scripts": {
+                        "start": "ng serve",
+                        "build": "ng build",
+                        "test": "ng test",
+                        "lint": "ng lint",
+                    },
+                    "dependencies": {
+                        "@angular/animations": "^18.0.0",
+                        "@angular/common": "^18.0.0",
+                        "@angular/compiler": "^18.0.0",
+                        "@angular/core": "^18.0.0",
+                        "@angular/forms": "^18.0.0",
+                        "@angular/platform-browser": "^18.0.0",
+                        "@angular/router": "^18.0.0",
+                        "rxjs": "^7.8.0",
+                        "zone.js": "^0.14.0",
+                    },
+                    "devDependencies": {
+                        "@angular/cli": "^18.0.0",
+                        "@angular/compiler-cli": "^18.0.0",
+                        "typescript": "^5.4.0",
+                        "karma": "^6.4.0",
+                        "jasmine-core": "^5.1.0",
+                    },
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
         files["package.json"] = str(pkg)
 
         # app.component.ts
@@ -1138,30 +1160,37 @@ function relativePath(path) {{
         files: dict[str, str] = {}
 
         pkg = output_dir / "package.json"
-        pkg.write_text(json.dumps({
-            "name": f"{self.name}-frontend",
-            "version": "0.1.0",
-            "type": "module",
-            "scripts": {
-                "dev": "vite dev",
-                "build": "vite build",
-                "preview": "vite preview",
-                "test": "vitest",
-            },
-            "dependencies": {
-                "@sveltejs/kit": "^2.0.0",
-                "svelte": "^4.2.0",
-            },
-            "devDependencies": {
-                "@sveltejs/adapter-auto": "^3.0.0",
-                "@sveltejs/vite-plugin-svelte": "^3.0.0",
-                "vite": "^5.0.0",
-                "vitest": "^1.2.0",
-                "tailwindcss": "^3.4.0",
-                "postcss": "^8.4.0",
-                "autoprefixer": "^10.4.0",
-            },
-        }, indent=2, ensure_ascii=False), encoding="utf-8")
+        pkg.write_text(
+            json.dumps(
+                {
+                    "name": f"{self.name}-frontend",
+                    "version": "0.1.0",
+                    "type": "module",
+                    "scripts": {
+                        "dev": "vite dev",
+                        "build": "vite build",
+                        "preview": "vite preview",
+                        "test": "vitest",
+                    },
+                    "dependencies": {
+                        "@sveltejs/kit": "^2.0.0",
+                        "svelte": "^4.2.0",
+                    },
+                    "devDependencies": {
+                        "@sveltejs/adapter-auto": "^3.0.0",
+                        "@sveltejs/vite-plugin-svelte": "^3.0.0",
+                        "vite": "^5.0.0",
+                        "vitest": "^1.2.0",
+                        "tailwindcss": "^3.4.0",
+                        "postcss": "^8.4.0",
+                        "autoprefixer": "^10.4.0",
+                    },
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
         files["package.json"] = str(pkg)
 
         # +page.svelte
@@ -1180,12 +1209,7 @@ function relativePath(path) {{
         # +layout.svelte
         layout = routes_dir / "+layout.svelte"
         layout.write_text(
-            (
-                "<script>\n"
-                "  import '../app.css';\n"
-                "</script>\n\n"
-                "<slot />\n"
-            ),
+            ("<script>\n" "  import '../app.css';\n" "</script>\n\n" "<slot />\n"),
             encoding="utf-8",
         )
         files["src/routes/+layout.svelte"] = str(layout)
@@ -1374,7 +1398,7 @@ function relativePath(path) {{
                 "      disabled={disabled || loading}\n"
                 "      {...props}\n"
                 "    >\n"
-                "      {loading && <span className=\"mr-2 animate-spin\">...</span>}\n"
+                '      {loading && <span className="mr-2 animate-spin">...</span>}\n'
                 "      {children}\n"
                 "    </button>\n"
                 "  );\n"
@@ -1645,7 +1669,7 @@ function relativePath(path) {{
                 "  as_?: 'script' | 'style' | 'image' | 'font'\n"
                 "): void {\n"
                 "  if (typeof document === 'undefined') return;\n"
-                "  const existing = document.querySelector(`link[href=\"${href}\"]`);\n"
+                '  const existing = document.querySelector(`link[href="${href}"]`);\n'
                 "  if (existing) return;\n"
                 "  const link = document.createElement('link');\n"
                 "  link.rel = rel;\n"

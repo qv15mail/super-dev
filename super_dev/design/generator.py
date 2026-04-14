@@ -19,6 +19,7 @@ from .tokens import TokenGenerator
 @dataclass
 class DesignSystem:
     """设计系统配置"""
+
     name: str
     description: str
 
@@ -194,13 +195,13 @@ class DesignSystemGenerator:
 
         # 间距（8pt 栅格）
         design_system.spacing = {
-            "xs": "0.25rem",   # 4px
-            "sm": "0.5rem",    # 8px
-            "md": "1rem",      # 16px
-            "lg": "1.5rem",    # 24px
-            "xl": "2rem",      # 32px
-            "2xl": "3rem",     # 48px
-            "3xl": "4rem",     # 64px
+            "xs": "0.25rem",  # 4px
+            "sm": "0.5rem",  # 8px
+            "md": "1rem",  # 16px
+            "lg": "1.5rem",  # 24px
+            "xl": "2rem",  # 32px
+            "2xl": "3rem",  # 48px
+            "3xl": "4rem",  # 64px
         }
 
         # 阴影
@@ -296,8 +297,7 @@ class DesignSystemGenerator:
         # 2. Tailwind Config
         tailwind_file = output_dir / "tailwind.config.json"
         tailwind_file.write_text(
-            json.dumps(design_system.to_tailwind_config(), indent=2),
-            encoding="utf-8"
+            json.dumps(design_system.to_tailwind_config(), indent=2), encoding="utf-8"
         )
         generated_files.append(tailwind_file)
 
@@ -327,32 +327,36 @@ class DesignSystemGenerator:
         for name, value in design_system.colors.items():
             lines.append(f"| `--color-{name}` | `{value}` | {self._get_color_usage(name)} |")
 
-        lines.extend([
-            "",
-            "### Typography",
-            "",
-            "| Token | Value | Usage |",
-            "|-------|-------|-------|",
-        ])
+        lines.extend(
+            [
+                "",
+                "### Typography",
+                "",
+                "| Token | Value | Usage |",
+                "|-------|-------|-------|",
+            ]
+        )
 
         for name, value in design_system.typography.items():
             if value:
                 lines.append(f"| `--font-{name}` | `{value}` | {name.capitalize()} text |")
 
         if design_system.aesthetic:
-            lines.extend([
-                "",
-                "## Aesthetic Direction",
-                "",
-                f"**Style**: {design_system.aesthetic.name}",
-                f"**Description**: {design_system.aesthetic.description}",
-                f"**Key Differentiator**: {design_system.aesthetic.differentiation}",
-                "",
-                "### Typography",
-                "",
-                f"- **Display**: {design_system.aesthetic.typography.display}",
-                f"- **Body**: {design_system.aesthetic.typography.body}",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "## Aesthetic Direction",
+                    "",
+                    f"**Style**: {design_system.aesthetic.name}",
+                    f"**Description**: {design_system.aesthetic.description}",
+                    f"**Key Differentiator**: {design_system.aesthetic.differentiation}",
+                    "",
+                    "### Typography",
+                    "",
+                    f"- **Display**: {design_system.aesthetic.typography.display}",
+                    f"- **Body**: {design_system.aesthetic.typography.body}",
+                ]
+            )
 
         return "\n".join(lines)
 

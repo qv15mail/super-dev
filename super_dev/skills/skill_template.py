@@ -6,7 +6,24 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-SUPER_DEV_VERSION = "2.3.7"
+from ..seeai_design_system import (
+    SEEAI_ARCHETYPE_DETECTION_HINTS,
+    SEEAI_COMPACT_DOC_SECTIONS,
+    SEEAI_COMPLEXITY_PATTERNS,
+    SEEAI_COMPLEXITY_REDUCTION_RULES,
+    SEEAI_EXECUTION_GUARDRAILS,
+    SEEAI_FAILURE_PROTOCOL,
+    SEEAI_FIRST_RESPONSE_TEMPLATE,
+    SEEAI_JUDGE_CHECKLIST,
+    SEEAI_MODULE_TRUTH_RULES,
+    SEEAI_QUALITY_FLOOR,
+    SEEAI_RESEARCH_PRIORITIES,
+    SEEAI_SEARCH_QUERIES,
+    get_seeai_archetype_playbooks,
+    get_seeai_design_packs,
+)
+
+SUPER_DEV_VERSION = "2.3.8"
 SEEAI_SKILL_NAME = "super-dev-seeai"
 
 
@@ -173,7 +190,11 @@ class SuperDevSkillContent:
             self._section_seeai_runtime_contract_codex(),
             self._section_seeai_first_response_contract(),
             self._section_seeai_first_response_template(),
+            self._section_seeai_research_protocol(),
             self._section_seeai_compact_doc_template(),
+            self._section_seeai_design_system(),
+            self._section_seeai_execution_guardrails(),
+            self._section_seeai_complexity_reduction(),
             self._section_seeai_tech_stack_matrix(),
             self._section_seeai_game_templates(),
             self._section_seeai_page_templates(),
@@ -359,7 +380,11 @@ class SuperDevSkillContent:
             self._section_seeai_runtime_contract_generic(),
             self._section_seeai_first_response_contract(),
             self._section_seeai_first_response_template(),
+            self._section_seeai_research_protocol(),
             self._section_seeai_compact_doc_template(),
+            self._section_seeai_design_system(),
+            self._section_seeai_execution_guardrails(),
+            self._section_seeai_complexity_reduction(),
             self._section_seeai_tech_stack_matrix(),
             self._section_seeai_game_templates(),
             self._section_seeai_page_templates(),
@@ -631,30 +656,61 @@ class SuperDevSkillContent:
         )
 
     def _section_seeai_first_response_template(self) -> str:
+        descriptions = {
+            "作品类型": "官网类 / 小游戏类 / 工具类，三选一。",
+            "评委 wow 点": "本次成品最值得被记住的一个亮点。",
+            "P0 主路径": "半小时内必须真正跑通的一条演示路径。",
+            "主动放弃项": "本轮明确不做的部分，避免范围失控。",
+            "关键假设": "只有在用户没说清时才写，最多 1 到 2 条。",
+        }
+        bullets = "\n".join(
+            f"- `{item}`：{descriptions[item]}" for item in SEEAI_FIRST_RESPONSE_TEMPLATE
+        )
         return (
             "## 首轮输出模板（强制）\n"
             "\n"
             "SEEAI 首轮回复不要展开成长讨论。优先用极短结构锁定范围，然后立即进入 research：\n"
             "\n"
-            "- `作品类型`：官网类 / 小游戏类 / 工具类，三选一。\n"
-            "- `评委 wow 点`：本次成品最值得被记住的一个亮点。\n"
-            "- `P0 主路径`：半小时内必须真正跑通的一条演示路径。\n"
-            "- `主动放弃项`：本轮明确不做的部分，避免范围失控。\n"
-            "- `关键假设`：只有在用户没说清时才写，最多 1 到 2 条。\n"
+            f"{bullets}\n"
             "\n"
+            "- `评委 wow 点` 要聚焦一个能被截图、讲解或实际操作看到的瞬间。\n"
+            "- 锁定 `作品类型` 后，必须立刻选 1 套比赛设计包，不允许自由混搭到页面变丑。\n"
             "如果需求不缺关键信息，就不要反问。直接按这个模板给出判断，然后开始 fast research 和 compact 文档。"
         )
 
+    def _section_seeai_research_protocol(self) -> str:
+        priority_lines = "\n".join(f"- {item}" for item in SEEAI_RESEARCH_PRIORITIES)
+        query_lines = "\n".join(f"- {item}" for item in SEEAI_SEARCH_QUERIES)
+        return (
+            "## SEEAI 顺位思考与联网研究协议（强制）\n"
+            "\n"
+            "比赛里 research 不是写长分析，而是用最短时间做出正确决策。顺位思考和联网搜索必须直接服务于范围压缩和稳定交付。\n"
+            "\n"
+            "### Research 优先级\n"
+            f"{priority_lines}\n"
+            "\n"
+            "### 联网搜索默认方向\n"
+            f"{query_lines}\n"
+            "\n"
+            "research 结束前，至少要回答清楚：这题属于什么题型/复杂度、wow 点是什么、P0 主路径是什么、主动放弃什么、回退栈是什么。"
+        )
+
     def _section_seeai_compact_doc_template(self) -> str:
+        compact_sections = "\n".join(
+            f"- `{name}.md`：{'、'.join(sections)}。"
+            for name, sections in (
+                ("research", SEEAI_COMPACT_DOC_SECTIONS["research"]),
+                ("prd", SEEAI_COMPACT_DOC_SECTIONS["prd"]),
+                ("architecture", SEEAI_COMPACT_DOC_SECTIONS["architecture"]),
+                ("uiux", SEEAI_COMPACT_DOC_SECTIONS["uiux"]),
+            )
+        )
         return (
             "## 比赛短文档模板（强制）\n"
             "\n"
             "SEEAI 的文档必须真实落盘到 `output/*`，但只保留比赛需要的信息：\n"
             "\n"
-            "- `research.md`：题目理解、目标观众、参考风格、评委 wow 点、风险与主动放弃项。\n"
-            "- `prd.md`：作品目标、P0 主路径、P1 wow 点、P2 可选项、非目标。\n"
-            "- `architecture.md`：页面/玩法主循环、技术栈、数据流、是否需要最小后端、降级方案。\n"
-            "- `uiux.md`：视觉关键词、主 KV、页面骨架、关键交互、动效重点、设计 token。\n"
+            f"{compact_sections}\n"
             "- `spec`：只保留一个 sprint 清单，按 `P0 -> P1 -> polish` 排序。\n"
             "\n"
             "### 推荐标题骨架\n"
@@ -665,6 +721,75 @@ class SuperDevSkillContent:
             "- `spec`：`# Sprint Checklist` 下只列 `P0`、`P1`、`Polish`\n"
             "\n"
             "不要把文档写成长方案、长竞品分析或完整工程规划。文档存在的目的，是帮你更快做出更像成品的作品。"
+        )
+
+    def _section_seeai_design_system(self) -> str:
+        pack_lines = []
+        for pack in get_seeai_design_packs():
+            pack_lines.append(
+                f"### {pack.label}\n"
+                f"- 适用：{pack.fit_for}\n"
+                f"- 字体：{pack.typography}\n"
+                f"- 色彩：{pack.color_story}\n"
+                f"- 动效：{pack.motion_signature}\n"
+                f"- 组件方向：{pack.component_direction}\n"
+                f"- 守卫：{pack.guardrail}\n"
+            )
+        pack_block = "\n".join(pack_lines)
+
+        return (
+            "## SEEAI 比赛设计系统（强制）\n"
+            "\n"
+            "SEEAI 不是自由发挥式 UI。进入比赛模式后，必须先选 1 套视觉包，再推进文档和实现。\n"
+            "\n"
+            "### 统一视觉守卫\n"
+            "- 先选题型，再选设计包，再冻结 Hero、卡片、按钮、动效层级。\n"
+            "- 禁止把多个设计包混着用，导致页面脏乱或像临时拼装。\n"
+            "- 禁止默认紫粉渐变、默认系统字体、通用 AI 模板 Hero。\n"
+            "- 首屏必须能截图当宣传图，结果页或结束态必须能截图当演示亮点。\n"
+            "\n"
+            f"{pack_block}"
+        )
+
+    def _section_seeai_execution_guardrails(self) -> str:
+        guardrail_lines = "\n".join(f"- {item}" for item in SEEAI_EXECUTION_GUARDRAILS)
+        failure_lines = "\n".join(f"- {item}" for item in SEEAI_FAILURE_PROTOCOL)
+        module_truth_lines = "\n".join(f"- {item}" for item in SEEAI_MODULE_TRUTH_RULES)
+        return (
+            "## SEEAI 执行守卫（强制）\n"
+            "\n"
+            "比赛里最致命的问题不是功能少，而是项目起不来、主路径跑不通、卡死在初始化。SEEAI 必须先防错，再求炫。\n"
+            "\n"
+            "### 快而稳的执行铁律\n"
+            f"{guardrail_lines}\n"
+            "\n"
+            "### 模块真实生效规则\n"
+            f"{module_truth_lines}\n"
+            "\n"
+            "### 失败优先回退协议\n"
+            f"{failure_lines}\n"
+        )
+
+    def _section_seeai_complexity_reduction(self) -> str:
+        reduction_lines = "\n".join(f"- {item}" for item in SEEAI_COMPLEXITY_REDUCTION_RULES)
+        pattern_lines = "\n".join(
+            f"- 模式：{item['pattern']}\n"
+            f"  压缩方式：{item['rewrite_strategy']}\n"
+            f"  原因：{item['reason']}"
+            for item in SEEAI_COMPLEXITY_PATTERNS
+        )
+        return (
+            "## SEEAI 复杂题压缩规则（强制）\n"
+            "\n"
+            "比赛题目不可能被提前穷举。SEEAI 不应该依赖题库，而要依赖通用压缩原则：先识别复杂度，再把需求压成 30 分钟能交付的 demo slice。\n"
+            "\n"
+            "### 通用压缩原则\n"
+            f"{reduction_lines}\n"
+            "\n"
+            "### 常见复杂度模式\n"
+            f"{pattern_lines}\n"
+            "\n"
+            "如果遇到未见过的新题，仍按这个顺序处理：识别题型 -> 识别复杂度 -> 砍成主演示切片 -> 锁回退栈 -> 立即开做。"
         )
 
     def _section_seeai_tech_stack_matrix(self) -> str:
@@ -1209,47 +1334,55 @@ class SuperDevSkillContent:
         )
 
     def _section_seeai_project_archetypes(self) -> str:
+        playbook_lines = []
+        for playbook in get_seeai_archetype_playbooks():
+            preferred_packs = " / ".join(playbook.preferred_design_packs)
+            playbook_lines.append(
+                f"- {playbook.label}：优先 {playbook.focus}。\n"
+                f"  默认技术栈：{playbook.default_stack}。\n"
+                f"  默认 sprint：{' -> '.join(playbook.sprint_plan)}。\n"
+                f"  默认设计包：{preferred_packs}。\n"
+                f"  Hero 策略：{playbook.hero_strategy}\n"
+                f"  wow 模式：{playbook.wow_pattern}\n"
+                f"  运行检查点：{playbook.runtime_checkpoint}\n"
+                f"  回退栈：{playbook.fallback_stack}"
+            )
+        playbook_block = "\n".join(playbook_lines)
         return (
             "## 作品类型决策模板\n"
             "\n"
             "进入 SEEAI 后，优先先判断当前更像哪一类题，再决定研究和实现重心：\n"
             "\n"
-            "- 官网类：优先主视觉、品牌故事、信息层级、首屏转化、滚动节奏与演示动效。\n"
-            "  默认技术栈：React/Vite 或 Next.js + Tailwind + Framer Motion。\n"
-            "  默认 sprint：先做 Hero 与主叙事，再做亮点区和 CTA，最后统一动效与滚动节奏。\n"
-            "- 小游戏类：优先核心玩法循环、反馈感、记分/胜负、开始到再次游玩的完整闭环。\n"
-            "  默认技术栈：HTML Canvas + Vanilla JS；更复杂时再上 Phaser。\n"
-            "  默认 sprint：先做可玩的主循环，再补积分/胜负反馈，最后加音效、特效和复玩钩子。\n"
-            "- 工具类：优先一个高价值主流程、输入输出清晰、演示结果直观、无需复杂配置。\n"
-            "  默认技术栈：React + Vite + Tailwind + 本地状态；必要时补最小 Express/Fastify 后端。\n"
-            "  默认 sprint：先打通输入到结果的主流程，再补结果页质感，最后加分享/导出等演示加分项。\n"
+            f"{playbook_block}\n"
             "\n"
             "如果需求跨多类，默认选最容易形成强演示效果的那一类做主轴，其余只做辅助。"
         )
 
     def _section_seeai_archetype_detection_hints(self) -> str:
+        detection_lines = "\n".join(
+            f"- 如果需求强调{hint}" for hint in SEEAI_ARCHETYPE_DETECTION_HINTS
+        )
         return (
             "## 题型识别提示\n"
             "\n"
             "在首轮判断时，优先用需求关键词快速归类，不要犹豫太久：\n"
             "\n"
-            "- 如果需求强调品牌、产品发布、活动宣传、首屏、官网、落地页，默认按官网类处理。\n"
-            "- 如果需求强调玩法、得分、胜负、闯关、点击反馈、复玩，默认按小游戏类处理。\n"
-            "- 如果需求强调生成、分析、查询、表单、输入输出、结果页、效率提升，默认按工具类处理。\n"
+            f"{detection_lines}\n"
             "- 如果用户同时提到官网 + 交互玩法，先判断评审更容易记住哪一面，把那一面作为主轴。\n"
         )
 
     def _section_seeai_quality_floor(self) -> str:
+        floor_lines = "\n".join(f"- {item}" for item in SEEAI_QUALITY_FLOOR)
+        judge_lines = "\n".join(f"- {item}" for item in SEEAI_JUDGE_CHECKLIST)
         return (
             "## 比赛质量底线\n"
             "\n"
             "即使在半小时里，也必须守住这些底线：\n"
             "\n"
-            "- 首屏或第一轮交互必须让人一眼看懂主题，不允许普通模板感。\n"
-            "- 至少有一个清晰 wow 点：视觉、玩法、结果页、数据动效、讲解桥段任选其一。\n"
-            "- 主路径必须真实可演示，不能全是占位按钮或空数据。\n"
-            "- 文案不能是通用 AI 空话，标题、卖点、CTA、结果文案要贴题。\n"
-            "- 时间不够时，优先删功能，不要删完成度。\n"
+            f"{floor_lines}\n"
+            "\n"
+            "### 评委视角自检\n"
+            f"{judge_lines}\n"
         )
 
     def _section_seeai_competition_tools(self) -> str:

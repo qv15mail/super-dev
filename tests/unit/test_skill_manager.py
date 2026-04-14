@@ -142,10 +142,18 @@ class TestSkillManager:
         assert "# 作品目标" in seeai_content
         assert "官网类" in seeai_content
         assert "默认技术栈：React/Vite 或 Next.js + Tailwind + Framer Motion" in seeai_content
-        assert "默认 sprint：先做可玩的主循环，再补积分/胜负反馈" in seeai_content
+        assert "默认 sprint：主循环可玩 -> 积分/胜负反馈 -> 特效/音效 -> 复玩和 polish" in seeai_content
         assert "题型识别提示" in seeai_content
-        assert "品牌、产品发布、活动宣传、首屏、官网、落地页" in seeai_content
-        assert "时间不够时，优先删功能，不要删完成度" in seeai_content
+        assert "品牌、官网、落地页、活动宣传、首屏" in seeai_content
+        assert "时间不够时优先删功能，不要删完成度、动效记忆点和演示闭环" in seeai_content
+        assert "SEEAI 比赛设计系统（强制）" in seeai_content
+        assert "Arena Neon" in seeai_content
+        assert "SEEAI 执行守卫（强制）" in seeai_content
+        assert "12 分钟内必须跑出第一个可见" in seeai_content
+        assert "模块真实生效规则" in seeai_content
+        assert "每个保留下来的模块都必须真实启动" in seeai_content
+        assert "初始化失败一次后，立刻切到更轻的备选栈" in seeai_content
+        assert "评委视角自检" in seeai_content
         metadata_content = metadata_file.read_text(encoding="utf-8")
         assert 'display_name: "Super Dev SEEAI"' in metadata_content
         assert "$super-dev-seeai" in metadata_content

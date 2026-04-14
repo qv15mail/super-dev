@@ -90,7 +90,9 @@ class RepoMapReport:
             "key_dependencies": [item.to_dict() for item in self.key_dependencies],
             "design_patterns": [item.to_dict() for item in self.design_patterns],
             "risk_points": [item.to_dict() for item in self.risk_points],
-            "recommended_reading_order": [item.to_dict() for item in self.recommended_reading_order],
+            "recommended_reading_order": [
+                item.to_dict() for item in self.recommended_reading_order
+            ],
         }
 
     def to_markdown(self) -> str:
@@ -152,7 +154,9 @@ class RepoMapBuilder:
         key_dependencies = self._collect_dependencies(report)
         design_patterns = self._collect_design_patterns(report)
         risk_points = self._build_risk_points(report, entry_points)
-        recommended_reading_order = self._build_reading_order(entry_points, top_modules, integration_surfaces)
+        recommended_reading_order = self._build_reading_order(
+            entry_points, top_modules, integration_surfaces
+        )
 
         summary = (
             f"This repository is a `{report.category.value}` codebase built primarily with "
@@ -179,7 +183,9 @@ class RepoMapBuilder:
         md_path = self.output_dir / f"{self.project_name}-repo-map.md"
         json_path = self.output_dir / f"{self.project_name}-repo-map.json"
         md_path.write_text(report.to_markdown(), encoding="utf-8")
-        json_path.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        json_path.write_text(
+            json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         return {"markdown": md_path, "json": json_path}
 
     def _find_entry_points(self) -> list[RepoMapItem]:
@@ -209,7 +215,12 @@ class RepoMapBuilder:
             if rel_root == Path("."):
                 continue
             bucket = rel_root.parts[0]
-            code_files = [f for f in files if Path(f).suffix in {".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".java", ".cs", ".vue"}]
+            code_files = [
+                f
+                for f in files
+                if Path(f).suffix
+                in {".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".java", ".cs", ".vue"}
+            ]
             dir_scores[bucket] += len(code_files)
             file_counts[bucket] += len(code_files)
         ranked = sorted(dir_scores.items(), key=lambda item: item[1], reverse=True)[:8]
@@ -268,7 +279,8 @@ class RepoMapBuilder:
                 RepoMapItem(
                     name=pattern.name.value,
                     path=str(pattern.location),
-                    summary=pattern.description or f"Detected {counter[pattern.name.value]} related occurrences",
+                    summary=pattern.description
+                    or f"Detected {counter[pattern.name.value]} related occurrences",
                     score=int(pattern.confidence * 100),
                 )
             )
@@ -294,7 +306,10 @@ class RepoMapBuilder:
                     score=80,
                 )
             )
-        if not any("test" in item.path.lower() or "tests" in item.path.lower() for item in entry_points + self._find_top_modules()):
+        if not any(
+            "test" in item.path.lower() or "tests" in item.path.lower()
+            for item in entry_points + self._find_top_modules()
+        ):
             risks.append(
                 RepoMapItem(
                     name="test-coverage-visibility",

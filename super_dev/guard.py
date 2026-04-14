@@ -59,9 +59,7 @@ class GovernanceGuard:
 
         console = create_console()
 
-        console.print(
-            "[bold cyan]Super Dev Guard[/bold cyan] — watching for governance violations"
-        )
+        console.print("[bold cyan]Super Dev Guard[/bold cyan] — watching for governance violations")
         console.print(f"Project: {self.project_dir}")
         console.print("")
 

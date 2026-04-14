@@ -69,7 +69,11 @@ class ProofPackReport:
 
     @property
     def status(self) -> str:
-        return "ready" if self.ready_count == self.total_count and self.total_count > 0 else "incomplete"
+        return (
+            "ready"
+            if self.ready_count == self.total_count and self.total_count > 0
+            else "incomplete"
+        )
 
     @property
     def completion_percent(self) -> int:
@@ -110,23 +114,35 @@ class ProofPackReport:
         artifact_names = {artifact.name: artifact for artifact in self.artifacts}
         docs = artifact_names.get("Docs Confirmation")
         if docs and docs.status != "ready":
-            actions.append('先执行 `super-dev review docs --status confirmed --comment "三文档已确认"`。')
+            actions.append(
+                '先执行 `super-dev review docs --status confirmed --comment "三文档已确认"`。'
+            )
         spec_quality = artifact_names.get("Spec Quality")
         if spec_quality and spec_quality.status != "ready":
             change_id = str(spec_quality.details.get("change_id", "<change_id>"))
-            actions.append(f"先执行 `super-dev spec quality {change_id}` 并补齐 proposal/spec/tasks/validation 的缺口。")
+            actions.append(
+                f"先执行 `super-dev spec quality {change_id}` 并补齐 proposal/spec/tasks/validation 的缺口。"
+            )
         scope_coverage = artifact_names.get("Scope Coverage")
         if scope_coverage and scope_coverage.status != "ready":
-            actions.append("先执行 `super-dev feature-checklist`，补齐高优先级未实现项，或把未落地能力明确降级到后续版本。")
+            actions.append(
+                "先执行 `super-dev feature-checklist`，补齐高优先级未实现项，或把未落地能力明确降级到后续版本。"
+            )
         product_audit = artifact_names.get("Product Audit")
         if product_audit and product_audit.status != "ready":
-            actions.append("先执行 `super-dev product-audit`，把产品闭环、首次上手和缺失功能的审查结果纳入交付证据。")
+            actions.append(
+                "先执行 `super-dev product-audit`，把产品闭环、首次上手和缺失功能的审查结果纳入交付证据。"
+            )
         architecture_revision = artifact_names.get("Architecture Revision State")
         if architecture_revision and architecture_revision.status != "ready":
-            actions.append("先完成架构改版闭环：更新 architecture 文档、同步任务与实现，再重新审查。")
+            actions.append(
+                "先完成架构改版闭环：更新 architecture 文档、同步任务与实现，再重新审查。"
+            )
         ui_revision = artifact_names.get("UI Revision State")
         if ui_revision and ui_revision.status != "ready":
-            actions.append("先完成 UI 改版闭环：更新 UIUX 文档、重做前端、重新执行 frontend runtime 与 UI review。")
+            actions.append(
+                "先完成 UI 改版闭环：更新 UIUX 文档、重做前端、重新执行 frontend runtime 与 UI review。"
+            )
         ui_contract = artifact_names.get("UI Contract")
         if ui_contract and ui_contract.status != "ready":
             required_sections = (
@@ -134,18 +150,27 @@ class ProofPackReport:
                 if isinstance(ui_contract.details, dict)
                 else {}
             )
-            if isinstance(required_sections, dict) and required_sections.get("framework_playbook") is False:
+            if (
+                isinstance(required_sections, dict)
+                and required_sections.get("framework_playbook") is False
+            ):
                 actions.append(
                     "先补齐并冻结 output/*-ui-contract.json 中的跨平台框架 playbook，确认 implementation modules、native capabilities、validation surfaces 与 delivery evidence 已写成正式契约。"
                 )
             else:
-                actions.append("先补齐并冻结 output/*-ui-contract.json，确认 UI 库选择、字体、图标系统和 design tokens 已写成正式契约。")
+                actions.append(
+                    "先补齐并冻结 output/*-ui-contract.json，确认 UI 库选择、字体、图标系统和 design tokens 已写成正式契约。"
+                )
         ui_contract_alignment = artifact_names.get("UI Contract Alignment")
         if ui_contract_alignment and ui_contract_alignment.status != "ready":
-            actions.append("重新执行 `super-dev review ui` 或 quality gate，补齐 output/*-ui-contract-alignment.json，确认源码已接入冻结后的图标、字体、组件生态和 design tokens。")
+            actions.append(
+                "重新执行 `super-dev review ui` 或 quality gate，补齐 output/*-ui-contract-alignment.json，确认源码已接入冻结后的图标、字体、组件生态和 design tokens。"
+            )
         framework_harness = artifact_names.get("Framework Harness")
         if framework_harness and framework_harness.status != "ready":
-            actions.append("补齐跨平台 framework harness：确认 framework playbook 已冻结，frontend runtime 已证明专项执行完成，并重新生成 framework harness 证据。")
+            actions.append(
+                "补齐跨平台 framework harness：确认 framework playbook 已冻结，frontend runtime 已证明专项执行完成，并重新生成 framework harness 证据。"
+            )
         operational_harness = artifact_names.get("Operational Harness")
         if operational_harness and operational_harness.status != "ready":
             focus = (
@@ -163,13 +188,19 @@ class ProofPackReport:
             if focus_action:
                 actions.append(focus_action)
             else:
-                actions.append("补齐 operational harness：确认 workflow / framework / hook 三类 harness 都已生成并通过，再重新生成 proof-pack。")
+                actions.append(
+                    "补齐 operational harness：确认 workflow / framework / hook 三类 harness 都已生成并通过，再重新生成 proof-pack。"
+                )
         hook_audit = artifact_names.get("Hook Audit Trail")
         if hook_audit and hook_audit.status != "ready":
-            actions.append("检查最近 hook 审计历史，修复失败/阻断的 hook 命令后重新执行相关阶段并重新生成 proof-pack。")
+            actions.append(
+                "检查最近 hook 审计历史，修复失败/阻断的 hook 命令后重新执行相关阶段并重新生成 proof-pack。"
+            )
         workflow_continuity = artifact_names.get("Workflow Continuity")
         if workflow_continuity and workflow_continuity.status != "ready":
-            actions.append("补齐 workflow continuity：确认 .super-dev/workflow-state.json、workflow-history 快照和 workflow-events.jsonl 都已落盘，再重新生成 proof-pack。")
+            actions.append(
+                "补齐 workflow continuity：确认 .super-dev/workflow-state.json、workflow-history 快照和 workflow-events.jsonl 都已落盘，再重新生成 proof-pack。"
+            )
         quality_revision = artifact_names.get("Quality Revision State")
         if quality_revision and quality_revision.status != "ready":
             actions.append("先修复质量返工项并确认 quality review 状态，再重新生成交付证据。")
@@ -193,7 +224,9 @@ class ProofPackReport:
             actions.append("重新执行发布演练，确认 rehearsal passed。")
         readiness = artifact_names.get("Release Readiness")
         if readiness and readiness.status != "ready":
-            actions.append("重新执行 `super-dev release readiness --verify-tests`，确认当前仓库达到发布阈值。")
+            actions.append(
+                "重新执行 `super-dev release readiness --verify-tests`，确认当前仓库达到发布阈值。"
+            )
         if not actions:
             actions.append("当前关键交付证据已经齐全，可以直接对外交付或发布。")
         return actions
@@ -325,7 +358,9 @@ class ProofPackReport:
             )
             for artifact in harnesses:
                 lines.append(f"- **{artifact.name}**: {artifact.summary} ({artifact.status})")
-            operational_harness = next((a for a in harnesses if a.name == "Operational Harness"), None)
+            operational_harness = next(
+                (a for a in harnesses if a.name == "Operational Harness"), None
+            )
             if operational_harness and isinstance(operational_harness.details, dict):
                 focus = operational_harness.details.get("operational_focus")
                 if not isinstance(focus, dict):
@@ -397,9 +432,7 @@ class ProofPackReport:
         if visible_operational:
             lines.extend(["", "## Operational Continuity", ""])
             for artifact in visible_operational:
-                lines.append(
-                    f"- **{artifact.name}**: {artifact.summary} ({artifact.status})"
-                )
+                lines.append(f"- **{artifact.name}**: {artifact.summary} ({artifact.status})")
             operational_harness = artifact_names.get("Operational Harness")
             if operational_harness is not None and isinstance(operational_harness.details, dict):
                 focus = operational_harness.details.get("operational_focus")
@@ -414,7 +447,9 @@ class ProofPackReport:
                         lines.append(f"- Do first: {focus_action}")
             workflow_artifact = artifact_names.get("Workflow Continuity")
             if workflow_artifact is not None:
-                details = workflow_artifact.details if isinstance(workflow_artifact.details, dict) else {}
+                details = (
+                    workflow_artifact.details if isinstance(workflow_artifact.details, dict) else {}
+                )
                 recent_timeline = details.get("recent_timeline")
                 if isinstance(recent_timeline, list) and recent_timeline:
                     lines.extend(["", "## Recent Operational Timeline", ""])
@@ -422,7 +457,9 @@ class ProofPackReport:
                         if not isinstance(item, dict):
                             continue
                         timestamp = str(item.get("timestamp", "")).strip() or "-"
-                        title = str(item.get("title", "")).strip() or str(item.get("kind", "")).strip()
+                        title = (
+                            str(item.get("title", "")).strip() or str(item.get("kind", "")).strip()
+                        )
                         message = str(item.get("message", "")).strip() or "-"
                         lines.append(f"- {timestamp} · {title} · {message}")
         lines.append("")
@@ -487,7 +524,9 @@ class ProofPackBuilder:
         json_path = base.with_suffix(".json")
         summary_path = self.output_dir / f"{self.project_name}-proof-pack-summary.md"
         md_path.write_text(report.to_markdown(), encoding="utf-8")
-        json_path.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        json_path.write_text(
+            json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         summary_path.write_text(report.to_executive_markdown(), encoding="utf-8")
         return {"markdown": md_path, "json": json_path, "summary": summary_path}
 
@@ -616,7 +655,9 @@ class ProofPackBuilder:
 
     def _spec_quality_artifact(self) -> ProofPackArtifact:
         validator = SpecValidator(self.project_dir)
-        report = validator.assess_latest_change_quality(exclude_ids={"release-hardening-finalization"})
+        report = validator.assess_latest_change_quality(
+            exclude_ids={"release-hardening-finalization"}
+        )
         if report is None:
             return ProofPackArtifact(
                 name="Spec Quality",
@@ -707,7 +748,9 @@ class ProofPackBuilder:
     def _frontend_runtime_artifact(self) -> ProofPackArtifact:
         file_path = self._latest("*-frontend-runtime.json")
         if file_path is None:
-            return ProofPackArtifact(name="Frontend Runtime", status="missing", summary="frontend runtime report missing")
+            return ProofPackArtifact(
+                name="Frontend Runtime", status="missing", summary="frontend runtime report missing"
+            )
         try:
             payload = json.loads(file_path.read_text(encoding="utf-8"))
         except Exception as e:
@@ -741,7 +784,9 @@ class ProofPackBuilder:
     def _ui_contract_artifact(self) -> ProofPackArtifact:
         file_path = self._latest("*-ui-contract.json")
         if file_path is None:
-            return ProofPackArtifact(name="UI Contract", status="missing", summary="UI contract missing")
+            return ProofPackArtifact(
+                name="UI Contract", status="missing", summary="UI contract missing"
+            )
         try:
             payload = json.loads(file_path.read_text(encoding="utf-8"))
         except Exception as e:
@@ -759,18 +804,36 @@ class ProofPackBuilder:
                 summary="UI contract must be a JSON object",
                 path=str(file_path),
             )
-        component_stack = payload.get("component_stack", {}) if isinstance(payload.get("component_stack"), dict) else {}
-        emoji_policy = payload.get("emoji_policy") if isinstance(payload.get("emoji_policy"), dict) else {}
+        component_stack = (
+            payload.get("component_stack", {})
+            if isinstance(payload.get("component_stack"), dict)
+            else {}
+        )
+        emoji_policy = (
+            payload.get("emoji_policy") if isinstance(payload.get("emoji_policy"), dict) else {}
+        )
         analysis = payload.get("analysis", {}) if isinstance(payload.get("analysis"), dict) else {}
         frontend_value = str(analysis.get("frontend") or "").lower().strip()
         cross_platform_frontend = is_cross_platform_frontend(frontend_value)
-        framework_playbook = payload.get("framework_playbook") if isinstance(payload.get("framework_playbook"), dict) else {}
-        icon_system = payload.get("icon_system") or component_stack.get("icon") or component_stack.get("icons") or ""
+        framework_playbook = (
+            payload.get("framework_playbook")
+            if isinstance(payload.get("framework_playbook"), dict)
+            else {}
+        )
+        icon_system = (
+            payload.get("icon_system")
+            or component_stack.get("icon")
+            or component_stack.get("icons")
+            or ""
+        )
         required_sections = {
             "style_direction": bool(payload.get("style_direction")),
             "typography": (
                 (isinstance(payload.get("typography"), dict) and bool(payload.get("typography")))
-                or (isinstance(payload.get("typography_preset"), dict) and bool(payload.get("typography_preset")))
+                or (
+                    isinstance(payload.get("typography_preset"), dict)
+                    and bool(payload.get("typography_preset"))
+                )
             ),
             "icon_system": bool(icon_system),
             "emoji_policy": (
@@ -781,26 +844,23 @@ class ProofPackBuilder:
             ),
             "ui_library_preference": isinstance(payload.get("ui_library_preference"), dict)
             and bool(payload.get("ui_library_preference")),
-            "design_tokens": isinstance(payload.get("design_tokens"), dict) and bool(payload.get("design_tokens")),
+            "design_tokens": isinstance(payload.get("design_tokens"), dict)
+            and bool(payload.get("design_tokens")),
         }
         if cross_platform_frontend:
-            required_sections["framework_playbook"] = framework_playbook_complete(framework_playbook)
+            required_sections["framework_playbook"] = framework_playbook_complete(
+                framework_playbook
+            )
         ready = all(required_sections.values())
         if ready:
             if cross_platform_frontend:
-                summary = (
-                    f"UI contract frozen with {framework_playbook.get('framework', 'cross-platform')} playbook, style, typography, icon system, emoji policy and design tokens"
-                )
+                summary = f"UI contract frozen with {framework_playbook.get('framework', 'cross-platform')} playbook, style, typography, icon system, emoji policy and design tokens"
             else:
-                summary = (
-                    "UI contract frozen with style, typography, icon system, emoji policy, library preference and design tokens"
-                )
+                summary = "UI contract frozen with style, typography, icon system, emoji policy, library preference and design tokens"
         else:
             missing_sections = [name for name, present in required_sections.items() if not present]
             if cross_platform_frontend and "framework_playbook" in missing_sections:
-                summary = (
-                    f"UI contract missing {frontend_value or 'cross-platform'} framework playbook sections"
-                )
+                summary = f"UI contract missing {frontend_value or 'cross-platform'} framework playbook sections"
             else:
                 summary = "UI contract missing required frozen decision sections"
         return ProofPackArtifact(
@@ -838,7 +898,11 @@ class ProofPackBuilder:
             )
         checks = [value for value in payload.values() if isinstance(value, dict)]
         passed = bool(checks) and all(bool(item.get("passed", False)) for item in checks)
-        failed_labels = [str(item.get("label") or key) for key, item in payload.items() if isinstance(item, dict) and not item.get("passed", False)]
+        failed_labels = [
+            str(item.get("label") or key)
+            for key, item in payload.items()
+            if isinstance(item, dict) and not item.get("passed", False)
+        ]
         summary = (
             "UI contract alignment verified across icons, typography, ecosystem and design tokens"
             if passed
@@ -861,10 +925,7 @@ class ProofPackBuilder:
         summary = (
             f"{report.framework} framework harness verified across playbook, runtime execution and alignment"
             if report.passed
-            else (
-                f"{report.framework} framework harness gaps: "
-                + "；".join(report.blockers[:3])
-            )
+            else (f"{report.framework} framework harness gaps: " + "；".join(report.blockers[:3]))
         )
         return ProofPackArtifact(
             name="Framework Harness",
@@ -928,7 +989,9 @@ class ProofPackBuilder:
     def _redteam_artifact(self) -> ProofPackArtifact:
         evidence = load_redteam_evidence(self.project_dir, self.project_name)
         if evidence is None:
-            return ProofPackArtifact(name="Redteam", status="missing", summary="redteam evidence missing")
+            return ProofPackArtifact(
+                name="Redteam", status="missing", summary="redteam evidence missing"
+            )
         summary = (
             f"score={evidence.total_score}/{evidence.pass_threshold}, "
             f"critical={evidence.critical_count}, passed={evidence.passed}"
@@ -947,7 +1010,9 @@ class ProofPackBuilder:
     def _task_execution_artifact(self) -> ProofPackArtifact:
         file_path = self._latest("*-task-execution.md")
         if file_path is None:
-            return ProofPackArtifact(name="Task Execution", status="missing", summary="task execution report missing")
+            return ProofPackArtifact(
+                name="Task Execution", status="missing", summary="task execution report missing"
+            )
         text = file_path.read_text(encoding="utf-8", errors="ignore")
         has_validation = "## 执行期验证摘要" in text
         has_self_review = "## 宿主补充自检（交付前必做）" in text
@@ -998,7 +1063,9 @@ class ProofPackBuilder:
     def _ui_review_artifact(self) -> ProofPackArtifact:
         file_path = self._latest("*-ui-review.json")
         if file_path is None:
-            return ProofPackArtifact(name="UI Review", status="missing", summary="UI review report missing")
+            return ProofPackArtifact(
+                name="UI Review", status="missing", summary="UI review report missing"
+            )
         try:
             payload = json.loads(file_path.read_text(encoding="utf-8"))
         except Exception as e:
@@ -1007,7 +1074,9 @@ class ProofPackBuilder:
         score = payload.get("score") if isinstance(payload, dict) else None
         critical = int(payload.get("critical_count", 0)) if isinstance(payload, dict) else 0
         ready = critical == 0
-        summary = f"score={score}, critical={critical}" if score is not None else f"critical={critical}"
+        summary = (
+            f"score={score}, critical={critical}" if score is not None else f"critical={critical}"
+        )
         return ProofPackArtifact(
             name="UI Review",
             status="ready" if ready else "pending",
@@ -1019,7 +1088,9 @@ class ProofPackBuilder:
     def _quality_gate_artifact(self) -> ProofPackArtifact:
         file_path = self._latest("*-quality-gate.md")
         if file_path is None:
-            return ProofPackArtifact(name="Quality Gate", status="missing", summary="quality gate report missing")
+            return ProofPackArtifact(
+                name="Quality Gate", status="missing", summary="quality gate report missing"
+            )
         text = file_path.read_text(encoding="utf-8", errors="ignore").lower()
         if "fail" in text or "未通过" in text:
             status = "pending"
@@ -1027,19 +1098,27 @@ class ProofPackBuilder:
         else:
             status = "ready"
             summary = "quality gate report generated"
-        return ProofPackArtifact(name="Quality Gate", status=status, summary=summary, path=str(file_path))
+        return ProofPackArtifact(
+            name="Quality Gate", status=status, summary=summary, path=str(file_path)
+        )
 
     def _delivery_manifest_artifact(self) -> ProofPackArtifact:
         file_path = self._latest("*-delivery-manifest.json", self.output_dir / "delivery")
         if file_path is None:
-            return ProofPackArtifact(name="Delivery Manifest", status="missing", summary="delivery manifest missing")
+            return ProofPackArtifact(
+                name="Delivery Manifest", status="missing", summary="delivery manifest missing"
+            )
         try:
             payload = json.loads(file_path.read_text(encoding="utf-8"))
         except Exception as e:
             _logger.debug(f"Failed to parse delivery manifest JSON: {e}")
             payload = {}
         ready = isinstance(payload, dict) and payload.get("status") == "ready"
-        summary = f"status={payload.get('status', 'unknown')}" if isinstance(payload, dict) else "manifest unreadable"
+        summary = (
+            f"status={payload.get('status', 'unknown')}"
+            if isinstance(payload, dict)
+            else "manifest unreadable"
+        )
         return ProofPackArtifact(
             name="Delivery Manifest",
             status="ready" if ready else "pending",
@@ -1052,14 +1131,20 @@ class ProofPackBuilder:
         rehearsal_dir = self.output_dir / "rehearsal"
         file_path = self._latest("*-rehearsal-report.json", rehearsal_dir)
         if file_path is None:
-            return ProofPackArtifact(name="Release Rehearsal", status="missing", summary="rehearsal report missing")
+            return ProofPackArtifact(
+                name="Release Rehearsal", status="missing", summary="rehearsal report missing"
+            )
         try:
             payload = json.loads(file_path.read_text(encoding="utf-8"))
         except Exception as e:
             _logger.debug(f"Failed to parse rehearsal report JSON: {e}")
             payload = {}
         passed = bool(payload.get("passed", False)) if isinstance(payload, dict) else False
-        summary = f"score={payload.get('score', 'unknown')}, passed={passed}" if isinstance(payload, dict) else "report unreadable"
+        summary = (
+            f"score={payload.get('score', 'unknown')}, passed={passed}"
+            if isinstance(payload, dict)
+            else "report unreadable"
+        )
         return ProofPackArtifact(
             name="Release Rehearsal",
             status="ready" if passed else "pending",
@@ -1085,9 +1170,7 @@ class ProofPackBuilder:
         report = builder.build()
         paths = builder.write(report)
         coverage_text = (
-            f"{report.coverage_rate:.1f}%"
-            if report.coverage_rate is not None
-            else "unknown"
+            f"{report.coverage_rate:.1f}%" if report.coverage_rate is not None else "unknown"
         )
         ready = report.status == "ready" or report.high_priority_gap_count == 0
         return ProofPackArtifact(
@@ -1110,7 +1193,9 @@ class ProofPackBuilder:
             self.output_dir / "knowledge-tracking-report.md",
             *sorted(self.output_dir.glob("*-knowledge-tracking.md")),
         ]
-        knowledge_report_path = next((path for path in knowledge_report_candidates if path.exists()), None)
+        knowledge_report_path = next(
+            (path for path in knowledge_report_candidates if path.exists()), None
+        )
         if knowledge_report_path is not None:
             artifacts.append(
                 ProofPackArtifact(
@@ -1164,9 +1249,11 @@ class ProofPackBuilder:
                 )
 
         # 5. 验证规则结果
-        validation_results = list(self.output_dir.glob("validation-report-*.md")) + list(
-            self.output_dir.glob("*-validation-results*.json")
-        ) + list(self.output_dir.glob("*-validation-results*.md"))
+        validation_results = (
+            list(self.output_dir.glob("validation-report-*.md"))
+            + list(self.output_dir.glob("*-validation-results*.json"))
+            + list(self.output_dir.glob("*-validation-results*.md"))
+        )
         if validation_results:
             artifacts.append(
                 ProofPackArtifact(
@@ -1182,7 +1269,9 @@ class ProofPackBuilder:
     def _product_audit_artifact(self) -> ProofPackArtifact:
         file_path = self._latest("*-product-audit.json")
         if file_path is None:
-            return ProofPackArtifact(name="Product Audit", status="missing", summary="product audit report missing")
+            return ProofPackArtifact(
+                name="Product Audit", status="missing", summary="product audit report missing"
+            )
         try:
             payload = json.loads(file_path.read_text(encoding="utf-8"))
         except Exception as e:

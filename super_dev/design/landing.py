@@ -16,6 +16,7 @@ from typing import Any
 
 class LandingCategory(str, Enum):
     """Landing 页面类别"""
+
     CLASSIC = "classic"
     VIDEO = "video"
     PRICING = "pricing"
@@ -36,6 +37,7 @@ class LandingCategory(str, Enum):
 @dataclass
 class LandingSection:
     """页面区块"""
+
     name: str
     type: str  # hero, features, pricing, testimonial, cta, etc.
     content_hint: str
@@ -46,6 +48,7 @@ class LandingSection:
 @dataclass
 class CTAStrategy:
     """CTA 策略"""
+
     primary_placement: str  # where the main CTA goes
     secondary_placements: list[str] = field(default_factory=list)
     style: str = "button"  # button, link, text
@@ -56,6 +59,7 @@ class CTAStrategy:
 @dataclass
 class LandingPattern:
     """Landing 页面模式"""
+
     name: str
     category: LandingCategory
     description: str
@@ -78,7 +82,7 @@ class LandingPattern:
                     "type": s.type,
                     "content_hint": s.content_hint,
                     "required": s.required,
-                    "order": s.order
+                    "order": s.order,
                 }
                 for s in self.sections
             ],
@@ -87,12 +91,12 @@ class LandingPattern:
                 "secondary_placements": self.cta_strategy.secondary_placements,
                 "style": self.cta_strategy.style,
                 "urgency": self.cta_strategy.urgency,
-                "text_variations": self.cta_strategy.text_variations
+                "text_variations": self.cta_strategy.text_variations,
             },
             "best_for": self.best_for,
             "conversion_tips": self.conversion_tips,
             "complexity": self.complexity,
-            "keywords": self.keywords
+            "keywords": self.keywords,
         }
 
 
@@ -122,7 +126,7 @@ class LandingPatternGenerator:
             self.patterns = self._get_default_patterns()
             return
 
-        with open(csv_path, encoding='utf-8') as f:
+        with open(csv_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 pattern = self._parse_pattern(row)
@@ -139,20 +143,22 @@ class LandingPatternGenerator:
             sections = []
             for i, name in enumerate(section_names):
                 section_type = self._infer_section_type(name)
-                sections.append(LandingSection(
-                    name=name.replace("_", " ").title(),
-                    type=section_type,
-                    content_hint=self._get_content_hint(section_type),
-                    required=(i == 0),  # 第一部分通常是必需的
-                    order=i
-                ))
+                sections.append(
+                    LandingSection(
+                        name=name.replace("_", " ").title(),
+                        type=section_type,
+                        content_hint=self._get_content_hint(section_type),
+                        required=(i == 0),  # 第一部分通常是必需的
+                        order=i,
+                    )
+                )
 
             # 解析 CTA 策略
             cta_strategy = CTAStrategy(
                 primary_placement=section_names[0] if section_names else "hero",
                 style="button",
                 urgency="medium",
-                text_variations=self._get_cta_variations(row.get("best_for", ""))
+                text_variations=self._get_cta_variations(row.get("best_for", "")),
             )
 
             return LandingPattern(
@@ -162,9 +168,11 @@ class LandingPatternGenerator:
                 sections=sections,
                 cta_strategy=cta_strategy,
                 best_for=row.get("best_for", "").split(","),
-                conversion_tips=row.get("conversion_tips", "").split(",") if row.get("conversion_tips") else [],
+                conversion_tips=(
+                    row.get("conversion_tips", "").split(",") if row.get("conversion_tips") else []
+                ),
                 complexity=row.get("complexity", "medium"),
-                keywords=row.get("keywords", "").split(",") if row.get("keywords") else []
+                keywords=row.get("keywords", "").split(",") if row.get("keywords") else [],
             )
         except Exception as e:
             logging.getLogger(__name__).warning(f"Failed to parse pattern: {e}")
@@ -215,7 +223,7 @@ class LandingPatternGenerator:
             "B2B": ["Request Demo", "Contact Sales", "Enterprise Plans", "Book a Call"],
             "Freemium": ["Start Free", "Upgrade Now", "Get Pro", "Unlock Features"],
             "Mobile": ["Download App", "Get on iOS", "Get on Android", "Install Now"],
-            "Default": ["Get Started", "Learn More", "Contact Us", "Sign Up"]
+            "Default": ["Get Started", "Learn More", "Contact Us", "Sign Up"],
         }
 
         for key, cta_list in base_ctas.items():
@@ -234,7 +242,9 @@ class LandingPatternGenerator:
                 sections=[
                     LandingSection("Hero", "hero", "Compelling headline and primary CTA", True, 0),
                     LandingSection("Features", "features", "3-6 key features with icons", False, 1),
-                    LandingSection("Social Proof", "testimonials", "Customer testimonials", False, 2),
+                    LandingSection(
+                        "Social Proof", "testimonials", "Customer testimonials", False, 2
+                    ),
                     LandingSection("CTA", "cta", "Final call-to-action", False, 3),
                 ],
                 cta_strategy=CTAStrategy(
@@ -242,31 +252,36 @@ class LandingPatternGenerator:
                     secondary_placements=["features", "cta"],
                     style="button",
                     urgency="medium",
-                    text_variations=["Get Started", "Learn More", "Start Free Trial"]
+                    text_variations=["Get Started", "Learn More", "Start Free Trial"],
                 ),
                 best_for=["SaaS", "Marketing", "Product"],
-                conversion_tips=["Place primary CTA in hero section", "Use contrasting color for CTA"],
+                conversion_tips=[
+                    "Place primary CTA in hero section",
+                    "Use contrasting color for CTA",
+                ],
                 complexity="medium",
-                keywords=["hero", "features", "classic", "landing"]
+                keywords=["hero", "features", "classic", "landing"],
             ),
             LandingPattern(
                 name="Minimal Single CTA",
                 category=LandingCategory.MINIMAL,
                 description="Ultra-minimalist page with single focused action",
                 sections=[
-                    LandingSection("Single CTA", "hero", "One clear headline and one button", True, 0),
+                    LandingSection(
+                        "Single CTA", "hero", "One clear headline and one button", True, 0
+                    ),
                 ],
                 cta_strategy=CTAStrategy(
                     primary_placement="hero",
                     style="button",
                     urgency="high",
-                    text_variations=["Sign Up", "Get Started", "Join Now"]
+                    text_variations=["Sign Up", "Get Started", "Join Now"],
                 ),
                 best_for=["Newsletter", "Signup", "Waitlist"],
                 conversion_tips=["Remove all distractions", "Use plenty of whitespace"],
                 complexity="low",
-                keywords=["minimal", "simple", "focused", "single"]
-            )
+                keywords=["minimal", "simple", "focused", "single"],
+            ),
         ]
 
     def search(self, query: str, max_results: int = 5) -> list[LandingPattern]:
@@ -386,7 +401,7 @@ class LandingPatternGenerator:
                     "name": section.name,
                     "type": section.type,
                     "content_hint": section.content_hint,
-                    "order": section.order
+                    "order": section.order,
                 }
                 for section in pattern.sections
             ],
@@ -394,18 +409,15 @@ class LandingPatternGenerator:
                 "primary": {
                     "placement": pattern.cta_strategy.primary_placement,
                     "style": pattern.cta_strategy.style,
-                    "texts": pattern.cta_strategy.text_variations[:3]
+                    "texts": pattern.cta_strategy.text_variations[:3],
                 },
                 "secondary": [
-                    {
-                        "placement": placement,
-                        "style": pattern.cta_strategy.style
-                    }
+                    {"placement": placement, "style": pattern.cta_strategy.style}
                     for placement in pattern.cta_strategy.secondary_placements
-                ]
+                ],
             },
             "conversion_tips": pattern.conversion_tips,
-            "complexity": pattern.complexity
+            "complexity": pattern.complexity,
         }
 
     def list_patterns(self) -> list[str]:

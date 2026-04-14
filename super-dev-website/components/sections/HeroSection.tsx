@@ -21,7 +21,7 @@ const COPY = {
     points: ['终端只保留 super-dev / super-dev update', '宿主内统一使用 /super-dev 或 super-dev:', '接入完成度与运行成熟度分开展示'],
     docs: '查看文档',
     installNote: '支持 pip 或 uv 安装。安装后终端输入 super-dev 进入宿主接入引导；日常使用回到宿主里的 /super-dev 或 super-dev:。',
-    releaseNote: 'v2.3.7: 修复 WorkBuddy doctor + 补充 Skill 不再重装报错 + 全局清理 super-dev-core 残留 + CI 配置重写',
+    releaseNote: 'v2.3.8: SEEAI 比赛验收升级为四段结构化证据 + 内容质量校验封堵假通过；附 WorkBuddy doctor / Skill 重装 / super-dev-core 清理修复',
   },
   en: {
     openSource: 'MIT Open Source',
@@ -30,7 +30,7 @@ const COPY = {
     points: ['The terminal only exposes super-dev and super-dev update', 'Inside the host, use /super-dev or super-dev:', 'Integration readiness and runtime maturity are shown separately'],
     docs: 'Read Docs',
     installNote: 'Install with pip or uv, then run super-dev in the terminal to open host onboarding. Daily use moves back into /super-dev or super-dev: inside the host.',
-    releaseNote: 'v2.3.7: WorkBuddy doctor fix + no more duplicate skill install errors + global super-dev-core cleanup + CI config rewrite',
+    releaseNote: 'v2.3.8: SEEAI competition acceptance upgraded to four-section structured evidence with content-quality gates that block fake passes; bundles the WorkBuddy doctor / skill reinstall / super-dev-core cleanup fixes.',
   },
 } as const;
 
@@ -48,7 +48,7 @@ export function HeroSection({ locale = 'zh' }: { locale?: SiteLocale }) {
       <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-14 px-4 pb-20 sm:px-6 lg:grid lg:grid-cols-[minmax(0,1fr)_520px] lg:items-center lg:gap-16 lg:pb-24">
         <div className="flex flex-col gap-7">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="version">v2.3.7</Badge>
+            <Badge variant="version">v2.3.8</Badge>
             <Badge variant="certified">{copy.openSource}</Badge>
             <a
               href={GITHUB_REPO_URL}

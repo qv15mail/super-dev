@@ -47,7 +47,11 @@ class ImplementationScaffoldBuilder:
         typography = self.ui_contract.get("typography_preset", {})
         heading = str(typography.get("heading") or "").strip()
         body = str(typography.get("body") or "").strip()
-        fonts = [font for font in (heading, body, "Noto Sans SC", "PingFang SC", "Segoe UI", "sans-serif") if font]
+        fonts = [
+            font
+            for font in (heading, body, "Noto Sans SC", "PingFang SC", "Segoe UI", "sans-serif")
+            if font
+        ]
         quoted = [f"'{font}'" if " " in font and font != "sans-serif" else font for font in fonts]
         return ",".join(quoted)
 
@@ -219,7 +223,9 @@ class ImplementationScaffoldBuilder:
             app_file.write_text(self._build_go_app(unique_modules), encoding="utf-8")
             files.append(str(app_file))
         elif backend_kind == "java":
-            app_file = backend_dir / "src" / "main" / "java" / "com" / "superdev" / "Application.java"
+            app_file = (
+                backend_dir / "src" / "main" / "java" / "com" / "superdev" / "Application.java"
+            )
             app_file.parent.mkdir(parents=True, exist_ok=True)
             app_file.write_text(self._build_java_app(), encoding="utf-8")
             files.append(str(app_file))
@@ -280,10 +286,7 @@ class ImplementationScaffoldBuilder:
         tests_dir.mkdir(parents=True, exist_ok=True)
         smoke_test = tests_dir / "test_smoke.py"
         smoke_test.write_text(
-            (
-                "def test_backend_scaffold_smoke() -> None:\n"
-                "    assert True\n"
-            ),
+            ("def test_backend_scaffold_smoke() -> None:\n" "    assert True\n"),
             encoding="utf-8",
         )
         files.append(str(smoke_test))
@@ -313,7 +316,9 @@ class ImplementationScaffoldBuilder:
             },
         }
         package_file = backend_dir / "package.json"
-        package_file.write_text(json.dumps(package_json, indent=2, ensure_ascii=False), encoding="utf-8")
+        package_file.write_text(
+            json.dumps(package_json, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         files.append(str(package_file))
 
         app_file = src_dir / "app.js"
@@ -337,11 +342,13 @@ class ImplementationScaffoldBuilder:
         files.extend(self._generate_node_tests(tests_dir, module_requirements))
         return files
 
-    def _generate_rust_backend(self, backend_dir: Path, src_dir: Path, modules: list[str]) -> list[str]:
+    def _generate_rust_backend(
+        self, backend_dir: Path, src_dir: Path, modules: list[str]
+    ) -> list[str]:
         files: list[str] = []
         route_lines = [
             (
-                f"        .route(\"/api/{self._safe_route_segment(module_name)}\", "
+                f'        .route("/api/{self._safe_route_segment(module_name)}", '
                 f"get({self._safe_identifier(module_name)}_handler))"
             )
             for module_name in modules
@@ -352,7 +359,7 @@ class ImplementationScaffoldBuilder:
             handler_lines.extend(
                 [
                     f"async fn {handler}_handler() -> Json<Value> {{",
-                    f"    Json(json!({{\"module\": \"{module_name}\", \"status\": \"todo\"}}))",
+                    f'    Json(json!({{"module": "{module_name}", "status": "todo"}}))',
                     "}",
                     "",
                 ]
@@ -362,13 +369,13 @@ class ImplementationScaffoldBuilder:
         cargo_file.write_text(
             (
                 "[package]\n"
-                f"name = \"{self.package_name}-backend\"\n"
-                "version = \"0.1.0\"\n"
-                "edition = \"2021\"\n\n"
+                f'name = "{self.package_name}-backend"\n'
+                'version = "0.1.0"\n'
+                'edition = "2021"\n\n'
                 "[dependencies]\n"
-                "axum = \"0.7\"\n"
-                "tokio = { version = \"1\", features = [\"full\"] }\n"
-                "serde_json = \"1\"\n"
+                'axum = "0.7"\n'
+                'tokio = { version = "1", features = ["full"] }\n'
+                'serde_json = "1"\n'
             ),
             encoding="utf-8",
         )
@@ -381,20 +388,18 @@ class ImplementationScaffoldBuilder:
                 "use serde_json::{json, Value};\n"
                 "use std::net::SocketAddr;\n\n"
                 "async fn health_handler() -> Json<Value> {\n"
-                "    Json(json!({\"status\": \"ok\"}))\n"
-                "}\n\n"
-                + "\n".join(handler_lines)
-                + "\n"
+                '    Json(json!({"status": "ok"}))\n'
+                "}\n\n" + "\n".join(handler_lines) + "\n"
                 "#[tokio::main]\n"
                 "async fn main() {\n"
                 "    let app = Router::new()\n"
-                "        .route(\"/health\", get(health_handler))\n"
+                '        .route("/health", get(health_handler))\n'
                 + ("\n".join(route_lines) + "\n" if route_lines else "")
                 + "        ;\n\n"
                 "    let addr = SocketAddr::from(([0, 0, 0, 0], 3001));\n"
-                "    println!(\"Backend scaffold running on http://{}\", addr);\n"
-                "    let listener = tokio::net::TcpListener::bind(addr).await.expect(\"bind failed\");\n"
-                "    axum::serve(listener, app).await.expect(\"server failed\");\n"
+                '    println!("Backend scaffold running on http://{}", addr);\n'
+                '    let listener = tokio::net::TcpListener::bind(addr).await.expect("bind failed");\n'
+                '    axum::serve(listener, app).await.expect("server failed");\n'
                 "}\n"
             ),
             encoding="utf-8",
@@ -441,9 +446,7 @@ class ImplementationScaffoldBuilder:
                 "if ($path === '/health') {\n"
                 "    echo json_encode(['status' => 'ok']);\n"
                 "    return;\n"
-                "}\n\n"
-                + "".join(route_blocks)
-                + "\n"
+                "}\n\n" + "".join(route_blocks) + "\n"
                 "http_response_code(404);\n"
                 "echo json_encode(['error' => 'not-found']);\n"
             ),
@@ -465,11 +468,7 @@ class ImplementationScaffoldBuilder:
 
         gem_file = backend_dir / "Gemfile"
         gem_file.write_text(
-            (
-                "source 'https://rubygems.org'\n\n"
-                "gem 'sinatra'\n"
-                "gem 'json'\n"
-            ),
+            ("source 'https://rubygems.org'\n\n" "gem 'sinatra'\n" "gem 'json'\n"),
             encoding="utf-8",
         )
         files.append(str(gem_file))
@@ -486,9 +485,7 @@ class ImplementationScaffoldBuilder:
                 "end\n\n"
                 "get '/health' do\n"
                 "  { status: 'ok' }.to_json\n"
-                "end\n\n"
-                + "".join(route_blocks)
-                + "not_found do\n"
+                "end\n\n" + "".join(route_blocks) + "not_found do\n"
                 "  status 404\n"
                 "  { error: 'not-found' }.to_json\n"
                 "end\n"
@@ -502,8 +499,8 @@ class ImplementationScaffoldBuilder:
         files: list[str] = []
         route_lines = [
             (
-                f"app.MapGet(\"/api/{self._safe_route_segment(module_name)}\", "
-                f"() => Results.Json(new {{ module = \"{module_name}\", status = \"todo\" }}));"
+                f'app.MapGet("/api/{self._safe_route_segment(module_name)}", '
+                f'() => Results.Json(new {{ module = "{module_name}", status = "todo" }}));'
             )
             for module_name in modules
         ]
@@ -511,7 +508,7 @@ class ImplementationScaffoldBuilder:
         csproj_file = backend_dir / f"{self.package_name}.csproj"
         csproj_file.write_text(
             (
-                "<Project Sdk=\"Microsoft.NET.Sdk.Web\">\n"
+                '<Project Sdk="Microsoft.NET.Sdk.Web">\n'
                 "  <PropertyGroup>\n"
                 "    <TargetFramework>net8.0</TargetFramework>\n"
                 "    <Nullable>enable</Nullable>\n"
@@ -528,10 +525,10 @@ class ImplementationScaffoldBuilder:
             (
                 "var builder = WebApplication.CreateBuilder(args);\n"
                 "var app = builder.Build();\n\n"
-                "app.MapGet(\"/health\", () => Results.Json(new { status = \"ok\" }));\n"
+                'app.MapGet("/health", () => Results.Json(new { status = "ok" }));\n'
                 + "\n".join(route_lines)
                 + "\n\n"
-                "app.Run(\"http://0.0.0.0:3001\");\n"
+                'app.Run("http://0.0.0.0:3001");\n'
             ),
             encoding="utf-8",
         )
@@ -542,8 +539,8 @@ class ImplementationScaffoldBuilder:
         files: list[str] = []
         route_lines = [
             (
-                f"        get(\"/api/{self._safe_route_segment(module_name)}\") {{\n"
-                f"            call.respond(mapOf(\"module\" to \"{module_name}\", \"status\" to \"todo\"))\n"
+                f'        get("/api/{self._safe_route_segment(module_name)}") {{\n'
+                f'            call.respond(mapOf("module" to "{module_name}", "status" to "todo"))\n'
                 "        }\n"
             )
             for module_name in modules
@@ -553,21 +550,21 @@ class ImplementationScaffoldBuilder:
         gradle_file.write_text(
             (
                 "plugins {\n"
-                "    kotlin(\"jvm\") version \"1.9.22\"\n"
+                '    kotlin("jvm") version "1.9.22"\n'
                 "    application\n"
                 "}\n\n"
                 "repositories {\n"
                 "    mavenCentral()\n"
                 "}\n\n"
                 "dependencies {\n"
-                "    implementation(\"io.ktor:ktor-server-core:2.3.7\")\n"
-                "    implementation(\"io.ktor:ktor-server-cio:2.3.7\")\n"
-                "    implementation(\"io.ktor:ktor-server-content-negotiation:2.3.7\")\n"
-                "    implementation(\"io.ktor:ktor-serialization-kotlinx-json:2.3.7\")\n"
-                "    implementation(\"ch.qos.logback:logback-classic:1.4.14\")\n"
+                '    implementation("io.ktor:ktor-server-core:2.3.7")\n'
+                '    implementation("io.ktor:ktor-server-cio:2.3.7")\n'
+                '    implementation("io.ktor:ktor-server-content-negotiation:2.3.7")\n'
+                '    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")\n'
+                '    implementation("ch.qos.logback:logback-classic:1.4.14")\n'
                 "}\n\n"
                 "application {\n"
-                "    mainClass.set(\"com.superdev.ApplicationKt\")\n"
+                '    mainClass.set("com.superdev.ApplicationKt")\n'
                 "}\n"
             ),
             encoding="utf-8",
@@ -575,7 +572,9 @@ class ImplementationScaffoldBuilder:
         files.append(str(gradle_file))
 
         settings_file = backend_dir / "settings.gradle.kts"
-        settings_file.write_text(f"rootProject.name = \"{self.package_name}-backend\"\n", encoding="utf-8")
+        settings_file.write_text(
+            f'rootProject.name = "{self.package_name}-backend"\n', encoding="utf-8"
+        )
         files.append(str(settings_file))
 
         app_file = backend_dir / "src" / "main" / "kotlin" / "com" / "superdev" / "Application.kt"
@@ -591,10 +590,10 @@ class ImplementationScaffoldBuilder:
                 "import io.ktor.server.response.*\n"
                 "import io.ktor.server.routing.*\n\n"
                 "fun main() {\n"
-                "    embeddedServer(CIO, port = 3001, host = \"0.0.0.0\") {\n"
+                '    embeddedServer(CIO, port = 3001, host = "0.0.0.0") {\n'
                 "        install(ContentNegotiation) { json() }\n"
                 "        routing {\n"
-                "            get(\"/health\") { call.respond(mapOf(\"status\" to \"ok\")) }\n"
+                '            get("/health") { call.respond(mapOf("status" to "ok")) }\n'
                 + "".join(route_lines)
                 + "        }\n"
                 "    }.start(wait = true)\n"
@@ -609,8 +608,8 @@ class ImplementationScaffoldBuilder:
         files: list[str] = []
         route_lines = [
             (
-                f"app.get(\"api\", \"{self._safe_route_segment(module_name)}\") {{ _ in\n"
-                f"    [\"module\": \"{module_name}\", \"status\": \"todo\"]\n"
+                f'app.get("api", "{self._safe_route_segment(module_name)}") {{ _ in\n'
+                f'    ["module": "{module_name}", "status": "todo"]\n'
                 "}\n\n"
             )
             for module_name in modules
@@ -622,15 +621,15 @@ class ImplementationScaffoldBuilder:
                 "// swift-tools-version:5.9\n"
                 "import PackageDescription\n\n"
                 "let package = Package(\n"
-                f"    name: \"{self.package_name}-backend\",\n"
+                f'    name: "{self.package_name}-backend",\n'
                 "    platforms: [.macOS(.v13)],\n"
                 "    dependencies: [\n"
-                "        .package(url: \"https://github.com/vapor/vapor.git\", from: \"4.92.0\")\n"
+                '        .package(url: "https://github.com/vapor/vapor.git", from: "4.92.0")\n'
                 "    ],\n"
                 "    targets: [\n"
                 "        .executableTarget(\n"
-                "            name: \"App\",\n"
-                "            dependencies: [.product(name: \"Vapor\", package: \"vapor\")]\n"
+                '            name: "App",\n'
+                '            dependencies: [.product(name: "Vapor", package: "vapor")]\n'
                 "        )\n"
                 "    ]\n"
                 ")\n"
@@ -646,9 +645,9 @@ class ImplementationScaffoldBuilder:
                 "import Vapor\n\n"
                 "let app = Application(.development)\n"
                 "defer { app.shutdown() }\n\n"
-                "app.get(\"health\") { _ in [\"status\": \"ok\"] }\n"
+                'app.get("health") { _ in ["status": "ok"] }\n'
                 + "".join(route_lines)
-                + "app.http.server.configuration.hostname = \"0.0.0.0\"\n"
+                + 'app.http.server.configuration.hostname = "0.0.0.0"\n'
                 "app.http.server.configuration.port = 3001\n"
                 "try app.run()\n"
             ),
@@ -661,8 +660,8 @@ class ImplementationScaffoldBuilder:
         files: list[str] = []
         route_lines = [
             (
-                f"    get \"/api/{self._safe_route_segment(module_name)}\" do\n"
-                f"      send_resp(conn, 200, Jason.encode!(%{{module: \"{module_name}\", status: \"todo\"}}))\n"
+                f'    get "/api/{self._safe_route_segment(module_name)}" do\n'
+                f'      send_resp(conn, 200, Jason.encode!(%{{module: "{module_name}", status: "todo"}}))\n'
                 "    end\n"
             )
             for module_name in modules
@@ -676,8 +675,8 @@ class ImplementationScaffoldBuilder:
                 "  def project do\n"
                 "    [\n"
                 "      app: :super_dev_backend,\n"
-                "      version: \"0.1.0\",\n"
-                "      elixir: \"~> 1.16\",\n"
+                '      version: "0.1.0",\n'
+                '      elixir: "~> 1.16",\n'
                 "      start_permanent: Mix.env() == :prod,\n"
                 "      deps: deps()\n"
                 "    ]\n"
@@ -687,8 +686,8 @@ class ImplementationScaffoldBuilder:
                 "  end\n\n"
                 "  defp deps do\n"
                 "    [\n"
-                "      {:plug_cowboy, \"~> 2.7\"},\n"
-                "      {:jason, \"~> 1.4\"}\n"
+                '      {:plug_cowboy, "~> 2.7"},\n'
+                '      {:jason, "~> 1.4"}\n'
                 "    ]\n"
                 "  end\n"
                 "end\n"
@@ -705,13 +704,11 @@ class ImplementationScaffoldBuilder:
                 "  use Plug.Router\n\n"
                 "  plug :match\n"
                 "  plug :dispatch\n\n"
-                "  get \"/health\" do\n"
-                "    send_resp(conn, 200, Jason.encode!(%{status: \"ok\"}))\n"
-                "  end\n\n"
-                + "".join(route_lines)
-                + "\n"
+                '  get "/health" do\n'
+                '    send_resp(conn, 200, Jason.encode!(%{status: "ok"}))\n'
+                "  end\n\n" + "".join(route_lines) + "\n"
                 "  match _ do\n"
-                "    send_resp(conn, 404, Jason.encode!(%{error: \"not-found\"}))\n"
+                '    send_resp(conn, 404, Jason.encode!(%{error: "not-found"}))\n'
                 "  end\n"
                 "end\n\n"
                 "defmodule SuperDevBackend.Application do\n"
@@ -734,9 +731,9 @@ class ImplementationScaffoldBuilder:
         files: list[str] = []
         route_lines = [
             (
-                f"      path(\"api\" / \"{self._safe_route_segment(module_name)}\") {{\n"
+                f'      path("api" / "{self._safe_route_segment(module_name)}") {{\n'
                 f"        complete(HttpEntity(ContentTypes.`application/json`, "
-                f"\"{{\\\"module\\\":\\\"{module_name}\\\",\\\"status\\\":\\\"todo\\\"}}\"))\n"
+                f'"{{\\"module\\":\\"{module_name}\\",\\"status\\":\\"todo\\"}}"))\n'
                 "      }\n"
             )
             for module_name in modules
@@ -746,12 +743,12 @@ class ImplementationScaffoldBuilder:
         sbt_file.write_text(
             (
                 f'name := "{self.package_name}-backend"\n'
-                "version := \"0.1.0\"\n"
-                "scalaVersion := \"2.13.13\"\n\n"
+                'version := "0.1.0"\n'
+                'scalaVersion := "2.13.13"\n\n'
                 "libraryDependencies ++= Seq(\n"
-                "  \"com.typesafe.akka\" %% \"akka-http\" % \"10.5.3\",\n"
-                "  \"com.typesafe.akka\" %% \"akka-stream\" % \"2.8.5\",\n"
-                "  \"com.typesafe.akka\" %% \"akka-actor-typed\" % \"2.8.5\"\n"
+                '  "com.typesafe.akka" %% "akka-http" % "10.5.3",\n'
+                '  "com.typesafe.akka" %% "akka-stream" % "2.8.5",\n'
+                '  "com.typesafe.akka" %% "akka-actor-typed" % "2.8.5"\n'
                 ")\n"
             ),
             encoding="utf-8",
@@ -770,16 +767,14 @@ class ImplementationScaffoldBuilder:
                 "import scala.concurrent.ExecutionContextExecutor\n\n"
                 "object Main {\n"
                 "  def main(args: Array[String]): Unit = {\n"
-                "    implicit val system: ActorSystem[Nothing] = ActorSystem(Behaviors.empty, \"super-dev-backend\")\n"
+                '    implicit val system: ActorSystem[Nothing] = ActorSystem(Behaviors.empty, "super-dev-backend")\n'
                 "    implicit val executionContext: ExecutionContextExecutor = system.executionContext\n\n"
                 "    val route = concat(\n"
-                "      path(\"health\") {\n"
-                "        complete(HttpEntity(ContentTypes.`application/json`, \"{\\\"status\\\":\\\"ok\\\"}\"))\n"
-                "      },\n"
-                + ",\n".join(route_lines)
-                + "\n"
+                '      path("health") {\n'
+                '        complete(HttpEntity(ContentTypes.`application/json`, "{\\"status\\":\\"ok\\"}"))\n'
+                "      },\n" + ",\n".join(route_lines) + "\n"
                 "    )\n\n"
-                "    Http().newServerAt(\"0.0.0.0\", 3001).bind(route)\n"
+                '    Http().newServerAt("0.0.0.0", 3001).bind(route)\n'
                 "  }\n"
                 "}\n"
             ),
@@ -840,9 +835,7 @@ class ImplementationScaffoldBuilder:
                 "    switch (path) {\n"
                 "      case '/health':\n"
                 "        response = _json({'status': 'ok'});\n"
-                "        break;\n"
-                + "".join(case_lines)
-                + "      default:\n"
+                "        break;\n" + "".join(case_lines) + "      default:\n"
                 "        response = _json({'error': 'not-found'}, code: 404);\n"
                 "    }\n"
                 "    request.response.statusCode = response.statusCode;\n"
@@ -880,7 +873,9 @@ class ImplementationScaffoldBuilder:
             },
         }
         package_file = frontend_dir / "package.json"
-        package_file.write_text(json.dumps(package_json, indent=2, ensure_ascii=False), encoding="utf-8")
+        package_file.write_text(
+            json.dumps(package_json, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         files.append(str(package_file))
 
         component_dir = src_dir / "components" / "ui"
@@ -941,7 +936,9 @@ class ImplementationScaffoldBuilder:
             "devDependencies": {"vite": "^5.0.0", "@vitejs/plugin-vue": "^5.0.0"},
         }
         package_file = frontend_dir / "package.json"
-        package_file.write_text(json.dumps(package_json, indent=2, ensure_ascii=False), encoding="utf-8")
+        package_file.write_text(
+            json.dumps(package_json, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         files.append(str(package_file))
 
         vite_file = frontend_dir / "vite.config.js"
@@ -1004,7 +1001,9 @@ class ImplementationScaffoldBuilder:
             "devDependencies": {"vite": "^5.0.0", "@sveltejs/vite-plugin-svelte": "^3.0.0"},
         }
         package_file = frontend_dir / "package.json"
-        package_file.write_text(json.dumps(package_json, indent=2, ensure_ascii=False), encoding="utf-8")
+        package_file.write_text(
+            json.dumps(package_json, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         files.append(str(package_file))
 
         vite_file = frontend_dir / "vite.config.js"
@@ -1087,7 +1086,9 @@ class ImplementationScaffoldBuilder:
             },
         }
         package_file = frontend_dir / "package.json"
-        package_file.write_text(json.dumps(package_json, indent=2, ensure_ascii=False), encoding="utf-8")
+        package_file.write_text(
+            json.dumps(package_json, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         files.append(str(package_file))
 
         app_dir = src_dir / "app"
@@ -1137,8 +1138,15 @@ class ImplementationScaffoldBuilder:
         return files
 
     def _build_react_app(self, modules: list[str]) -> str:
-        safe_name = self.name.replace("<", "&lt;").replace(">", "&gt;").replace("{", "&#123;").replace("}", "&#125;")
-        imports = [f"import {self._to_component(module)} from './modules/{module}';" for module in modules]
+        safe_name = (
+            self.name.replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("{", "&#123;")
+            .replace("}", "&#125;")
+        )
+        imports = [
+            f"import {self._to_component(module)} from './modules/{module}';" for module in modules
+        ]
         imports.append("import { Button } from './components/ui/button';")
         cards = [
             (
@@ -1151,9 +1159,7 @@ class ImplementationScaffoldBuilder:
         ]
 
         return (
-            "import React from 'react';\n"
-            + "\n".join(imports)
-            + "\n\n"
+            "import React from 'react';\n" + "\n".join(imports) + "\n\n"
             "export default function App() {\n"
             "  return (\n"
             f"    <main style={{maxWidth: 960, margin: '40px auto', fontFamily: \"{self._font_stack()}\"}}>\n"
@@ -1161,11 +1167,9 @@ class ImplementationScaffoldBuilder:
             "      <p>该页面由 Super Dev 自动生成，按模块分区承接需求实现。</p>\n"
             "      <div style={{display: 'flex', gap: 12, margin: '16px 0 24px', flexWrap: 'wrap'}}>\n"
             "        <Button>查看核心文档</Button>\n"
-            "        <Button variant=\"secondary\">进入模块实现</Button>\n"
+            '        <Button variant="secondary">进入模块实现</Button>\n'
             "      </div>\n"
-            "      <div style={{display: 'grid', gap: 12}}>\n"
-            + "\n".join(cards)
-            + "\n"
+            "      <div style={{display: 'grid', gap: 12}}>\n" + "\n".join(cards) + "\n"
             "      </div>\n"
             "    </main>\n"
             "  );\n"
@@ -1204,7 +1208,10 @@ class ImplementationScaffoldBuilder:
 
     def _build_module_component(self, module_name: str, req_names: list[str]) -> str:
         component = self._to_component(module_name)
-        checklist = "\n".join(f"        <li>{req}</li>" for req in req_names) or "        <li>待补充需求</li>"
+        checklist = (
+            "\n".join(f"        <li>{req}</li>" for req in req_names)
+            or "        <li>待补充需求</li>"
+        )
         return (
             "import React from 'react';\n\n"
             f"export default function {component}() {{\n"
@@ -1229,16 +1236,12 @@ class ImplementationScaffoldBuilder:
             mount_lines.append(f"app.use('/api/{route_segment}', {variable});")
 
         return (
-            "const express = require('express');\n\n"
-            + "\n".join(imports)
-            + "\n\n"
+            "const express = require('express');\n\n" + "\n".join(imports) + "\n\n"
             "const app = express();\n"
             "app.use(express.json());\n\n"
             "app.get('/health', (_req, res) => {\n"
             "  res.json({ status: 'ok' });\n"
-            "});\n\n"
-            + "\n".join(mount_lines)
-            + "\n\n"
+            "});\n\n" + "\n".join(mount_lines) + "\n\n"
             "const port = process.env.PORT || 3001;\n"
             "app.listen(port, () => {\n"
             "  console.log(`Backend scaffold is running on http://localhost:${port}`);\n"
@@ -1251,21 +1254,15 @@ class ImplementationScaffoldBuilder:
         for module_name in module_requirements:
             route_segment = self._safe_route_segment(module_name)
             variable = f"{self._safe_identifier(module_name)}_router"
-            imports.append(
-                f"from .routes.{route_segment}_route import router as {variable}"
-            )
+            imports.append(f"from .routes.{route_segment}_route import router as {variable}")
             include_routes.append(f"app.include_router({variable})")
 
         return (
-            "from fastapi import FastAPI\n"
-            + "\n".join(imports)
-            + "\n\n"
+            "from fastapi import FastAPI\n" + "\n".join(imports) + "\n\n"
             "app = FastAPI(title='Super Dev Backend Scaffold')\n\n"
             "@app.get('/health')\n"
             "def health():\n"
-            "    return {'status': 'ok'}\n\n"
-            + "\n".join(include_routes)
-            + "\n"
+            "    return {'status': 'ok'}\n\n" + "\n".join(include_routes) + "\n"
         )
 
     def _build_api_contract(self, modules: list[str]) -> str:
@@ -1279,12 +1276,18 @@ class ImplementationScaffoldBuilder:
         ]
         for module_name in modules:
             route_segment = self._safe_route_segment(module_name)
-            lines.append(f"| {module_name} | GET | /api/{route_segment} | 获取 {module_name} 模块初始数据 |")
-            lines.append(f"| {module_name} | POST | /api/{route_segment} | 创建 {module_name} 模块初始数据 |")
+            lines.append(
+                f"| {module_name} | GET | /api/{route_segment} | 获取 {module_name} 模块初始数据 |"
+            )
+            lines.append(
+                f"| {module_name} | POST | /api/{route_segment} | 创建 {module_name} 模块初始数据 |"
+            )
         lines.append("")
         return "\n".join(lines)
 
-    def _generate_node_feature_pack(self, src_dir: Path, module_requirements: dict[str, list[str]]) -> list[str]:
+    def _generate_node_feature_pack(
+        self, src_dir: Path, module_requirements: dict[str, list[str]]
+    ) -> list[str]:
         files: list[str] = []
         routes_dir = src_dir / "routes"
         services_dir = src_dir / "services"
@@ -1356,7 +1359,9 @@ class ImplementationScaffoldBuilder:
 
         return files
 
-    def _generate_node_tests(self, tests_dir: Path, module_requirements: dict[str, list[str]]) -> list[str]:
+    def _generate_node_tests(
+        self, tests_dir: Path, module_requirements: dict[str, list[str]]
+    ) -> list[str]:
         files: list[str] = []
         for module_name in module_requirements:
             route_segment = self._safe_route_segment(module_name)
@@ -1379,7 +1384,9 @@ class ImplementationScaffoldBuilder:
             files.append(str(test_file))
         return files
 
-    def _generate_python_feature_pack(self, src_dir: Path, module_requirements: dict[str, list[str]]) -> list[str]:
+    def _generate_python_feature_pack(
+        self, src_dir: Path, module_requirements: dict[str, list[str]]
+    ) -> list[str]:
         files: list[str] = []
         init_file = src_dir / "__init__.py"
         init_file.write_text("", encoding="utf-8")
@@ -1457,7 +1464,9 @@ class ImplementationScaffoldBuilder:
 
         return files
 
-    def _generate_python_tests(self, tests_dir: Path, module_requirements: dict[str, list[str]]) -> list[str]:
+    def _generate_python_tests(
+        self, tests_dir: Path, module_requirements: dict[str, list[str]]
+    ) -> list[str]:
         files: list[str] = []
         for module_name in module_requirements:
             route_segment = self._safe_route_segment(module_name)
@@ -1506,34 +1515,31 @@ class ImplementationScaffoldBuilder:
         for module_name in modules:
             handler = self._safe_identifier(module_name)
             handlers.append(
-
-                    f"func {handler}Handler(w http.ResponseWriter, _ *http.Request) {{\n"
-                    "    w.Header().Set(\"Content-Type\", \"application/json\")\n"
-                    f"    w.Write([]byte(`{{\"module\":\"{module_name}\",\"status\":\"todo\"}}`))\n"
-                    "}\n"
-
+                f"func {handler}Handler(w http.ResponseWriter, _ *http.Request) {{\n"
+                '    w.Header().Set("Content-Type", "application/json")\n'
+                f'    w.Write([]byte(`{{"module":"{module_name}","status":"todo"}}`))\n'
+                "}\n"
             )
 
-        routes = [f"    http.HandleFunc(\"/api/{self._safe_route_segment(module_name)}\", {self._safe_identifier(module_name)}Handler)" for module_name in modules]
+        routes = [
+            f'    http.HandleFunc("/api/{self._safe_route_segment(module_name)}", {self._safe_identifier(module_name)}Handler)'
+            for module_name in modules
+        ]
 
         return (
             "package main\n\n"
             "import (\n"
-            "    \"log\"\n"
-            "    \"net/http\"\n"
-            ")\n\n"
-            + "\n".join(handlers)
-            + "\n"
+            '    "log"\n'
+            '    "net/http"\n'
+            ")\n\n" + "\n".join(handlers) + "\n"
             "func healthHandler(w http.ResponseWriter, _ *http.Request) {\n"
-            "    w.Header().Set(\"Content-Type\", \"application/json\")\n"
-            "    w.Write([]byte(`{\"status\":\"ok\"}`))\n"
+            '    w.Header().Set("Content-Type", "application/json")\n'
+            '    w.Write([]byte(`{"status":"ok"}`))\n'
             "}\n\n"
             "func main() {\n"
-            "    http.HandleFunc(\"/health\", healthHandler)\n"
-            + "\n".join(routes)
-            + "\n"
-            "    log.Println(\"Backend scaffold running on :3001\")\n"
-            "    log.Fatal(http.ListenAndServe(\":3001\", nil))\n"
+            '    http.HandleFunc("/health", healthHandler)\n' + "\n".join(routes) + "\n"
+            '    log.Println("Backend scaffold running on :3001")\n'
+            '    log.Fatal(http.ListenAndServe(":3001", nil))\n'
             "}\n"
         )
 
@@ -1552,10 +1558,10 @@ class ImplementationScaffoldBuilder:
 
     def _build_java_pom(self) -> str:
         return (
-            "<project xmlns=\"http://maven.apache.org/POM/4.0.0\" "
-            "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" "
-            "xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 "
-            "http://maven.apache.org/xsd/maven-4.0.0.xsd\">\n"
+            '<project xmlns="http://maven.apache.org/POM/4.0.0" '
+            'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+            'xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 '
+            'http://maven.apache.org/xsd/maven-4.0.0.xsd">\n'
             "  <modelVersion>4.0.0</modelVersion>\n"
             "  <groupId>com.superdev</groupId>\n"
             f"  <artifactId>{xml_escape(self.name)}-backend</artifactId>\n"
@@ -1581,25 +1587,33 @@ class ImplementationScaffoldBuilder:
     def _build_index_html(self, mount_id: str, entry_path: str) -> str:
         return (
             "<!doctype html>\n"
-            "<html lang=\"zh-CN\">\n"
+            '<html lang="zh-CN">\n'
             "  <head>\n"
-            "    <meta charset=\"UTF-8\" />\n"
-            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n"
+            '    <meta charset="UTF-8" />\n'
+            '    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n'
             f"    <title>{self.name} Frontend</title>\n"
             "  </head>\n"
             "  <body>\n"
-            f"    <div id=\"{mount_id}\"></div>\n"
-            f"    <script type=\"module\" src=\"{entry_path}\"></script>\n"
+            f'    <div id="{mount_id}"></div>\n'
+            f'    <script type="module" src="{entry_path}"></script>\n'
             "  </body>\n"
             "</html>\n"
         )
 
     def _build_vue_app(self, modules: list[str]) -> str:
-        safe_name = self.name.replace("<", "&lt;").replace(">", "&gt;").replace("{", "&#123;").replace("}", "&#125;")
-        imports = [f"import {self._to_component(module)} from './modules/{module}.vue';" for module in modules]
+        safe_name = (
+            self.name.replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("{", "&#123;")
+            .replace("}", "&#125;")
+        )
+        imports = [
+            f"import {self._to_component(module)} from './modules/{module}.vue';"
+            for module in modules
+        ]
         cards = [
             (
-                f"      <section class=\"card\">\n"
+                f'      <section class="card">\n'
                 f"        <h3>{self._to_component(module)}</h3>\n"
                 f"        <{self._to_component(module)} />\n"
                 "      </section>"
@@ -1608,17 +1622,13 @@ class ImplementationScaffoldBuilder:
         ]
         return (
             "<template>\n"
-            "  <main class=\"shell\">\n"
+            '  <main class="shell">\n'
             f"    <h1>{safe_name} 实现骨架</h1>\n"
-            "    <div class=\"grid\">\n"
-            + "\n".join(cards)
-            + "\n"
+            '    <div class="grid">\n' + "\n".join(cards) + "\n"
             "    </div>\n"
             "  </main>\n"
             "</template>\n\n"
-            "<script setup>\n"
-            + "\n".join(imports)
-            + "\n"
+            "<script setup>\n" + "\n".join(imports) + "\n"
             "</script>\n\n"
             "<style>\n"
             f".shell {{ max-width: 960px; margin: 40px auto; font-family: {self._font_stack()}; }}\n"
@@ -1639,11 +1649,19 @@ class ImplementationScaffoldBuilder:
         )
 
     def _build_svelte_app(self, modules: list[str]) -> str:
-        safe_name = self.name.replace("<", "&lt;").replace(">", "&gt;").replace("{", "&#123;").replace("}", "&#125;")
-        imports = [f"import {self._to_component(module)} from './modules/{module}.svelte';" for module in modules]
+        safe_name = (
+            self.name.replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("{", "&#123;")
+            .replace("}", "&#125;")
+        )
+        imports = [
+            f"import {self._to_component(module)} from './modules/{module}.svelte';"
+            for module in modules
+        ]
         cards = [
             (
-                "  <section class=\"card\">\n"
+                '  <section class="card">\n'
                 f"    <h3>{self._to_component(module)}</h3>\n"
                 f"    <{self._to_component(module)} />\n"
                 "  </section>"
@@ -1651,13 +1669,10 @@ class ImplementationScaffoldBuilder:
             for module in modules
         ]
         return (
-            "\n".join(imports)
-            + "\n\n"
-            f"<main class=\"shell\">\n"
+            "\n".join(imports) + "\n\n"
+            f'<main class="shell">\n'
             f"  <h1>{safe_name} 实现骨架</h1>\n"
-            "  <div class=\"grid\">\n"
-            + "\n".join(cards)
-            + "\n"
+            '  <div class="grid">\n' + "\n".join(cards) + "\n"
             "  </div>\n"
             "</main>\n\n"
             "<style>\n"
@@ -1676,30 +1691,36 @@ class ImplementationScaffoldBuilder:
             "</ul>\n"
         )
 
-    def _build_angular_component(self, modules: list[str], module_requirements: dict[str, list[str]]) -> str:
-        safe_name = self.name.replace("<", "&lt;").replace(">", "&gt;").replace("{", "&#123;").replace("}", "&#125;")
+    def _build_angular_component(
+        self, modules: list[str], module_requirements: dict[str, list[str]]
+    ) -> str:
+        safe_name = (
+            self.name.replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("{", "&#123;")
+            .replace("}", "&#125;")
+        )
         sections = []
         for module_name in modules:
-            req_items = "".join(
-                f"  <li>{req}</li>" for req in module_requirements.get(module_name, [])
-            ) or "  <li>待补充需求</li>"
+            req_items = (
+                "".join(f"  <li>{req}</li>" for req in module_requirements.get(module_name, []))
+                or "  <li>待补充需求</li>"
+            )
             sections.append(
-
-                    "<section style=\"border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin:8px 0;\">\n"
-                    f"  <h3>{self._to_component(module_name)}</h3>\n"
-                    f"  <p>{module_name} 模块初始骨架已创建，可在此实现业务逻辑。</p>\n"
-                    "  <ul>\n"
-                    f"{req_items}\n"
-                    "  </ul>\n"
-                    "</section>"
-
+                '<section style="border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin:8px 0;">\n'
+                f"  <h3>{self._to_component(module_name)}</h3>\n"
+                f"  <p>{module_name} 模块初始骨架已创建，可在此实现业务逻辑。</p>\n"
+                "  <ul>\n"
+                f"{req_items}\n"
+                "  </ul>\n"
+                "</section>"
             )
         return (
             "import { Component } from '@angular/core';\n\n"
             "@Component({\n"
             "  selector: 'app-root',\n"
             "  template: `\n"
-            f"    <main style=\"max-width:960px;margin:40px auto;font-family:{self._font_stack()};\">\n"
+            f'    <main style="max-width:960px;margin:40px auto;font-family:{self._font_stack()};">\n'
             f"      <h1>{safe_name} 实现骨架</h1>\n"
             f"{' '.join(sections)}\n"
             "    </main>\n"
@@ -1751,7 +1772,15 @@ class ImplementationScaffoldBuilder:
         files: list[str] = []
 
         # Project structure
-        for sub in ("config", "middleware", "models", "schemas", "routes", "services", "repositories"):
+        for sub in (
+            "config",
+            "middleware",
+            "models",
+            "schemas",
+            "routes",
+            "services",
+            "repositories",
+        ):
             pkg_dir = src_dir / sub
             pkg_dir.mkdir(parents=True, exist_ok=True)
             init_file = pkg_dir / "__init__.py"
@@ -1860,27 +1889,27 @@ class ImplementationScaffoldBuilder:
         pyproject.write_text(
             (
                 "[project]\n"
-                f"name = \"{self.package_name}-backend\"\n"
-                "version = \"0.1.0\"\n"
-                "requires-python = \">=3.11\"\n"
+                f'name = "{self.package_name}-backend"\n'
+                'version = "0.1.0"\n'
+                'requires-python = ">=3.11"\n'
                 "dependencies = [\n"
-                "    \"fastapi>=0.110.0\",\n"
-                "    \"uvicorn[standard]>=0.27.0\",\n"
-                "    \"pydantic>=2.0.2\",\n"
-                "    \"pydantic-settings>=2.0.0\",\n"
-                "    \"sqlalchemy[asyncio]>=2.0.0\",\n"
-                "    \"asyncpg>=0.29.0\",\n"
-                "    \"alembic>=1.13.0\",\n"
-                "    \"redis>=5.0.0\",\n"
-                "    \"python-dotenv>=1.0.0\",\n"
+                '    "fastapi>=0.110.0",\n'
+                '    "uvicorn[standard]>=0.27.0",\n'
+                '    "pydantic>=2.0.2",\n'
+                '    "pydantic-settings>=2.0.0",\n'
+                '    "sqlalchemy[asyncio]>=2.0.0",\n'
+                '    "asyncpg>=0.29.0",\n'
+                '    "alembic>=1.13.0",\n'
+                '    "redis>=5.0.0",\n'
+                '    "python-dotenv>=1.0.0",\n'
                 "]\n\n"
                 "[project.optional-dependencies]\n"
                 "dev = [\n"
-                "    \"pytest>=8.0.0\",\n"
-                "    \"pytest-asyncio>=0.23.0\",\n"
-                "    \"httpx>=0.27.0\",\n"
-                "    \"ruff>=0.3.0\",\n"
-                "    \"mypy>=1.8.0\",\n"
+                '    "pytest>=8.0.0",\n'
+                '    "pytest-asyncio>=0.23.0",\n'
+                '    "httpx>=0.27.0",\n'
+                '    "ruff>=0.3.0",\n'
+                '    "mypy>=1.8.0",\n'
                 "]\n"
             ),
             encoding="utf-8",
@@ -2069,7 +2098,9 @@ class ImplementationScaffoldBuilder:
             },
         }
         package_file = backend_dir / "package.json"
-        package_file.write_text(json.dumps(package_json, indent=2, ensure_ascii=False), encoding="utf-8")
+        package_file.write_text(
+            json.dumps(package_json, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         files.append(str(package_file))
 
         # main.ts
@@ -2287,8 +2318,7 @@ class ImplementationScaffoldBuilder:
             )
 
         drop_blocks = [
-            f"    op.drop_table('{self._safe_route_segment(m)}_items')"
-            for m in reversed(modules)
+            f"    op.drop_table('{self._safe_route_segment(m)}_items')" for m in reversed(modules)
         ]
 
         migration_file = versions_dir / "001_initial_tables.py"
@@ -2299,12 +2329,8 @@ class ImplementationScaffoldBuilder:
                 "down_revision = None\n\n"
                 "import sqlalchemy as sa\n"
                 "from alembic import op\n\n\n"
-                "def upgrade() -> None:\n"
-                + "\n".join(table_blocks)
-                + "\n\n\n"
-                "def downgrade() -> None:\n"
-                + "\n".join(drop_blocks)
-                + "\n"
+                "def upgrade() -> None:\n" + "\n".join(table_blocks) + "\n\n\n"
+                "def downgrade() -> None:\n" + "\n".join(drop_blocks) + "\n"
             ),
             encoding="utf-8",
         )
@@ -2326,9 +2352,9 @@ class ImplementationScaffoldBuilder:
                 f"model {comp} {{\n"
                 f"  id        Int      @id @default(autoincrement())\n"
                 f"  name      String   @db.VarChar(255)\n"
-                f"  createdAt DateTime @default(now()) @map(\"created_at\")\n"
-                f"  updatedAt DateTime @updatedAt @map(\"updated_at\")\n\n"
-                f"  @@map(\"{self._safe_route_segment(module_name)}_items\")\n"
+                f'  createdAt DateTime @default(now()) @map("created_at")\n'
+                f'  updatedAt DateTime @updatedAt @map("updated_at")\n\n'
+                f'  @@map("{self._safe_route_segment(module_name)}_items")\n'
                 f"}}"
             )
 
@@ -2336,14 +2362,12 @@ class ImplementationScaffoldBuilder:
         schema_file.write_text(
             (
                 "generator client {\n"
-                "  provider = \"prisma-client-js\"\n"
+                '  provider = "prisma-client-js"\n'
                 "}\n\n"
                 "datasource db {\n"
-                "  provider = \"postgresql\"\n"
-                "  url      = env(\"DATABASE_URL\")\n"
-                "}\n\n"
-                + "\n\n".join(model_blocks)
-                + "\n"
+                '  provider = "postgresql"\n'
+                '  url      = env("DATABASE_URL")\n'
+                "}\n\n" + "\n\n".join(model_blocks) + "\n"
             ),
             encoding="utf-8",
         )
@@ -2361,17 +2385,20 @@ class ImplementationScaffoldBuilder:
         # ormconfig
         ormconfig = backend_dir / "ormconfig.json"
         ormconfig.write_text(
-            json.dumps({
-                "type": "postgres",
-                "host": "localhost",
-                "port": 5432,
-                "username": "postgres",
-                "password": "",
-                "database": "app",
-                "entities": ["src/**/*.entity.ts"],
-                "migrations": ["src/migrations/*.ts"],
-                "cli": {"migrationsDir": "src/migrations"},
-            }, indent=2),
+            json.dumps(
+                {
+                    "type": "postgres",
+                    "host": "localhost",
+                    "port": 5432,
+                    "username": "postgres",
+                    "password": "",
+                    "database": "app",
+                    "entities": ["src/**/*.entity.ts"],
+                    "migrations": ["src/migrations/*.ts"],
+                    "cli": {"migrationsDir": "src/migrations"},
+                },
+                indent=2,
+            ),
             encoding="utf-8",
         )
         files.append(str(ormconfig))
@@ -2383,15 +2410,17 @@ class ImplementationScaffoldBuilder:
             seg = self._safe_route_segment(module_name)
             up_stmts.append(
                 f"        await queryRunner.query(`\n"
-                f"            CREATE TABLE IF NOT EXISTS \"{seg}_items\" (\n"
-                f"                \"id\" SERIAL PRIMARY KEY,\n"
-                f"                \"name\" VARCHAR(255) NOT NULL,\n"
-                f"                \"createdAt\" TIMESTAMP DEFAULT now(),\n"
-                f"                \"updatedAt\" TIMESTAMP DEFAULT now()\n"
+                f'            CREATE TABLE IF NOT EXISTS "{seg}_items" (\n'
+                f'                "id" SERIAL PRIMARY KEY,\n'
+                f'                "name" VARCHAR(255) NOT NULL,\n'
+                f'                "createdAt" TIMESTAMP DEFAULT now(),\n'
+                f'                "updatedAt" TIMESTAMP DEFAULT now()\n'
                 f"            )\n"
                 f"        `);"
             )
-            down_stmts.append(f"        await queryRunner.query(`DROP TABLE IF EXISTS \"{seg}_items\"`);" )
+            down_stmts.append(
+                f'        await queryRunner.query(`DROP TABLE IF EXISTS "{seg}_items"`);'
+            )
 
         migration_file = migrations_dir / "1_InitialTables.ts"
         migration_file.write_text(
@@ -2503,7 +2532,7 @@ class ImplementationScaffoldBuilder:
                 "RUN npm ci\n"
                 "COPY . .\n"
                 "EXPOSE 3000\n"
-                "CMD [\"npm\", \"run\", \"dev\", \"--\", \"--host\", \"0.0.0.0\"]\n"
+                'CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]\n'
             ),
             encoding="utf-8",
         )
@@ -2522,7 +2551,7 @@ class ImplementationScaffoldBuilder:
                     "RUN pip install --no-cache-dir -r requirements.txt 2>/dev/null || pip install --no-cache-dir -e '.[dev]'\n"
                     "COPY . .\n"
                     "EXPOSE 3001\n"
-                    "CMD [\"uvicorn\", \"src.main:app\", \"--host\", \"0.0.0.0\", \"--port\", \"3001\", \"--reload\"]\n"
+                    'CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "3001", "--reload"]\n'
                 ),
                 encoding="utf-8",
             )
@@ -2535,7 +2564,7 @@ class ImplementationScaffoldBuilder:
                     "RUN npm ci\n"
                     "COPY . .\n"
                     "EXPOSE 3001\n"
-                    "CMD [\"node\", \"src/app.js\"]\n"
+                    'CMD ["node", "src/app.js"]\n'
                 ),
                 encoding="utf-8",
             )
@@ -2674,7 +2703,8 @@ class ImplementationScaffoldBuilder:
                 files.append(str(gitignore_file))
         else:
             gitignore_file.write_text(
-                "node_modules/\n__pycache__/\n*.pyc\ndist/\nbuild/\n.next/\ncoverage/\n" + gitignore_additions,
+                "node_modules/\n__pycache__/\n*.pyc\ndist/\nbuild/\n.next/\ncoverage/\n"
+                + gitignore_additions,
                 encoding="utf-8",
             )
             files.append(str(gitignore_file))

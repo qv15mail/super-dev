@@ -178,7 +178,9 @@ class PromptTemplateManager:
                 if template:
                     self.templates[template.id] = template
                     self._record_version(template)
-                    logger.debug("已加载模板: %s v%s (%s)", template.id, template.version, md_file.name)
+                    logger.debug(
+                        "已加载模板: %s v%s (%s)", template.id, template.version, md_file.name
+                    )
             except Exception:
                 logger.exception("加载模板文件失败: %s", md_file)
 
@@ -221,7 +223,7 @@ class PromptTemplateManager:
             logger.exception("解析 front-matter 失败: %s", path)
             return None
 
-        template_body = content[match.end():]
+        template_body = content[match.end() :]
 
         template_id: str = meta.get("id", path.stem)
         variables: list[str] = meta.get("variables", [])

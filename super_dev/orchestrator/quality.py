@@ -16,15 +16,17 @@ from pathlib import Path
 @dataclass
 class QualityDimension:
     """质量评估维度"""
+
     name: str
-    score: int          # 0-100
-    weight: float       # 权重
+    score: int  # 0-100
+    weight: float  # 权重
     details: str = ""
 
 
 @dataclass
 class PhaseQualityReport:
     """阶段质量评估报告"""
+
     phase_name: str
     dimensions: list[QualityDimension] = field(default_factory=list)
 
@@ -66,30 +68,36 @@ class QualityScorer:
         # 1. 需求描述长度和完整度
         description = context_data.get("description", "")
         desc_score = min(100, max(40, len(description) // 2))
-        report.dimensions.append(QualityDimension(
-            name="需求描述完整度",
-            score=desc_score,
-            weight=1.5,
-            details=f"需求描述长度：{len(description)} 字符",
-        ))
+        report.dimensions.append(
+            QualityDimension(
+                name="需求描述完整度",
+                score=desc_score,
+                weight=1.5,
+                details=f"需求描述长度：{len(description)} 字符",
+            )
+        )
 
         # 2. 是否有知识库增强
         has_kb_enhancement = bool(context_data.get("knowledge_enhanced"))
-        report.dimensions.append(QualityDimension(
-            name="知识库增强",
-            score=90 if has_kb_enhancement else 60,
-            weight=1.0,
-            details="知识库已注入" if has_kb_enhancement else "未进行知识库增强",
-        ))
+        report.dimensions.append(
+            QualityDimension(
+                name="知识库增强",
+                score=90 if has_kb_enhancement else 60,
+                weight=1.0,
+                details="知识库已注入" if has_kb_enhancement else "未进行知识库增强",
+            )
+        )
 
         # 3. 是否有联网检索
         has_web_research = bool(context_data.get("web_research"))
-        report.dimensions.append(QualityDimension(
-            name="联网检索",
-            score=90 if has_web_research else 65,
-            weight=0.8,
-            details="已完成联网检索" if has_web_research else "未进行联网检索（离线模式）",
-        ))
+        report.dimensions.append(
+            QualityDimension(
+                name="联网检索",
+                score=90 if has_web_research else 65,
+                weight=0.8,
+                details="已完成联网检索" if has_web_research else "未进行联网检索（离线模式）",
+            )
+        )
 
         return report.total_score
 
@@ -103,11 +111,13 @@ class QualityScorer:
             required_sections=["产品愿景", "功能需求", "用户故事", "验收标准"],
             min_length=2000,
         )
-        report.dimensions.append(QualityDimension(
-            name="PRD 文档",
-            score=prd_score,
-            weight=1.5,
-        ))
+        report.dimensions.append(
+            QualityDimension(
+                name="PRD 文档",
+                score=prd_score,
+                weight=1.5,
+            )
+        )
 
         # 架构文档
         arch_score = self._score_doc_file(
@@ -115,11 +125,13 @@ class QualityScorer:
             required_sections=["技术栈", "数据库", "API", "安全"],
             min_length=2000,
         )
-        report.dimensions.append(QualityDimension(
-            name="架构文档",
-            score=arch_score,
-            weight=1.5,
-        ))
+        report.dimensions.append(
+            QualityDimension(
+                name="架构文档",
+                score=arch_score,
+                weight=1.5,
+            )
+        )
 
         # UI/UX 文档
         uiux_score = self._score_doc_file(
@@ -127,11 +139,13 @@ class QualityScorer:
             required_sections=["设计系统", "色彩"],
             min_length=1000,
         )
-        report.dimensions.append(QualityDimension(
-            name="UI/UX 文档",
-            score=uiux_score,
-            weight=1.0,
-        ))
+        report.dimensions.append(
+            QualityDimension(
+                name="UI/UX 文档",
+                score=uiux_score,
+                weight=1.0,
+            )
+        )
 
         return report.total_score
 
@@ -145,11 +159,13 @@ class QualityScorer:
             required_sections=["信息架构", "页面", "组件"],
             min_length=500,
         )
-        report.dimensions.append(QualityDimension(
-            name="前端蓝图",
-            score=blueprint_score,
-            weight=1.2,
-        ))
+        report.dimensions.append(
+            QualityDimension(
+                name="前端蓝图",
+                score=blueprint_score,
+                weight=1.2,
+            )
+        )
 
         # 执行计划
         plan_score = self._score_doc_file(
@@ -157,11 +173,13 @@ class QualityScorer:
             required_sections=["phase", "阶段"],
             min_length=500,
         )
-        report.dimensions.append(QualityDimension(
-            name="执行计划",
-            score=plan_score,
-            weight=1.0,
-        ))
+        report.dimensions.append(
+            QualityDimension(
+                name="执行计划",
+                score=plan_score,
+                weight=1.0,
+            )
+        )
 
         return report.total_score
 
@@ -200,11 +218,13 @@ class QualityScorer:
             required_sections=["目录结构", "API", "frontend", "backend"],
             min_length=500,
         )
-        report.dimensions.append(QualityDimension(
-            name="实现骨架",
-            score=impl_score,
-            weight=1.0,
-        ))
+        report.dimensions.append(
+            QualityDimension(
+                name="实现骨架",
+                score=impl_score,
+                weight=1.0,
+            )
+        )
 
         return report.total_score
 
@@ -222,6 +242,7 @@ class QualityScorer:
             content = redteam_file.read_text(encoding="utf-8", errors="ignore")
             # 尝试提取 "总分: XX/100" 格式
             import re
+
             match = re.search(r"总分[：:]\s*(\d+)/100", content)
             if match:
                 return int(match.group(1))
@@ -238,6 +259,7 @@ class QualityScorer:
 
         # 提取总分
         import re
+
         match = re.search(r"总分[：:]\s*(\d+)/100", content)
         if match:
             return int(match.group(1))
@@ -304,7 +326,7 @@ class QualityScorer:
         ctx = context_data or {}
         scorers = {
             "discovery": lambda: self.score_discovery(ctx),
-            "intelligence": lambda: self.score_discovery(ctx),     # 同 discovery 逻辑
+            "intelligence": lambda: self.score_discovery(ctx),  # 同 discovery 逻辑
             "drafting": self.score_documentation,
             "frontend": self.score_frontend_scaffold,
             "spec": self.score_spec,

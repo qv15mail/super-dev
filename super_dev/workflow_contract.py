@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from .seeai_design_system import SEEAI_JUDGE_CHECKLIST, SEEAI_QUALITY_FLOOR
+
 FlowVariant = Literal["standard", "seeai"]
 
 
@@ -38,6 +40,7 @@ class WorkflowContractSpec:
     gates: tuple[WorkflowGate, ...]
     agent_team: tuple[WorkflowAgent, ...]
     quality_floor: tuple[str, ...]
+    judge_checklist: tuple[str, ...]
     artifacts: tuple[str, ...]
 
     def to_dict(self) -> dict[str, Any]:
@@ -72,6 +75,7 @@ class WorkflowContractSpec:
                 for agent in self.agent_team
             ],
             "quality_floor": list(self.quality_floor),
+            "judge_checklist": list(self.judge_checklist),
             "artifacts": list(self.artifacts),
         }
 
@@ -283,6 +287,7 @@ STANDARD_WORKFLOW_CONTRACT = WorkflowContractSpec(
         "预览确认门必须保留。",
         "交付前必须完成完整质量门禁。",
     ),
+    judge_checklist=(),
     artifacts=("research.md", "prd.md", "architecture.md", "uiux.md", "proposal.md", "tasks.md"),
 )
 
@@ -294,11 +299,8 @@ SEEAI_WORKFLOW_CONTRACT = WorkflowContractSpec(
     phase_chain=SEEAI_PHASE_CHAIN,
     gates=SEEAI_GATES,
     agent_team=SEEAI_AGENT_TEAM,
-    quality_floor=(
-        "至少保住一个 wow 点和一条主演示路径。",
-        "时间不够时优先删功能，不要删完成度。",
-        "必须能在比赛现场直接讲解与演示。",
-    ),
+    quality_floor=SEEAI_QUALITY_FLOOR,
+    judge_checklist=SEEAI_JUDGE_CHECKLIST,
     artifacts=("research.md", "prd.md", "architecture.md", "uiux.md", "tasks.md"),
 )
 

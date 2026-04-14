@@ -20,7 +20,7 @@ def save_checkpoint(project_dir: Path, phase: str, context: dict[str, Any]) -> P
         "user_input": {
             k: v
             for k, v in context.get("user_input", {}).items()
-            if isinstance(v, (str, int, float, bool, list))
+            if isinstance(v, str | int | float | bool | list)
         },
         "metadata": context.get("metadata", {}),
     }

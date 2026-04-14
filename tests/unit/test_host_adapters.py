@@ -47,6 +47,7 @@ def test_codebuddy_special_adapter_exposes_competition_steps_and_surfaces():
     surfaces = get_special_install_surfaces("codebuddy")
 
     assert any("P0/P1/P2" in step for step in steps)
+    assert any("12 分钟内先跑出首个可见界面" in step for step in steps)
     assert surfaces is not None
     assert ".codebuddy/commands/super-dev-seeai.md" in surfaces["official_project_surfaces"]
     assert "~/.codebuddy/skills/super-dev-seeai/SKILL.md" in surfaces["official_user_surfaces"]
@@ -86,3 +87,4 @@ def test_runtime_validation_payload_is_present_in_usage_profiles():
     assert runtime_validation["runtime_checklist"]
     assert runtime_validation["pass_criteria"]
     assert runtime_validation["resume_checklist"]
+    assert any("12 分钟内先跑出第一个可见界面" in item for item in runtime_validation["runtime_checklist"])

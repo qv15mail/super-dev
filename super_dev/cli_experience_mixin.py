@@ -40,10 +40,12 @@ class CliExperienceMixin:
         # 回退：生成文档概览预览页
         output_dir = Path.cwd() / "output"
         docs = sorted(output_dir.glob("*.md")) if output_dir.exists() else []
-        rows = "\n".join(
-            f"<li><a href=\"{doc.name}\" target=\"_blank\">{doc.name}</a></li>"
-            for doc in docs[:20]
-        ) or "<li>未找到可预览文档，请先在宿主会话触发 /super-dev，或运行 super-dev start / super-dev create 生成治理产物。</li>"
+        rows = (
+            "\n".join(
+                f'<li><a href="{doc.name}" target="_blank">{doc.name}</a></li>' for doc in docs[:20]
+            )
+            or "<li>未找到可预览文档，请先在宿主会话触发 /super-dev，或运行 super-dev start / super-dev create 生成治理产物。</li>"
+        )
 
         fallback_html = f"""<!doctype html>
 <html lang="zh-CN">
@@ -179,7 +181,9 @@ class CliExperienceMixin:
     def _cmd_fix(self, args) -> int:
         """显式缺陷修复模式。"""
         self.console.print("[cyan]Super Dev Bugfix Mode[/cyan]")
-        self.console.print("[dim]将执行：问题复现与影响分析 -> 轻量补丁文档 -> 定点修复与回归验证 -> 质量门禁与交付[/dim]")
+        self.console.print(
+            "[dim]将执行：问题复现与影响分析 -> 轻量补丁文档 -> 定点修复与回归验证 -> 质量门禁与交付[/dim]"
+        )
         self.console.print("")
         pipeline_args = argparse.Namespace(
             description=args.description,
@@ -210,7 +214,9 @@ class CliExperienceMixin:
         )
         self.console.print(f"[dim]描述: {args.description}[/dim]")
         self.console.print(f"[dim]请求模式: {args.mode}[/dim]")
-        self.console.print(f"[dim]平台: {args.platform} | 前端: {args.frontend} | 后端: {args.backend}[/dim]")
+        self.console.print(
+            f"[dim]平台: {args.platform} | 前端: {args.frontend} | 后端: {args.backend}[/dim]"
+        )
         self.console.print("")
 
         # 确定项目名称
@@ -218,9 +224,10 @@ class CliExperienceMixin:
         if not project_name:
             # 从描述生成项目名称
             import re
-            words = re.findall(r'[\w]+', args.description)
+
+            words = re.findall(r"[\w]+", args.description)
             if words:
-                project_name = '-'.join(words[:3]).lower()
+                project_name = "-".join(words[:3]).lower()
             else:
                 project_name = "my-project"
         project_name = self._sanitize_project_name(project_name)
@@ -239,10 +246,10 @@ class CliExperienceMixin:
                 frontend=args.frontend,
                 backend=args.backend,
                 domain=args.domain,
-                ui_library=getattr(args, 'ui_library', None),
-                style_solution=getattr(args, 'style', None),
-                state_management=getattr(args, 'state', []) or [],
-                testing_frameworks=getattr(args, 'testing', []) or [],
+                ui_library=getattr(args, "ui_library", None),
+                style_solution=getattr(args, "style", None),
+                state_management=getattr(args, "state", []) or [],
+                testing_frameworks=getattr(args, "testing", []) or [],
                 language_preferences=project_config.language_preferences,
             )
 
@@ -288,6 +295,7 @@ class CliExperienceMixin:
         except Exception as e:
             self.console.print(f"[red]创建失败: {e}[/red]")
             import traceback
+
             self.console.print(traceback.format_exc())
             return 1
 
@@ -311,7 +319,9 @@ class CliExperienceMixin:
         if not base_name:
             base_name = project_dir.name or "my-project"
         project_name = self._sanitize_project_name(base_name)
-        description = str(idea or "").strip() or str(config.description or "").strip() or project_name
+        description = (
+            str(idea or "").strip() or str(config.description or "").strip() or project_name
+        )
         platform_value = str(config.platform or "web").strip() or "web"
         frontend_value = str(frontend or config.frontend or "next").strip() or "next"
         backend_value = str(config.backend or "node").strip() or "node"
@@ -388,7 +398,8 @@ class CliExperienceMixin:
             inspirations = [
                 item.to_dict()
                 for item in advisor.list_design_references(
-                    product_type=str(getattr(args, "product_type", "") or "").strip().lower() or None,
+                    product_type=str(getattr(args, "product_type", "") or "").strip().lower()
+                    or None,
                     industry=str(getattr(args, "industry", "") or "").strip().lower() or None,
                     style=str(getattr(args, "style", "") or "").strip().lower() or None,
                     frontend=str(getattr(args, "frontend", "") or "").strip() or None,
@@ -421,7 +432,9 @@ class CliExperienceMixin:
             )
             inspirations = [
                 item
-                for item in list(profile.get("design_references", []))[: max(int(getattr(args, "max_results", 3) or 3), 1)]
+                for item in list(profile.get("design_references", []))[
+                    : max(int(getattr(args, "max_results", 3) or 3), 1)
+                ]
                 if isinstance(item, dict)
             ]
 
@@ -432,7 +445,9 @@ class CliExperienceMixin:
             self.console.print(
                 f"  行业: {analysis.get('industry', 'general')} | 风格: {analysis.get('style', 'modern')}"
             )
-            self.console.print("  真源: 内部仍以 output/*-uiux.md + output/*-ui-contract.json 为准\n")
+            self.console.print(
+                "  真源: 内部仍以 output/*-uiux.md + output/*-ui-contract.json 为准\n"
+            )
             self._render_design_inspiration_list(inspirations)
             return 0
 
@@ -444,7 +459,9 @@ class CliExperienceMixin:
                 self.console.print("[dim]先运行 `super-dev design list` 查看可用 slug[/dim]")
                 return 1
 
-            context = self._resolve_design_command_context(idea=str(getattr(args, "idea", "") or ""))
+            context = self._resolve_design_command_context(
+                idea=str(getattr(args, "idea", "") or "")
+            )
             config_manager = context["config_manager"]
             if not isinstance(config_manager, ConfigManager):
                 self.console.print("[red]无法加载项目配置管理器[/red]")
@@ -461,13 +478,18 @@ class CliExperienceMixin:
                 )
 
             update_payload: dict[str, object] = {"design_inspiration_slug": selected.slug}
-            if str(getattr(args, "idea", "") or "").strip() and not str(config_manager.config.description or "").strip():
+            if (
+                str(getattr(args, "idea", "") or "").strip()
+                and not str(config_manager.config.description or "").strip()
+            ):
                 update_payload["description"] = str(getattr(args, "idea", "")).strip()
             updated_config = config_manager.update(**update_payload)
 
             output_dir = Path.cwd() / str(updated_config.output_dir or "output")
             output_dir.mkdir(parents=True, exist_ok=True)
-            project_name = self._sanitize_project_name(str(updated_config.name or context["project_name"]))
+            project_name = self._sanitize_project_name(
+                str(updated_config.name or context["project_name"])
+            )
             record_path = output_dir / f"{project_name}-design-inspiration.json"
             record_payload = {
                 "slug": selected.slug,
@@ -484,7 +506,9 @@ class CliExperienceMixin:
                 encoding="utf-8",
             )
 
-            self.console.print(f"[green]✓[/green] 已应用设计灵感: {selected.name} ({selected.slug})")
+            self.console.print(
+                f"[green]✓[/green] 已应用设计灵感: {selected.name} ({selected.slug})"
+            )
             self.console.print(f"  来源: {selected.source}")
             self.console.print(f"  已写入配置: design_inspiration_slug = {selected.slug}")
             self.console.print(f"  记录文件: {record_path}")
@@ -531,7 +555,9 @@ class CliExperienceMixin:
                     "low": "dim",
                 }.get(item.get("relevance", "low"), "dim")
 
-                self.console.print(f"[{relevance_color}]{idx}.[/] [bold]{item.get('name', item.get('Style Category', item.get('Font Pairing Name', 'N/A')))}[/] (相关度: {item.get('relevance', 'N/A')})")
+                self.console.print(
+                    f"[{relevance_color}]{idx}.[/] [bold]{item.get('name', item.get('Style Category', item.get('Font Pairing Name', 'N/A')))}[/] (相关度: {item.get('relevance', 'N/A')})"
+                )
 
                 # 显示关键信息
                 if "description" in item:
@@ -669,26 +695,32 @@ class CliExperienceMixin:
             landing_gen = get_landing_generator()
 
             # 列出所有模式
-            if hasattr(args, 'list') and args.list:
+            if hasattr(args, "list") and args.list:
                 pattern_names = landing_gen.list_patterns()
-                self.console.print(f"\n[green]可用的 Landing 页面模式 ({len(pattern_names)} 个):[/green]\n")
+                self.console.print(
+                    f"\n[green]可用的 Landing 页面模式 ({len(pattern_names)} 个):[/green]\n"
+                )
                 for i, pattern_name in enumerate(pattern_names, 1):
                     self.console.print(f"  {i}. {pattern_name}")
                 self.console.print()
                 return 0
 
             # 智能推荐
-            if hasattr(args, 'product_type') and args.product_type:
+            if hasattr(args, "product_type") and args.product_type:
                 self.console.print("[cyan]智能推荐 Landing 页面模式[/cyan]")
                 self.console.print(f"  产品类型: {args.product_type}")
-                self.console.print(f"  目标: {args.goal if hasattr(args, 'goal') and args.goal else 'N/A'}")
-                self.console.print(f"  受众: {args.audience if hasattr(args, 'audience') and args.audience else 'N/A'}")
+                self.console.print(
+                    f"  目标: {args.goal if hasattr(args, 'goal') and args.goal else 'N/A'}"
+                )
+                self.console.print(
+                    f"  受众: {args.audience if hasattr(args, 'audience') and args.audience else 'N/A'}"
+                )
                 self.console.print()
 
                 recommended = landing_gen.recommend(
                     product_type=args.product_type,
-                    goal=args.goal if hasattr(args, 'goal') and args.goal else "",
-                    audience=args.audience if hasattr(args, 'audience') and args.audience else ""
+                    goal=args.goal if hasattr(args, "goal") and args.goal else "",
+                    audience=args.audience if hasattr(args, "audience") and args.audience else "",
                 )
 
                 if recommended:
@@ -700,7 +732,7 @@ class CliExperienceMixin:
                     return 0
 
             # 搜索模式
-            query = args.query if hasattr(args, 'query') and args.query else ""
+            query = args.query if hasattr(args, "query") and args.query else ""
             if query:
                 self.console.print(f"[cyan]搜索 Landing 页面模式: {query}[/cyan]\n")
 
@@ -723,7 +755,9 @@ class CliExperienceMixin:
 
             # 默认显示所有模式
             pattern_names = landing_gen.list_patterns()
-            self.console.print(f"\n[green]可用的 Landing 页面模式 ({len(pattern_names)} 个):[/green]\n")
+            self.console.print(
+                f"\n[green]可用的 Landing 页面模式 ({len(pattern_names)} 个):[/green]\n"
+            )
             for i, pattern_name in enumerate(pattern_names, 1):
                 self.console.print(f"  {i}. {pattern_name}")
             self.console.print()
@@ -736,12 +770,23 @@ class CliExperienceMixin:
             chart_recommender = get_chart_recommender()
 
             # 列出所有图表类型
-            if hasattr(args, 'list') and args.list:
+            if hasattr(args, "list") and args.list:
                 chart_types = chart_recommender.list_chart_types()
                 categories = chart_recommender.list_categories()
-                self.console.print(f"\n[green]可用的图表类型 ({len(chart_types)} 个, {len(categories)} 个类别):[/green]\n")
+                self.console.print(
+                    f"\n[green]可用的图表类型 ({len(chart_types)} 个, {len(categories)} 个类别):[/green]\n"
+                )
                 for category in sorted(categories):
-                    types = [ct for ct in chart_types if ct in [c.name for c in chart_recommender.chart_types if c.category.value == category]]
+                    types = [
+                        ct
+                        for ct in chart_types
+                        if ct
+                        in [
+                            c.name
+                            for c in chart_recommender.chart_types
+                            if c.category.value == category
+                        ]
+                    ]
                     self.console.print(f"  [cyan]{category}:[/cyan]")
                     for ct in sorted(types):
                         self.console.print(f"    - {ct}")
@@ -749,7 +794,7 @@ class CliExperienceMixin:
                 return 0
 
             # 推荐图表类型
-            data_description = args.data_description if hasattr(args, 'data_description') else ""
+            data_description = args.data_description if hasattr(args, "data_description") else ""
             if data_description:
                 self.console.print("[cyan]推荐图表类型[/cyan]")
                 self.console.print(f"  数据描述: {data_description}")
@@ -759,7 +804,7 @@ class CliExperienceMixin:
                 chart_recommendations = chart_recommender.recommend(
                     data_description=data_description,
                     framework=args.framework,
-                    max_results=args.max_results
+                    max_results=args.max_results,
                 )
 
                 if not chart_recommendations:
@@ -770,13 +815,17 @@ class CliExperienceMixin:
 
                 for idx, chart_rec in enumerate(chart_recommendations, 1):
                     confidence_pct = int(chart_rec.confidence * 100)
-                    self.console.print(f"[cyan]{idx}. {chart_rec.chart_type.name}[/cyan] (置信度: {confidence_pct}%)")
+                    self.console.print(
+                        f"[cyan]{idx}. {chart_rec.chart_type.name}[/cyan] (置信度: {confidence_pct}%)"
+                    )
                     self.console.print(f"    {chart_rec.chart_type.description}")
                     self.console.print(f"    理由: {chart_rec.reasoning}")
                     self.console.print(f"    推荐库: {chart_rec.library_recommendation}")
                     self.console.print(f"    无障碍: {chart_rec.chart_type.accessibility_notes}")
                     if chart_rec.alternatives:
-                        self.console.print(f"    替代方案: {', '.join([a.name for a in chart_rec.alternatives])}")
+                        self.console.print(
+                            f"    替代方案: {', '.join([a.name for a in chart_rec.alternatives])}"
+                        )
                     self.console.print()
 
                 return 0
@@ -796,7 +845,7 @@ class CliExperienceMixin:
             ux_guide = get_ux_guide()
 
             # 列出所有领域
-            if hasattr(args, 'list_domains') and args.list_domains:
+            if hasattr(args, "list_domains") and args.list_domains:
                 domains = ux_guide.list_domains()
                 self.console.print(f"\n[green]UX 指南领域 ({len(domains)} 个):[/green]\n")
                 for i, domain in enumerate(domains, 1):
@@ -805,7 +854,7 @@ class CliExperienceMixin:
                 return 0
 
             # 快速见效的改进
-            if hasattr(args, 'quick_wins') and args.quick_wins:
+            if hasattr(args, "quick_wins") and args.quick_wins:
                 self.console.print("[cyan]快速见效的 UX 改进建议[/cyan]\n")
 
                 ux_quick_wins = ux_guide.get_quick_wins(max_results=args.max_results)
@@ -815,11 +864,17 @@ class CliExperienceMixin:
                     return 1
 
                 for idx, ux_rec in enumerate(ux_quick_wins, 1):
-                    self.console.print(f"[cyan]{idx}. {ux_rec.guideline.topic}[/cyan] ({ux_rec.guideline.domain.value})")
-                    self.console.print(f"    [green]最佳实践:[/green] {ux_rec.guideline.best_practice}")
+                    self.console.print(
+                        f"[cyan]{idx}. {ux_rec.guideline.topic}[/cyan] ({ux_rec.guideline.domain.value})"
+                    )
+                    self.console.print(
+                        f"    [green]最佳实践:[/green] {ux_rec.guideline.best_practice}"
+                    )
                     self.console.print(f"    [red]反模式:[/red] {ux_rec.guideline.anti_pattern}")
                     self.console.print(f"    影响: {ux_rec.guideline.impact}")
-                    self.console.print(f"    优先级: {ux_rec.priority} | 实现难度: {ux_rec.implementation_effort} | 用户影响: {ux_rec.user_impact}")
+                    self.console.print(
+                        f"    优先级: {ux_rec.priority} | 实现难度: {ux_rec.implementation_effort} | 用户影响: {ux_rec.user_impact}"
+                    )
                     if ux_rec.resources:
                         self.console.print(f"    资源: {', '.join(ux_rec.resources)}")
                     self.console.print()
@@ -827,10 +882,12 @@ class CliExperienceMixin:
                 return 0
 
             # 检查清单
-            if hasattr(args, 'checklist') and args.checklist:
+            if hasattr(args, "checklist") and args.checklist:
                 self.console.print("[cyan]UX 检查清单[/cyan]\n")
 
-                checklist = ux_guide.get_checklist(domains=[args.domain] if hasattr(args, 'domain') and args.domain else None)
+                checklist = ux_guide.get_checklist(
+                    domains=[args.domain] if hasattr(args, "domain") and args.domain else None
+                )
 
                 for domain, items in sorted(checklist.items()):
                     self.console.print(f"[cyan]{domain}:[/cyan]")
@@ -841,14 +898,14 @@ class CliExperienceMixin:
                 return 0
 
             # 搜索 UX 指南
-            query = args.query if hasattr(args, 'query') and args.query else ""
+            query = args.query if hasattr(args, "query") and args.query else ""
             if query:
                 self.console.print(f"[cyan]搜索 UX 指南: {query}[/cyan]\n")
 
                 ux_recommendations = ux_guide.search(
                     query=query,
-                    domain=args.domain if hasattr(args, 'domain') else None,
-                    max_results=args.max_results
+                    domain=args.domain if hasattr(args, "domain") else None,
+                    max_results=args.max_results,
                 )
 
                 if not ux_recommendations:
@@ -858,11 +915,17 @@ class CliExperienceMixin:
                 self.console.print(f"[green]找到 {len(ux_recommendations)} 个结果:[/green]\n")
 
                 for idx, ux_rec in enumerate(ux_recommendations, 1):
-                    self.console.print(f"[cyan]{idx}. {ux_rec.guideline.topic}[/cyan] ({ux_rec.guideline.domain.value})")
-                    self.console.print(f"    [green]最佳实践:[/green] {ux_rec.guideline.best_practice}")
+                    self.console.print(
+                        f"[cyan]{idx}. {ux_rec.guideline.topic}[/cyan] ({ux_rec.guideline.domain.value})"
+                    )
+                    self.console.print(
+                        f"    [green]最佳实践:[/green] {ux_rec.guideline.best_practice}"
+                    )
                     self.console.print(f"    [red]反模式:[/red] {ux_rec.guideline.anti_pattern}")
                     self.console.print(f"    影响: {ux_rec.guideline.impact}")
-                    self.console.print(f"    优先级: {ux_rec.priority} | 实现难度: {ux_rec.implementation_effort} | 用户影响: {ux_rec.user_impact}")
+                    self.console.print(
+                        f"    优先级: {ux_rec.priority} | 实现难度: {ux_rec.implementation_effort} | 用户影响: {ux_rec.user_impact}"
+                    )
                     if ux_rec.resources:
                         self.console.print(f"    资源: {', '.join(ux_rec.resources)}")
                     self.console.print()
@@ -884,7 +947,7 @@ class CliExperienceMixin:
             tech_engine = get_tech_stack_engine()
 
             # 列出所有技术栈
-            if hasattr(args, 'list') and args.list:
+            if hasattr(args, "list") and args.list:
                 stacks = tech_engine.list_stacks()
                 self.console.print(f"\n[green]支持的技术栈 ({len(stacks)} 个):[/green]\n")
                 for i, stack in enumerate(stacks, 1):
@@ -894,18 +957,20 @@ class CliExperienceMixin:
 
             # 查询参数
             stack_name = args.stack
-            query = args.query if hasattr(args, 'query') and args.query else None
-            category = args.category if hasattr(args, 'category') else None
+            query = args.query if hasattr(args, "query") and args.query else None
+            category = args.category if hasattr(args, "category") else None
 
             # 显示设计模式
-            if hasattr(args, 'patterns') and args.patterns:
+            if hasattr(args, "patterns") and args.patterns:
                 tech_patterns = tech_engine.get_patterns(stack_name)
 
                 if not tech_patterns:
                     self.console.print(f"[yellow]未找到 {stack_name} 的设计模式[/yellow]")
                     return 1
 
-                self.console.print(f"\n[cyan]{stack_name} 设计模式 ({len(tech_patterns)} 个):[/cyan]\n")
+                self.console.print(
+                    f"\n[cyan]{stack_name} 设计模式 ({len(tech_patterns)} 个):[/cyan]\n"
+                )
 
                 for idx, tech_pattern in enumerate(tech_patterns, 1):
                     self.console.print(f"[cyan]{idx}. {tech_pattern.name}[/cyan]")
@@ -920,7 +985,7 @@ class CliExperienceMixin:
                 return 0
 
             # 显示性能优化建议
-            if hasattr(args, 'performance') and args.performance:
+            if hasattr(args, "performance") and args.performance:
                 tips = tech_engine.get_performance_tips(stack_name)
 
                 if not tips:
@@ -940,14 +1005,16 @@ class CliExperienceMixin:
                 return 0
 
             # 快速见效的性能优化
-            if hasattr(args, 'quick_wins') and args.quick_wins:
+            if hasattr(args, "quick_wins") and args.quick_wins:
                 tips = tech_engine.get_quick_wins(stack_name)
 
                 if not tips:
                     self.console.print(f"[yellow]未找到 {stack_name} 的快速性能优化[/yellow]")
                     return 1
 
-                self.console.print(f"\n[cyan]{stack_name} 快速见效的性能优化 ({len(tips)} 个):[/cyan]\n")
+                self.console.print(
+                    f"\n[cyan]{stack_name} 快速见效的性能优化 ({len(tips)} 个):[/cyan]\n"
+                )
 
                 for idx, tip in enumerate(tips, 1):
                     self.console.print(f"[cyan]{idx}. {tip.topic} - {tip.technique}[/cyan]")
@@ -965,10 +1032,7 @@ class CliExperienceMixin:
                 self.console.print(f"查询: {query}\n")
 
             stack_recommendations = tech_engine.search_practices(
-                stack=stack_name,
-                query=query,
-                category=category,
-                max_results=args.max_results
+                stack=stack_name, query=query, category=category, max_results=args.max_results
             )
 
             if not stack_recommendations:
@@ -976,11 +1040,15 @@ class CliExperienceMixin:
                 return 1
 
             for idx, stack_rec in enumerate(stack_recommendations, 1):
-                self.console.print(f"[cyan]{idx}. {stack_rec.practice.topic}[/cyan] ({stack_rec.practice.category.value})")
+                self.console.print(
+                    f"[cyan]{idx}. {stack_rec.practice.topic}[/cyan] ({stack_rec.practice.category.value})"
+                )
                 self.console.print(f"    [green]最佳实践:[/green] {stack_rec.practice.practice}")
                 self.console.print(f"    [red]反模式:[/red] {stack_rec.practice.anti_pattern}")
                 self.console.print(f"    好处: {stack_rec.practice.benefits}")
-                self.console.print(f"    优先级: {stack_rec.priority} | 复杂度: {stack_rec.practice.complexity}")
+                self.console.print(
+                    f"    优先级: {stack_rec.priority} | 复杂度: {stack_rec.practice.complexity}"
+                )
                 if stack_rec.context:
                     self.console.print(f"    上下文: {stack_rec.context}")
                 if stack_rec.alternatives:
@@ -990,7 +1058,9 @@ class CliExperienceMixin:
                 if stack_rec.resources:
                     self.console.print(f"    资源: {', '.join(stack_rec.resources)}")
                 if stack_rec.practice.code_example:
-                    self.console.print(f"    代码示例:\n    [dim]{stack_rec.practice.code_example[:200]}...[/dim]")
+                    self.console.print(
+                        f"    代码示例:\n    [dim]{stack_rec.practice.code_example[:200]}...[/dim]"
+                    )
                 self.console.print()
 
             return 0
@@ -1003,9 +1073,9 @@ class CliExperienceMixin:
             codegen = get_code_generator()
 
             # 列出所有可用组件
-            if hasattr(args, 'list') and args.list:
+            if hasattr(args, "list") and args.list:
                 components = codegen.get_available_components(
-                    framework=Framework(args.framework) if hasattr(args, 'framework') else None
+                    framework=Framework(args.framework) if hasattr(args, "framework") else None
                 )
 
                 self.console.print(f"\n[green]可用组件 ({args.framework or 'all'}):[/green]\n")
@@ -1019,10 +1089,10 @@ class CliExperienceMixin:
                 return 0
 
             # 搜索组件
-            if hasattr(args, 'search') and args.search:
+            if hasattr(args, "search") and args.search:
                 component_snippets = codegen.search_components(
                     query=args.search,
-                    framework=args.framework if hasattr(args, 'framework') else None
+                    framework=args.framework if hasattr(args, "framework") else None,
                 )
 
                 if not component_snippets:
@@ -1032,7 +1102,9 @@ class CliExperienceMixin:
                 self.console.print(f"\n[green]找到 {len(component_snippets)} 个组件:[/green]\n")
 
                 for idx, snippet in enumerate(component_snippets, 1):
-                    self.console.print(f"[cyan]{idx}. {snippet.name}[/cyan] ({snippet.framework.value})")
+                    self.console.print(
+                        f"[cyan]{idx}. {snippet.name}[/cyan] ({snippet.framework.value})"
+                    )
                     self.console.print(f"    类别: {snippet.category.value}")
                     self.console.print(f"    描述: {snippet.description}")
                     self.console.print(f"    依赖: {', '.join(snippet.dependencies)}")
@@ -1044,13 +1116,12 @@ class CliExperienceMixin:
 
             # 生成组件代码
             component_name = args.component
-            framework = args.framework if hasattr(args, 'framework') else "react"
+            framework = args.framework if hasattr(args, "framework") else "react"
 
             self.console.print(f"[cyan]生成 {component_name} 组件 ({framework})[/cyan]\n")
 
             component = codegen.generate_component(
-                component_name=component_name,
-                framework=Framework(framework)
+                component_name=component_name, framework=Framework(framework)
             )
 
             if not component:
@@ -1082,11 +1153,11 @@ class CliExperienceMixin:
                 self.console.print(f"  [dim]{component.usage_example}[/dim]")
 
             # 输出到文件
-            if hasattr(args, 'output') and args.output:
+            if hasattr(args, "output") and args.output:
                 output_path = Path(args.output)
                 output_path.parent.mkdir(parents=True, exist_ok=True)
 
-                with open(output_path, 'w', encoding='utf-8') as f:
+                with open(output_path, "w", encoding="utf-8") as f:
                     f.write(component.code)
 
                 self.console.print(f"\n[green]已保存到: {output_path}[/green]")
@@ -1095,6 +1166,8 @@ class CliExperienceMixin:
 
         else:
             self.console.print("[yellow]请指定设计子命令[/yellow]")
-            self.console.print("  可用命令: list, recommend, apply, search, generate, tokens, landing, chart, ux, stack, codegen")
+            self.console.print(
+                "  可用命令: list, recommend, apply, search, generate, tokens, landing, chart, ux, stack, codegen"
+            )
             self.console.print("  使用 'super-dev design <command> -h' 查看帮助")
             return 1

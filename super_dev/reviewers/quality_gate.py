@@ -1449,7 +1449,9 @@ class QualityGateChecker:
             and bool(payload.get("design_tokens")),
         }
         if cross_platform_frontend:
-            required_sections["framework_playbook"] = framework_playbook_complete(framework_playbook)
+            required_sections["framework_playbook"] = framework_playbook_complete(
+                framework_playbook
+            )
         missing_sections = [name for name, present in required_sections.items() if not present]
         if missing_sections:
             if cross_platform_frontend and "framework_playbook" in missing_sections:
@@ -2756,11 +2758,7 @@ class QualityGateChecker:
 
         # Filter out __pycache__, node_modules, .git, and migration dirs themselves
         skip_segments = {"__pycache__", "node_modules", ".git", "migrations", "alembic"}
-        model_files = [
-            f
-            for f in model_files
-            if f.is_file() and not (skip_segments & set(f.parts))
-        ]
+        model_files = [f for f in model_files if f.is_file() and not (skip_segments & set(f.parts))]
 
         if not model_files:
             return QualityCheck(
@@ -2778,9 +2776,7 @@ class QualityGateChecker:
         # Collect migration files
         migration_files: list[Path] = []
         for pattern in migration_patterns:
-            migration_files.extend(
-                f for f in self.project_dir.glob(pattern) if f.is_file()
-            )
+            migration_files.extend(f for f in self.project_dir.glob(pattern) if f.is_file())
         migration_files = [
             f
             for f in migration_files
@@ -2808,9 +2804,7 @@ class QualityGateChecker:
 
         if latest_model_mtime > latest_migration_mtime:
             # Find which model files are newer than latest migration
-            drifted = [
-                f for f in model_files if f.stat().st_mtime > latest_migration_mtime
-            ]
+            drifted = [f for f in model_files if f.stat().st_mtime > latest_migration_mtime]
             drifted_names = ", ".join(
                 sorted(str(f.relative_to(self.project_dir)) for f in drifted[:5])
             )

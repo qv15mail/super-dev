@@ -198,26 +198,30 @@ class ArchitectureDecisionRecord:
                     lines.append(f"- {c}")
                 lines.append("")
 
-        lines.extend([
-            "## 决策 (Decision)",
-            "",
-            self.decision,
-            "",
-            "## 理由 (Rationale)",
-            "",
-            self.rationale,
-            "",
-            "## 后果 (Consequences)",
-            "",
-            self.consequences,
-            "",
-        ])
+        lines.extend(
+            [
+                "## 决策 (Decision)",
+                "",
+                self.decision,
+                "",
+                "## 理由 (Rationale)",
+                "",
+                self.rationale,
+                "",
+                "## 后果 (Consequences)",
+                "",
+                self.consequences,
+                "",
+            ]
+        )
 
         if self.related_adrs:
-            lines.extend([
-                "## 相关决策",
-                "",
-            ])
+            lines.extend(
+                [
+                    "## 相关决策",
+                    "",
+                ]
+            )
             for ref in self.related_adrs:
                 lines.append(f"- {ref}")
             lines.append("")
@@ -245,9 +249,7 @@ class ADRGenerator:
     # Public API
     # ------------------------------------------------------------------
 
-    def generate_from_architecture(
-        self, arch_config: dict
-    ) -> list[ArchitectureDecisionRecord]:
+    def generate_from_architecture(self, arch_config: dict) -> list[ArchitectureDecisionRecord]:
         """从架构配置自动生成 ADR 集合。
 
         为以下选型生成 ADR（如果配置中存在对应字段）:
@@ -556,7 +558,11 @@ class ADRGenerator:
         # 解析标题行: "# ADR-001: 选择 PostgreSQL 作为数据库"
         title_line = lines[0].lstrip("# ").strip()
         parts = title_line.split(":", 1)
-        adr_id = parts[0].strip() if parts else path.stem.split("-", 2)[0] + "-" + path.stem.split("-", 2)[1]
+        adr_id = (
+            parts[0].strip()
+            if parts
+            else path.stem.split("-", 2)[0] + "-" + path.stem.split("-", 2)[1]
+        )
         title = parts[1].strip() if len(parts) > 1 else title_line
 
         # 解析状态和日期

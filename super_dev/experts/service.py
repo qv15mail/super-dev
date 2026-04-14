@@ -147,7 +147,10 @@ def render_team_advice_markdown(team_id: str, prompt: str = "") -> str:
         "",
     ]
     for member in members:
-        meta = next((item for item in _EXPERT_META if item["id"] == member), {"name": member, "description": ""})
+        meta = next(
+            (item for item in _EXPERT_META if item["id"] == member),
+            {"name": member, "description": ""},
+        )
         lines.append(f"- **{member}**: {meta['name']} - {meta['description']}")
 
     lines.extend(

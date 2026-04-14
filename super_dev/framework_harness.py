@@ -40,7 +40,11 @@ class FrameworkHarnessReport:
 
     @property
     def passed(self) -> bool:
-        return self.enabled and not self.blockers and all(self.checks.values()) if self.checks else self.enabled and not self.blockers
+        return (
+            self.enabled and not self.blockers and all(self.checks.values())
+            if self.checks
+            else self.enabled and not self.blockers
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -78,10 +82,14 @@ class FrameworkHarnessReport:
                 "",
                 "## Framework Playbook",
                 "",
-                "- Implementation Modules: " + ("；".join(self.implementation_modules) if self.implementation_modules else "-"),
-                "- Native Capabilities: " + ("；".join(self.native_capabilities) if self.native_capabilities else "-"),
-                "- Validation Surfaces: " + ("；".join(self.validation_surfaces) if self.validation_surfaces else "-"),
-                "- Delivery Evidence: " + ("；".join(self.delivery_evidence) if self.delivery_evidence else "-"),
+                "- Implementation Modules: "
+                + ("；".join(self.implementation_modules) if self.implementation_modules else "-"),
+                "- Native Capabilities: "
+                + ("；".join(self.native_capabilities) if self.native_capabilities else "-"),
+                "- Validation Surfaces: "
+                + ("；".join(self.validation_surfaces) if self.validation_surfaces else "-"),
+                "- Delivery Evidence: "
+                + ("；".join(self.delivery_evidence) if self.delivery_evidence else "-"),
                 "",
                 "## Checks",
                 "",
@@ -125,7 +133,11 @@ class FrameworkHarnessBuilder:
 
         analysis = payload.get("analysis", {}) if isinstance(payload.get("analysis"), dict) else {}
         frontend_value = str(analysis.get("frontend") or "").lower().strip()
-        framework_playbook = payload.get("framework_playbook") if isinstance(payload.get("framework_playbook"), dict) else {}
+        framework_playbook = (
+            payload.get("framework_playbook")
+            if isinstance(payload.get("framework_playbook"), dict)
+            else {}
+        )
         framework_name = str(framework_playbook.get("framework") or "").strip()
         enabled = is_cross_platform_frontend(frontend_value) or bool(framework_name)
         if not enabled:
@@ -134,20 +146,30 @@ class FrameworkHarnessBuilder:
         report.enabled = True
         report.framework = framework_name or frontend_value or "cross-platform"
         report.implementation_modules = [
-            str(item) for item in framework_playbook.get("implementation_modules", []) if str(item).strip()
+            str(item)
+            for item in framework_playbook.get("implementation_modules", [])
+            if str(item).strip()
         ]
         report.native_capabilities = [
-            str(item) for item in framework_playbook.get("native_capabilities", []) if str(item).strip()
+            str(item)
+            for item in framework_playbook.get("native_capabilities", [])
+            if str(item).strip()
         ]
         report.validation_surfaces = [
-            str(item) for item in framework_playbook.get("validation_surfaces", []) if str(item).strip()
+            str(item)
+            for item in framework_playbook.get("validation_surfaces", [])
+            if str(item).strip()
         ]
         report.delivery_evidence = [
-            str(item) for item in framework_playbook.get("delivery_evidence", []) if str(item).strip()
+            str(item)
+            for item in framework_playbook.get("delivery_evidence", [])
+            if str(item).strip()
         ]
         report.source_files["ui_contract"] = str(ui_contract_file)
 
-        report.checks["ui_contract_framework_playbook"] = framework_playbook_complete(framework_playbook)
+        report.checks["ui_contract_framework_playbook"] = framework_playbook_complete(
+            framework_playbook
+        )
         if not report.checks["ui_contract_framework_playbook"]:
             report.blockers.append(
                 f"{report.framework} framework playbook 尚未完整冻结到 output/*-ui-contract.json"
@@ -160,7 +182,9 @@ class FrameworkHarnessBuilder:
                 runtime_payload = json.loads(runtime_file.read_text(encoding="utf-8"))
             except Exception:
                 runtime_payload = {}
-            runtime_checks = runtime_payload.get("checks", {}) if isinstance(runtime_payload, dict) else {}
+            runtime_checks = (
+                runtime_payload.get("checks", {}) if isinstance(runtime_payload, dict) else {}
+            )
             report.checks["frontend_runtime_framework_execution"] = (
                 isinstance(runtime_payload, dict)
                 and bool(runtime_payload.get("passed", False))
@@ -189,8 +213,7 @@ class FrameworkHarnessBuilder:
                 else {}
             )
             report.checks["ui_contract_alignment_framework_execution"] = bool(
-                isinstance(framework_execution, dict)
-                and framework_execution.get("passed", False)
+                isinstance(framework_execution, dict) and framework_execution.get("passed", False)
             )
             if not report.checks["ui_contract_alignment_framework_execution"]:
                 report.blockers.append(
@@ -200,7 +223,10 @@ class FrameworkHarnessBuilder:
             report.checks["ui_contract_alignment_framework_execution"] = False
             report.blockers.append(f"{report.framework} UI 契约对齐报告缺失")
 
-        if "ui_contract_framework_playbook" in report.checks and not report.checks["ui_contract_framework_playbook"]:
+        if (
+            "ui_contract_framework_playbook" in report.checks
+            and not report.checks["ui_contract_framework_playbook"]
+        ):
             report.next_actions.append(
                 "先补齐 framework playbook：implementation modules、platform constraints、execution guardrails、native capabilities、validation surfaces、delivery evidence。"
             )
@@ -209,9 +235,7 @@ class FrameworkHarnessBuilder:
                 "重新执行 frontend runtime，确认 ui_framework_playbook 和 ui_framework_execution 都为 true。"
             )
         if not report.checks.get("ui_contract_alignment_framework_execution", False):
-            report.next_actions.append(
-                "重新执行 UI review，确认 framework_execution 对齐项通过。"
-            )
+            report.next_actions.append("重新执行 UI review，确认 framework_execution 对齐项通过。")
         if not report.next_actions:
             report.next_actions.append("当前跨平台 framework harness 已满足发布前证据要求。")
         return report
@@ -222,5 +246,7 @@ class FrameworkHarnessBuilder:
         md_path = base.with_suffix(".md")
         json_path = base.with_suffix(".json")
         md_path.write_text(report.to_markdown(), encoding="utf-8")
-        json_path.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        json_path.write_text(
+            json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         return {"markdown": md_path, "json": json_path}

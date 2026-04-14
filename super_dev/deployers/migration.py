@@ -16,6 +16,7 @@ from pathlib import Path
 
 class DatabaseType(Enum):
     """数据库类型"""
+
     POSTGRESQL = "postgresql"
     MYSQL = "mysql"
     MONGODB = "mongodb"
@@ -24,6 +25,7 @@ class DatabaseType(Enum):
 
 class ORMType(Enum):
     """ORM 框架类型"""
+
     PRISMA = "prisma"
     TYPEORM = "typeorm"
     SEQUELIZE = "sequelize"
@@ -35,6 +37,7 @@ class ORMType(Enum):
 @dataclass
 class Column:
     """数据库列定义"""
+
     name: str
     type: str
     nullable: bool = True
@@ -48,6 +51,7 @@ class Column:
 @dataclass
 class Table:
     """数据库表定义"""
+
     name: str
     columns: list[Column]
     indexes: list[str] | None = None
@@ -67,7 +71,7 @@ class MigrationGenerator:
         name: str,
         tech_stack: dict,
         db_type: DatabaseType = DatabaseType.POSTGRESQL,
-        orm_type: ORMType | None = None
+        orm_type: ORMType | None = None,
     ):
         self.project_dir = Path(project_dir).resolve()
         self.name = name
@@ -108,7 +112,7 @@ class MigrationGenerator:
             # 检查 package.json
             package_json = self.project_dir / "package.json"
             if package_json.exists():
-                content = package_json.read_text(encoding='utf-8')
+                content = package_json.read_text(encoding="utf-8")
                 if "prisma" in content:
                     return ORMType.PRISMA
                 elif "typeorm" in content:
@@ -123,7 +127,7 @@ class MigrationGenerator:
             for file_name in ["requirements.txt", "pyproject.toml"]:
                 req_file = self.project_dir / file_name
                 if req_file.exists():
-                    content = req_file.read_text(encoding='utf-8')
+                    content = req_file.read_text(encoding="utf-8")
                     if "sqlalchemy" in content:
                         return ORMType.SQLALCHEMY
                     elif "django" in content:
@@ -142,7 +146,7 @@ class MigrationGenerator:
         spec_dir = self.project_dir / ".super-dev" / "specs"
         if spec_dir.exists():
             for spec_file in spec_dir.rglob("spec.md"):
-                content = spec_file.read_text(encoding='utf-8')
+                content = spec_file.read_text(encoding="utf-8")
                 entities.extend(self._parse_entities_from_spec(content))
 
         # 2. 尝试从变更提案规范读取（pipeline 常见路径）
@@ -151,7 +155,7 @@ class MigrationGenerator:
         if changes_dir.exists():
             change_spec_files = list(changes_dir.glob("*/specs/*/spec.md"))
             for spec_file in change_spec_files:
-                content = spec_file.read_text(encoding='utf-8')
+                content = spec_file.read_text(encoding="utf-8")
                 entities.extend(self._parse_entities_from_spec(content))
 
         # 3. 没有显式实体定义时，按模块线索推断（优先于默认模板）
@@ -333,7 +337,7 @@ class MigrationGenerator:
             name=name,
             type=col_type,
             nullable="primary" not in col_def.lower(),
-            primary_key="primary" in col_def.lower()
+            primary_key="primary" in col_def.lower(),
         )
 
     def _generate_default_entities(self) -> list[Table]:
@@ -349,7 +353,7 @@ class MigrationGenerator:
                     Column("created_at", "timestamp", default="CURRENT_TIMESTAMP"),
                     Column("updated_at", "timestamp", default="CURRENT_TIMESTAMP"),
                 ],
-                indexes=["idx_users_email", "idx_users_created_at"]
+                indexes=["idx_users_email", "idx_users_created_at"],
             ),
             Table(
                 name="auth_tokens",
@@ -360,7 +364,7 @@ class MigrationGenerator:
                     Column("expires_at", "timestamp", comment="过期时间"),
                     Column("created_at", "timestamp", default="CURRENT_TIMESTAMP"),
                 ],
-                indexes=["idx_auth_tokens_user_id", "idx_auth_tokens_token"]
+                indexes=["idx_auth_tokens_user_id", "idx_auth_tokens_token"],
             ),
         ]
 
@@ -373,24 +377,26 @@ class MigrationGenerator:
             "// This is your Prisma schema file,",
             "// learn more about it in the docs: https://pris.ly/d/prisma-schema",
             "",
-            'generator client {',
+            "generator client {",
             '  provider = "prisma-client-js"',
-            '}',
+            "}",
             "",
-            'datasource db {',
+            "datasource db {",
             f'  provider = "{self._get_prisma_provider()}"',
             '  url      = env("DATABASE_URL")',
-            '}',
+            "}",
             "",
         ]
 
         # 添加模型
         for entity in self.entities:
-            schema_lines.append(f'model {entity.name.capitalize()} {{')
+            schema_lines.append(f"model {entity.name.capitalize()} {{")
             for col in entity.columns:
                 nullable_mark = "?" if col.nullable else ""
                 pk_decorator = " @id @default(uuid())" if col.primary_key else ""
-                schema_lines.append(f'  {col.name} {self._prisma_type(col.type)}{nullable_mark}{pk_decorator}')
+                schema_lines.append(
+                    f"  {col.name} {self._prisma_type(col.type)}{nullable_mark}{pk_decorator}"
+                )
             schema_lines.append("}")
             schema_lines.append("")
 
@@ -403,13 +409,15 @@ class MigrationGenerator:
 
         for entity in self.entities:
             migration_lines.append(f"-- Create {entity.name} table")
-            migration_lines.append(f"CREATE TABLE \"{entity.name}\" (")
+            migration_lines.append(f'CREATE TABLE "{entity.name}" (')
             col_defs = []
             for col in entity.columns:
-                col_defs.append(f'    "{col.name}" {self._sql_type(col.type)}'
-                               f'{"" if col.nullable else " NOT NULL"}'
-                               f'{" PRIMARY KEY" if col.primary_key else ""}'
-                               f'{" UNIQUE" if col.unique else ""}')
+                col_defs.append(
+                    f'    "{col.name}" {self._sql_type(col.type)}'
+                    f'{"" if col.nullable else " NOT NULL"}'
+                    f'{" PRIMARY KEY" if col.primary_key else ""}'
+                    f'{" UNIQUE" if col.unique else ""}'
+                )
             migration_lines.append(",\n".join(col_defs))
             migration_lines.append(");")
             migration_lines.append("")
@@ -425,12 +433,14 @@ class MigrationGenerator:
 
         entity_lines = []
         for entity in self.entities:
-            entity_lines.extend([
-                "import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';",
-                "",
-                "@Entity()",
-                f"export class {entity.name.capitalize()} {{",
-            ])
+            entity_lines.extend(
+                [
+                    "import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';",
+                    "",
+                    "@Entity()",
+                    f"export class {entity.name.capitalize()} {{",
+                ]
+            )
 
             for col in entity.columns:
                 decorator = ""
@@ -438,7 +448,9 @@ class MigrationGenerator:
                     decorator = "@PrimaryGeneratedColumn('uuid')"
                 else:
                     col_type = self._typeorm_type(col.type)
-                    decorator = f"@Column({{ type: '{col_type}', nullable: {str(col.nullable).lower()} }})"
+                    decorator = (
+                        f"@Column({{ type: '{col_type}', nullable: {str(col.nullable).lower()} }})"
+                    )
 
                 entity_lines.append(f"  {decorator}")
                 entity_lines.append(f"  {col.name}: {self._typescript_type(col.type)};")
@@ -467,8 +479,12 @@ class MigrationGenerator:
                 migration_lines.append("                {")
                 migration_lines.append(f"                    name: '{col.name}',")
                 migration_lines.append(f"                    type: '{self._sql_type(col.type)}',")
-                migration_lines.append(f"                    isPrimary: {str(col.primary_key).lower()},")
-                migration_lines.append(f"                    isNullable: {str(col.nullable).lower()},")
+                migration_lines.append(
+                    f"                    isPrimary: {str(col.primary_key).lower()},"
+                )
+                migration_lines.append(
+                    f"                    isNullable: {str(col.nullable).lower()},"
+                )
                 migration_lines.append(f"                    isUnique: {str(col.unique).lower()},")
                 migration_lines.append("                },")
 
@@ -476,24 +492,30 @@ class MigrationGenerator:
             migration_lines.append("        }));")
             migration_lines.append("")
 
-        migration_lines.extend([
-            "    }",
-            "",
-            "    public async down(queryRunner: QueryRunner): Promise<void> {",
-            "",
-        ])
+        migration_lines.extend(
+            [
+                "    }",
+                "",
+                "    public async down(queryRunner: QueryRunner): Promise<void> {",
+                "",
+            ]
+        )
 
         for entity in self.entities:
             migration_lines.append(f"        await queryRunner.dropTable('{entity.name}');")
 
-        migration_lines.extend([
-            "",
-            "    }",
-            "}",
-        ])
+        migration_lines.extend(
+            [
+                "",
+                "    }",
+                "}",
+            ]
+        )
 
         return {
-            f"src/migrations/{timestamp}_Init.ts": "\n".join(entity_lines + ["", ""] + migration_lines),
+            f"src/migrations/{timestamp}_Init.ts": "\n".join(
+                entity_lines + ["", ""] + migration_lines
+            ),
         }
 
     def _generate_sqlalchemy_migration(self) -> dict[str, str]:
@@ -502,17 +524,17 @@ class MigrationGenerator:
 
         # models.py
         models_lines = [
-            'from sqlalchemy import Column, String, DateTime, Boolean, Integer, ForeignKey, create_engine',
-            'from sqlalchemy.ext.declarative import declarative_base',
-            'from sqlalchemy.orm import sessionmaker, relationship',
-            'import uuid',
+            "from sqlalchemy import Column, String, DateTime, Boolean, Integer, ForeignKey, create_engine",
+            "from sqlalchemy.ext.declarative import declarative_base",
+            "from sqlalchemy.orm import sessionmaker, relationship",
+            "import uuid",
             "",
             "Base = declarative_base()",
             "",
         ]
 
         for entity in self.entities:
-            models_lines.append(f'class {entity.name.capitalize()}(Base):')
+            models_lines.append(f"class {entity.name.capitalize()}(Base):")
             models_lines.append(f'    __tablename__ = "{entity.name}"')
             models_lines.append("")
 
@@ -523,7 +545,13 @@ class MigrationGenerator:
                 unique = f"unique={col.unique}" if col.unique else ""
                 default_arg = f"default={col.default}" if col.default else ""
 
-                models_lines.append(f'    {col.name} = Column({py_type}, {nullable}, {primary_key}, {unique}, {default_arg})'.replace(", True, ", ", ").replace(", False, ", ", ").replace(", )", ")"))
+                models_lines.append(
+                    f"    {col.name} = Column({py_type}, {nullable}, {primary_key}, {unique}, {default_arg})".replace(
+                        ", True, ", ", "
+                    )
+                    .replace(", False, ", ", ")
+                    .replace(", )", ")")
+                )
 
             models_lines.append("")
             models_lines.append("")
@@ -532,8 +560,8 @@ class MigrationGenerator:
         migration_lines = [
             '"""Initial migration',
             "",
-            f'Revision: {timestamp}',
-            'Create Date: ' + datetime.datetime.now().isoformat() + '',
+            f"Revision: {timestamp}",
+            "Create Date: " + datetime.datetime.now().isoformat() + "",
             '"""',
             "from alembic import op",
             "import sqlalchemy as sa",
@@ -544,23 +572,25 @@ class MigrationGenerator:
         ]
 
         for entity in self.entities:
-            migration_lines.append('    op.create_table(')
+            migration_lines.append("    op.create_table(")
             migration_lines.append(f'        "{entity.name}",')
 
             for col in entity.columns:
                 col_type = self._sqlalchemy_type(col.type)
                 migration_lines.append(
                     f'        sa.Column("{col.name}", {col_type}, '
-                    f'nullable={col.nullable}, primary_key={col.primary_key}),'
+                    f"nullable={col.nullable}, primary_key={col.primary_key}),"
                 )
             migration_lines.append("    )")
             migration_lines.append("")
 
-        migration_lines.extend([
-            "",
-            "def downgrade():",
-            "",
-        ])
+        migration_lines.extend(
+            [
+                "",
+                "def downgrade():",
+                "",
+            ]
+        )
 
         for entity in self.entities:
             migration_lines.append(f'    op.drop_table("{entity.name}")')
@@ -583,7 +613,7 @@ class MigrationGenerator:
         ]
 
         for entity in self.entities:
-            models_lines.append(f'class {entity.name.capitalize()}(models.Model):')
+            models_lines.append(f"class {entity.name.capitalize()}(models.Model):")
             models_lines.append(f'    """{entity.comment or entity.name}"""')
             models_lines.append("")
 
@@ -594,9 +624,13 @@ class MigrationGenerator:
                 default = f'default="{col.default}", ' if col.default else ""
 
                 if col.primary_key:
-                    models_lines.append('    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)')
+                    models_lines.append(
+                        "    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)"
+                    )
                 else:
-                    models_lines.append(f'    {col.name} = models.{field_type}({nullable}{unique}{default})')
+                    models_lines.append(
+                        f"    {col.name} = models.{field_type}({nullable}{unique}{default})"
+                    )
 
             models_lines.append("")
             models_lines.append("    class Meta:")
@@ -614,27 +648,27 @@ class MigrationGenerator:
             "",
             "class Migration(migrations.Migration):",
             "",
-            '    initial = True',
+            "    initial = True",
             "",
-            '    dependencies = [',
-            '    ]',
+            "    dependencies = [",
+            "    ]",
             "",
-            '    operations = [',
+            "    operations = [",
         ]
 
         for entity in self.entities:
-            migration_lines.append('        migrations.CreateModel(')
-            migration_lines.append(f'            name=\'{entity.name.capitalize()}\',')
-            migration_lines.append('            fields=[')
+            migration_lines.append("        migrations.CreateModel(")
+            migration_lines.append(f"            name='{entity.name.capitalize()}',")
+            migration_lines.append("            fields=[")
 
             for col in entity.columns:
                 field_def = self._django_migration_field(col)
-                migration_lines.append(f'                {field_def},')
+                migration_lines.append(f"                {field_def},")
 
-            migration_lines.append('            ],')
-            migration_lines.append('        ),')
+            migration_lines.append("            ],")
+            migration_lines.append("        ),")
 
-        migration_lines.append('    ]')
+        migration_lines.append("    ]")
 
         return {
             "src/models.py": "\n".join(models_lines),
@@ -648,10 +682,12 @@ class MigrationGenerator:
         # models
         models_lines = []
         for entity in self.entities:
-            models_lines.extend([
-                "module.exports = (sequelize, DataTypes) => {",
-                f"  const {entity.name.capitalize()} = sequelize.define('{entity.name}', {{",
-            ])
+            models_lines.extend(
+                [
+                    "module.exports = (sequelize, DataTypes) => {",
+                    f"  const {entity.name.capitalize()} = sequelize.define('{entity.name}', {{",
+                ]
+            )
 
             for col in entity.columns:
                 sequelize_type = self._sequelize_type(col.type)
@@ -662,15 +698,17 @@ class MigrationGenerator:
                 models_lines.append(f"      primaryKey: {str(col.primary_key).lower()},")
                 models_lines.append("    },")
 
-            models_lines.extend([
-                "  }, {",
-                f"    tableName: '{entity.name}',",
-                "    timestamps: true,",
-                "  });",
-                f"  return {entity.name.capitalize()};",
-                "};",
-                "",
-            ])
+            models_lines.extend(
+                [
+                    "  }, {",
+                    f"    tableName: '{entity.name}',",
+                    "    timestamps: true,",
+                    "  });",
+                    f"  return {entity.name.capitalize()};",
+                    "};",
+                    "",
+                ]
+            )
 
         # migration
         migration_lines = [
@@ -682,78 +720,100 @@ class MigrationGenerator:
         ]
 
         for entity in self.entities:
-            migration_lines.extend([
-                f'    await queryInterface.createTable("{entity.name}", {{',
-            ])
+            migration_lines.extend(
+                [
+                    f'    await queryInterface.createTable("{entity.name}", {{',
+                ]
+            )
 
             for col in entity.columns:
                 col_type = self._sequelize_type(col.type)
-                migration_lines.extend([
-                    f'      {col.name}: {{',
-                    f'        type: Sequelize.{col_type},',
-                    f'        allowNull: {str(col.nullable).lower()},',
-                    f'        unique: {str(col.unique).lower()},',
-                    f'        primaryKey: {str(col.primary_key).lower()},',
-                    '      },',
-                ])
+                migration_lines.extend(
+                    [
+                        f"      {col.name}: {{",
+                        f"        type: Sequelize.{col_type},",
+                        f"        allowNull: {str(col.nullable).lower()},",
+                        f"        unique: {str(col.unique).lower()},",
+                        f"        primaryKey: {str(col.primary_key).lower()},",
+                        "      },",
+                    ]
+                )
 
-            migration_lines.extend([
-                "    });",
+            migration_lines.extend(
+                [
+                    "    });",
+                    "",
+                ]
+            )
+
+        migration_lines.extend(
+            [
+                "  },",
                 "",
-            ])
-
-        migration_lines.extend([
-            "  },",
-            "",
-            "  down: async (queryInterface, Sequelize) => {",
-            "",
-        ])
+                "  down: async (queryInterface, Sequelize) => {",
+                "",
+            ]
+        )
 
         for entity in self.entities:
             migration_lines.append(f'    await queryInterface.dropTable("{entity.name}");')
 
-        migration_lines.extend([
-            "",
-            "  },",
-            "};",
-        ])
+        migration_lines.extend(
+            [
+                "",
+                "  },",
+                "};",
+            ]
+        )
 
         return {
-            f"src/models/{timestamp}-create-{self.name}.js": "\n".join(models_lines + ["", ""] + migration_lines),
+            f"src/models/{timestamp}-create-{self.name}.js": "\n".join(
+                models_lines + ["", ""] + migration_lines
+            ),
         }
 
     def _generate_mongoose_migration(self) -> dict[str, str]:
         """生成 Mongoose 迁移"""
         models_lines = []
         for entity in self.entities:
-            models_lines.extend([
-                "const mongoose = require('mongoose');",
-                "",
-                f"const {entity.name.capitalize()}Schema = new mongoose.Schema({{" if entity.name == self.entities[0].name else f"const {entity.name.capitalize()}Schema = new mongoose.Schema({{",
-            ])
+            models_lines.extend(
+                [
+                    "const mongoose = require('mongoose');",
+                    "",
+                    (
+                        f"const {entity.name.capitalize()}Schema = new mongoose.Schema({{"
+                        if entity.name == self.entities[0].name
+                        else f"const {entity.name.capitalize()}Schema = new mongoose.Schema({{"
+                    ),
+                ]
+            )
 
             for col in entity.columns:
                 mongoose_type = self._mongoose_type(col.type)
                 required = "true" if not col.nullable else "false"
                 unique = "true" if col.unique else "false"
 
-                models_lines.extend([
-                    f"  {col.name}: {{",
-                    f"    type: {mongoose_type},",
-                    f"    required: {required},",
-                    f"    unique: {unique},",
-                    "  },",
-                ])
+                models_lines.extend(
+                    [
+                        f"  {col.name}: {{",
+                        f"    type: {mongoose_type},",
+                        f"    required: {required},",
+                        f"    unique: {unique},",
+                        "  },",
+                    ]
+                )
 
-            models_lines.extend([
-                "}, {",
-                "  timestamps: true,",
-                f"  collection: '{entity.name}',",
-                "});",
-                "",
-                f"module.exports = mongoose.model('{entity.name.capitalize()}', {entity.name.capitalize()}Schema);",
-                "",
-            ])
+            models_lines.extend(
+                [
+                    "}, {",
+                    "  timestamps: true,",
+                    f"  collection: '{entity.name}',",
+                    "});",
+                    "",
+                    f"module.exports = mongoose.model('{entity.name.capitalize()}', {entity.name.capitalize()}Schema);",
+                    "",
+                ]
+            )
 
         return {
             f"src/models/{entity.name}.model.js": "\n".join(models_lines),
@@ -771,24 +831,30 @@ class MigrationGenerator:
         ]
 
         for entity in self.entities:
-            up_lines.extend([
-                f"-- Create {entity.name} table",
-                f"CREATE TABLE IF NOT EXISTS {entity.name} (",
-            ])
+            up_lines.extend(
+                [
+                    f"-- Create {entity.name} table",
+                    f"CREATE TABLE IF NOT EXISTS {entity.name} (",
+                ]
+            )
 
             col_defs = []
             for col in entity.columns:
-                col_defs.append(f"    {col.name} {self._sql_type(col.type)}"
-                               f"{'' if col.nullable else ' NOT NULL'}"
-                               f"{' PRIMARY KEY' if col.primary_key else ''}"
-                               f"{' UNIQUE' if col.unique else ''}"
-                               f"{',' if col != entity.columns[-1] else ''}")
+                col_defs.append(
+                    f"    {col.name} {self._sql_type(col.type)}"
+                    f"{'' if col.nullable else ' NOT NULL'}"
+                    f"{' PRIMARY KEY' if col.primary_key else ''}"
+                    f"{' UNIQUE' if col.unique else ''}"
+                    f"{',' if col != entity.columns[-1] else ''}"
+                )
 
             up_lines.extend(col_defs)
-            up_lines.extend([
-                ");",
-                "",
-            ])
+            up_lines.extend(
+                [
+                    ");",
+                    "",
+                ]
+            )
 
         # down migration
         down_lines = [
@@ -980,7 +1046,7 @@ class MigrationGenerator:
             args.append("max_length=255")
 
         args_str = ", ".join(args) if args else ""
-        return f'models.{field_type}({args_str})'
+        return f"models.{field_type}({args_str})"
 
     def _sequelize_type(self, col_type: str) -> str:
         """转换为 Sequelize 类型"""

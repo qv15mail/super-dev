@@ -243,15 +243,19 @@ HOST_RUNTIME_VALIDATION_OVERRIDES: dict[str, dict[str, list[str]]] = {
             "确认项目根 `CLAUDE.md`、兼容 `.claude/CLAUDE.md`、项目级 `.claude/skills/super-dev/` 与用户级 `~/.claude/skills/` 已被当前会话重新加载。",
             "确认 `/super-dev` 直接进入 Super Dev，而不是普通聊天或旁路兼容命令面。",
             "确认改文档、补充、继续修改等自然语言仍留在当前 Super Dev 流程内。",
+            "比赛模式验收时，确认 `/super-dev-seeai` 会进入 30 分钟比赛链路，并在 12 分钟内先跑出第一个可见、可点击、可截图的界面。",
+            "确认 SEEAI 若初始化失败一次，会立刻切轻量回退栈，而不是继续死磕重配置方案。",
             "若 execution_mode 为 plan-execute，确认 .super-dev/plans/ 目录可写且 PlanExecutor 已初始化。",
             "若 codex_review_enabled 为 true，确认 codex CLI 可用（运行 which codex 验证）且 Overseer 已启用。",
         ],
         "pass_criteria": [
             "Claude Code 在 `CLAUDE.md + skills` 主模型下进入并保持同一条 Super Dev 流程，兼容 commands/agents 与可选 plugin enhancement 不会造成分叉。",
+            "Claude Code 的 SEEAI 入口会保住比赛主路径：先跑出可演示界面，再补 wow 点，初始化失败会主动降级回退栈。",
             "Plan-Execute 模式下，每个阶段执行前有对应的 execution plan 文件。Overseer 审查报告在 .super-dev/overseer/ 中持续更新。",
         ],
         "resume_checklist": [
             "Claude Code 恢复时不能绕过当前确认门或返工门，并要确认重新打开的会话再次读取了 `CLAUDE.md + skills`。",
+            "若当前是 SEEAI 比赛模式，恢复后仍应保持当前回退栈与演示主路径，不要重新做重初始化方案。",
         ],
     },
     "cline": {
@@ -309,16 +313,20 @@ HOST_RUNTIME_VALIDATION_OVERRIDES: dict[str, dict[str, list[str]]] = {
             "确认 Codex CLI 当前终端就在目标项目目录里，并优先使用 `$super-dev` 显式调用 Skill。",
             "确认 Codex App/Desktop 若在 `/` 列表里出现 `super-dev`，它被当作已启用 Skill 入口，而不是项目自定义 slash 文件。",
             "确认 `super-dev:` 仍可作为 AGENTS 驱动的自然语言回退入口，但不是 Codex 官方主触发面。",
+            "比赛模式验收时，确认 `$super-dev-seeai`、App/Desktop 的 `/super-dev-seeai` 或 `super-dev-seeai:` 会进入 30 分钟比赛链路，并在 12 分钟内先跑出第一个可见、可点击、可截图的界面。",
+            "确认 SEEAI 若初始化失败一次，会立刻切轻量回退栈，而不是继续死磕重配置方案。",
             "确认会话没有先解释 skill 或退回普通聊天，而是直接进入 Super Dev 流程。",
             "若被用于 Claude-Codex 混合模式审查，确认 codex --quiet --prompt 可正常执行。",
         ],
         "pass_criteria": [
             "重开 codex 后的新会话确实加载了项目 AGENTS.md、项目级 `.agents/skills/super-dev/`、全局 AGENTS 与官方 Skills，并识别 repo plugin enhancement。",
             "无论使用 Codex App/Desktop 的 `/super-dev` Skill 入口、CLI 的 `$super-dev`，还是 `super-dev:` 回退入口，都会进入同一条 Super Dev 流程。",
+            "Codex 的 SEEAI 模式会优先保住比赛主路径：先跑出可演示界面，再补 wow 点，初始化失败会主动降级到更轻的回退栈。",
         ],
         "resume_checklist": [
             "Codex 必须在新会话里恢复，不能复用接入前的旧会话；若 App/Desktop 没看到本地 plugin 面，先确认 repo marketplace 已被当前项目加载。",
             "恢复时优先沿用当前会话表面：App/Desktop 继续从 `/` 列表选 `super-dev`，CLI 继续用 `$super-dev`；如果当前是在自然语言上下文中恢复，也要保持同一条 Super Dev 流程。",
+            "若当前是 SEEAI 比赛模式，恢复后仍应保持当前回退栈与演示主路径，不要重新做重初始化方案。",
         ],
     },
     "copilot-cli": {

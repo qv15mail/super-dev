@@ -134,7 +134,11 @@ class UIReviewReport:
                 lines.append(f"- {item}")
 
         # UI/UX 专家视角章节
-        expert_findings = [f for f in self.findings if f.title.startswith("[UI 专家]") or f.title.startswith("[UX 专家]")]
+        expert_findings = [
+            f
+            for f in self.findings
+            if f.title.startswith("[UI 专家]") or f.title.startswith("[UX 专家]")
+        ]
         if expert_findings:
             lines.extend(["", "## UI/UX ��家视角", ""])
             ui_items = [f for f in expert_findings if f.title.startswith("[UI 专家]")]
@@ -144,14 +148,18 @@ class UIReviewReport:
                 lines.append("")
                 for item in ui_items:
                     marker = item.level.upper()
-                    lines.append(f"- [{marker}] {item.title.replace('[UI 专家] ', '')}: {item.description}")
+                    lines.append(
+                        f"- [{marker}] {item.title.replace('[UI 专家] ', '')}: {item.description}"
+                    )
                 lines.append("")
             if ux_items:
                 lines.append("### UX 专家 (用户旅程/导航层级/表单设计/可访问性)")
                 lines.append("")
                 for item in ux_items:
                     marker = item.level.upper()
-                    lines.append(f"- [{marker}] {item.title.replace('[UX 专家] ', '')}: {item.description}")
+                    lines.append(
+                        f"- [{marker}] {item.title.replace('[UX 专家] ', '')}: {item.description}"
+                    )
                 lines.append("")
 
         return "\n".join(lines)
@@ -176,7 +184,9 @@ class UIReviewReport:
                 label = value.get("label", key)
                 status = "ok" if passed else "gap"
                 if expected or observed:
-                    items.append(f"{label}: {status} | expected={expected or '-'} | observed={observed or '-'}")
+                    items.append(
+                        f"{label}: {status} | expected={expected or '-'} | observed={observed or '-'}"
+                    )
                 else:
                     items.append(f"{label}: {status}")
             else:
@@ -272,7 +282,9 @@ class UIReviewReviewer:
         ux_expert_dimensions = self._collect_expert_review_dimensions("UX", "frontend")
 
         uiux_path = self.project_dir / "output" / f"{self.name}-uiux.md"
-        uiux_content = uiux_path.read_text(encoding="utf-8", errors="ignore") if uiux_path.exists() else ""
+        uiux_content = (
+            uiux_path.read_text(encoding="utf-8", errors="ignore") if uiux_path.exists() else ""
+        )
         uiux_decisions = self._extract_uiux_decisions(uiux_content)
         ui_contract = self._load_ui_contract()
 
@@ -282,24 +294,36 @@ class UIReviewReviewer:
             for file_path in source_files[:80]
         )
         preview_path = self._find_preview_file()
-        preview_content = preview_path.read_text(encoding="utf-8", errors="ignore") if preview_path else ""
+        preview_content = (
+            preview_path.read_text(encoding="utf-8", errors="ignore") if preview_path else ""
+        )
         combined_visual_content = "\n".join([uiux_content, source_content, preview_content])
         preview_summary = self._inspect_preview_html(preview_content) if preview_content else {}
         screenshot_path = self._capture_preview_screenshot(preview_path) if preview_path else None
         screenshot_metrics = self._analyze_screenshot(screenshot_path) if screenshot_path else {}
         design_tokens_path = self.project_dir / "output" / "frontend" / "design-tokens.css"
         design_tokens_content = (
-            design_tokens_path.read_text(encoding="utf-8", errors="ignore") if design_tokens_path.exists() else ""
+            design_tokens_path.read_text(encoding="utf-8", errors="ignore")
+            if design_tokens_path.exists()
+            else ""
         )
         alignment_summary: dict[str, Any] = {
             "ui_contract": {
                 "label": "UI 契约文件",
                 "passed": bool(ui_contract),
                 "expected": "output/*-ui-contract.json",
-                "observed": str(self.project_dir / "output" / f"{self.name}-ui-contract.json") if ui_contract else "",
+                "observed": (
+                    str(self.project_dir / "output" / f"{self.name}-ui-contract.json")
+                    if ui_contract
+                    else ""
+                ),
             }
         }
-        emoji_policy = ui_contract.get("emoji_policy", {}) if isinstance(ui_contract.get("emoji_policy"), dict) else {}
+        emoji_policy = (
+            ui_contract.get("emoji_policy", {})
+            if isinstance(ui_contract.get("emoji_policy"), dict)
+            else {}
+        )
         alignment_summary["emoji_policy"] = {
             "label": "Emoji 禁令",
             "passed": (
@@ -339,29 +363,36 @@ class UIReviewReviewer:
             "label": "原生能力面",
             "passed": has_native_capabilities if cross_platform_frontend else True,
             "expected": "跨平台框架需冻结原生能力面（如 provider / offline / filesystem / push / share）",
-            "observed": ", ".join(framework_playbook.get("native_capabilities", [])[:4])
-            if framework_playbook
-            else ("not required for web-only" if not cross_platform_frontend else "missing"),
+            "observed": (
+                ", ".join(framework_playbook.get("native_capabilities", [])[:4])
+                if framework_playbook
+                else ("not required for web-only" if not cross_platform_frontend else "missing")
+            ),
         }
         alignment_summary["validation_surfaces"] = {
             "label": "真实验收面",
             "passed": has_validation_surfaces if cross_platform_frontend else True,
             "expected": "跨平台框架需冻结必须验收的真实场景",
-            "observed": ", ".join(framework_playbook.get("validation_surfaces", [])[:4])
-            if framework_playbook
-            else ("not required for web-only" if not cross_platform_frontend else "missing"),
+            "observed": (
+                ", ".join(framework_playbook.get("validation_surfaces", [])[:4])
+                if framework_playbook
+                else ("not required for web-only" if not cross_platform_frontend else "missing")
+            ),
         }
         alignment_summary["delivery_evidence"] = {
             "label": "交付证据要求",
             "passed": has_delivery_evidence if cross_platform_frontend else True,
             "expected": "跨平台框架需冻结交付阶段必须沉淀的证据",
-            "observed": ", ".join(framework_playbook.get("delivery_evidence", [])[:4])
-            if framework_playbook
-            else ("not required for web-only" if not cross_platform_frontend else "missing"),
+            "observed": (
+                ", ".join(framework_playbook.get("delivery_evidence", [])[:4])
+                if framework_playbook
+                else ("not required for web-only" if not cross_platform_frontend else "missing")
+            ),
         }
         product_type = self._infer_product_type(description)
         conversational_product = any(
-            token in description.lower() for token in ("ai", "chat", "对话", "助手", "agent", "copilot")
+            token in description.lower()
+            for token in ("ai", "chat", "对话", "助手", "agent", "copilot")
         )
 
         if not uiux_content:
@@ -401,8 +432,14 @@ class UIReviewReviewer:
                 strengths.append(
                     f"已冻结 {framework_playbook.get('framework', '跨平台框架')} playbook，框架级约束进入 UI 契约。"
                 )
-            if cross_platform_frontend and framework_playbook and (
-                not has_native_capabilities or not has_validation_surfaces or not has_delivery_evidence
+            if (
+                cross_platform_frontend
+                and framework_playbook
+                and (
+                    not has_native_capabilities
+                    or not has_validation_surfaces
+                    or not has_delivery_evidence
+                )
             ):
                 missing_framework_facets = []
                 if not has_native_capabilities:
@@ -451,7 +488,9 @@ class UIReviewReviewer:
                 "Design Token 冻结输出",
                 "备选实现路径",
             ]
-            missing_decision_markers = [item for item in ui_decision_markers if item not in uiux_content]
+            missing_decision_markers = [
+                item for item in ui_decision_markers if item not in uiux_content
+            ]
             if missing_decision_markers:
                 findings.append(
                     UIReviewFinding(
@@ -496,7 +535,9 @@ class UIReviewReviewer:
             else:
                 strengths.append("UI/UX 文档已覆盖多端策略与商业级质量门禁。")
             required_platform_terms = ("WEB", "H5", "微信小程序", "APP", "桌面端")
-            missing_platform_terms = [term for term in required_platform_terms if term not in uiux_content]
+            missing_platform_terms = [
+                term for term in required_platform_terms if term not in uiux_content
+            ]
             if missing_platform_terms:
                 findings.append(
                     UIReviewFinding(
@@ -512,12 +553,17 @@ class UIReviewReviewer:
                 strengths.append("UI/UX 文档已覆盖 Web/H5/微信小程序/APP/桌面端 五端口径。")
 
         selected_library = self._resolve_primary_library(ui_contract, uiux_decisions)
-        expected_library = (selected_library or profile.get("primary_library", {}).get("name", "")).lower()
+        expected_library = (
+            selected_library or profile.get("primary_library", {}).get("name", "")
+        ).lower()
         package_json = self._read_package_json()
-        dependency_blob = json.dumps(package_json, ensure_ascii=False).lower() if package_json else ""
+        dependency_blob = (
+            json.dumps(package_json, ensure_ascii=False).lower() if package_json else ""
+        )
         if package_json:
             if "shadcn" in expected_library and not any(
-                token in dependency_blob for token in ("@radix-ui", "tailwindcss", "class-variance-authority")
+                token in dependency_blob
+                for token in ("@radix-ui", "tailwindcss", "class-variance-authority")
             ):
                 findings.append(
                     UIReviewFinding(
@@ -530,7 +576,9 @@ class UIReviewReviewer:
                 )
                 score -= 8
             else:
-                strengths.append(f"依赖层已基本匹配推荐组件生态：{selected_library or profile['primary_library']['name']}。")
+                strengths.append(
+                    f"依赖层已基本匹配推荐组件生态：{selected_library or profile['primary_library']['name']}。"
+                )
             frontend_token_expectations = {
                 "miniapp": ("tdesign", "taro", "uniapp", "uni-app", "vant-weapp", "nutui"),
                 "desktop": ("electron", "tauri", "wails"),
@@ -538,7 +586,9 @@ class UIReviewReviewer:
                 "flutter": ("flutter", "dart"),
                 "swiftui": ("swiftui", "xcode"),
             }
-            expected_tokens = frontend_token_expectations.get(profile.get("normalized_frontend", ""))
+            expected_tokens = frontend_token_expectations.get(
+                profile.get("normalized_frontend", "")
+            )
             if expected_tokens and not any(token in dependency_blob for token in expected_tokens):
                 findings.append(
                     UIReviewFinding(
@@ -588,7 +638,10 @@ class UIReviewReviewer:
             )
             expected_icon_tokens = self._expected_icon_tokens(icon_system)
             if expected_icon_tokens:
-                icon_aligned = any(token in dependency_blob or token in source_content.lower() for token in expected_icon_tokens)
+                icon_aligned = any(
+                    token in dependency_blob or token in source_content.lower()
+                    for token in expected_icon_tokens
+                )
                 alignment_summary["icon_system"] = {
                     "label": "图标系统",
                     "passed": icon_aligned,
@@ -613,7 +666,9 @@ class UIReviewReviewer:
             expected_font_tokens = self._expected_font_tokens(font_pair)
             if expected_font_tokens:
                 source_visual_content = "\n".join([source_content, preview_content]).lower()
-                matched_fonts = [token for token in expected_font_tokens if token in source_visual_content]
+                matched_fonts = [
+                    token for token in expected_font_tokens if token in source_visual_content
+                ]
                 alignment_summary["font_pair"] = {
                     "label": "字体组合",
                     "passed": bool(matched_fonts),
@@ -634,9 +689,14 @@ class UIReviewReviewer:
 
             primary_library = selected_library
             expected_library_tokens = self._expected_library_tokens(primary_library)
-            library_aligned = any(
-                token in dependency_blob or token in source_content.lower() for token in expected_library_tokens
-            ) if expected_library_tokens else False
+            library_aligned = (
+                any(
+                    token in dependency_blob or token in source_content.lower()
+                    for token in expected_library_tokens
+                )
+                if expected_library_tokens
+                else False
+            )
             if expected_library_tokens:
                 alignment_summary["component_ecosystem"] = {
                     "label": "组件生态",
@@ -672,7 +732,11 @@ class UIReviewReviewer:
                     "observed": (
                         ", ".join(matched_imports[:8])
                         if matched_imports
-                        else ("not enforced for static scaffold" if not should_enforce_component_imports else "")
+                        else (
+                            "not enforced for static scaffold"
+                            if not should_enforce_component_imports
+                            else ""
+                        )
                     ),
                 }
             if should_enforce_component_imports and not matched_imports and source_files:
@@ -719,7 +783,11 @@ class UIReviewReviewer:
                     "label": "Design Token 接入",
                     "passed": design_token_reference_ready,
                     "expected": str(design_tokens_path),
-                    "observed": "design-tokens.css / CSS variables wired" if design_token_reference_ready else "",
+                    "observed": (
+                        "design-tokens.css / CSS variables wired"
+                        if design_token_reference_ready
+                        else ""
+                    ),
                 }
                 if not design_token_reference_ready:
                     findings.append(
@@ -729,7 +797,11 @@ class UIReviewReviewer:
                             description="虽然已经生成了 UI 契约，但源码和预览页没有明确体现 design-tokens.css 或 CSS variables 的接入，宿主仍可能在实现阶段直接写死视觉样式。",
                             recommendation="确保前端入口显式接入 design-tokens.css，并在组件和样式中优先使用 var(--color-*) / var(--space-*) / var(--font-*) 等 token。",
                             evidence=[
-                                str(design_tokens_path) if design_tokens_path.exists() else "design-tokens.css missing",
+                                (
+                                    str(design_tokens_path)
+                                    if design_tokens_path.exists()
+                                    else "design-tokens.css missing"
+                                ),
                                 "missing design token reference in source or preview",
                             ],
                         )
@@ -769,7 +841,11 @@ class UIReviewReviewer:
 
                 token_variables = self._extract_token_variables(design_tokens_content)
                 if token_variables:
-                    referenced = [token for token in token_variables if token in source_content or token in preview_content]
+                    referenced = [
+                        token
+                        for token in token_variables
+                        if token in source_content or token in preview_content
+                    ]
                     alignment_summary["token_usage"] = {
                         "label": "冻结 Token 使用率",
                         "passed": len(referenced) >= min(2, len(token_variables)),
@@ -788,8 +864,14 @@ class UIReviewReviewer:
                         )
                         score -= 8
 
-                hardcoded_hex_colors = sorted({item for item in self.HEX_COLOR_RE.findall(source_content)})[:12]
-                if hardcoded_hex_colors and "var(--color-" not in source_content and "--color-" not in design_tokens_content:
+                hardcoded_hex_colors = sorted(
+                    {item for item in self.HEX_COLOR_RE.findall(source_content)}
+                )[:12]
+                if (
+                    hardcoded_hex_colors
+                    and "var(--color-" not in source_content
+                    and "--color-" not in design_tokens_content
+                ):
                     findings.append(
                         UIReviewFinding(
                             level="medium",
@@ -814,7 +896,9 @@ class UIReviewReviewer:
                 )
                 score -= 18
 
-            emoji_hits = sorted({item for item in self.EMOJI_RE.findall(combined_visual_content)})[:10]
+            emoji_hits = sorted({item for item in self.EMOJI_RE.findall(combined_visual_content)})[
+                :10
+            ]
             if emoji_hits:
                 findings.append(
                     UIReviewFinding(
@@ -827,7 +911,9 @@ class UIReviewReviewer:
                 )
                 score -= 24
 
-            clone_hits = sorted({item for item in self.CLAUDE_CLONE_RE.findall(source_content)})[:10]
+            clone_hits = sorted({item for item in self.CLAUDE_CLONE_RE.findall(source_content)})[
+                :10
+            ]
             if preview_summary or source_files:
                 expected_layout = "非聊天壳层，按产品类型组织导航、主体内容和关键动作"
                 observed_layout_parts = []
@@ -865,12 +951,24 @@ class UIReviewReviewer:
                     "expected": expected_layout,
                     "observed": " | ".join(observed_layout_parts),
                 }
-                navigation_shell_passed = bool(nav_markers) or bool(preview_summary.get("nav_links", 0))
+                navigation_shell_passed = bool(nav_markers) or bool(
+                    preview_summary.get("nav_links", 0)
+                )
                 if clone_hits and not conversational_product:
                     navigation_shell_passed = False
                 elif product_type in {"dashboard", "saas"}:
                     navigation_shell_passed = navigation_shell_passed and (
-                        any(marker in nav_markers for marker in ("sidebar", "topbar", "header", "nav", "breadcrumb", "appshell"))
+                        any(
+                            marker in nav_markers
+                            for marker in (
+                                "sidebar",
+                                "topbar",
+                                "header",
+                                "nav",
+                                "breadcrumb",
+                                "appshell",
+                            )
+                        )
                         or bool(preview_summary.get("nav_links", 0))
                     )
                 alignment_summary["navigation_shell"] = {
@@ -886,7 +984,8 @@ class UIReviewReviewer:
                             title="源码缺少稳定的导航骨架",
                             description="源码和预览里没有足够明确的导航、header、sidebar 或 breadcrumb 信号，页面容易退化成只堆内容的单块界面。",
                             recommendation="为当前产品类型补齐稳定的导航骨架，在源码入口明确 header/nav/sidebar/breadcrumb 等结构，而不是只靠内容块临时拼接。",
-                            evidence=nav_markers[:6] or [f"preview_nav_links={preview_summary.get('nav_links', 0)}"],
+                            evidence=nav_markers[:6]
+                            or [f"preview_nav_links={preview_summary.get('nav_links', 0)}"],
                         )
                     )
                     score -= 8
@@ -916,7 +1015,9 @@ class UIReviewReviewer:
                 "observed": ", ".join(banned_hits[:10]),
             }
 
-            missing_state_terms = [item for item in self.STATE_KEYWORDS if item not in source_content.lower()]
+            missing_state_terms = [
+                item for item in self.STATE_KEYWORDS if item not in source_content.lower()
+            ]
             if len(missing_state_terms) >= 4:
                 findings.append(
                     UIReviewFinding(
@@ -931,8 +1032,13 @@ class UIReviewReviewer:
             else:
                 strengths.append("源码中已体现出多态状态处理。")
 
-            if any(term in description.lower() for term in ("官网", "official website", "landing", "营销")):
-                marketing_hits = sum(1 for item in self.MARKETING_KEYWORDS if item in source_content.lower())
+            if any(
+                term in description.lower()
+                for term in ("官网", "official website", "landing", "营销")
+            ):
+                marketing_hits = sum(
+                    1 for item in self.MARKETING_KEYWORDS if item in source_content.lower()
+                )
                 if marketing_hits < 2:
                     findings.append(
                         UIReviewFinding(
@@ -956,7 +1062,10 @@ class UIReviewReviewer:
                         title="可预览页面结构过于单薄",
                         description="预览页的主结构层级不足，页面更像占位原型而不是商业级成品页面。",
                         recommendation="补齐 Hero 之外的关键模块，至少形成价值、证据、功能和下一步动作的完整结构。",
-                        evidence=[f"sections={preview_summary['sections']}", f"headings={preview_summary['headings']}"],
+                        evidence=[
+                            f"sections={preview_summary['sections']}",
+                            f"headings={preview_summary['headings']}",
+                        ],
                     )
                 )
                 score -= 8
@@ -970,7 +1079,10 @@ class UIReviewReviewer:
                         title="页面层级不足，排版节奏偏平",
                         description="虽然页面已经拆成多个分区，但标题层级不足，信息节奏会更像占位稿而不是商业成品。",
                         recommendation="为关键分区补足 h1/h2/h3 层级与辅助文案，拉开版式节奏。",
-                        evidence=[f"sections={preview_summary['sections']}", f"headings={preview_summary['headings']}"],
+                        evidence=[
+                            f"sections={preview_summary['sections']}",
+                            f"headings={preview_summary['headings']}",
+                        ],
                     )
                 )
                 score -= 6
@@ -1030,7 +1142,11 @@ class UIReviewReviewer:
                     )
                     score -= 8
 
-            if preview_summary["media"] == 0 and self._infer_product_type(description) in {"landing", "saas", "ecommerce"}:
+            if preview_summary["media"] == 0 and self._infer_product_type(description) in {
+                "landing",
+                "saas",
+                "ecommerce",
+            }:
                 findings.append(
                     UIReviewFinding(
                         level="medium",
@@ -1042,7 +1158,11 @@ class UIReviewReviewer:
                 score -= 8
 
             product_type = self._infer_product_type(description)
-            if preview_summary["trust_hits"] < 2 and product_type in {"landing", "saas", "ecommerce"}:
+            if preview_summary["trust_hits"] < 2 and product_type in {
+                "landing",
+                "saas",
+                "ecommerce",
+            }:
                 findings.append(
                     UIReviewFinding(
                         level="medium",
@@ -1068,7 +1188,9 @@ class UIReviewReviewer:
                 )
                 score -= 4
         else:
-            notes.append("未检测到 preview.html 或 output/frontend/index.html，未执行结构级视觉审查。")
+            notes.append(
+                "未检测到 preview.html 或 output/frontend/index.html，未执行结构级视觉审查。"
+            )
 
         if screenshot_path and screenshot_metrics:
             notes.append(f"已生成预览截图: {screenshot_path}")
@@ -1183,7 +1305,8 @@ class UIReviewReviewer:
                 "shadow": ("--shadow-", "box-shadow-", "shadow-"),
             }
             missing_categories = [
-                cat for cat, tokens in token_categories.items()
+                cat
+                for cat, tokens in token_categories.items()
                 if not any(t in combined for t in tokens)
             ]
             if len(missing_categories) >= 3:
@@ -1214,7 +1337,16 @@ class UIReviewReviewer:
                 )
 
             # 组件状态完整性（UI 专家更严格的标准）
-            ui_state_keywords = ("hover", "focus", "active", "disabled", "loading", "error", "empty", "success")
+            ui_state_keywords = (
+                "hover",
+                "focus",
+                "active",
+                "disabled",
+                "loading",
+                "error",
+                "empty",
+                "success",
+            )
             covered_states = [kw for kw in ui_state_keywords if kw in combined]
             if len(covered_states) < 4 and source_content:
                 findings.append(
@@ -1254,9 +1386,17 @@ class UIReviewReviewer:
         if ux_expert_dimensions:
             # 用户旅程：检查核心任务流信号
             journey_signals = (
-                "onboarding", "wizard", "stepper", "step-",
-                "progress", "breadcrumb", "flow", "funnel",
-                "引导", "步骤", "流程",
+                "onboarding",
+                "wizard",
+                "stepper",
+                "step-",
+                "progress",
+                "breadcrumb",
+                "flow",
+                "funnel",
+                "引导",
+                "步骤",
+                "流程",
             )
             journey_hits = sum(1 for s in journey_signals if s in combined)
             if journey_hits == 0 and source_content:
@@ -1287,9 +1427,16 @@ class UIReviewReviewer:
             has_forms = any(s in combined for s in form_signals)
             if has_forms:
                 validation_signals = (
-                    "validation", "validate", "error-message", "field-error",
-                    "invalid", "required", "pattern=", "helpertext",
-                    "errormessage", "formerror",
+                    "validation",
+                    "validate",
+                    "error-message",
+                    "field-error",
+                    "invalid",
+                    "required",
+                    "pattern=",
+                    "helpertext",
+                    "errormessage",
+                    "formerror",
                 )
                 has_validation = any(s in combined for s in validation_signals)
                 if not has_validation:
@@ -1304,9 +1451,16 @@ class UIReviewReviewer:
 
             # 可访问性：检查 WCAG 基础信号
             a11y_signals = (
-                "aria-", "role=", "sr-only", "screen-reader",
-                "alt=", "tabindex", "focus-visible", "focus-trap",
-                "labelledby", "describedby",
+                "aria-",
+                "role=",
+                "sr-only",
+                "screen-reader",
+                "alt=",
+                "tabindex",
+                "focus-visible",
+                "focus-trap",
+                "labelledby",
+                "describedby",
             )
             a11y_hits = sum(1 for s in a11y_signals if s in combined)
             if a11y_hits < 2 and source_content:
@@ -1326,7 +1480,18 @@ class UIReviewReviewer:
         return findings
 
     def _collect_frontend_files(self) -> list[Path]:
-        allowed_suffixes = {".tsx", ".ts", ".jsx", ".js", ".vue", ".svelte", ".css", ".scss", ".less", ".html"}
+        allowed_suffixes = {
+            ".tsx",
+            ".ts",
+            ".jsx",
+            ".js",
+            ".vue",
+            ".svelte",
+            ".css",
+            ".scss",
+            ".less",
+            ".html",
+        }
         excluded_dirs = {
             "node_modules",
             ".git",
@@ -1396,7 +1561,9 @@ class UIReviewReviewer:
 
         return screenshot_path if screenshot_path.exists() else None
 
-    def _analyze_screenshot(self, screenshot_path: Path | None) -> dict[str, float] | dict[str, int]:
+    def _analyze_screenshot(
+        self, screenshot_path: Path | None
+    ) -> dict[str, float] | dict[str, int]:
         if not screenshot_path or not screenshot_path.exists():
             return {}
         try:
@@ -1432,7 +1599,10 @@ class UIReviewReviewer:
         }
 
     def _read_package_json(self) -> dict[str, Any] | None:
-        for candidate in (self.project_dir / "package.json", self.project_dir / "frontend" / "package.json"):
+        for candidate in (
+            self.project_dir / "package.json",
+            self.project_dir / "frontend" / "package.json",
+        ):
             if candidate.exists():
                 try:
                     return json.loads(candidate.read_text(encoding="utf-8"))
@@ -1465,9 +1635,13 @@ class UIReviewReviewer:
 
     def _infer_product_type(self, description: str) -> str:
         text = description.lower()
-        if any(word in text for word in ["dashboard", "仪表盘", "后台", "admin", "工作台", "workspace"]):
+        if any(
+            word in text for word in ["dashboard", "仪表盘", "后台", "admin", "工作台", "workspace"]
+        ):
             return "dashboard"
-        if any(word in text for word in ["landing", "落地页", "营销页", "官网", "official website"]):
+        if any(
+            word in text for word in ["landing", "落地页", "营销页", "官网", "official website"]
+        ):
             return "landing"
         if any(word in text for word in ["saas", "平台", "platform", "软件服务"]):
             return "saas"
@@ -1506,7 +1680,9 @@ class UIReviewReviewer:
         return "modern"
 
     def _is_cross_platform_frontend(self, frontend: str) -> bool:
-        normalized = UIIntelligenceAdvisor.FRONTEND_ALIASES.get(frontend.lower().strip(), frontend.lower().strip())
+        normalized = UIIntelligenceAdvisor.FRONTEND_ALIASES.get(
+            frontend.lower().strip(), frontend.lower().strip()
+        )
         return normalized in {"miniapp", "react-native", "flutter", "desktop"}
 
     def _framework_playbook_complete(self, playbook: dict[str, Any]) -> bool:
@@ -1593,7 +1769,9 @@ class UIReviewReviewer:
             return True
         if "var(--color-" in combined or "var(--space-" in combined or "var(--font-" in combined:
             return True
-        if design_tokens_content and ("--color-" in design_tokens_content or "--font-" in design_tokens_content):
+        if design_tokens_content and (
+            "--color-" in design_tokens_content or "--font-" in design_tokens_content
+        ):
             return "var(--" in combined
         return False
 
@@ -1647,7 +1825,11 @@ class UIReviewReviewer:
     def _extract_token_variables(self, design_tokens_content: str) -> list[str]:
         if not design_tokens_content:
             return []
-        matches = re.findall(r"(--(?:color|space|font|radius|shadow)-[a-z0-9-]+)\s*:", design_tokens_content, flags=re.IGNORECASE)
+        matches = re.findall(
+            r"(--(?:color|space|font|radius|shadow)-[a-z0-9-]+)\s*:",
+            design_tokens_content,
+            flags=re.IGNORECASE,
+        )
         ordered = []
         seen: set[str] = set()
         for item in matches:
@@ -1713,7 +1895,12 @@ class UIReviewReviewer:
         if "shadcn" in lowered or "radix" in lowered:
             return ("@/components/ui", "/components/ui/", "components/ui/", "@radix-ui")
         if "magic ui" in lowered:
-            return ("magicui", "@/components/magicui", "/components/magicui/", "components/magicui/")
+            return (
+                "magicui",
+                "@/components/magicui",
+                "/components/magicui/",
+                "components/magicui/",
+            )
         if "aceternity" in lowered:
             return ("aceternity", "@/components/ui", "/components/ui/")
         if "daisyui" in lowered:
@@ -1802,21 +1989,29 @@ class UIReviewReviewer:
     ) -> dict[str, Any]:
         framework = str(framework_playbook.get("framework") or "").strip()
         expected_tokens = self._expected_framework_tokens(framework)
-        combined = "\n".join([dependency_blob.lower(), source_content.lower(), preview_content.lower()])
+        combined = "\n".join(
+            [dependency_blob.lower(), source_content.lower(), preview_content.lower()]
+        )
         matched = [token for token in expected_tokens if token and token in combined]
         required_hits = 2 if framework in {"React Native", "Flutter", "Desktop Web Shell"} else 3
         passed = len(matched) >= required_hits if expected_tokens else bool(framework)
         return {
             "label": "框架 Playbook 执行",
             "passed": passed,
-            "expected": ", ".join(expected_tokens[:6]) if expected_tokens else framework or "framework signals",
+            "expected": (
+                ", ".join(expected_tokens[:6])
+                if expected_tokens
+                else framework or "framework signals"
+            ),
             "observed": ", ".join(matched[:8]),
         }
 
     def _extract_import_sources(self, source_content: str) -> list[str]:
         if not source_content:
             return []
-        matches = re.findall(r"(?:from\s+['\"]([^'\"]+)['\"]|import\s+['\"]([^'\"]+)['\"])", source_content)
+        matches = re.findall(
+            r"(?:from\s+['\"]([^'\"]+)['\"]|import\s+['\"]([^'\"]+)['\"])", source_content
+        )
         imports: list[str] = []
         seen: set[str] = set()
         for left, right in matches:

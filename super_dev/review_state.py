@@ -106,7 +106,9 @@ def load_recent_workflow_snapshots(
     history_dir = workflow_state_history_dir(project_dir)
     if not history_dir.exists():
         return []
-    files = sorted(history_dir.glob("workflow-state-*.json"), key=lambda path: path.name, reverse=True)
+    files = sorted(
+        history_dir.glob("workflow-state-*.json"), key=lambda path: path.name, reverse=True
+    )
     if not files:
         latest_file = latest_workflow_snapshot_file(project_dir)
         files = [latest_file] if latest_file.exists() else []
@@ -180,7 +182,9 @@ def load_recent_workflow_events(
 def describe_workflow_event(payload: dict[str, Any]) -> str:
     event_name = str(payload.get("event", "")).strip()
     label = _WORKFLOW_EVENT_LABELS.get(event_name, event_name or "workflow event")
-    step = str(payload.get("current_step_label", "")).strip() or str(payload.get("status", "")).strip()
+    step = (
+        str(payload.get("current_step_label", "")).strip() or str(payload.get("status", "")).strip()
+    )
     if step:
         return f"{label} · {step}"
     return label
@@ -205,7 +209,9 @@ def load_recent_operational_timeline(
     max_items = max(limit, 0)
     for item in load_recent_workflow_snapshots(project_dir, limit=max_items):
         timestamp = str(item.get("updated_at", "")).strip() or _utc_now()
-        step = str(item.get("current_step_label", "")).strip() or str(item.get("status", "")).strip()
+        step = (
+            str(item.get("current_step_label", "")).strip() or str(item.get("status", "")).strip()
+        )
         timeline.append(
             {
                 "timestamp": timestamp,

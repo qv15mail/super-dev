@@ -6,6 +6,13 @@ import json
 from pathlib import Path
 
 from .. import __version__
+from ..seeai_design_system import (
+    SEEAI_EXECUTION_GUARDRAILS,
+    SEEAI_FAILURE_PROTOCOL,
+    SEEAI_MODULE_TRUTH_RULES,
+    get_seeai_archetype_playbooks,
+    get_seeai_design_packs,
+)
 from ..skills.skill_template import SkillTemplate
 
 
@@ -837,6 +844,17 @@ class IntegrationManagerContentMixin:
                 "- 如果 `/super-dev-seeai` 尚未出现在命令面板，直接使用 `super-dev-seeai: <需求>` 文本入口，不要等待命令索引刷新。\n"
                 "- OpenClaw 比赛态只在 sprint 末段再调用质量/状态 Tool 做收口，中段优先把主作品做出来，减少工具切换打断。\n\n"
             )
+        design_pack_lines = "\n".join(
+            f"- {pack.label}：{pack.fit_for}；守卫：{pack.guardrail}"
+            for pack in get_seeai_design_packs()
+        )
+        playbook_lines = "\n".join(
+            f"- {playbook.label}：检查点={playbook.runtime_checkpoint}；回退栈={playbook.fallback_stack}"
+            for playbook in get_seeai_archetype_playbooks()
+        )
+        execution_guardrails = "\n".join(f"- {item}" for item in SEEAI_EXECUTION_GUARDRAILS)
+        module_truth_rules = "\n".join(f"- {item}" for item in SEEAI_MODULE_TRUTH_RULES)
+        failure_protocol = "\n".join(f"- {item}" for item in SEEAI_FAILURE_PROTOCOL)
         return (
             f"# /super-dev-seeai ({target})\n\n"
             "在当前项目触发 Super Dev SEEAI 赛事极速版。\n\n"
@@ -893,6 +911,17 @@ class IntegrationManagerContentMixin:
             "- 提到玩法、得分、胜负、闯关、点击反馈，默认按小游戏类处理。\n"
             "- 提到生成、分析、查询、输入输出、结果页、效率提升，默认按工具类处理。\n"
             "- 如果需求跨多类，先选最容易让评委记住的那一类做主轴。\n\n"
+            "## 比赛设计包（先选后做）\n"
+            "- 进入 SEEAI 后必须先锁 1 套视觉包，再推进实现，不允许自由混搭到页面变丑。\n"
+            f"{design_pack_lines}\n\n"
+            "## 快而稳的执行守卫\n"
+            f"{execution_guardrails}\n\n"
+            "## 模块真实生效规则\n"
+            f"{module_truth_rules}\n\n"
+            "## 题型运行检查点与回退栈\n"
+            f"{playbook_lines}\n\n"
+            "## 失败优先回退协议\n"
+            f"{failure_protocol}\n\n"
             "## 降级策略\n"
             "- 如果真实后端会拖慢交付，优先用本地 mock、JSON、内存态或静态数据把演示路径跑通。\n"
             "- 如果鉴权、支付、上传等不是评审主轴，优先做高保真演示流，不强行接完整生产链路。\n"

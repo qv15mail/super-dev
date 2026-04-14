@@ -70,7 +70,9 @@ class ProductAuditReport:
     @property
     def next_actions(self) -> list[str]:
         actions: list[str] = []
-        for finding in sorted(self.findings, key=lambda item: _severity_weight(item.severity), reverse=True)[:5]:
+        for finding in sorted(
+            self.findings, key=lambda item: _severity_weight(item.severity), reverse=True
+        )[:5]:
             actions.append(f"[{finding.owner}/{finding.severity}] {finding.recommendation}")
         if not actions:
             actions.append("当前产品审查通过，可继续执行质量门禁与交付流程。")
@@ -135,7 +137,11 @@ class ProductAuditBuilder:
     DOC_MARKERS = {
         "docs/QUICKSTART.md": ["super-dev start --idea", "当前阶段是 `research`"],
         "docs/HOST_USAGE_GUIDE.md": ["super-dev start --idea", "当前阶段是 `research`"],
-        "docs/WORKFLOW_GUIDE.md": ["super-dev review docs", "super-dev run --resume", "super-dev review quality"],
+        "docs/WORKFLOW_GUIDE.md": [
+            "super-dev review docs",
+            "super-dev run --resume",
+            "super-dev review quality",
+        ],
         "docs/PRODUCT_AUDIT.md": ["super-dev product-audit", "proof-pack", "release readiness"],
     }
 
@@ -162,7 +168,9 @@ class ProductAuditBuilder:
         md_path = base.with_suffix(".md")
         json_path = base.with_suffix(".json")
         md_path.write_text(report.to_markdown(), encoding="utf-8")
-        json_path.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        json_path.write_text(
+            json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         return {"markdown": md_path, "json": json_path}
 
     def _collect_strengths(self) -> list[str]:
@@ -291,7 +299,11 @@ class ProductAuditBuilder:
                     title="缺少顶级 Product Agent",
                     summary="当前专家体系缺少站在全局产品视角汇总审查、串联交互与交付闭环的顶级角色。",
                     recommendation="增加 `PRODUCT` 角色，并让其参与首次上手、产品审查和功能缺口识别。",
-                    file_refs=["super_dev/experts/service.py", "super_dev/orchestrator/experts.py", "super_dev/cli.py"],
+                    file_refs=[
+                        "super_dev/experts/service.py",
+                        "super_dev/orchestrator/experts.py",
+                        "super_dev/cli.py",
+                    ],
                 )
             )
         return findings

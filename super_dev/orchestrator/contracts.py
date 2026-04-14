@@ -94,12 +94,16 @@ class PipelineContractReport:
         if self.failure_reason:
             lines.append(f"- Failure reason: {self.failure_reason}")
         lines.extend(["", "## Stage Evidence", ""])
-        lines.extend(["| Stage | Name | Status | Inputs | Outputs |", "|:---|:---|:---:|:---|:---|"])
+        lines.extend(
+            ["| Stage | Name | Status | Inputs | Outputs |", "|:---|:---|:---:|:---|:---|"]
+        )
         for stage in self.stages:
             status = "PASS" if stage.success else "FAIL"
             input_text = "<br/>".join(stage.inputs) if stage.inputs else "-"
             output_text = "<br/>".join(stage.outputs) if stage.outputs else "-"
-            lines.append(f"| {stage.stage} | {stage.title} | {status} | {input_text} | {output_text} |")
+            lines.append(
+                f"| {stage.stage} | {stage.title} | {status} | {input_text} | {output_text} |"
+            )
         lines.append("")
         return "\n".join(lines)
 
@@ -108,6 +112,8 @@ class PipelineContractReport:
         output_dir.mkdir(parents=True, exist_ok=True)
         json_file = output_dir / f"{self.project_name}-pipeline-contract.json"
         md_file = output_dir / f"{self.project_name}-pipeline-contract.md"
-        json_file.write_text(json.dumps(self.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        json_file.write_text(
+            json.dumps(self.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         md_file.write_text(self.to_markdown(), encoding="utf-8")
         return {"json": json_file, "markdown": md_file}

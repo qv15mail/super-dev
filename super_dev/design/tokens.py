@@ -7,7 +7,6 @@
 """
 
 
-
 class TokenGenerator:
     """
     Design Token 生成器

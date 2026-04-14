@@ -26,7 +26,7 @@ class ArtifactSpec:
 class DeliveryPackager:
     """交付包生成器"""
 
-    def __init__(self, project_dir: Path, name: str, version: str = "2.3.7"):
+    def __init__(self, project_dir: Path, name: str, version: str = "2.3.8"):
         self.project_dir = Path(project_dir).resolve()
         self.name = name
         self.version = version
@@ -134,13 +134,21 @@ class DeliveryPackager:
             ArtifactSpec(output_dir / f"{self.name}-quality-gate.md", True, "缺少质量门禁报告"),
             ArtifactSpec(output_dir / f"{self.name}-code-review.md", True, "缺少代码审查指南"),
             ArtifactSpec(output_dir / f"{self.name}-ai-prompt.md", True, "缺少 AI 提示词"),
-            ArtifactSpec(output_dir / f"{self.name}-task-execution.md", True, "缺少 Spec 任务执行报告"),
-            ArtifactSpec(output_dir / f"{self.name}-frontend-runtime.md", True, "缺少前端运行验证报告"),
-            ArtifactSpec(output_dir / f"{self.name}-frontend-runtime.json", True, "缺少前端运行验证数据"),
+            ArtifactSpec(
+                output_dir / f"{self.name}-task-execution.md", True, "缺少 Spec 任务执行报告"
+            ),
+            ArtifactSpec(
+                output_dir / f"{self.name}-frontend-runtime.md", True, "缺少前端运行验证报告"
+            ),
+            ArtifactSpec(
+                output_dir / f"{self.name}-frontend-runtime.json", True, "缺少前端运行验证数据"
+            ),
             ArtifactSpec(self.project_dir / "preview.html", True, "缺少前端预览页"),
             ArtifactSpec(output_dir / "frontend" / "index.html", True, "缺少前端演示页面"),
             ArtifactSpec(output_dir / "frontend" / "styles.css", True, "缺少前端演示样式"),
-            ArtifactSpec(output_dir / "frontend" / "design-tokens.css", True, "缺少前端 Design Token 样式"),
+            ArtifactSpec(
+                output_dir / "frontend" / "design-tokens.css", True, "缺少前端 Design Token 样式"
+            ),
             ArtifactSpec(output_dir / "frontend" / "app.js", True, "缺少前端演示脚本"),
             ArtifactSpec(self.project_dir / "backend" / "API_CONTRACT.md", True, "缺少 API 契约"),
             ArtifactSpec(self.project_dir / ".env.deploy.example", True, "缺少部署环境模板"),
@@ -236,9 +244,7 @@ class DeliveryPackager:
         if isinstance(missing, list) and missing:
             for item in missing:
                 if isinstance(item, dict):
-                    lines.append(
-                        f"- {item.get('path', 'unknown')}: {item.get('reason', '')}"
-                    )
+                    lines.append(f"- {item.get('path', 'unknown')}: {item.get('reason', '')}")
         else:
             lines.append("- 无")
         lines.append("")
@@ -288,7 +294,9 @@ class DeliveryPackager:
         configs: dict[str, str] = {}
 
         # --- Deployment ---
-        configs["deployment.yaml"] = f"""apiVersion: apps/v1
+        configs[
+            "deployment.yaml"
+        ] = f"""apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {app_label}
@@ -361,7 +369,9 @@ spec:
 """
 
         # --- Service ---
-        configs["service.yaml"] = f"""apiVersion: v1
+        configs[
+            "service.yaml"
+        ] = f"""apiVersion: v1
 kind: Service
 metadata:
   name: {app_label}
@@ -379,7 +389,9 @@ spec:
 """
 
         # --- Ingress ---
-        configs["ingress.yaml"] = f"""apiVersion: networking.k8s.io/v1
+        configs[
+            "ingress.yaml"
+        ] = f"""apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {app_label}
@@ -411,7 +423,9 @@ spec:
 """
 
         # --- HPA ---
-        configs["hpa.yaml"] = f"""apiVersion: autoscaling/v2
+        configs[
+            "hpa.yaml"
+        ] = f"""apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: {app_label}
@@ -453,7 +467,9 @@ spec:
 """
 
         # --- ConfigMap placeholder ---
-        configs["configmap.yaml"] = f"""apiVersion: v1
+        configs[
+            "configmap.yaml"
+        ] = f"""apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {app_label}-config
@@ -466,7 +482,9 @@ data:
 """
 
         # --- Secret placeholder ---
-        configs["secret.yaml"] = f"""apiVersion: v1
+        configs[
+            "secret.yaml"
+        ] = f"""apiVersion: v1
 kind: Secret
 metadata:
   name: {app_label}-secrets

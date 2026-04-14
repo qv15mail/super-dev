@@ -239,9 +239,7 @@ class Overseer:
 
         if quality_score < self.quality_threshold:
             gap = self.quality_threshold - quality_score
-            severity = (
-                DeviationSeverity.HIGH if gap >= 20 else DeviationSeverity.WARNING
-            )
+            severity = DeviationSeverity.HIGH if gap >= 20 else DeviationSeverity.WARNING
             report.deviations.append(
                 self._create_deviation(
                     severity=severity,
@@ -258,7 +256,7 @@ class Overseer:
         if plan_data and actual_output:
             self._check_plan_alignment(report, phase, plan_data, actual_output)
 
-        for review in (codex_reviews or []):
+        for review in codex_reviews or []:
             severity_label = str(review.get("severity", "")).strip().lower()
             issue = str(review.get("issue", "")).strip() or "Unspecified Codex review issue."
             if severity_label == "critical":
@@ -297,9 +295,7 @@ class Overseer:
                         "halt_reason": self._report.halt_reason,
                         "verdict": report.verdict.value,
                         "quality_score": report.quality_score,
-                        "deviations": [
-                            d.to_dict() for d in report.deviations
-                        ],
+                        "deviations": [d.to_dict() for d in report.deviations],
                         "project": self.project_name,
                     },
                 )
@@ -329,7 +325,7 @@ class Overseer:
             timestamp=_now_iso(),
         )
 
-        for result in (verify_results or []):
+        for result in verify_results or []:
             if result.get("required") and not result.get("passed"):
                 gate_name = str(result.get("gate", "unknown"))
                 report.deviations.append(
@@ -361,10 +357,7 @@ class Overseer:
 
         if codex_review is not None:
             severity_label = str(codex_review.get("severity", "")).strip().lower()
-            issue = (
-                str(codex_review.get("issue", "")).strip()
-                or "Unspecified Codex review issue."
-            )
+            issue = str(codex_review.get("issue", "")).strip() or "Unspecified Codex review issue."
             if severity_label == "critical":
                 severity = DeviationSeverity.CRITICAL
             elif severity_label == "high":

@@ -116,10 +116,10 @@ def supports_unicode_output() -> bool:
 
     # Windows 平台：检测现代终端
     if (
-        os.environ.get("WT_SESSION")                        # Windows Terminal
-        or os.environ.get("TERMINUS_SUBLIME")                # Terminus
-        or os.environ.get("ConEmuTask") == "{cmd::Cmder}"   # ConEmu/Cmder
-        or os.environ.get("TERM_PROGRAM") == "vscode"        # VS Code terminal
+        os.environ.get("WT_SESSION")  # Windows Terminal
+        or os.environ.get("TERMINUS_SUBLIME")  # Terminus
+        or os.environ.get("ConEmuTask") == "{cmd::Cmder}"  # ConEmu/Cmder
+        or os.environ.get("TERM_PROGRAM") == "vscode"  # VS Code terminal
         or os.environ.get("TERM") in ("xterm-256color", "alacritty")
         or os.environ.get("TERMINAL_EMULATOR") == "JetBrains-JediTerm"
     ):
@@ -213,6 +213,7 @@ class FallbackConsole:
     @property
     def width(self) -> int:
         import shutil
+
         return shutil.get_terminal_size().columns
 
 

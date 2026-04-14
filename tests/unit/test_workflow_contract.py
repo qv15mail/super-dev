@@ -71,8 +71,11 @@ def test_seeai_workflow_contract_exposes_competition_fast_path():
         "visual_polish",
         "qa",
     ]
-    assert "至少保住一个 wow 点" in contract.quality_floor[0]
-    assert "时间不够时优先删功能" in contract.quality_floor[1]
+    assert "3 秒内必须让评委看懂主题和亮点" in contract.quality_floor[0]
+    assert "30 秒内必须能完整走完一条主演示路径" in contract.quality_floor[1]
+    assert "wow 点" in contract.quality_floor[2]
+    assert "3 秒第一印象" in contract.judge_checklist[0]
+    assert "30 秒主演示路径" in contract.judge_checklist[1]
 
 
 def test_unknown_variant_falls_back_to_standard_contract():

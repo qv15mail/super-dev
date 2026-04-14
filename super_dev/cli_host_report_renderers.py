@@ -14,6 +14,7 @@ from .catalogs import host_display_name
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _runtime_status_label(status: str) -> str:
     mapping = {
         "pending": "待真人验收",
@@ -26,6 +27,7 @@ def _runtime_status_label(status: str) -> str:
 # ---------------------------------------------------------------------------
 # Markdown renderers
 # ---------------------------------------------------------------------------
+
 
 def render_host_compatibility_markdown(
     payload: dict[str, Any],
@@ -365,8 +367,7 @@ def render_host_runtime_validation_markdown(
             modules = framework_playbook.get("implementation_modules", [])
             if isinstance(modules, list) and modules:
                 lines.append(
-                    "- Implementation Modules: "
-                    + "；".join(str(item) for item in modules[:3])
+                    "- Implementation Modules: " + "；".join(str(item) for item in modules[:3])
                 )
             native_capabilities = framework_playbook.get("native_capabilities", [])
             if isinstance(native_capabilities, list) and native_capabilities:
@@ -377,19 +378,40 @@ def render_host_runtime_validation_markdown(
             validation = framework_playbook.get("validation_surfaces", [])
             if isinstance(validation, list) and validation:
                 lines.append(
-                    "- Validation Surfaces: "
-                    + "；".join(str(item) for item in validation[:3])
+                    "- Validation Surfaces: " + "；".join(str(item) for item in validation[:3])
                 )
             evidence = framework_playbook.get("delivery_evidence", [])
             if isinstance(evidence, list) and evidence:
                 lines.append(
-                    "- Delivery Evidence: "
-                    + "；".join(str(item) for item in evidence[:3])
+                    "- Delivery Evidence: " + "；".join(str(item) for item in evidence[:3])
                 )
             lines.append("")
         comment = host.get("manual_runtime_comment", "")
         if isinstance(comment, str) and comment.strip():
             lines.extend(["### Runtime Validation Note", "", f"- {comment.strip()}", ""])
+        competition_ready = bool(host.get("competition_evidence_ready", False))
+        competition_missing = host.get("competition_evidence_missing", [])
+        competition_shallow = host.get("competition_evidence_shallow", [])
+        if bool(host.get("competition_evidence_required", False)):
+            lines.extend(
+                [
+                    "### Competition Evidence",
+                    "",
+                    f"- Evidence Ready: {'yes' if competition_ready else 'no'}",
+                ]
+            )
+            if isinstance(competition_missing, list) and competition_missing:
+                lines.append(
+                    "- Missing Sections: " + "、".join(str(item) for item in competition_missing)
+                )
+            if isinstance(competition_shallow, list) and competition_shallow:
+                lines.append(
+                    "- Shallow Sections: " + "、".join(str(item) for item in competition_shallow)
+                )
+                lines.append(
+                    "  - 这些段落已填写，但内容过短或未覆盖模板 `required` 关键词，视为未真正验收。"
+                )
+            lines.append("")
         preconditions = host.get("precondition_guidance", [])
         if isinstance(preconditions, list) and preconditions:
             lines.extend(["", "### Host Precondition Guidance", ""])
@@ -454,20 +476,14 @@ def render_host_hardening_markdown(
             "hosts", {}
         )
         runtime_script_info = (
-            runtime_script_hosts.get(target, {})
-            if isinstance(runtime_script_hosts, dict)
-            else {}
+            runtime_script_hosts.get(target, {}) if isinstance(runtime_script_hosts, dict) else {}
         )
         recovery_hosts = (payload.get("host_recovery_summary", {}) or {}).get("hosts", {})
-        recovery_info = (
-            recovery_hosts.get(target, {}) if isinstance(recovery_hosts, dict) else {}
-        )
+        recovery_info = recovery_hosts.get(target, {}) if isinstance(recovery_hosts, dict) else {}
         lines.extend([f"## {target}", ""])
         lines.append(f"- Trigger: {plan.get('final_trigger', '-')}")
         lines.append(f"- Trigger Mode: {plan.get('trigger_mode', '-')}")
-        lines.append(
-            f"- Contract OK: {'yes' if bool((contract or {}).get('ok', False)) else 'no'}"
-        )
+        lines.append(f"- Contract OK: {'yes' if bool((contract or {}).get('ok', False)) else 'no'}")
         if isinstance(gate_info, dict) and gate_info:
             lines.append(
                 f"- Gate Parity: {'yes' if bool(gate_info.get('passed', False)) else 'no'}"
@@ -604,6 +620,7 @@ def render_host_parity_onepage_markdown(
 # ---------------------------------------------------------------------------
 # File writers
 # ---------------------------------------------------------------------------
+
 
 def write_host_surface_audit_report(
     *,

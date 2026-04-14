@@ -26,6 +26,7 @@ from typing import Any
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class KnowledgeReference:
     """单条知识引用记录"""
@@ -201,6 +202,7 @@ class KnowledgeTrackingReport:
 # 知识文件索引条目
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class _KnowledgeIndexEntry:
     """内部索引条目"""
@@ -225,13 +227,25 @@ class _KnowledgeIndexEntry:
 # 有效的阶段和使用类型常量
 # ---------------------------------------------------------------------------
 
-VALID_PHASES = frozenset({
-    "research", "docs", "spec", "frontend", "backend", "quality", "delivery",
-})
+VALID_PHASES = frozenset(
+    {
+        "research",
+        "docs",
+        "spec",
+        "frontend",
+        "backend",
+        "quality",
+        "delivery",
+    }
+)
 
-VALID_USAGE_TYPES = frozenset({
-    "constraint", "guidance", "reference",
-})
+VALID_USAGE_TYPES = frozenset(
+    {
+        "constraint",
+        "guidance",
+        "reference",
+    }
+)
 
 # 领域 -> 相关阶段映射（用于 find_relevant_knowledge 过滤）
 _DOMAIN_PHASE_AFFINITY: dict[str, list[str]] = {
@@ -264,6 +278,7 @@ _DOMAIN_PHASE_AFFINITY: dict[str, list[str]] = {
 # ---------------------------------------------------------------------------
 # KnowledgeTracker
 # ---------------------------------------------------------------------------
+
 
 class KnowledgeTracker:
     """知识引用追踪器
@@ -395,9 +410,7 @@ class KnowledgeTracker:
             ValueError: 当 phase 或 usage_type 不合法时
         """
         if phase not in VALID_PHASES:
-            raise ValueError(
-                f"Invalid phase '{phase}'. Must be one of: {sorted(VALID_PHASES)}"
-            )
+            raise ValueError(f"Invalid phase '{phase}'. Must be one of: {sorted(VALID_PHASES)}")
         if usage_type not in VALID_USAGE_TYPES:
             raise ValueError(
                 f"Invalid usage_type '{usage_type}'. Must be one of: {sorted(VALID_USAGE_TYPES)}"
@@ -478,14 +491,16 @@ class KnowledgeTracker:
 
         results: list[dict[str, Any]] = []
         for score, path, entry in scored[:top_k]:
-            results.append({
-                "path": path,
-                "title": entry.title,
-                "domain": entry.domain,
-                "category": entry.category,
-                "score": round(min(score, 1.0), 4),
-                "tags": entry.tags,
-            })
+            results.append(
+                {
+                    "path": path,
+                    "title": entry.title,
+                    "domain": entry.domain,
+                    "category": entry.category,
+                    "score": round(min(score, 1.0), 4),
+                    "tags": entry.tags,
+                }
+            )
         return results
 
     # ------------------------------------------------------------------
@@ -519,9 +534,7 @@ class KnowledgeTracker:
 
         # 未引用领域
         unreferenced_domains = [
-            domain
-            for domain, info in coverage.items()
-            if info["referenced"] == 0
+            domain for domain, info in coverage.items() if info["referenced"] == 0
         ]
 
         return KnowledgeTrackingReport(

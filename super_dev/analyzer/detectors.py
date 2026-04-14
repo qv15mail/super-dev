@@ -97,16 +97,30 @@ def _detect_node_project_type(project_path: Path) -> ProjectCategory:
 
             # 检测前端框架
             frontend_frameworks = [
-                "react", "react-dom", "vue", "vue-router", "@angular/core",
-                "angular", "svelte", "next", "nuxt", "@remix-run/react",
+                "react",
+                "react-dom",
+                "vue",
+                "vue-router",
+                "@angular/core",
+                "angular",
+                "svelte",
+                "next",
+                "nuxt",
+                "@remix-run/react",
             ]
 
             has_frontend = any(fw in all_deps for fw in frontend_frameworks)
 
             # 检测后端框架
             backend_frameworks = [
-                "express", "fastify", "koa", "nest", "@nestjs/common",
-                "hapi", "feathers", "socket.io",
+                "express",
+                "fastify",
+                "koa",
+                "nest",
+                "@nestjs/common",
+                "hapi",
+                "feathers",
+                "socket.io",
             ]
 
             has_backend = any(bw in all_deps for bw in backend_frameworks)
@@ -159,16 +173,27 @@ def _detect_python_project_type(project_path: Path) -> ProjectCategory:
 
     # 检测 Web 框架
     web_frameworks = {
-        "django", "flask", "fastapi", "starlette", "tornado",
-        "aiohttp", "sanic", "quart",
+        "django",
+        "flask",
+        "fastapi",
+        "starlette",
+        "tornado",
+        "aiohttp",
+        "sanic",
+        "quart",
     }
 
     has_web = any(fw in dependencies for fw in web_frameworks)
 
     # 检测前端相关
     frontend_related = {
-        "webpack", "vite", "rollup", "parcel",
-        "react", "vue", "angular",
+        "webpack",
+        "vite",
+        "rollup",
+        "parcel",
+        "react",
+        "vue",
+        "angular",
     }
 
     has_frontend = any(fr in dependencies for fr in frontend_related)
@@ -272,9 +297,15 @@ def _detect_node_tech_stack(project_path: Path, category: ProjectCategory) -> Te
             # 检测 UI 库
             ui_library = ""
             ui_libraries = [
-                "@mui/material", "@chakra-ui/react", "@mantine/core",
-                "antd", "react-bootstrap", "tailwindcss",
-                "element-plus", "vuetify", "antd-mobile",
+                "@mui/material",
+                "@chakra-ui/react",
+                "@mantine/core",
+                "antd",
+                "react-bootstrap",
+                "tailwindcss",
+                "element-plus",
+                "vuetify",
+                "antd-mobile",
             ]
             for lib in ui_libraries:
                 if lib in all_deps:
@@ -284,8 +315,14 @@ def _detect_node_tech_stack(project_path: Path, category: ProjectCategory) -> Te
             # 检测状态管理
             state_management = ""
             state_libs = [
-                "redux", "@reduxjs/toolkit", "zustand", "jotai",
-                "recoil", "mobx", "pinia", "vuex",
+                "redux",
+                "@reduxjs/toolkit",
+                "zustand",
+                "jotai",
+                "recoil",
+                "mobx",
+                "pinia",
+                "vuex",
             ]
             for lib in state_libs:
                 if lib in all_deps:
@@ -295,8 +332,12 @@ def _detect_node_tech_stack(project_path: Path, category: ProjectCategory) -> Te
             # 检测构建工具
             build_tool = ""
             build_tools = [
-                "vite", "webpack", "rollup", "parcel",
-                "esbuild", "turbo",
+                "vite",
+                "webpack",
+                "rollup",
+                "parcel",
+                "esbuild",
+                "turbo",
             ]
             for tool in build_tools:
                 if tool in all_deps:
@@ -306,8 +347,12 @@ def _detect_node_tech_stack(project_path: Path, category: ProjectCategory) -> Te
             # 检测测试框架
             testing_framework = ""
             test_frameworks = [
-                "jest", "vitest", "@testing-library/react",
-                "mocha", "chai", "jasmine",
+                "jest",
+                "vitest",
+                "@testing-library/react",
+                "mocha",
+                "chai",
+                "jasmine",
             ]
             for fw in test_frameworks:
                 if fw in all_deps:
@@ -364,9 +409,7 @@ def _detect_python_tech_stack(project_path: Path, category: ProjectCategory) -> 
                         if match:
                             name = match.group(1)
                             version = match.group(3) or ""
-                            dependencies.append(
-                                Dependency(name=name, version=version, type="prod")
-                            )
+                            dependencies.append(Dependency(name=name, version=version, type="prod"))
         except OSError:
             pass
 
@@ -514,7 +557,10 @@ def _detect_node_architecture(project_path: Path, dirs: list[str]) -> Architectu
 
         # 整洁架构检测
         clean_arch_indicators = [
-            "domain", "use-cases", "application", "infrastructure",
+            "domain",
+            "use-cases",
+            "application",
+            "infrastructure",
         ]
         if any(ind in src_dirs for ind in clean_arch_indicators):
             return ArchitecturePattern.CLEAN_ARCHITECTURE

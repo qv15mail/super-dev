@@ -505,7 +505,9 @@ class PlanExecutor:
                 step = plan.get_step(step_id)
                 if step is None:
                     continue
-                duration = f"{step.duration_seconds:.3f}s" if step.duration_seconds is not None else "-"
+                duration = (
+                    f"{step.duration_seconds:.3f}s" if step.duration_seconds is not None else "-"
+                )
                 lines.append(
                     f"| `{step.id}` | {step.label} | `{step.status.value}` | "
                     f"`{step.executor}` | {duration} |"
@@ -518,19 +520,15 @@ class PlanExecutor:
             lines.append(f"- Status: `{step.status.value}`")
             lines.append(f"- Description: {step.description or '-'}")
             lines.append(f"- Depends On: {', '.join(step.depends_on) if step.depends_on else '-'}")
-            lines.append(f"- Allowed Files: {', '.join(step.allowed_files) if step.allowed_files else '-'}")
+            lines.append(
+                f"- Allowed Files: {', '.join(step.allowed_files) if step.allowed_files else '-'}"
+            )
             lines.append(
                 f"- Forbidden Files: {', '.join(step.forbidden_files) if step.forbidden_files else '-'}"
             )
-            lines.append(
-                f"- Started At: `{_serialize_datetime(step.started_at) or '-'}`"
-            )
-            lines.append(
-                f"- Completed At: `{_serialize_datetime(step.completed_at) or '-'}`"
-            )
-            lines.append(
-                f"- Failure Budget: `{step.failure_count}/{step.failure_budget}`"
-            )
+            lines.append(f"- Started At: `{_serialize_datetime(step.started_at) or '-'}`")
+            lines.append(f"- Completed At: `{_serialize_datetime(step.completed_at) or '-'}`")
+            lines.append(f"- Failure Budget: `{step.failure_count}/{step.failure_budget}`")
             if step.errors:
                 lines.append(f"- Latest Error: {step.errors[-1]}")
             if step.codex_review:
@@ -591,7 +589,9 @@ class PlanExecutor:
         )
 
     def _dict_to_plan(self, data: Mapping[str, Any]) -> ExecutionPlan:
-        steps = [self._coerce_step(str(data["phase"]), raw_step) for raw_step in data.get("steps", [])]
+        steps = [
+            self._coerce_step(str(data["phase"]), raw_step) for raw_step in data.get("steps", [])
+        ]
         return ExecutionPlan(
             plan_id=str(data["plan_id"]),
             phase=str(data["phase"]),
@@ -615,7 +615,9 @@ class PlanExecutor:
             for gate in raw_step.get("verify_gates", [])
         ]
         status_value = raw_step.get("status", StepStatus.PENDING)
-        status = status_value if isinstance(status_value, StepStatus) else StepStatus(str(status_value))
+        status = (
+            status_value if isinstance(status_value, StepStatus) else StepStatus(str(status_value))
+        )
 
         return PlanStep(
             id=str(raw_step["id"]),

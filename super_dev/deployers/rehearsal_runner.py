@@ -64,7 +64,9 @@ class RehearsalResult:
 
     @property
     def passed(self) -> bool:
-        has_critical_failure = any((not check.passed and check.severity == "critical") for check in self.checks)
+        has_critical_failure = any(
+            (not check.passed and check.severity == "critical") for check in self.checks
+        )
         return self.score >= self.threshold and not has_critical_failure
 
     def to_dict(self) -> dict[str, Any]:
@@ -102,10 +104,12 @@ class RehearsalResult:
         # 治理状态摘要
         governance_check = next((c for c in self.checks if c.name == "Governance Status"), None)
         if governance_check:
-            lines.extend([
-                "## Governance Status",
-                "",
-            ])
+            lines.extend(
+                [
+                    "## Governance Status",
+                    "",
+                ]
+            )
             parts = governance_check.detail.split("; ")
             for part in parts:
                 lines.append(f"- {part}")
@@ -180,13 +184,17 @@ class LaunchRehearsalRunner:
         md_file = output_dir / f"{self.project_name}-rehearsal-report.md"
         json_file = output_dir / f"{self.project_name}-rehearsal-report.json"
         md_file.write_text(rehearsal_result.to_markdown(), encoding="utf-8")
-        json_file.write_text(json.dumps(rehearsal_result.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        json_file.write_text(
+            json.dumps(rehearsal_result.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         return {"markdown": md_file, "json": json_file}
 
     def _check_redteam_report(self) -> RehearsalCheck:
         evidence = load_redteam_evidence(self.project_dir, self.project_name)
         if evidence is None:
-            return RehearsalCheck("Redteam Report", False, "missing output/*-redteam.{json,md}", severity="critical")
+            return RehearsalCheck(
+                "Redteam Report", False, "missing output/*-redteam.{json,md}", severity="critical"
+            )
         detail = (
             f"{evidence.path.name}, score={evidence.total_score}/{evidence.pass_threshold}, "
             f"critical={evidence.critical_count}"
@@ -201,12 +209,16 @@ class LaunchRehearsalRunner:
     def _check_quality_gate_report(self) -> RehearsalCheck:
         file_path = self.project_dir / "output" / f"{self.project_name}-quality-gate.md"
         if not file_path.exists():
-            return RehearsalCheck("Quality Gate", False, "missing output/*-quality-gate.md", severity="critical")
+            return RehearsalCheck(
+                "Quality Gate", False, "missing output/*-quality-gate.md", severity="critical"
+            )
 
         text = file_path.read_text(encoding="utf-8", errors="ignore")
         lowered = text.lower()
         if "未通过" in text or "failed" in lowered:
-            return RehearsalCheck("Quality Gate", False, "quality gate report indicates failed", severity="critical")
+            return RehearsalCheck(
+                "Quality Gate", False, "quality gate report indicates failed", severity="critical"
+            )
 
         score_match = re.search(r"(总分|Score)\D+(\d{1,3})/100", text, re.IGNORECASE)
         score = int(score_match.group(2)) if score_match else 0
@@ -220,7 +232,9 @@ class LaunchRehearsalRunner:
             passed = passed and score >= 80
 
         detail = f"quality score={score}" if score_match else "quality gate report detected"
-        return RehearsalCheck("Quality Gate", passed, detail, severity="critical" if not passed else "medium")
+        return RehearsalCheck(
+            "Quality Gate", passed, detail, severity="critical" if not passed else "medium"
+        )
 
     def _check_pipeline_metrics(self) -> RehearsalCheck:
         metrics_file = self.project_dir / "output" / f"{self.project_name}-pipeline-metrics.json"
@@ -241,14 +255,20 @@ class LaunchRehearsalRunner:
 
     def _check_delivery_manifest(self) -> RehearsalCheck:
         delivery_dir = self.project_dir / "output" / "delivery"
-        manifest_candidates = sorted(delivery_dir.glob(f"{self.project_name}-delivery-manifest.json"))
+        manifest_candidates = sorted(
+            delivery_dir.glob(f"{self.project_name}-delivery-manifest.json")
+        )
         if not manifest_candidates:
-            return RehearsalCheck("Delivery Manifest", False, "missing delivery manifest", severity="critical")
+            return RehearsalCheck(
+                "Delivery Manifest", False, "missing delivery manifest", severity="critical"
+            )
         manifest_file = manifest_candidates[-1]
         try:
             payload = json.loads(manifest_file.read_text(encoding="utf-8"))
         except Exception:
-            return RehearsalCheck("Delivery Manifest", False, "manifest parse failed", severity="high")
+            return RehearsalCheck(
+                "Delivery Manifest", False, "manifest parse failed", severity="high"
+            )
         status = str(payload.get("status", "")).lower()
         return RehearsalCheck(
             "Delivery Manifest",
@@ -272,7 +292,9 @@ class LaunchRehearsalRunner:
                 f"missing: {', '.join(missing)}",
                 severity="high",
             )
-        return RehearsalCheck("Rehearsal Documents", True, "launch/rollback/smoke docs ready", severity="low")
+        return RehearsalCheck(
+            "Rehearsal Documents", True, "launch/rollback/smoke docs ready", severity="low"
+        )
 
     def _check_migration_files(self) -> RehearsalCheck:
         backend_migrations = list((self.project_dir / "backend" / "migrations").glob("*.sql"))
@@ -422,14 +444,16 @@ class LaunchRehearsalRunner:
             return RehearsalCheck(
                 "SSL Certificate",
                 is_placeholder,  # 占位域名视为通过
-                f"无法连接 {domain}:{port}，跳过 SSL 检查" + (" (placeholder domain)" if is_placeholder else ""),
+                f"无法连接 {domain}:{port}，跳过 SSL 检查"
+                + (" (placeholder domain)" if is_placeholder else ""),
                 severity="low" if is_placeholder else "medium",
             )
         except Exception as e:
             return RehearsalCheck(
                 "SSL Certificate",
                 is_placeholder,
-                f"SSL 检查异常: {type(e).__name__}: {e}" + (" (placeholder domain)" if is_placeholder else ""),
+                f"SSL 检查异常: {type(e).__name__}: {e}"
+                + (" (placeholder domain)" if is_placeholder else ""),
                 severity="low" if is_placeholder else "medium",
             )
 
@@ -495,7 +519,9 @@ class LaunchRehearsalRunner:
         issues: list[str] = []
 
         # 1. 检查回滚 Playbook
-        rollback_playbook = self.project_dir / "output" / "rehearsal" / f"{self.project_name}-rollback-playbook.md"
+        rollback_playbook = (
+            self.project_dir / "output" / "rehearsal" / f"{self.project_name}-rollback-playbook.md"
+        )
         if rollback_playbook.exists():
             findings.append("rollback-playbook.md found")
         else:
@@ -552,7 +578,9 @@ class LaunchRehearsalRunner:
                 continue
             try:
                 content = cicd_file.read_text(encoding="utf-8", errors="ignore")
-                if re.search(r"rollback|roll-back|revert|undo|previous[_-]?version", content, re.IGNORECASE):
+                if re.search(
+                    r"rollback|roll-back|revert|undo|previous[_-]?version", content, re.IGNORECASE
+                ):
                     has_cicd_rollback = True
                     findings.append(f"CI/CD rollback step in {cicd_file.name}")
                     break
@@ -603,13 +631,27 @@ class LaunchRehearsalRunner:
         total_files = 0
         language_lines: dict[str, int] = {}
         ext_to_lang = {
-            ".py": "Python", ".js": "JavaScript", ".ts": "TypeScript",
-            ".tsx": "TypeScript", ".jsx": "JavaScript", ".go": "Go",
-            ".java": "Java", ".rs": "Rust", ".sql": "SQL",
+            ".py": "Python",
+            ".js": "JavaScript",
+            ".ts": "TypeScript",
+            ".tsx": "TypeScript",
+            ".jsx": "JavaScript",
+            ".go": "Go",
+            ".java": "Java",
+            ".rs": "Rust",
+            ".sql": "SQL",
         }
         skip_dirs = {
-            ".git", "node_modules", "__pycache__", "dist", "build",
-            ".venv", "venv", ".next", "output", ".super-dev",
+            ".git",
+            "node_modules",
+            "__pycache__",
+            "dist",
+            "build",
+            ".venv",
+            "venv",
+            ".next",
+            "output",
+            ".super-dev",
         }
 
         for dirpath, dirnames, filenames in os.walk(self.project_dir):
@@ -676,7 +718,9 @@ class LaunchRehearsalRunner:
                 if compose_path.exists():
                     try:
                         content = compose_path.read_text(encoding="utf-8", errors="ignore")
-                        if re.search(r"postgres|mysql|mongodb|mariadb|redis", content, re.IGNORECASE):
+                        if re.search(
+                            r"postgres|mysql|mongodb|mariadb|redis", content, re.IGNORECASE
+                        ):
                             has_db = True
                             break
                     except Exception:
@@ -688,7 +732,8 @@ class LaunchRehearsalRunner:
 
         # 4. 语言分布
         lang_summary = ", ".join(
-            f"{lang}={lines}L" for lang, lines in sorted(language_lines.items(), key=lambda x: -x[1])[:5]
+            f"{lang}={lines}L"
+            for lang, lines in sorted(language_lines.items(), key=lambda x: -x[1])[:5]
         )
 
         detail = (
@@ -754,7 +799,11 @@ class LaunchRehearsalRunner:
         )
 
         passed = risk_level in ("MINIMAL", "LOW", "MEDIUM")
-        severity = "critical" if risk_level == "CRITICAL" else "high" if risk_level == "HIGH" else "medium" if risk_level == "MEDIUM" else "low"
+        severity = (
+            "critical"
+            if risk_level == "CRITICAL"
+            else "high" if risk_level == "HIGH" else "medium" if risk_level == "MEDIUM" else "low"
+        )
 
         return RehearsalCheck(
             "Release Risk Assessment",

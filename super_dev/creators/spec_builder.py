@@ -42,26 +42,26 @@ class SpecBuilder:
             scenario = self.requirement_parser.detect_scenario(self.project_dir)
 
         # 生成变更 ID (从项目名称转换)
-        change_id = self.name.replace('_', '-').lower()
+        change_id = self.name.replace("_", "-").lower()
 
         # 1. 创建变更提案
         self.spec_generator.create_change(
             change_id=change_id,
-            title=self.name.replace('-', ' ').title(),
+            title=self.name.replace("-", " ").title(),
             description=self.description,
             motivation="用户需求驱动的功能开发",
-            impact=f"涉及 {len(requirements)} 个主要功能模块"
+            impact=f"涉及 {len(requirements)} 个主要功能模块",
         )
 
         # 2. 添加需求到变更
         for idx, req in enumerate(requirements):
             self.spec_generator.add_requirement_to_change(
                 change_id=change_id,
-                spec_name=req.get('spec_name', change_id),
-                requirement_name=req.get('req_name', f'req-{idx}'),
-                description=req.get('description', ''),
-                scenarios=req.get('scenarios', []),
-                delta_type=DeltaType.ADDED
+                spec_name=req.get("spec_name", change_id),
+                requirement_name=req.get("req_name", f"req-{idx}"),
+                description=req.get("description", ""),
+                scenarios=req.get("scenarios", []),
+                delta_type=DeltaType.ADDED,
             )
 
         # 3. 自动生成任务
@@ -79,8 +79,8 @@ class SpecBuilder:
         major = 1
 
         # 根据技术栈生成任务
-        backend = tech_stack.get('backend', 'node')
-        frontend = tech_stack.get('frontend', 'react')
+        backend = tech_stack.get("backend", "node")
+        frontend = tech_stack.get("frontend", "react")
 
         if scenario == "0-1":
             tasks.extend(
@@ -124,7 +124,7 @@ class SpecBuilder:
             major += 1
 
         # 前端优先任务
-        if frontend != 'none':
+        if frontend != "none":
             minor = 0
             for delta in change.spec_deltas:
                 minor += 1
@@ -140,7 +140,7 @@ class SpecBuilder:
             major += 1
 
         # 后端与数据任务
-        if backend != 'none':
+        if backend != "none":
             minor = 0
             for delta in change.spec_deltas:
                 minor += 1

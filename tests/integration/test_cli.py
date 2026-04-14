@@ -1295,7 +1295,9 @@ class TestCLIDesignInspiration:
 
             assert result == 0
 
-            config = yaml.safe_load((temp_project_dir / "super-dev.yaml").read_text(encoding="utf-8"))
+            config = yaml.safe_load(
+                (temp_project_dir / "super-dev.yaml").read_text(encoding="utf-8")
+            )
             assert config["design_inspiration_slug"] == "vercel"
 
             output_dir = temp_project_dir / "output"
@@ -1836,25 +1838,17 @@ class TestCLISkillAndIntegrate:
             assert (temp_project_dir / ".kiro" / "skills" / "super-dev" / "SKILL.md").exists()
             assert (temp_project_dir / "CODEBUDDY.md").exists()
             assert (temp_project_dir / ".codebuddy" / "rules" / "super-dev" / "RULE.mdc").exists()
-            assert (
-                temp_project_dir / ".codebuddy" / "skills" / "super-dev" / "SKILL.md"
-            ).exists()
+            assert (temp_project_dir / ".codebuddy" / "skills" / "super-dev" / "SKILL.md").exists()
             assert (temp_project_dir / ".claude" / "commands" / "super-dev.md").exists()
             assert (temp_project_dir / ".github" / "copilot-instructions.md").exists()
-            assert (
-                temp_project_dir / ".github" / "skills" / "super-dev" / "SKILL.md"
-            ).exists()
+            assert (temp_project_dir / ".github" / "skills" / "super-dev" / "SKILL.md").exists()
             assert (temp_project_dir / ".cursor" / "rules" / "super-dev.mdc").exists()
             assert (temp_project_dir / ".cursor" / "commands" / "super-dev.md").exists()
             assert (temp_project_dir / ".windsurf" / "rules" / "super-dev.md").exists()
             assert (temp_project_dir / ".windsurf" / "workflows" / "super-dev.md").exists()
-            assert (
-                temp_project_dir / ".windsurf" / "skills" / "super-dev" / "SKILL.md"
-            ).exists()
+            assert (temp_project_dir / ".windsurf" / "skills" / "super-dev" / "SKILL.md").exists()
             assert (temp_project_dir / ".opencode" / "commands" / "super-dev.md").exists()
-            assert (
-                temp_project_dir / ".opencode" / "skills" / "super-dev" / "SKILL.md"
-            ).exists()
+            assert (temp_project_dir / ".opencode" / "skills" / "super-dev" / "SKILL.md").exists()
             assert not (temp_project_dir / ".kimi" / "commands" / "super-dev.md").exists()
             assert not (temp_project_dir / ".kimi" / "AGENTS.md").exists()
         finally:
@@ -2332,6 +2326,20 @@ class TestCLISkillAndIntegrate:
                 "SEEAI_SMOKE_OK"
                 in payload["usage_profiles"]["codex-cli"]["competition_smoke_test_prompt"]
             )
+            assert len(payload["usage_profiles"]["codex-cli"]["competition_smoke_suite"]) >= 4
+            assert payload["usage_profiles"]["codex-cli"]["competition_smoke_suite"][0][
+                "trigger"
+            ].startswith("$super-dev-seeai")
+            assert any(
+                "12 分钟内是否出现第一个可见" in item
+                for item in payload["usage_profiles"]["codex-cli"]["competition_acceptance_gates"]
+            )
+            assert (
+                payload["usage_profiles"]["codex-cli"]["competition_evidence_template"][
+                    "first_response"
+                ]["required"][0]
+                == "作品类型"
+            )
             assert payload["usage_profiles"]["codex-cli"]["smoke_test_steps"]
             assert payload["session_resume_cards"]["codex-cli"]["enabled"] is False
             assert (
@@ -2665,7 +2673,12 @@ class TestCLISkillAndIntegrate:
                 == "官方 AGENTS.md + 官方 Skills + optional repo plugin enhancement"
             )
             assert host["manual_runtime_status"] == "pending"
-            assert host["runtime_evidence"]["integration_status"]["status"] == "project_and_global_installed"
+            assert host["competition_evidence_ready"] is False
+            assert "first_response" in host["competition_evidence_missing"]
+            assert (
+                host["runtime_evidence"]["integration_status"]["status"]
+                == "project_and_global_installed"
+            )
             assert host["runtime_evidence"]["runtime_status"]["status"] == "pending"
             assert host["runtime_checklist"]
             assert host["pass_criteria"]
@@ -2678,11 +2691,16 @@ class TestCLISkillAndIntegrate:
             assert any(
                 "Codex CLI 当前终端就在目标项目目录" in item for item in host["runtime_checklist"]
             )
+            assert any(
+                "12 分钟内先跑出第一个可见、可点击、可截图的界面" in item
+                for item in host["runtime_checklist"]
+            )
             assert any("/` 列表里出现 `super-dev`" in item for item in host["runtime_checklist"])
             assert any("$super-dev" in item for item in host["runtime_checklist"])
             assert any(".agents/skills/super-dev" in item for item in host["pass_criteria"])
             assert any("官方 Skills" in item for item in host["pass_criteria"])
             assert any("$super-dev" in item for item in host["pass_criteria"])
+            assert any("回退栈" in item for item in host["pass_criteria"])
             assert host["flow_probe"]["enabled"] is True
             assert any("/` 列表选择 `super-dev`" in item for item in host["flow_probe"]["steps"])
             assert any("$super-dev" in item for item in host["flow_probe"]["steps"])
@@ -2749,7 +2767,12 @@ class TestCLISkillAndIntegrate:
                 for item in host["runtime_checklist"]
             )
             assert any("30 分钟比赛链路" in item for item in host["runtime_checklist"])
+            assert any(
+                "12 分钟内先跑出第一个可见、可点击、可截图的界面" in item
+                for item in host["runtime_checklist"]
+            )
             assert any("SEEAI" in item for item in host["pass_criteria"])
+            assert any("回退栈" in item for item in host["pass_criteria"])
             assert host["flow_probe"]["enabled"] is True
             assert any("/super-dev-seeai" in item for item in host["flow_probe"]["steps"])
         finally:
@@ -2845,6 +2868,8 @@ class TestCLISkillAndIntegrate:
             assert payload["manual_runtime_status"] == "passed"
             assert payload["manual_runtime_status_label"] == "已真人通过"
             assert payload["runtime_evidence"]["runtime_status"]["status"] == "passed"
+            assert payload["competition_evidence_ready"] is False
+            assert "first_response" in payload["competition_evidence_missing"]
             assert payload["updated_at"]
 
             result = cli.run(["integrate", "validate", "--target", "codex-cli", "--json"])
@@ -2858,9 +2883,56 @@ class TestCLISkillAndIntegrate:
             assert host["manual_runtime_status_label"] == "已真人通过"
             assert host["manual_runtime_comment"] == "首轮先进入 research，三文档已真实落盘"
             assert host["manual_runtime_updated_at"]
-            assert host["runtime_evidence"]["integration_status"]["status"] == "project_and_global_installed"
+            assert host["competition_evidence_ready"] is False
+            assert "first_response" in host["competition_evidence_missing"]
+            assert host["ready_for_delivery"] is False
+            assert host["blocking_reason"] == "SEEAI 比赛验收证据不完整"
+            assert (
+                host["runtime_evidence"]["integration_status"]["status"]
+                == "project_and_global_installed"
+            )
             assert host["runtime_evidence"]["runtime_status"]["status"] == "passed"
+            assert host["runtime_evidence"]["competition_evidence_ready"] is False
             assert (temp_project_dir / ".super-dev" / "install-manifest.json").exists()
+
+            result = cli.run(
+                [
+                    "integrate",
+                    "validate",
+                    "--target",
+                    "codex-cli",
+                    "--status",
+                    "passed",
+                    "--comment",
+                    "补齐比赛验收证据",
+                    "--competition-evidence-json",
+                    json.dumps(
+                        {
+                            "first_response": {"summary": "作品类型 / wow 点 / P0 / 放弃项"},
+                            "runtime_checkpoint": {
+                                "summary": "12 分钟内首个可见界面 + 主路径首个点击动作 + 真实启动模块"
+                            },
+                            "fallback_decision": {"summary": "失败点 / 回退栈 / 降级原因"},
+                            "demo_path": {
+                                "summary": "30-60 秒主演示路径 + 结果页/结束态 + wow 点截图"
+                            },
+                        },
+                        ensure_ascii=False,
+                    ),
+                    "--json",
+                ]
+            )
+            assert result == 0
+            payload = json.loads(capsys.readouterr().out)
+            assert payload["competition_evidence_ready"] is True
+
+            result = cli.run(["integrate", "validate", "--target", "codex-cli", "--json"])
+            assert result == 0
+            payload = json.loads(capsys.readouterr().out)
+            host = payload["hosts"][0]
+            assert host["competition_evidence_ready"] is True
+            assert host["competition_evidence_missing"] == []
+            assert host["ready_for_delivery"] is True
         finally:
             os.chdir(original_cwd)
 

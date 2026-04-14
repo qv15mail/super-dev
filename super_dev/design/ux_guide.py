@@ -16,6 +16,7 @@ from pathlib import Path
 
 class UXDomain(str, Enum):
     """UX 领域"""
+
     ANIMATION = "Animation"
     A11Y = "A11y"  # Accessibility
     PERFORMANCE = "Performance"
@@ -31,6 +32,7 @@ class UXDomain(str, Enum):
 @dataclass
 class UXGuideline:
     """UX 指南"""
+
     domain: UXDomain
     topic: str
     best_practice: str
@@ -43,6 +45,7 @@ class UXGuideline:
 @dataclass
 class UXRecommendation:
     """UX 推荐建议"""
+
     guideline: UXGuideline
     priority: str  # critical, high, medium, low
     implementation_effort: str  # low, medium, high
@@ -75,7 +78,7 @@ class UXGuideEngine:
             self.guidelines = self._get_default_guidelines()
             return
 
-        with open(csv_path, encoding='utf-8') as f:
+        with open(csv_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
@@ -86,7 +89,7 @@ class UXGuideEngine:
                         anti_pattern=row["anti_pattern"],
                         example=row["example"],
                         impact=row["impact"],
-                        complexity=row["complexity"]
+                        complexity=row["complexity"],
                     )
                     self.guidelines.append(guideline)
                 except Exception as e:
@@ -102,7 +105,7 @@ class UXGuideEngine:
                 anti_pattern="Use spinners for all loading states",
                 example="Skeleton while profile data loads",
                 impact="Reduced perceived wait time",
-                complexity="medium"
+                complexity="medium",
             ),
             UXGuideline(
                 domain=UXDomain.A11Y,
@@ -111,7 +114,7 @@ class UXGuideEngine:
                 anti_pattern="Light gray text on white background",
                 example="Dark text on light background",
                 impact="Readable by all users",
-                complexity="low"
+                complexity="low",
             ),
             UXGuideline(
                 domain=UXDomain.PERFORMANCE,
@@ -120,15 +123,12 @@ class UXGuideEngine:
                 anti_pattern="Unoptimized 5MB PNGs",
                 example="WebP with JPEG fallback",
                 impact="Faster page load",
-                complexity="low"
-            )
+                complexity="low",
+            ),
         ]
 
     def search(
-        self,
-        query: str,
-        domain: str | None = None,
-        max_results: int = 5
+        self, query: str, domain: str | None = None, max_results: int = 5
     ) -> list[UXRecommendation]:
         """
         搜索 UX 指南
@@ -188,13 +188,15 @@ class UXGuideEngine:
         # 构建推荐列表
         recommendations = []
         for guideline, score, priority, effort, user_impact in scored_guidelines[:max_results]:
-            recommendations.append(UXRecommendation(
-                guideline=guideline,
-                priority=priority,
-                implementation_effort=effort,
-                user_impact=user_impact,
-                resources=self._get_resources(guideline)
-            ))
+            recommendations.append(
+                UXRecommendation(
+                    guideline=guideline,
+                    priority=priority,
+                    implementation_effort=effort,
+                    user_impact=user_impact,
+                    resources=self._get_resources(guideline),
+                )
+            )
 
         return recommendations
 
@@ -235,18 +237,16 @@ class UXGuideEngine:
         domain_resources = {
             UXDomain.A11Y: [
                 "WCAG 2.1 Guidelines: https://www.w3.org/WAI/WCAG21/quickref/",
-                "WebAIM Contrast Checker: https://webaim.org/resources/contrastchecker/"
+                "WebAIM Contrast Checker: https://webaim.org/resources/contrastchecker/",
             ],
             UXDomain.PERFORMANCE: [
                 "Web.dev Performance: https://web.dev/performance/",
-                "Google Lighthouse: https://developers.google.com/web/tools/lighthouse"
+                "Google Lighthouse: https://developers.google.com/web/tools/lighthouse",
             ],
             UXDomain.RESPONSIVE: [
                 "MDN Responsive Design: https://developer.mozilla.org/en-US/docs/Learn/CSS/CSS_layout/Responsive_Design"
             ],
-            UXDomain.ANIMATION: [
-                "Motion Design Guidelines: https://material.io/design/motion"
-            ]
+            UXDomain.ANIMATION: ["Motion Design Guidelines: https://material.io/design/motion"],
         }
 
         resources.extend(domain_resources.get(guideline.domain, []))
@@ -264,10 +264,7 @@ class UXGuideEngine:
             该领域的所有指南
         """
         domain_lower = domain.lower()
-        return [
-            g for g in self.guidelines
-            if g.domain.value.lower() == domain_lower
-        ]
+        return [g for g in self.guidelines if g.domain.value.lower() == domain_lower]
 
     def get_quick_wins(self, max_results: int = 5) -> list[UXRecommendation]:
         """
@@ -288,16 +285,19 @@ class UXGuideEngine:
 
                 # 高或中等影响
                 if user_impact in ["high", "medium"]:
-                    quick_wins.append(UXRecommendation(
-                        guideline=guideline,
-                        priority="high",
-                        implementation_effort="low",
-                        user_impact=user_impact,
-                        resources=self._get_resources(guideline)
-                    ))
+                    quick_wins.append(
+                        UXRecommendation(
+                            guideline=guideline,
+                            priority="high",
+                            implementation_effort="low",
+                            user_impact=user_impact,
+                            resources=self._get_resources(guideline),
+                        )
+                    )
 
         # 按领域分组，避免同一领域的建议过多
         from collections import defaultdict
+
         domain_groups = defaultdict(list)
         for rec in quick_wins:
             domain_groups[rec.guideline.domain].append(rec)
@@ -336,9 +336,7 @@ class UXGuideEngine:
             if domain not in checklist:
                 checklist[domain] = []
 
-            checklist[domain].append(
-                f"[ ] {guideline.best_practice}"
-            )
+            checklist[domain].append(f"[ ] {guideline.best_practice}")
 
         return checklist
 
@@ -357,11 +355,13 @@ class UXGuideEngine:
             if domain not in anti_patterns:
                 anti_patterns[domain] = []
 
-            anti_patterns[domain].append({
-                "anti_pattern": guideline.anti_pattern,
-                "best_practice": guideline.best_practice,
-                "impact": guideline.impact
-            })
+            anti_patterns[domain].append(
+                {
+                    "anti_pattern": guideline.anti_pattern,
+                    "best_practice": guideline.best_practice,
+                    "impact": guideline.impact,
+                }
+            )
 
         return anti_patterns
 

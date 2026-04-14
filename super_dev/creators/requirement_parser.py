@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import TypedDict
 
 
 class KeywordRule(TypedDict):
@@ -83,54 +83,211 @@ class RequirementAnalysis:
 
 _INDUSTRY_KEYWORDS: dict[str, tuple[str, ...]] = {
     "ecommerce": (
-        "电商", "购物", "商品", "订单", "购物车", "库存", "物流", "快递",
-        "ecommerce", "shop", "store", "product", "cart", "order", "inventory",
-        "支付", "退款", "优惠券", "促销", "秒杀", "拼团", "评价", "商品详情",
+        "电商",
+        "购物",
+        "商品",
+        "订单",
+        "购物车",
+        "库存",
+        "物流",
+        "快递",
+        "ecommerce",
+        "shop",
+        "store",
+        "product",
+        "cart",
+        "order",
+        "inventory",
+        "支付",
+        "退款",
+        "优惠券",
+        "促销",
+        "秒杀",
+        "拼团",
+        "评价",
+        "商品详情",
     ),
     "saas": (
-        "SaaS", "订阅", "计费", "多租户", "租户", "workspace", "team",
-        "套餐", "定价", "付费", "会员", "企业版", "专业版", "免费版",
-        "billing", "subscription", "plan", "tenant",
+        "SaaS",
+        "订阅",
+        "计费",
+        "多租户",
+        "租户",
+        "workspace",
+        "team",
+        "套餐",
+        "定价",
+        "付费",
+        "会员",
+        "企业版",
+        "专业版",
+        "免费版",
+        "billing",
+        "subscription",
+        "plan",
+        "tenant",
     ),
     "education": (
-        "教育", "课程", "学习", "考试", "培训", "学员", "教师", "学校",
-        "education", "course", "learn", "exam", "quiz", "student", "teacher",
-        "在线教育", "直播课", "录播", "题库", "作业",
+        "教育",
+        "课程",
+        "学习",
+        "考试",
+        "培训",
+        "学员",
+        "教师",
+        "学校",
+        "education",
+        "course",
+        "learn",
+        "exam",
+        "quiz",
+        "student",
+        "teacher",
+        "在线教育",
+        "直播课",
+        "录播",
+        "题库",
+        "作业",
     ),
     "healthcare": (
-        "医疗", "健康", "医院", "诊所", "挂号", "问诊", "病历", "处方",
-        "healthcare", "medical", "hospital", "patient", "doctor", "diagnosis",
-        "体检", "预约", "药", "健康管理",
+        "医疗",
+        "健康",
+        "医院",
+        "诊所",
+        "挂号",
+        "问诊",
+        "病历",
+        "处方",
+        "healthcare",
+        "medical",
+        "hospital",
+        "patient",
+        "doctor",
+        "diagnosis",
+        "体检",
+        "预约",
+        "药",
+        "健康管理",
     ),
     "fintech": (
-        "金融", "理财", "投资", "贷款", "保险", "银行", "股票", "基金",
-        "fintech", "finance", "loan", "insurance", "trading", "payment",
-        "转账", "账户", "风控", "信用", "征信",
+        "金融",
+        "理财",
+        "投资",
+        "贷款",
+        "保险",
+        "银行",
+        "股票",
+        "基金",
+        "fintech",
+        "finance",
+        "loan",
+        "insurance",
+        "trading",
+        "payment",
+        "转账",
+        "账户",
+        "风控",
+        "信用",
+        "征信",
     ),
     "content": (
-        "内容", "文章", "博客", "社区", "论坛", "帖子", "评论", "标签",
-        "content", "blog", "forum", "post", "comment", "tag", "category",
-        "CMS", "发布", "编辑", "富文本", "专栏", "作者",
+        "内容",
+        "文章",
+        "博客",
+        "社区",
+        "论坛",
+        "帖子",
+        "评论",
+        "标签",
+        "content",
+        "blog",
+        "forum",
+        "post",
+        "comment",
+        "tag",
+        "category",
+        "CMS",
+        "发布",
+        "编辑",
+        "富文本",
+        "专栏",
+        "作者",
     ),
     "social": (
-        "社交", "聊天", "好友", "关注", "粉丝", "动态", "朋友圈",
-        "social", "chat", "friend", "follow", "feed", "message", "group",
-        "私信", "群聊", "互动", "点赞", "收藏",
+        "社交",
+        "聊天",
+        "好友",
+        "关注",
+        "粉丝",
+        "动态",
+        "朋友圈",
+        "social",
+        "chat",
+        "friend",
+        "follow",
+        "feed",
+        "message",
+        "group",
+        "私信",
+        "群聊",
+        "互动",
+        "点赞",
+        "收藏",
     ),
     "tool": (
-        "工具", "效率", "自动化", "转换", "生成", "计算", "分析",
-        "tool", "utility", "converter", "generator", "calculator", "analyzer",
-        "批量", "处理", "导入", "导出", "模板",
+        "工具",
+        "效率",
+        "自动化",
+        "转换",
+        "生成",
+        "计算",
+        "分析",
+        "tool",
+        "utility",
+        "converter",
+        "generator",
+        "calculator",
+        "analyzer",
+        "批量",
+        "处理",
+        "导入",
+        "导出",
+        "模板",
     ),
     "government": (
-        "政务", "公共服务", "办事", "审批", "申报", "政务大厅",
-        "government", "public service", "citizen", "permit", "license",
-        "窗口", "办理", "流程", "监督",
+        "政务",
+        "公共服务",
+        "办事",
+        "审批",
+        "申报",
+        "政务大厅",
+        "government",
+        "public service",
+        "citizen",
+        "permit",
+        "license",
+        "窗口",
+        "办理",
+        "流程",
+        "监督",
     ),
     "realestate": (
-        "房产", "房源", "租房", "买房", "楼盘", "中介", "物业",
-        "real estate", "property", "rent", "house", "apartment",
-        "二手房", "新房", "看房", "签约",
+        "房产",
+        "房源",
+        "租房",
+        "买房",
+        "楼盘",
+        "中介",
+        "物业",
+        "real estate",
+        "property",
+        "rent",
+        "house",
+        "apartment",
+        "二手房",
+        "新房",
+        "看房",
+        "签约",
     ),
 }
 
@@ -144,20 +301,54 @@ _PRODUCT_TYPE_KEYWORDS: dict[str, tuple[str, ...]] = {
 
 _USER_PERSONA_KEYWORDS: dict[str, tuple[str, ...]] = {
     "consumer": (
-        "消费者", "用户", "客户", "买家", "普通用户", "个人", "C端",
-        "consumer", "customer", "user", "buyer",
+        "消费者",
+        "用户",
+        "客户",
+        "买家",
+        "普通用户",
+        "个人",
+        "C端",
+        "consumer",
+        "customer",
+        "user",
+        "buyer",
     ),
     "business": (
-        "企业", "商家", "B端", "商户", "供应商", "合作伙伴", "门店",
-        "business", "merchant", "vendor", "supplier", "B2B", "enterprise",
+        "企业",
+        "商家",
+        "B端",
+        "商户",
+        "供应商",
+        "合作伙伴",
+        "门店",
+        "business",
+        "merchant",
+        "vendor",
+        "supplier",
+        "B2B",
+        "enterprise",
     ),
     "admin": (
-        "管理员", "运营", "超级管理员", "后台人员", "审核员",
-        "admin", "operator", "manager", "moderator",
+        "管理员",
+        "运营",
+        "超级管理员",
+        "后台人员",
+        "审核员",
+        "admin",
+        "operator",
+        "manager",
+        "moderator",
     ),
     "developer": (
-        "开发者", "程序员", "工程师", "技术", "SDK", "API用户",
-        "developer", "engineer", "programmer",
+        "开发者",
+        "程序员",
+        "工程师",
+        "技术",
+        "SDK",
+        "API用户",
+        "developer",
+        "engineer",
+        "programmer",
     ),
 }
 
@@ -165,8 +356,17 @@ _SCALE_KEYWORDS: dict[str, tuple[str, ...]] = {
     "small": ("小型", "个人", "单人", "MVP", "demo", "原型", "起步", "试水"),
     "medium": ("中型", "团队", "中小", "成长", "扩展", "几百", "几千"),
     "large": (
-        "大型", "企业级", "高并发", "百万", "千万", "海量", "分布式",
-        "enterprise", "scale", "high-traffic", "million",
+        "大型",
+        "企业级",
+        "高并发",
+        "百万",
+        "千万",
+        "海量",
+        "分布式",
+        "enterprise",
+        "scale",
+        "high-traffic",
+        "million",
     ),
 }
 
@@ -248,17 +448,46 @@ class RequirementParser:
     """将一句话需求解析为规范、阶段和前端模块"""
 
     _BUGFIX_KEYWORDS = (
-        "bug", "bugfix", "fix", "hotfix", "回归", "修bug", "修复",
-        "报错", "错误", "异常", "崩溃", "故障", "问题", "失效",
-        "无法", "不生效", "不工作", "不对", "失败",
-        "crash", "error", "exception", "regression",
+        "bug",
+        "bugfix",
+        "fix",
+        "hotfix",
+        "回归",
+        "修bug",
+        "修复",
+        "报错",
+        "错误",
+        "异常",
+        "崩溃",
+        "故障",
+        "问题",
+        "失效",
+        "无法",
+        "不生效",
+        "不工作",
+        "不对",
+        "失败",
+        "crash",
+        "error",
+        "exception",
+        "regression",
     )
 
     _KEYWORD_RULES: list[KeywordRule] = [
         {
             "spec_name": "auth",
             "req_name": "secure-authentication",
-            "keywords": ("登录", "注册", "认证", "oauth", "auth", "password", "账号", "密码", "验证码"),
+            "keywords": (
+                "登录",
+                "注册",
+                "认证",
+                "oauth",
+                "auth",
+                "password",
+                "账号",
+                "密码",
+                "验证码",
+            ),
             "description": "系统应支持安全认证与会话管理。",
             "scenario": {
                 "given": "用户处于未登录状态",
@@ -324,7 +553,17 @@ class RequirementParser:
         {
             "spec_name": "billing",
             "req_name": "payment-and-billing",
-            "keywords": ("支付", "账单", "billing", "付款", "订阅计费", "收费", "定价", "充值", "退款"),
+            "keywords": (
+                "支付",
+                "账单",
+                "billing",
+                "付款",
+                "订阅计费",
+                "收费",
+                "定价",
+                "充值",
+                "退款",
+            ),
             "description": "系统应支持支付流程、账单记录与对账。",
             "scenario": {
                 "given": "用户发起付费行为",
@@ -401,13 +640,24 @@ class RequirementParser:
     ]
 
     _SOURCE_DIRS = (
-        "src", "app", "backend", "frontend", "services",
-        "api", "server", "client", "lib",
+        "src",
+        "app",
+        "backend",
+        "frontend",
+        "services",
+        "api",
+        "server",
+        "client",
+        "lib",
     )
 
     _PROJECT_FILES = (
-        "package.json", "requirements.txt", "go.mod",
-        "pom.xml", "Cargo.toml", "pyproject.toml",
+        "package.json",
+        "requirements.txt",
+        "go.mod",
+        "pom.xml",
+        "Cargo.toml",
+        "pyproject.toml",
     )
 
     # Dependency map: spec_name -> list of spec_names it depends on
@@ -438,7 +688,6 @@ class RequirementParser:
         product type, scale expectations, and inferred modules.
         """
         text = (description or "").strip()
-        lowered = text.lower()
 
         target_users = self._extract_target_users(text)
         core_features = self._extract_core_features(text)
@@ -519,7 +768,6 @@ class RequirementParser:
 
         # If no keyword matched, generate generic requirements based on analysis
         if len(parsed) == 1:
-            subject = self._extract_subject(text)
             for feature in analysis.core_features[:3]:
                 slug = re.sub(r"[^a-z0-9]+", "-", feature.lower()).strip("-") or "feature"
                 parsed.append(
@@ -705,9 +953,7 @@ class RequirementParser:
 
         return modules[:8] if modules else ["核心业务模块"]
 
-    def _generate_acceptance_criteria(
-        self, spec_name: str, description: str
-    ) -> list[str]:
+    def _generate_acceptance_criteria(self, spec_name: str, description: str) -> list[str]:
         """Generate acceptance criteria for a spec."""
         criteria_map: dict[str, list[str]] = {
             "auth": [
@@ -762,15 +1008,16 @@ class RequirementParser:
                 "大文件支持断点续传",
             ],
         }
-        return criteria_map.get(spec_name, [
-            f"{description}功能完整可用",
-            "操作有明确的状态反馈",
-            "异常情况有友好的错误提示",
-        ])
+        return criteria_map.get(
+            spec_name,
+            [
+                f"{description}功能完整可用",
+                "操作有明确的状态反馈",
+                "异常情况有友好的错误提示",
+            ],
+        )
 
-    def _derive_nfrs_for_spec(
-        self, spec_name: str, global_nfrs: dict[str, str]
-    ) -> dict[str, str]:
+    def _derive_nfrs_for_spec(self, spec_name: str, global_nfrs: dict[str, str]) -> dict[str, str]:
         """Derive spec-specific non-functional requirements."""
         spec_nfrs: dict[str, str] = {}
 
@@ -800,7 +1047,9 @@ class RequirementParser:
     def detect_request_mode(self, description: str) -> str:
         """Detect if the request is a feature or bugfix."""
         lowered = (description or "").strip().lower()
-        return "bugfix" if any(keyword in lowered for keyword in self._BUGFIX_KEYWORDS) else "feature"
+        return (
+            "bugfix" if any(keyword in lowered for keyword in self._BUGFIX_KEYWORDS) else "feature"
+        )
 
     def detect_scenario(self, project_dir: Path) -> str:
         """Detect 0-1 / 1-N+1 scenario."""

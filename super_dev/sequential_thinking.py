@@ -34,7 +34,9 @@ class ThoughtStep:
     branch_from: int | None = None
     branch_id: str | None = None
     needs_more: bool = False
-    step_type: str = "analysis"  # analysis | revision | branch | hypothesis | verification | conclusion
+    step_type: str = (
+        "analysis"  # analysis | revision | branch | hypothesis | verification | conclusion
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return {k: v for k, v in asdict(self).items() if v is not None}
@@ -77,7 +79,9 @@ class SequentialThinkingEngine:
         self.sessions: list[ThinkingSession] = []
         self._current: ThinkingSession | None = None
 
-    def start(self, topic: str, mode: str = "requirement", estimated_steps: int = 7) -> ThinkingSession:
+    def start(
+        self, topic: str, mode: str = "requirement", estimated_steps: int = 7
+    ) -> ThinkingSession:
         """开始一个新的思考会话"""
         session = ThinkingSession(topic=topic, mode=mode)
         self.sessions.append(session)
@@ -218,22 +222,74 @@ class SequentialThinkingEngine:
 
 REQUIREMENT_THINKING_STEPS = {
     "standard": [
-        {"step": 1, "label": "理解需求本质", "prompt": "这是什么类型的产品？解决什么问题？服务谁？"},
-        {"step": 2, "label": "识别核心价值", "prompt": "用户为什么要用这个？核心价值主张是什么？和现有方案的差异在哪？"},
-        {"step": 3, "label": "拆解功能域", "prompt": "按用户旅程拆分功能模块。用户从打开到完成目标要经过哪些步骤？"},
-        {"step": 4, "label": "判断技术方向", "prompt": "前端框架？后端架构？数据存储？部署方式？为什么选这些？"},
-        {"step": 5, "label": "识别风险与约束", "prompt": "技术风险、时间约束、业务规则、安全要求、性能预期？"},
-        {"step": 6, "label": "确定优先级", "prompt": "哪些是 MVP 必须的？哪些可以后续迭代？按什么标准排优先级？"},
-        {"step": 7, "label": "回顾修正", "prompt": "前面的步骤有矛盾吗？优先级合理吗？漏掉了什么？"},
+        {
+            "step": 1,
+            "label": "理解需求本质",
+            "prompt": "这是什么类型的产品？解决什么问题？服务谁？",
+        },
+        {
+            "step": 2,
+            "label": "识别核心价值",
+            "prompt": "用户为什么要用这个？核心价值主张是什么？和现有方案的差异在哪？",
+        },
+        {
+            "step": 3,
+            "label": "拆解功能域",
+            "prompt": "按用户旅程拆分功能模块。用户从打开到完成目标要经过哪些步骤？",
+        },
+        {
+            "step": 4,
+            "label": "判断技术方向",
+            "prompt": "前端框架？后端架构？数据存储？部署方式？为什么选这些？",
+        },
+        {
+            "step": 5,
+            "label": "识别风险与约束",
+            "prompt": "技术风险、时间约束、业务规则、安全要求、性能预期？",
+        },
+        {
+            "step": 6,
+            "label": "确定优先级",
+            "prompt": "哪些是 MVP 必须的？哪些可以后续迭代？按什么标准排优先级？",
+        },
+        {
+            "step": 7,
+            "label": "回顾修正",
+            "prompt": "前面的步骤有矛盾吗？优先级合理吗？漏掉了什么？",
+        },
     ],
     "competition": [
         {"step": 1, "label": "理解本质", "prompt": "这个东西本质是什么？一句话定义它。"},
-        {"step": 2, "label": "核心体验", "prompt": "用户打开后最先感受到什么？不是功能列表，是感受。"},
-        {"step": 3, "label": "演示路径", "prompt": "从打开到'哇'的最短路径是什么？打开→看到X→点击Y→发生Z→'哇'"},
-        {"step": 4, "label": "锁定 P0", "prompt": "从演示路径中提取 ≤3 个必须完成的功能。砍掉哪个路径还能走通就砍。"},
-        {"step": 5, "label": "识别 P1", "prompt": "什么能让作品从'能用'变成'惊艳'？一个动效？一个细节？一个交互？"},
-        {"step": 6, "label": "声明不做", "prompt": "明确放弃什么。用户注册？设置页面？数据持久化？响应式？"},
-        {"step": 7, "label": "回顾修正", "prompt": "P0 是不是太多？演示路径走得通吗？有没有前后矛盾？"},
+        {
+            "step": 2,
+            "label": "核心体验",
+            "prompt": "用户打开后最先感受到什么？不是功能列表，是感受。",
+        },
+        {
+            "step": 3,
+            "label": "演示路径",
+            "prompt": "从打开到'哇'的最短路径是什么？打开→看到X→点击Y→发生Z→'哇'",
+        },
+        {
+            "step": 4,
+            "label": "锁定 P0",
+            "prompt": "从演示路径中提取 ≤3 个必须完成的功能。砍掉哪个路径还能走通就砍。",
+        },
+        {
+            "step": 5,
+            "label": "识别 P1",
+            "prompt": "什么能让作品从'能用'变成'惊艳'？一个动效？一个细节？一个交互？",
+        },
+        {
+            "step": 6,
+            "label": "声明不做",
+            "prompt": "明确放弃什么。用户注册？设置页面？数据持久化？响应式？",
+        },
+        {
+            "step": 7,
+            "label": "回顾修正",
+            "prompt": "P0 是不是太多？演示路径走得通吗？有没有前后矛盾？",
+        },
     ],
 }
 

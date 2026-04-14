@@ -13,6 +13,7 @@ from typing import Any
 
 class FrameworkCategory(str, Enum):
     """前端框架类别"""
+
     REACT = "react"
     VUE = "vue"
     ANGULAR = "angular"
@@ -24,6 +25,7 @@ class FrameworkCategory(str, Enum):
 
 class BuildTool(str, Enum):
     """构建工具"""
+
     VITE = "vite"
     WEBPACK = "webpack"
     ESBUILD = "esbuild"
@@ -34,6 +36,7 @@ class BuildTool(str, Enum):
 
 class TestingFramework(str, Enum):
     """测试框架"""
+
     VITEST = "vitest"
     JEST = "jest"
     PLAYWRIGHT = "playwright"
@@ -43,6 +46,7 @@ class TestingFramework(str, Enum):
 
 class StyleSolution(str, Enum):
     """样式方案"""
+
     TAILWIND = "tailwind"
     CSS_MODULES = "css-modules"
     STYLED_COMPONENTS = "styled-components"
@@ -54,6 +58,7 @@ class StyleSolution(str, Enum):
 
 class StateManagement(str, Enum):
     """状态管理"""
+
     # Server State
     REACT_QUERY = "react-query"
     SWR = "swr"
@@ -105,7 +110,6 @@ FRAMEWORKS: dict[str, dict[str, Any]] = {
         "build_tool": BuildTool.WEBPACK,
         "recommended_for": ["blog", "marketing-site", "documentation"],
     },
-
     # Vue 生态
     "nuxt": {
         "name": "Nuxt",
@@ -123,7 +127,6 @@ FRAMEWORKS: dict[str, dict[str, Any]] = {
         "build_tool": BuildTool.VITE,
         "recommended_for": ["spa", "dashboard", "admin-panel"],
     },
-
     # Angular
     "angular": {
         "name": "Angular",
@@ -133,7 +136,6 @@ FRAMEWORKS: dict[str, dict[str, Any]] = {
         "build_tool": BuildTool.ESBUILD,
         "recommended_for": ["enterprise", "large-scale"],
     },
-
     # Svelte
     "sveltekit": {
         "name": "SvelteKit",
@@ -143,7 +145,6 @@ FRAMEWORKS: dict[str, dict[str, Any]] = {
         "build_tool": BuildTool.VITE,
         "recommended_for": ["performance", "seo-critical", "universal-app"],
     },
-
     # 其他
     "astro": {
         "name": "Astro",
@@ -230,7 +231,6 @@ UI_LIBRARIES: dict[str, dict[str, Any]] = {
         "bundle_size": "small",
         "recommended_for": ["a11y-critical", "i18n"],
     },
-
     # Vue 组件库
     "element-plus": {
         "name": "Element Plus",
@@ -271,7 +271,6 @@ UI_LIBRARIES: dict[str, dict[str, Any]] = {
         "bundle_size": "medium",
         "recommended_for": ["enterprise", "chinese-market"],
     },
-
     # Angular 组件库
     "angular-material": {
         "name": "Angular Material",
@@ -287,7 +286,6 @@ UI_LIBRARIES: dict[str, dict[str, Any]] = {
         "features": ["components", "themes", "templates"],
         "bundle_size": "medium",
     },
-
     # Svelte 组件库
     "skeleton-ui": {
         "name": "Skeleton UI",
@@ -304,7 +302,6 @@ UI_LIBRARIES: dict[str, dict[str, Any]] = {
         "features": ["components", "material-design"],
         "bundle_size": "medium",
     },
-
     # 跨框架
     "tailwind": {
         "name": "Tailwind CSS",
@@ -531,9 +528,7 @@ class FrontendConfig:
             framework_cat = framework_info.get("category")
             ui_framework = ui_info.get("framework")
             if ui_framework != "any" and ui_framework != framework_cat:
-                errors.append(
-                    f"UI 库 {self.ui_library} 不兼容框架 {self.framework}"
-                )
+                errors.append(f"UI 库 {self.ui_library} 不兼容框架 {self.framework}")
 
         return errors
 

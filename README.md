@@ -19,9 +19,9 @@
 
 ## 版本
 
-当前版本：`2.3.7`
+当前版本：`2.3.8`
 
-- 发布说明：[v2.3.7 更新内容](docs/releases/2.3.7.md)
+- 发布说明：[v2.3.8 更新内容](docs/releases/2.3.8.md)
 - 官网更新历史：[superdev.goder.ai/changelog](https://superdev.goder.ai/changelog)
 
 ---
@@ -396,13 +396,13 @@ super-dev
 ### 3. 指定版本安装
 
 ```bash
-pip install super-dev==2.3.7
+pip install super-dev==2.3.8
 ```
 
 ### 4. GitHub 指定标签安装
 
 ```bash
-pip install git+https://github.com/shangyankeji/super-dev.git@v2.3.7
+pip install git+https://github.com/shangyankeji/super-dev.git@v2.3.8
 ```
 
 ### 5. 源码开发安装
@@ -573,7 +573,7 @@ super-dev bootstrap --name my-project --platform web --frontend next --backend n
 
 ## 架构概览
 
-Super Dev 2.3.7 架构由四层组成：**宿主接入层**（20 个统一接入宿主 + 1 个 OpenClaw 手动插件宿主）、**知识治理层**（306 索引 / 渐进式加载 / 自演化）、**编排引擎层**（9 阶段流水线 / 11 专家 + Overseer / 验证规则引擎）、**交付审计层**（DORA 度量 / ADR / 一致性检测 / proof-pack）。
+Super Dev 2.3.8 架构由四层组成：**宿主接入层**（20 个统一接入宿主 + 1 个 OpenClaw 手动插件宿主）、**知识治理层**（306 索引 / 渐进式加载 / 自演化）、**编排引擎层**（9 阶段流水线 / 11 专家 + Overseer / 验证规则引擎）、**交付审计层**（DORA 度量 / ADR / 一致性检测 / proof-pack）。
 
 ### 一、系统高阶流转架构
 
