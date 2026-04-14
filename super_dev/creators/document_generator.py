@@ -36,6 +36,7 @@ class DocumentGenerator(DocumentGeneratorContentMixin):
         style_solution: str | None = None,
         state_management: list[str] | None = None,
         testing_frameworks: list[str] | None = None,
+        design_inspiration_slug: str | None = None,
         language_preferences: list[str] | None = None,
         knowledge_summary: dict | None = None,
     ):
@@ -51,6 +52,7 @@ class DocumentGenerator(DocumentGeneratorContentMixin):
         self.style_solution = style_solution
         self.state_management = state_management or []
         self.testing_frameworks = testing_frameworks or []
+        self.design_inspiration_slug = str(design_inspiration_slug or "").strip()
         self.language_preferences = self._normalize_language_preferences(language_preferences)
         self.knowledge_summary: dict = knowledge_summary or {}
         self.expert_context: dict | None = None  # 专家视角注入（由 ExpertDispatcher 设置）

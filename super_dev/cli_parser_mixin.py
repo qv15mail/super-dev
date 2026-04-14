@@ -1068,6 +1068,58 @@ class CliParserMixin:
             description="使用 'super-dev design <command> -h' 查看帮助",
         )
 
+        design_list_parser = design_subparsers.add_parser(
+            "list",
+            help="列出设计灵感锚点",
+            description="列出内置设计灵感库，供 UI/UX 方向选择与参考",
+        )
+        design_list_parser.add_argument("--product-type", help="产品类型过滤 (landing/saas/dashboard/content/ecommerce)")
+        design_list_parser.add_argument("--industry", help="行业过滤 (fintech/education/healthcare/general)")
+        design_list_parser.add_argument("--style", help="风格过滤 (minimal/professional/playful/luxury/modern)")
+        design_list_parser.add_argument("--frontend", help="前端栈过滤 (react/vue/next/uni-app/electron 等)")
+        design_list_parser.add_argument(
+            "-n", "--max-results", type=int, default=10, help="最大结果数 (默认: 10)"
+        )
+
+        design_recommend_parser = design_subparsers.add_parser(
+            "recommend",
+            help="推荐设计灵感锚点",
+            description="结合当前项目配置或需求描述，推荐最合适的设计灵感方向",
+        )
+        design_recommend_parser.add_argument(
+            "--idea", default="", help="显式需求描述；未提供时优先读取 super-dev.yaml 中的 description"
+        )
+        design_recommend_parser.add_argument("--product-type", help="显式指定产品类型")
+        design_recommend_parser.add_argument("--industry", help="显式指定行业")
+        design_recommend_parser.add_argument("--style", help="显式指定风格")
+        design_recommend_parser.add_argument("--frontend", help="显式指定前端栈")
+        design_recommend_parser.add_argument(
+            "-n", "--max-results", type=int, default=3, help="最大推荐数 (默认: 3)"
+        )
+
+        design_apply_parser = design_subparsers.add_parser(
+            "apply",
+            help="应用设计灵感锚点",
+            description="将指定设计灵感写入项目配置，并可同步重生成 uiux/ui-contract",
+        )
+        design_apply_parser.add_argument("slug", help="设计灵感 slug，例如 linear.app / vercel / stripe")
+        design_apply_parser.add_argument(
+            "--idea", default="", help="可选需求描述；仅在当前项目 description 为空时作为补充上下文"
+        )
+        design_apply_parser.add_argument(
+            "--write-uiux",
+            dest="write_uiux",
+            action="store_true",
+            help="应用后同步重生成 output/*-uiux.md 和 output/*-ui-contract.json（默认开启）",
+        )
+        design_apply_parser.add_argument(
+            "--no-write-uiux",
+            dest="write_uiux",
+            action="store_false",
+            help="仅写入配置与灵感记录，不重生成 UI 文档",
+        )
+        design_apply_parser.set_defaults(write_uiux=True)
+
         # design search
         design_search_parser = design_subparsers.add_parser(
             "search", help="搜索设计资产", description="搜索 UI 风格、配色、字体、组件等设计资产"

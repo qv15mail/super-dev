@@ -151,6 +151,22 @@ class TestDocumentGeneratorIntegration:
         assert contract["design_tokens"]["css_variables"]
         assert contract["typography_preset"]["heading"]
 
+    def test_document_generator_prefers_explicit_design_inspiration(self):
+        generator = DocumentGenerator(
+            name="brand-site",
+            description="为一个商业级 SaaS 产品生成官方网站和产品页",
+            frontend="react",
+            backend="node",
+            design_inspiration_slug="vercel",
+        )
+
+        contract = generator.generate_ui_contract()
+        uiux = generator.generate_uiux()
+
+        assert contract["selected_design_reference"]["slug"] == "vercel"
+        assert contract["design_references"][0]["slug"] == "vercel"
+        assert "Vercel（已选灵感）" in uiux
+
     def test_document_generator_emits_uniapp_framework_playbook(self):
         generator = DocumentGenerator(
             name="uni-shop",

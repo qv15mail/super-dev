@@ -31,7 +31,7 @@ from .tech_stack import (
     get_tech_stack_engine,
 )
 from .tokens import TokenGenerator
-from .ui_intelligence import LibraryRecommendation, UIIntelligenceAdvisor
+from .ui_intelligence import DesignReference, LibraryRecommendation, UIIntelligenceAdvisor
 from .ux_guide import UXGuideEngine, UXGuideline, UXRecommendation, get_ux_guide
 
 __all__ = [
@@ -45,6 +45,7 @@ __all__ = [
     "TokenGenerator",
     "UIIntelligenceAdvisor",
     "LibraryRecommendation",
+    "DesignReference",
     "LandingPatternGenerator",
     "LandingPattern",
     "CTAStrategy",
