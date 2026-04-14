@@ -1198,6 +1198,122 @@ class TestCLIReview:
             os.chdir(original_cwd)
 
 
+class TestCLIDesignInspiration:
+    def test_design_list_outputs_curated_inspirations(self, temp_project_dir: Path, capsys):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+
+        try:
+            cli = SuperDevCLI()
+            result = cli.run(["design", "list", "--frontend", "react", "-n", "5"])
+
+            assert result == 0
+            output = capsys.readouterr().out
+            assert "设计灵感锚点" in output
+            assert "Linear" in output or "Vercel" in output
+        finally:
+            os.chdir(original_cwd)
+
+    def test_design_recommend_uses_project_context(self, temp_project_dir: Path, capsys):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+
+        try:
+            with open(temp_project_dir / "super-dev.yaml", "w", encoding="utf-8") as f:
+                yaml.dump(
+                    {
+                        "name": "ops-suite",
+                        "description": "构建一个企业协作 SaaS 工作台",
+                        "platform": "web",
+                        "frontend": "react",
+                        "backend": "python",
+                    },
+                    f,
+                    allow_unicode=True,
+                )
+
+            cli = SuperDevCLI()
+            result = cli.run(["design", "recommend"])
+
+            assert result == 0
+            output = capsys.readouterr().out
+            assert "设计灵感推荐" in output
+            assert "Linear" in output
+        finally:
+            os.chdir(original_cwd)
+
+    def test_design_recommend_accepts_minimal_config_without_schema_warning(
+        self, temp_project_dir: Path, capsys
+    ):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+
+        try:
+            with open(temp_project_dir / "super-dev.yaml", "w", encoding="utf-8") as f:
+                yaml.dump(
+                    {
+                        "name": "minimal-site",
+                        "description": "商业级 SaaS 官网",
+                        "frontend": "react",
+                        "backend": "node",
+                        "platform": "web",
+                    },
+                    f,
+                    allow_unicode=True,
+                )
+
+            cli = SuperDevCLI()
+            result = cli.run(["design", "recommend"])
+
+            assert result == 0
+            output = capsys.readouterr().out
+            assert "Config schema validation warnings" not in output
+            assert "设计灵感推荐" in output
+        finally:
+            os.chdir(original_cwd)
+
+    def test_design_apply_updates_config_and_regenerates_uiux(self, temp_project_dir: Path):
+        original_cwd = os.getcwd()
+        os.chdir(temp_project_dir)
+
+        try:
+            with open(temp_project_dir / "super-dev.yaml", "w", encoding="utf-8") as f:
+                yaml.dump(
+                    {
+                        "name": "brand-site",
+                        "description": "为一个商业级 SaaS 产品生成官方网站和产品页",
+                        "platform": "web",
+                        "frontend": "react",
+                        "backend": "node",
+                    },
+                    f,
+                    allow_unicode=True,
+                )
+
+            cli = SuperDevCLI()
+            result = cli.run(["design", "apply", "vercel"])
+
+            assert result == 0
+
+            config = yaml.safe_load((temp_project_dir / "super-dev.yaml").read_text(encoding="utf-8"))
+            assert config["design_inspiration_slug"] == "vercel"
+
+            output_dir = temp_project_dir / "output"
+            uiux_path = output_dir / "brand-site-uiux.md"
+            contract_path = output_dir / "brand-site-ui-contract.json"
+            inspiration_path = output_dir / "brand-site-design-inspiration.json"
+
+            assert uiux_path.exists()
+            assert contract_path.exists()
+            assert inspiration_path.exists()
+
+            contract = json.loads(contract_path.read_text(encoding="utf-8"))
+            assert contract["selected_design_reference"]["slug"] == "vercel"
+            assert contract["design_references"][0]["slug"] == "vercel"
+        finally:
+            os.chdir(original_cwd)
+
+
 class TestCLIQuality:
     """测试 quality 命令"""
 
@@ -1856,6 +1972,11 @@ class TestCLISkillAndIntegrate:
     def test_doctor_prints_multiple_host_precondition_items_for_codex(
         self, temp_project_dir: Path, capsys
     ):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        (fake_home / ".codex").mkdir(parents=True, exist_ok=True)
+        original_home = os.environ.get("HOME")
+        os.environ["HOME"] = str(fake_home)
         original_cwd = os.getcwd()
         os.chdir(temp_project_dir)
         try:
@@ -1869,11 +1990,19 @@ class TestCLISkillAndIntegrate:
             assert "需在目标项目/工作区内触发" in output
             assert "关闭旧会话并新开一个宿主会话" in output
         finally:
+            if original_home is None:
+                os.environ.pop("HOME", None)
+            else:
+                os.environ["HOME"] = original_home
             os.chdir(original_cwd)
 
     def test_doctor_json_includes_runtime_install_health(
         self, temp_project_dir: Path, monkeypatch, capsys
     ):
+        fake_home = temp_project_dir / "fake-home"
+        fake_home.mkdir(parents=True, exist_ok=True)
+        (fake_home / ".codex").mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("HOME", str(fake_home))
         original_cwd = os.getcwd()
         os.chdir(temp_project_dir)
         try:

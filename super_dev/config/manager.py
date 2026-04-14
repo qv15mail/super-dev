@@ -46,6 +46,7 @@ class ProjectConfig:
     style_solution: str | None = None  # 样式方案
     state_management: list[str] = field(default_factory=list)  # 状态管理
     testing_frameworks: list[str] = field(default_factory=list)  # 测试框架
+    design_inspiration_slug: str = ""  # 显式设计灵感锚点
 
     # 领域知识
     domain: str = ""  # fintech, ecommerce, medical, social, iot, education
@@ -113,6 +114,16 @@ class ConfigManager:
         "language_preferences": [],
         "knowledge_allowed_domains": [],
         "knowledge_cache_ttl_seconds": 1800,
+        "phases": [
+            "discovery",
+            "intelligence",
+            "drafting",
+            "redteam",
+            "qa",
+            "delivery",
+            "deployment",
+        ],
+        "experts": ["PM", "ARCHITECT", "UI", "UX", "SECURITY", "CODE"],
         "quality_gate": 80,
         "host_compatibility_min_score": 80,
         "host_compatibility_min_ready_hosts": 1,
@@ -130,6 +141,7 @@ class ConfigManager:
         "style_solution": None,
         "state_management": [],
         "testing_frameworks": [],
+        "design_inspiration_slug": "",
     }
 
     def __init__(self, project_dir: Path | None = None):
@@ -169,11 +181,14 @@ class ConfigManager:
             loaded = yaml.safe_load(f)
         data = loaded if isinstance(loaded, dict) else {}
 
-        # Validate against schema (warnings only, not blocking)
+        # 合并默认配置
+        config_data: dict[str, Any] = {**self.DEFAULT_CONFIG, **data}
+
+        # Validate merged config (warnings only, not blocking)
         try:
             from .schema_validator import validate_config
 
-            schema_errors = validate_config(data)
+            schema_errors = validate_config(config_data)
             if schema_errors:
                 import logging
 
@@ -183,9 +198,6 @@ class ConfigManager:
                 )
         except Exception:
             pass
-
-        # 合并默认配置
-        config_data: dict[str, Any] = {**self.DEFAULT_CONFIG, **data}
 
         # 过滤掉 ProjectConfig 不支持的字段，避免 TypeError
         valid_fields = {f.name for f in dataclasses.fields(ProjectConfig)}

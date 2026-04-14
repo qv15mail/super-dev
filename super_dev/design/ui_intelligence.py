@@ -1671,6 +1671,7 @@ class UIIntelligenceAdvisor:
         industry: str,
         style: str,
         ui_library: str | None = None,
+        preferred_design_reference_slug: str | None = None,
     ) -> dict[str, Any]:
         """生成 UI intelligence 推荐"""
         raw_frontend = frontend.lower().strip()
@@ -1782,15 +1783,15 @@ class UIIntelligenceAdvisor:
         if typo_key not in self.PRODUCT_TYPOGRAPHY_PRESETS:
             typo_key = industry if industry in self.PRODUCT_TYPOGRAPHY_PRESETS else "general"
         typography_preset = self.PRODUCT_TYPOGRAPHY_PRESETS.get(typo_key, self.PRODUCT_TYPOGRAPHY_PRESETS["general"])
-        design_references = [
-            item.to_dict()
-            for item in self._select_design_references(
-                product_type=product_type,
-                industry=industry,
-                style=style,
-                frontend=normalized_frontend,
-            )
-        ]
+        selected_reference = self.get_design_reference(preferred_design_reference_slug)
+        design_reference_items = self._select_design_references(
+            product_type=product_type,
+            industry=industry,
+            style=style,
+            frontend=normalized_frontend,
+            preferred_slug=selected_reference.slug if selected_reference else None,
+        )
+        design_references = [item.to_dict() for item in design_reference_items]
         framework_playbook = self._select_framework_playbook(
             raw_frontend=raw_frontend,
             normalized_frontend=normalized_frontend,
@@ -1821,9 +1822,71 @@ class UIIntelligenceAdvisor:
             "color_palette_dark": self.generate_dark_variant(color_palette),
             "typography_preset": typography_preset,
             "design_references": design_references,
+            "selected_design_reference": selected_reference.to_dict() if selected_reference else None,
             "framework_playbook": framework_playbook.to_dict() if framework_playbook else None,
             "pre_delivery_checklist": list(self.PRE_DELIVERY_CHECKLIST),
         }
+
+    def list_design_references(
+        self,
+        *,
+        product_type: str | None = None,
+        industry: str | None = None,
+        style: str | None = None,
+        frontend: str | None = None,
+        limit: int | None = None,
+    ) -> list[DesignReference]:
+        normalized_frontend = ""
+        if frontend:
+            raw_frontend = frontend.lower().strip()
+            normalized_frontend = self.FRONTEND_ALIASES.get(raw_frontend, raw_frontend)
+
+        scored: list[tuple[int, DesignReference]] = []
+        for item in self.DESIGN_REFERENCES:
+            if product_type and product_type not in item.fit_product_types:
+                continue
+            if industry and industry not in item.fit_industries:
+                continue
+            if style and style not in item.fit_styles:
+                continue
+            if normalized_frontend and normalized_frontend not in item.fit_frontends:
+                continue
+            score = item.priority
+            if product_type:
+                score += 5
+            if industry:
+                score += 3
+            if style:
+                score += 2
+            if normalized_frontend:
+                score += 2
+            scored.append((score, item))
+
+        if not scored:
+            scored = [(item.priority, item) for item in self.DESIGN_REFERENCES]
+
+        scored.sort(key=lambda pair: pair[0], reverse=True)
+        items = [item for _, item in scored]
+        if limit is not None:
+            return items[: max(limit, 0)]
+        return items
+
+    def get_design_reference(self, slug_or_name: str | None) -> DesignReference | None:
+        token = str(slug_or_name or "").strip().lower()
+        if not token:
+            return None
+
+        for item in self.DESIGN_REFERENCES:
+            aliases = {
+                item.slug.lower(),
+                item.slug.lower().replace(".", "-"),
+                item.slug.lower().split(".")[0],
+                item.name.lower(),
+                item.name.lower().replace(" ", "-"),
+            }
+            if token in aliases:
+                return item
+        return None
 
     def _select_design_references(
         self,
@@ -1833,6 +1896,7 @@ class UIIntelligenceAdvisor:
         style: str,
         frontend: str,
         limit: int = 3,
+        preferred_slug: str | None = None,
     ) -> list[DesignReference]:
         scored: list[tuple[int, DesignReference]] = []
         for item in self.DESIGN_REFERENCES:
@@ -1852,6 +1916,10 @@ class UIIntelligenceAdvisor:
 
         picked: list[DesignReference] = []
         seen: set[str] = set()
+        preferred = self.get_design_reference(preferred_slug)
+        if preferred is not None:
+            picked.append(preferred)
+            seen.add(preferred.slug)
         for _, item in scored:
             if item.slug in seen:
                 continue

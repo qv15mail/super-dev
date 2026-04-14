@@ -209,6 +209,7 @@ const theme: ThemeConfig = {
             industry=analysis["industry"],
             style=analysis["style"],
             ui_library=self.ui_library,
+            preferred_design_reference_slug=getattr(self, "design_inspiration_slug", ""),
         )
 
     def _get_design_system_bundle(self, analysis: dict, profile: dict) -> dict:
@@ -264,6 +265,7 @@ const theme: ThemeConfig = {
                 "style": analysis.get("style", "modern"),
                 "platform": self.platform,
                 "frontend": self.frontend,
+                "design_inspiration_slug": getattr(self, "design_inspiration_slug", ""),
             },
             "style_direction": profile.get("style_direction", {}),
             "surface": profile.get("surface"),
@@ -279,6 +281,7 @@ const theme: ThemeConfig = {
             "banned_patterns": list(profile.get("banned_patterns", [])),
             "knowledge_keywords": list(profile.get("knowledge_keywords", [])),
             "design_references": list(profile.get("design_references", [])),
+            "selected_design_reference": profile.get("selected_design_reference"),
             "framework_playbook": profile.get("framework_playbook"),
             "color_palette": palette,
             "typography_preset": typography,
@@ -3023,6 +3026,12 @@ spec:
                     continue
                 lines.append(f"- **{item.get('name', 'N/A')}**: {item.get('rationale', 'N/A')}")
         references = profile.get("design_references", [])
+        selected_reference = (
+            profile.get("selected_design_reference")
+            if isinstance(profile.get("selected_design_reference"), dict)
+            else {}
+        )
+        selected_slug = str(selected_reference.get("slug", "")).strip()
         if references:
             lines.extend(["", "**设计参考锚点**:"])
             for item in references[:3]:
@@ -3030,8 +3039,9 @@ spec:
                     continue
                 signals = " / ".join(item.get("signals", [])[:3])
                 cautions = "；".join(item.get("cautions", [])[:2])
+                selected_tag = "（已选灵感）" if selected_slug and item.get("slug") == selected_slug else ""
                 lines.append(
-                    f"- **{item.get('name', 'N/A')}**: {item.get('rationale', 'N/A')} 参考信号：{signals or 'N/A'}。避免：{cautions or 'N/A'}"
+                    f"- **{item.get('name', 'N/A')}{selected_tag}**: {item.get('rationale', 'N/A')} 参考信号：{signals or 'N/A'}。避免：{cautions or 'N/A'}"
                 )
 
         lines.extend(["", "**明确不默认采用**:"])

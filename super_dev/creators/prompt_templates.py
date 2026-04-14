@@ -79,7 +79,7 @@ class PromptTemplateManager:
     """
 
     def __init__(self, templates_dir: str = "super_dev/templates") -> None:
-        self.templates_dir = Path(templates_dir)
+        self.templates_dir = self._resolve_templates_dir(templates_dir)
         self.templates: dict[str, PromptTemplate] = {}
         self._version_history: dict[str, list[dict]] = {}
         self._load_templates()
@@ -185,7 +185,18 @@ class PromptTemplateManager:
         # 同时尝试从 manifest.yaml 补充信息
         self._load_manifest()
 
-        logger.info("共加载 %d 个 Prompt 模板", len(self.templates))
+        logger.debug("共加载 %d 个 Prompt 模板", len(self.templates))
+
+    def _resolve_templates_dir(self, templates_dir: str) -> Path:
+        candidate = Path(templates_dir)
+        if candidate.is_absolute():
+            return candidate
+
+        cwd_candidate = Path.cwd() / candidate
+        if cwd_candidate.exists():
+            return cwd_candidate
+
+        return Path(__file__).resolve().parent.parent / "templates"
 
     def _parse_template_file(self, path: Path) -> PromptTemplate | None:
         """解析单个 Markdown 模板文件。

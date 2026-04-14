@@ -1338,6 +1338,7 @@ class SuperDevCLI(
             style_solution=config.style_solution,
             state_management=list(config.state_management or []),
             testing_frameworks=list(config.testing_frameworks or []),
+            design_inspiration_slug=str(getattr(config, "design_inspiration_slug", "") or ""),
             language_preferences=list(config.language_preferences or []),
             knowledge_summary=knowledge_summary,
         )
@@ -2794,6 +2795,9 @@ class SuperDevCLI(
                     frontend=args.frontend,
                     backend=args.backend,
                     domain=args.domain,
+                    design_inspiration_slug=str(
+                        getattr(pipeline_config, "design_inspiration_slug", "") or ""
+                    ),
                     language_preferences=pipeline_config.language_preferences,
                     knowledge_summary=(
                         knowledge_bundle.get("research_summary", {})

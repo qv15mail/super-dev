@@ -100,6 +100,11 @@ class TestPromptTemplate:
 # ---------------------------------------------------------------------------
 
 class TestManagerLoading:
+    def test_default_relative_dir_resolves_to_package_templates(self):
+        mgr = PromptTemplateManager()
+        assert mgr.templates_dir.name == "templates"
+        assert mgr.templates_dir.exists()
+
     def test_empty_dir(self, tmp_path: Path):
         mgr = PromptTemplateManager(str(tmp_path))
         assert len(mgr.templates) == 0

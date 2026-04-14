@@ -89,6 +89,27 @@ class TestConfigManager:
         assert config.platform == "desktop"
         assert config.quality_gate == 85
 
+    def test_load_minimal_file_does_not_emit_schema_warning(self, temp_project_dir: Path, caplog):
+        config_data = {
+            "name": "minimal-project",
+            "platform": "web",
+            "frontend": "react",
+            "backend": "node",
+        }
+        config_path = temp_project_dir / "super-dev.yaml"
+        with open(config_path, "w") as f:
+            yaml.dump(config_data, f)
+
+        caplog.clear()
+        caplog.set_level("WARNING", logger="super_dev.config")
+
+        manager = ConfigManager(temp_project_dir)
+        config = manager.load()
+
+        assert config.name == "minimal-project"
+        assert config.quality_gate == 80
+        assert not any("Config schema validation warnings" in record.message for record in caplog.records)
+
     def test_save_config(self, temp_project_dir: Path):
         """测试保存配置"""
         manager = ConfigManager(temp_project_dir)

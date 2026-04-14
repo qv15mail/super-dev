@@ -27,10 +27,19 @@ KNOWN_FIELDS = {
     "knowledge_allowed_domains",
     "knowledge_cache_ttl_seconds",
     "language_preferences",
+    "ui_library",
+    "style_solution",
     "state_management",
     "testing_frameworks",
+    "design_inspiration_slug",
     "database",
     "author",
+    "execution_mode",
+    "overseer_enabled",
+    "codex_review_enabled",
+    "codex_review_phases",
+    "overseer_halt_on_critical",
+    "plan_failure_budget",
 }
 
 
@@ -102,6 +111,10 @@ def validate_config(config: dict) -> list[str]:
     ttl = config.get("knowledge_cache_ttl_seconds")
     if ttl is not None and (not isinstance(ttl, int) or ttl <= 0):
         errors.append("'knowledge_cache_ttl_seconds' must be a positive integer if present")
+
+    design_inspiration_slug = config.get("design_inspiration_slug")
+    if design_inspiration_slug is not None and not isinstance(design_inspiration_slug, str):
+        errors.append("'design_inspiration_slug' must be a string if present")
 
     return errors
 
