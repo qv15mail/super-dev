@@ -84,6 +84,9 @@ super-dev jump docs
 super-dev jump frontend
 super-dev confirm docs --comment "三文档已确认"
 super-dev confirm preview --comment "前端预览已确认"
+super-dev design list                 # 列出设计灵感锚点（PR #11，2.3.8 新增）
+super-dev design recommend            # 按当前项目推荐设计方向
+super-dev design apply linear.app     # 应用并重生成 uiux/ui-contract
 super-dev spec init
 super-dev spec list
 super-dev quality --type all

@@ -63,6 +63,12 @@ Current version: `2.3.8`
 - **New checks**: console.log / hardcoded localhost / TODO-FIXME / large files / package.json scripts.
 - **Emoji hooks**: Reports specific emoji characters found and file types.
 
+### Design Inspiration (new in 2.3.8, contributed by [@staruhub](https://github.com/staruhub) via PR #11)
+
+- `super-dev design list` — list bundled design inspiration anchors; filter by `--product-type / --industry / --style / --frontend`.
+- `super-dev design recommend` — recommend the best-fitting anchors using the project config or an explicit `--idea` description.
+- `super-dev design apply <slug>` — apply an inspiration (e.g. `linear.app`, `vercel`, `stripe`) to the project and regenerate `output/*-uiux.md` / `*-ui-contract.json`. Use `--no-write-uiux` to only persist the config.
+
 ### Enforcement System
 
 - `super-dev enforce install` — auto-configure host hooks (emoji checks, etc.).

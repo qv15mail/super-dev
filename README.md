@@ -134,6 +134,16 @@ super-dev knowledge stats             # 知识库使用统计
 super-dev knowledge evolve            # 知识权重自演化
 ```
 
+设计灵感命令（2.3.8 新增，感谢 [@staruhub](https://github.com/staruhub) 贡献 PR #11）：
+
+```bash
+super-dev design list                 # 列出内置设计灵感锚点（可按 product-type/industry/style/frontend 过滤）
+super-dev design recommend            # 结合当前项目配置或 --idea 描述推荐最合适的设计方向
+super-dev design apply <slug>         # 把指定灵感写入项目并重生成 output/*-uiux.md / *-ui-contract.json
+                                      # 例如：super-dev design apply linear.app
+                                      # 加 --no-write-uiux 仅写配置不重生成 UI 文档
+```
+
 治理与执行命令（2.3.0 新增）：
 
 | 命令 | 功能 |

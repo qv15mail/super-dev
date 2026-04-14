@@ -305,8 +305,10 @@ const zhContent: Content = {
     '如果宿主直接开始开发，优先判断当前会话没有重新加载规则。',
   ],
   highlightsTitle: 'v2.3.8 新功能亮点',
-  highlightsBody: '2.3.8 聚焦赛事模式与宿主生态：新增 SEEAI 赛事模式、WorkBuddy 正式接入、安全防护增强（敏感文件守卫 + API 认证）、安装界面响应式优化、旧版残留自动修复、需求解析器增强。',
+  highlightsBody: '2.3.8 聚焦赛事模式与宿主生态：SEEAI 比赛验收升级为四段结构化证据（封堵假通过）、新增设计灵感工作流（PR #11，感谢 @staruhub 超哥贡献）、WorkBuddy 正式接入、安全防护增强、安装界面响应式优化、旧版残留自动修复、需求解析器增强。',
   highlightsCards: [
+    { title: 'SEEAI 结构化证据闸门', body: 'first_response / runtime_checkpoint / fallback_decision / demo_path 四段缺一段就阻塞；每段最小 8 字符 + 模板关键词覆盖检查，passed 不再等于 ready。' },
+    { title: '设计灵感工作流（PR #11）', body: '感谢 @staruhub 超哥贡献。新增 super-dev design list / recommend / apply <slug>，把内置设计灵感库（linear.app / vercel / stripe 等）一键写入项目并重生成 uiux/ui-contract。' },
     { title: '新增 SEEAI 赛事模式', body: '行动驱动的竞赛快速交付循环：需求→拆解→联网搜索→方案文档→Spec→写码→跑起来→反馈循环。' },
     { title: 'WorkBuddy 正式接入', body: 'WorkBuddy 从手动安装升级为统一安装宿主，Skill 自动安装到 ~/.workbuddy/skills/，21+1 宿主生态。' },
     { title: '安装界面响应式', body: '砍掉冗长的宿主协议列，三级窗口自适应（窄/标准/宽），交互选择器精简为 1 行快捷键。' },
@@ -534,8 +536,10 @@ const enContent: Content = {
     'If the host starts coding immediately, assume the current session did not reload the rules.',
   ],
   highlightsTitle: 'v2.3.8 Highlights',
-  highlightsBody: 'Version 2.3.8 focuses on competition mode and host ecosystem: SEEAI flow rewrite, WorkBuddy unified install, responsive install UI, security hardening, and auto-fix for stale installations.',
+  highlightsBody: 'Version 2.3.8 focuses on competition mode and host ecosystem: SEEAI acceptance now requires four-section structured evidence with content-quality gates (no more fake passes); a new design inspiration workflow (PR #11, contributed by @staruhub — thanks!); WorkBuddy unified install; responsive install UI; security hardening; and auto-fix for stale installations.',
   highlightsCards: [
+    { title: 'SEEAI Structured Evidence Gate', body: 'Acceptance now requires four sections (first_response / runtime_checkpoint / fallback_decision / demo_path); each must clear a length + template-keyword check. Passed no longer means ready.' },
+    { title: 'Design Inspiration Workflow (PR #11)', body: 'Thanks to @staruhub. New super-dev design list / recommend / apply <slug> commands ship a curated inspiration library (linear.app, vercel, stripe...) that writes into the project and regenerates uiux/ui-contract.' },
     { title: 'SEEAI Competition Mode', body: 'New action-driven competition mode: Requirements > Decompose > Search > Solution Doc > Spec > Code > Run > Feedback Loop.' },
     { title: 'WorkBuddy Unified Install', body: 'WorkBuddy promoted from manual to unified install host. Skills auto-installed to ~/.workbuddy/skills/. 21+1 host ecosystem.' },
     { title: 'Responsive Install UI', body: 'Removed verbose protocol column, three-tier responsive layout for narrow/standard/wide terminals.' },
